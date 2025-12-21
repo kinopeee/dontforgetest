@@ -1,8 +1,8 @@
-# AGENTS.md - IDE Extension 開発ガイド
+# AGENTS.md - テスト生成エージェント 開発ガイド
 
 ## プロジェクト概要
 
-VS Code拡張機能の開発プロジェクト。TypeScriptで記述され、VS Code Extension APIを使用。
+Cursor CLI（cursor-agent）をヘッドレスモードで非同期呼び出しし、コミット差分や選択範囲からテストコードを自動生成するVS Code拡張機能。TypeScriptで記述され、VS Code Extension APIを使用。
 
 ## 技術スタック
 
@@ -37,7 +37,7 @@ tsconfig.json       # TypeScript設定
 ### VS Code拡張機能パターン
 - コマンドは `context.subscriptions.push()` で登録
 - リソースは `Disposable` パターンで管理
-- コマンドIDは `ide-ext.commandName` 形式
+- コマンドIDは `testgen-agent.commandName` 形式
 
 ## 開発コマンド
 
