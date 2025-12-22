@@ -10,17 +10,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:testgen-agent.generateTest",
-    "onCommand:testgen-agent.generateTestFromFile",
-    "onCommand:testgen-agent.generateTestFromCommit",
-    "onCommand:testgen-agent.generateTestFromCommitRange",
-    "onCommand:testgen-agent.generateTestFromWorkingTree",
-    "onCommand:testgen-agent.previewLastRun",
-    "onCommand:testgen-agent.rollbackLastRun",
-    "onCommand:testgen-agent.showTestGeneratorOutput",
-    "onCommand:testgen-agent.selectDefaultModel"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
