@@ -14,9 +14,17 @@
 - 依存関係がインストール済みであること（未実行なら `npm install`）
 - `.vsix` は `.gitignore` で無視される（成果物はGit管理しない）
 
-## 実行手順（対話なし）
+## 実行手順
 
 ### A) パッチバージョンを上げて VSIX を生成（推奨）
+
+#### ワンライナー（コピペ用）
+
+```bash
+npm version patch --no-git-tag-version && npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "testgen-agent-$VERSION.vsix" && echo "✅ 生成完了: testgen-agent-$VERSION.vsix"
+```
+
+#### ステップ実行（読みやすさ重視）
 
 ```bash
 # 1) バージョンを上げる（git tag は付けない）
@@ -26,20 +34,30 @@ npm version patch --no-git-tag-version
 npm run compile
 npm test
 
-# 3) VSIX を生成（package.json の version をファイル名に反映）
+# 3) VSIX を生成
 VERSION=$(node -p "require('./package.json').version")
 npx --yes @vscode/vsce package --out "testgen-agent-$VERSION.vsix"
+
+# 4) 生成確認
+echo "✅ 生成完了: testgen-agent-$VERSION.vsix"
 ```
 
 ### B) バージョンを上げずに VSIX を生成（ローカル検証用）
 
 ```bash
-npm run compile
-npm test
-
-VERSION=$(node -p "require('./package.json').version")
-npx --yes @vscode/vsce package --out "testgen-agent-$VERSION.vsix"
+npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "testgen-agent-$VERSION.vsix" && echo "✅ 生成完了: testgen-agent-$VERSION.vsix"
 ```
+
+## バージョン更新のコミット
+
+VSIX 生成後、`package.json` / `package-lock.json` の変更をコミットします。
+
+```bash
+git add package.json package-lock.json
+git commit -m "chore: バージョンを$(node -p \"require('./package.json').version\")に更新"
+```
+
+または `/commit-only` スラッシュコマンドを使用してください。
 
 ## インストール方法
 
@@ -47,7 +65,6 @@ VS Code の拡張機能ビューで `...` → **Install from VSIX...** を選び
 
 ## ノート
 
-- `vsce package` は `npm run vscode:prepublish` を自動で実行します（= compile が走ります）。
+- `vsce package` は内部で `npm run vscode:prepublish`（= compile）を実行します。手順で先に `npm run compile` を実行しているため **compile は2回走ります**が、テストを先に回すための意図的な構成です。
 - `*.vsix` がエクスプローラーに見えない場合は、VS Code の設定 `Explorer: Exclude Git Ignore` を確認してください。
-- 生成物はリポジトリのルートに出す運用を想定しています（例: `testgen-agent-0.0.8.vsix`）。
-
+- 生成物はリポジトリのルートに出力されます（例: `testgen-agent-0.0.9.vsix`）。
