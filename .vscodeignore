@@ -1,5 +1,7 @@
 .vscode/**
 .vscode-test/**
+node_modules/**
+.cursor/**
 src/**
 .gitignore
 .yarnrc
@@ -8,3 +10,5 @@ vsc-extension-quickstart.md
 **/.eslintrc.json
 **/*.map
 **/*.ts
+out/test/**
+docs/test-*.md

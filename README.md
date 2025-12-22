@@ -1,12 +1,30 @@
-# IDE Extension
+# テスト生成エージェント（TestGen Agent）
 
-VS Code拡張機能の開発環境です。
+Cursor CLI（`cursor-agent`）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する VS Code / Cursor 拡張機能です。
 
-## 機能
+## 主な機能
 
-- Hello Worldコマンド
+- **QuickPick UI**でソース/モデルを選択して実行
+- **最新コミット差分 / コミット範囲差分 / 未コミット差分（staged/unstaged）**から生成
+- 実行ログを **Output Channel** に集約
+- **直近実行の差分プレビュー / ロールバック**（スナップショットベース）
+- **ステータスバー**に実行中タスク数を表示（クリックでログ表示）
 
-## 開発方法
+> **注意（重要）**: `cursor-agent` は **`--force` で実行**されるため、生成結果は実ファイルへ書き込まれます。  
+> ブランチを切る／コミットする等の退避手段を用意してから実行してください。
+
+## ドキュメント
+
+- 操作手順: `docs/usage.md`
+- テスト戦略: `docs/test-strategy.md`
+
+## 開発（このリポジトリを開発する場合）
+
+### セットアップ
+
+```bash
+npm install
+```
 
 ### ビルド
 
@@ -20,29 +38,17 @@ npm run compile
 npm run watch
 ```
 
-### 拡張機能の実行
+### テスト
 
-1. F5キーを押すか、「Run Extension」デバッグ設定を実行
-2. 新しいVS Codeウィンドウが開きます
-3. コマンドパレット（Cmd+Shift+P）を開く
-4. 「Hello World」と入力してコマンドを実行
-
-## プロジェクト構造
-
-```
-.
-├── src/
-│   └── extension.ts    # 拡張機能のメインファイル
-├── out/                # コンパイル後のファイル
-├── package.json        # 拡張機能のマニフェスト
-└── tsconfig.json       # TypeScript設定
+```bash
+npm test
 ```
 
-## 依存関係
+### 拡張機能の実行（デバッグ）
 
-- TypeScript
-- VS Code Extension API
-- Node.js
+1. VS Code / Cursor でこのリポジトリを開く
+2. F5（Run Extension）
+3. Extension Development Host のコマンドパレットで `TestGen:` を実行
 
 ## ライセンス
 

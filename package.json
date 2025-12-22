@@ -1,23 +1,81 @@
 {
   "name": "testgen-agent",
+  "publisher": "local",
   "displayName": "テスト生成エージェント",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.1",
+  "version": "0.0.7",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:testgen-agent.generateTest",
+    "onCommand:testgen-agent.generateTestFromFile",
+    "onCommand:testgen-agent.generateTestFromCommit",
+    "onCommand:testgen-agent.generateTestFromCommitRange",
+    "onCommand:testgen-agent.generateTestFromWorkingTree",
+    "onCommand:testgen-agent.previewLastRun",
+    "onCommand:testgen-agent.rollbackLastRun",
+    "onCommand:testgen-agent.showTestGeneratorOutput"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "testgen-agent.helloWorld",
-        "title": "Hello World"
+        "command": "testgen-agent.generateTest",
+        "title": "TestGen: テスト生成（QuickPick）"
+      },
+      {
+        "command": "testgen-agent.generateTestFromFile",
+        "title": "TestGen: 現在のファイルからテスト生成"
+      },
+      {
+        "command": "testgen-agent.generateTestFromCommit",
+        "title": "TestGen: 最新コミット差分からテスト生成"
+      },
+      {
+        "command": "testgen-agent.generateTestFromCommitRange",
+        "title": "TestGen: コミット範囲差分からテスト生成"
+      },
+      {
+        "command": "testgen-agent.generateTestFromWorkingTree",
+        "title": "TestGen: 未コミット差分からテスト生成"
+      },
+      {
+        "command": "testgen-agent.previewLastRun",
+        "title": "TestGen: 直近実行の差分を表示"
+      },
+      {
+        "command": "testgen-agent.rollbackLastRun",
+        "title": "TestGen: 直近実行をロールバック"
+      },
+      {
+        "command": "testgen-agent.showTestGeneratorOutput",
+        "title": "TestGen: 出力ログを表示"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "TestGen Agent",
+      "properties": {
+        "testgen-agent.cursorAgentPath": {
+          "type": "string",
+          "default": "",
+          "description": "cursor-agent コマンドのパス（未指定の場合は PATH から解決）"
+        },
+        "testgen-agent.defaultModel": {
+          "type": "string",
+          "default": "",
+          "description": "cursor-agent に渡すデフォルトモデル（空の場合は自動）"
+        },
+        "testgen-agent.testStrategyPath": {
+          "type": "string",
+          "default": "docs/test-strategy.md",
+          "description": "テスト戦略ルールファイルのパス（ワークスペース相対または絶対）"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -28,10 +86,14 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
     "@types/node": "^22.10.5",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.4.1",
     "esbuild": "^0.24.2",
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
     "typescript": "^5.7.2"
   },
   "keywords": [],
