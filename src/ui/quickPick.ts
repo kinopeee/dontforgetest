@@ -3,12 +3,14 @@ import { generateTestFromLatestCommit } from '../commands/generateFromCommit';
 import { generateTestFromCommitRange } from '../commands/generateFromCommitRange';
 import { generateTestFromActiveFile } from '../commands/generateFromFile';
 import { generateTestFromWorkingTree } from '../commands/generateFromWorkingTree';
+import { getModelSettings } from '../core/modelSettings';
 import { ensurePreflight } from '../core/preflight';
 import { type AgentProvider } from '../providers/provider';
 
 type SourceKind = 'activeFile' | 'latestCommit' | 'commitRange' | 'workingTree';
 type SourcePickItem = vscode.QuickPickItem & { source: SourceKind };
-type ModelPickItem = vscode.QuickPickItem & { mode: 'useConfig' | 'override' };
+type ModelPickMode = 'useConfig' | 'useCandidate' | 'input' | 'separator';
+type ModelPickItem = vscode.QuickPickItem & { mode: ModelPickMode; modelValue?: string };
 
 /**
  * QuickPickでソース/モデルを選択してテスト生成を実行する（MVP UI）。
@@ -71,24 +73,42 @@ async function pickSource(): Promise<SourceKind | undefined> {
  * - null: キャンセル
  */
 async function pickModelOverride(): Promise<string | undefined | null> {
-  const config = vscode.workspace.getConfiguration('testgen-agent');
-  const defaultModel = (config.get<string>('defaultModel') ?? '').trim();
+  const { defaultModel, customModels } = getModelSettings();
 
-  const picked = await vscode.window.showQuickPick<ModelPickItem>(
-    [
-      {
-        label: '設定の defaultModel を使用',
-        description: defaultModel.length > 0 ? defaultModel : '（未設定: 自動選択）',
-        mode: 'useConfig' as const,
-      },
-      {
-        label: 'モデルを入力して上書き',
-        description: '例: claude-3.5-sonnet',
-        mode: 'override' as const,
-      },
-    ],
-    { title: 'TestGen: モデルを選択', placeHolder: '使用するモデルを選択してください' },
-  );
+  const items: ModelPickItem[] = [
+    {
+      label: '設定の defaultModel を使用',
+      description: defaultModel ? defaultModel : '（未設定: 自動選択）',
+      mode: 'useConfig',
+    },
+  ];
+
+  if (customModels.length > 0) {
+    items.push({
+      label: 'customModels',
+      kind: vscode.QuickPickItemKind.Separator,
+      mode: 'separator',
+    });
+    for (const model of customModels) {
+      items.push({
+        label: model,
+        description: '設定: testgen-agent.customModels',
+        mode: 'useCandidate',
+        modelValue: model,
+      });
+    }
+  }
+
+  items.push({
+    label: 'モデルを入力して上書き',
+    description: '例: claude-3.5-sonnet',
+    mode: 'input',
+  });
+
+  const picked = await vscode.window.showQuickPick<ModelPickItem>(items, {
+    title: 'TestGen: モデルを選択',
+    placeHolder: '使用するモデルを選択してください',
+  });
 
   if (!picked) {
     return null;
@@ -98,21 +118,30 @@ async function pickModelOverride(): Promise<string | undefined | null> {
     return undefined;
   }
 
-  const input = await vscode.window.showInputBox({
-    title: 'モデルを入力',
-    prompt: 'cursor-agent に渡すモデル名を入力してください（空の場合はキャンセル）',
-    value: defaultModel,
-    validateInput: (value) => {
-      if (value.trim().length === 0) {
-        return 'モデル名を入力してください。';
-      }
-      return undefined;
-    },
-  });
-  if (input === undefined) {
-    return null;
+  if (picked.mode === 'useCandidate') {
+    return picked.modelValue;
   }
 
-  return input.trim();
+  if (picked.mode === 'input') {
+    const input = await vscode.window.showInputBox({
+      title: 'モデルを入力',
+      prompt: 'cursor-agent に渡すモデル名を入力してください（空の場合はキャンセル）',
+      value: defaultModel ?? '',
+      validateInput: (value) => {
+        if (value.trim().length === 0) {
+          return 'モデル名を入力してください。';
+        }
+        return undefined;
+      },
+    });
+    if (input === undefined) {
+      return null;
+    }
+
+    return input.trim();
+  }
+
+  // separator は選択されない想定だが、型のために分岐を残す
+  return null;
 }
 

@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { getModelSettings } from './modelSettings';
 
 export interface PreflightOk {
   workspaceRoot: string;
@@ -25,7 +26,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
   }
 
   const config = vscode.workspace.getConfiguration('testgen-agent');
-  const defaultModel = config.get<string>('defaultModel')?.trim() || undefined;
+  const { defaultModel } = getModelSettings();
   const testStrategyPath = (config.get<string>('testStrategyPath', 'docs/test-strategy.md') ?? '').trim();
   const cursorAgentPath = (config.get<string>('cursorAgentPath') ?? '').trim();
   const cursorAgentCommand = cursorAgentPath.length > 0 ? cursorAgentPath : 'cursor-agent';

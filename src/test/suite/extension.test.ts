@@ -36,6 +36,7 @@ suite('src/extension.ts', () => {
         'testgen-agent.generateTestFromCommit',
         'testgen-agent.generateTestFromCommitRange',
         'testgen-agent.generateTestFromWorkingTree',
+        'testgen-agent.selectDefaultModel',
         'testgen-agent.previewLastRun',
         'testgen-agent.rollbackLastRun',
         'testgen-agent.showTestGeneratorOutput'
@@ -61,7 +62,9 @@ suite('src/extension.ts', () => {
       const config = vscode.workspace.getConfiguration('testgen-agent');
       
       assert.strictEqual(config.get('cursorAgentPath'), '', 'cursorAgentPathのデフォルト値が不正');
+      assert.strictEqual(config.get('maxParallelTasks'), 4, 'maxParallelTasksのデフォルト値が不正');
       assert.strictEqual(config.get('defaultModel'), '', 'defaultModelのデフォルト値が不正');
+      assert.deepStrictEqual(config.get('customModels'), [], 'customModelsのデフォルト値が不正');
       assert.strictEqual(config.get('testStrategyPath'), 'docs/test-strategy.md', 'testStrategyPathのデフォルト値が不正');
     });
   });

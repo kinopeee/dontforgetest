@@ -4,6 +4,7 @@ import { generateTestFromLatestCommit } from './commands/generateFromCommit';
 import { generateTestFromCommitRange } from './commands/generateFromCommitRange';
 import { generateTestFromActiveFile } from './commands/generateFromFile';
 import { generateTestFromWorkingTree } from './commands/generateFromWorkingTree';
+import { selectDefaultModel } from './commands/selectDefaultModel';
 import { CursorAgentProvider } from './providers/cursorAgentProvider';
 import { showTestGenOutput } from './ui/outputChannel';
 import { generateTestWithQuickPick } from './ui/quickPick';
@@ -51,6 +52,12 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('testgen-agent.showTestGeneratorOutput', () => {
       showTestGenOutput(true);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('testgen-agent.selectDefaultModel', async () => {
+      await selectDefaultModel();
     }),
   );
 

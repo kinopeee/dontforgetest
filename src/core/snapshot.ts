@@ -28,31 +28,44 @@ export interface WorkspaceSnapshot {
 export async function takeWorkspaceSnapshot(workspaceRoot: string, targetPaths: string[]): Promise<WorkspaceSnapshot> {
   const files = new Map<string, FileSnapshot>();
 
+  const uniqueRelPaths: string[] = [];
+  const seen = new Set<string>();
   for (const raw of targetPaths) {
     const rel = normalizeToWorkspaceRelative(workspaceRoot, raw);
     if (!rel) {
       continue;
     }
-    if (files.has(rel)) {
+    if (seen.has(rel)) {
       continue;
     }
+    seen.add(rel);
+    uniqueRelPaths.push(rel);
+  }
 
+  const maxParallel = getMaxParallelTasks();
+  const results = await mapWithConcurrency(uniqueRelPaths, maxParallel, async (rel) => {
     const absolutePath = path.join(workspaceRoot, rel);
     const uri = vscode.Uri.file(absolutePath);
 
     try {
       const data = await vscode.workspace.fs.readFile(uri);
       const buf = Buffer.from(data);
-      files.set(rel, {
+      const snapshot: FileSnapshot = {
         relativePath: rel,
         existed: true,
         content: buf.toString('utf8'),
         sha256: sha256Hex(buf),
-      });
-    } catch (err) {
+      };
+      return snapshot;
+    } catch {
       // ファイル不存在等は「存在しない」として扱う
-      files.set(rel, { relativePath: rel, existed: false });
+      const snapshot: FileSnapshot = { relativePath: rel, existed: false };
+      return snapshot;
     }
+  });
+
+  for (const entry of results) {
+    files.set(entry.relativePath, entry);
   }
 
   return {
@@ -69,7 +82,10 @@ export async function takeWorkspaceSnapshot(workspaceRoot: string, targetPaths: 
  * - existed=false: 現在存在するなら削除
  */
 export async function restoreWorkspaceSnapshot(snapshot: WorkspaceSnapshot): Promise<void> {
-  for (const entry of snapshot.files.values()) {
+  const entries = Array.from(snapshot.files.values());
+  const maxParallel = getMaxParallelTasks();
+
+  await mapWithConcurrency(entries, maxParallel, async (entry) => {
     const abs = path.join(snapshot.workspaceRoot, entry.relativePath);
     const uri = vscode.Uri.file(abs);
 
@@ -79,14 +95,14 @@ export async function restoreWorkspaceSnapshot(snapshot: WorkspaceSnapshot): Pro
       } catch {
         // 既に無い場合などは無視
       }
-      continue;
+      return;
     }
 
     const parent = path.dirname(abs);
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(parent));
     const content = entry.content ?? '';
     await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
-  }
+  });
 }
 
 export function snapshotToRelativePaths(snapshot: WorkspaceSnapshot): string[] {
@@ -126,3 +142,43 @@ function normalizeRelativePath(rel: string): string {
   return normalized;
 }
 
+function getMaxParallelTasks(): number {
+  const config = vscode.workspace.getConfiguration('testgen-agent');
+  const raw = config.get<number>('maxParallelTasks');
+  const parsed = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : 4;
+  // 極端に大きい値はファイルI/Oを圧迫しやすいので上限を設ける
+  const clamped = Math.max(1, Math.min(32, parsed));
+  return clamped;
+}
+
+/**
+ * 配列を「最大並列数」を守りながら処理する。
+ * - 戻り値の順序は入力順を維持
+ */
+async function mapWithConcurrency<T, R>(items: readonly T[], maxParallel: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  if (items.length === 0) {
+    return [];
+  }
+  const parallel = Math.max(1, Math.floor(maxParallel));
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  const runOne = async (): Promise<void> => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) {
+        return;
+      }
+      results[index] = await worker(items[index] as T);
+    }
+  };
+
+  const runners: Promise<void>[] = [];
+  const runnerCount = Math.min(parallel, items.length);
+  for (let i = 0; i < runnerCount; i += 1) {
+    runners.push(runOne());
+  }
+  await Promise.all(runners);
+  return results;
+}

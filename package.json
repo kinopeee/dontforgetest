@@ -18,7 +18,8 @@
     "onCommand:testgen-agent.generateTestFromWorkingTree",
     "onCommand:testgen-agent.previewLastRun",
     "onCommand:testgen-agent.rollbackLastRun",
-    "onCommand:testgen-agent.showTestGeneratorOutput"
+    "onCommand:testgen-agent.showTestGeneratorOutput",
+    "onCommand:testgen-agent.selectDefaultModel"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -54,6 +55,10 @@
       {
         "command": "testgen-agent.showTestGeneratorOutput",
         "title": "TestGen: 出力ログを表示"
+      },
+      {
+        "command": "testgen-agent.selectDefaultModel",
+        "title": "TestGen: デフォルトモデルを選択"
       }
     ],
     "configuration": {
@@ -64,10 +69,23 @@
           "default": "",
           "description": "cursor-agent コマンドのパス（未指定の場合は PATH から解決）"
         },
+        "testgen-agent.maxParallelTasks": {
+          "type": "number",
+          "default": 4,
+          "description": "複数ファイル処理の同時実行数上限（スナップショット取得/復元など）"
+        },
         "testgen-agent.defaultModel": {
           "type": "string",
           "default": "",
           "description": "cursor-agent に渡すデフォルトモデル（空の場合は自動）"
+        },
+        "testgen-agent.customModels": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "モデル候補のフォールバックリスト（QuickPick等で使用）"
         },
         "testgen-agent.testStrategyPath": {
           "type": "string",
