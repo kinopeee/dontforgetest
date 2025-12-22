@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "テスト生成エージェント",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "engines": {
     "vscode": "^1.85.0"
   },
