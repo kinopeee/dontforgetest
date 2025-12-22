@@ -12,7 +12,7 @@ suite('ui/outputChannel.ts', () => {
       const channel = getTestGenOutputChannel();
 
       assert.ok(channel !== undefined, 'Output Channelが作成されている');
-      assert.strictEqual(channel.name, 'TestGen Agent', '名前が正しい');
+      assert.strictEqual(channel.name, 'TestGenie', '名前が正しい');
     });
 
     // Given: 2回目以降の呼び出し
