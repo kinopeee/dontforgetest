@@ -21,7 +21,7 @@
 #### ワンライナー（コピペ用）
 
 ```bash
-npm version patch --no-git-tag-version && npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "testgen-agent-$VERSION.vsix" && echo "✅ 生成完了: testgen-agent-$VERSION.vsix"
+npm version patch --no-git-tag-version && npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "testgenie-$VERSION.vsix" && echo "✅ 生成完了: testgenie-$VERSION.vsix"
 ```
 
 #### ステップ実行（読みやすさ重視）
@@ -36,16 +36,16 @@ npm test
 
 # 3) VSIX を生成
 VERSION=$(node -p "require('./package.json').version")
-npx --yes @vscode/vsce package --out "testgen-agent-$VERSION.vsix"
+npx --yes @vscode/vsce package --out "testgenie-$VERSION.vsix"
 
 # 4) 生成確認
-echo "✅ 生成完了: testgen-agent-$VERSION.vsix"
+echo "✅ 生成完了: testgenie-$VERSION.vsix"
 ```
 
 ### B) バージョンを上げずに VSIX を生成（ローカル検証用）
 
 ```bash
-npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "testgen-agent-$VERSION.vsix" && echo "✅ 生成完了: testgen-agent-$VERSION.vsix"
+npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "testgenie-$VERSION.vsix" && echo "✅ 生成完了: testgenie-$VERSION.vsix"
 ```
 
 ## バージョン更新のコミット
@@ -67,4 +67,4 @@ VS Code の拡張機能ビューで `...` → **Install from VSIX...** を選び
 
 - `vsce package` は内部で `npm run vscode:prepublish`（= compile）を実行します。手順で先に `npm run compile` を実行しているため **compile は2回走ります**が、テストを先に回すための意図的な構成です。
 - `*.vsix` がエクスプローラーに見えない場合は、VS Code の設定 `Explorer: Exclude Git Ignore` を確認してください。
-- 生成物はリポジトリのルートに出力されます（例: `testgen-agent-0.0.9.vsix`）。
+- 生成物はリポジトリのルートに出力されます（例: `testgenie-0.0.11.vsix`）。
