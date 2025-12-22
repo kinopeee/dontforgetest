@@ -21,7 +21,7 @@
 #### ワンライナー（コピペ用）
 
 ```bash
-npm version patch --no-git-tag-version && npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "testgenie-$VERSION.vsix" && echo "✅ 生成完了: testgenie-$VERSION.vsix"
+npm version patch --no-git-tag-version && npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "testgen-agent-$VERSION.vsix" --allow-missing-repository && echo "✅ 生成完了: testgen-agent-$VERSION.vsix"
 ```
 
 #### ステップ実行（読みやすさ重視）
@@ -36,16 +36,16 @@ npm test
 
 # 3) VSIX を生成
 VERSION=$(node -p "require('./package.json').version")
-npx --yes @vscode/vsce package --out "testgenie-$VERSION.vsix"
+npx --yes @vscode/vsce package --out "testgen-agent-$VERSION.vsix" --allow-missing-repository
 
 # 4) 生成確認
-echo "✅ 生成完了: testgenie-$VERSION.vsix"
+echo "✅ 生成完了: testgen-agent-$VERSION.vsix"
 ```
 
 ### B) バージョンを上げずに VSIX を生成（ローカル検証用）
 
 ```bash
-npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "testgenie-$VERSION.vsix" && echo "✅ 生成完了: testgenie-$VERSION.vsix"
+npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "testgen-agent-$VERSION.vsix" --allow-missing-repository && echo "✅ 生成完了: testgen-agent-$VERSION.vsix"
 ```
 
 ## バージョン更新のコミット
@@ -66,5 +66,7 @@ VS Code の拡張機能ビューで `...` → **Install from VSIX...** を選び
 ## ノート
 
 - `vsce package` は内部で `npm run vscode:prepublish`（= compile）を実行します。手順で先に `npm run compile` を実行しているため **compile は2回走ります**が、テストを先に回すための意図的な構成です。
+- `package.json` に `repository` が無い場合、`vsce` は警告するため `--allow-missing-repository` を付与しています。
+- `LICENSE` が無い場合も `vsce` が警告します（パッケージ生成は可能）。配布を想定するなら `LICENSE` / `LICENSE.md` / `LICENSE.txt` を追加してください。
 - `*.vsix` がエクスプローラーに見えない場合は、VS Code の設定 `Explorer: Exclude Git Ignore` を確認してください。
-- 生成物はリポジトリのルートに出力されます（例: `testgenie-0.0.11.vsix`）。
+- 生成物はリポジトリのルートに出力されます（例: `testgen-agent-0.0.12.vsix`）。
