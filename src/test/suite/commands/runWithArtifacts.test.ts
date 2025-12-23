@@ -128,7 +128,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const reportDoc = await vscode.workspace.openTextDocument(reports[0]);
     const reportText = reportDoc.getText();
     assert.ok(reportText.includes('test-cmd-01'), 'レポートに echo コマンドの出力が含まれること');
-    assert.ok(reportText.includes('## 実行ログ（拡張機能）'), '実行ログセクションが含まれること');
+    assert.ok(reportText.includes('実行ログ（拡張機能）（クリックで展開）'), '実行ログセクションが含まれること');
     assert.ok(reportText.includes('START test-command'), 'テスト開始ログが含まれること');
     assert.ok(reportText.includes('DONE exit=0'), '完了ログが含まれること');
   });
@@ -209,8 +209,8 @@ suite('commands/runWithArtifacts.ts', () => {
     const text = reportDoc.getText();
     assert.ok(text.includes('status: skipped'), 'レポートに skipped ステータスが含まれること');
     assert.ok(text.includes('testCommand が空のため'), '適切なスキップ理由が含まれること');
-    assert.ok(text.includes('## 実行ログ（拡張機能）'), '実行ログセクションが含まれること');
-    assert.ok(text.includes('WARN\ntestgen-agent.testCommand が空のため'), 'ログに警告が含まれること');
+    assert.ok(text.includes('実行ログ（拡張機能）（クリックで展開）'), '実行ログセクションが含まれること');
+    assert.ok(text.includes('WARN testgen-agent.testCommand が空のため'), 'ログに警告が含まれること');
   });
 
   // TC-CMD-04: テスト実行失敗
@@ -255,6 +255,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const provider = new MockProvider(1);
     const taskId = `task-05-${Date.now()}`;
     const perspectiveDir = path.join(baseTempDir, 'perspectives-05');
+    const reportDir = path.join(baseTempDir, 'reports-05');
 
     // When: runWithArtifacts を呼び出す
     await runWithArtifacts({
@@ -270,6 +271,7 @@ suite('commands/runWithArtifacts.ts', () => {
       settingsOverride: {
         includeTestPerspectiveTable: true,
         perspectiveReportDir: perspectiveDir,
+        testExecutionReportDir: reportDir,
         testCommand: '',
         testExecutionRunner: 'extension',
       }
@@ -332,8 +334,8 @@ suite('commands/runWithArtifacts.ts', () => {
     const text = reportDoc.getText();
     assert.ok(text.includes('status: skipped'), 'レポートに skipped ステータスが含まれること');
     assert.ok(text.includes('VS Code を別プロセスで起動する可能性があるため'), '適切なスキップ理由が含まれること');
-    assert.ok(text.includes('## 実行ログ（拡張機能）'), '実行ログセクションが含まれること');
-    assert.ok(text.includes('WARN\nこのプロジェクトの testCommand は'), 'ログに警告が含まれること');
+    assert.ok(text.includes('実行ログ（拡張機能）（クリックで展開）'), '実行ログセクションが含まれること');
+    assert.ok(text.includes('WARN このプロジェクトの testCommand は'), 'ログに警告が含まれること');
   });
 
   // TC-CMD-07: allowUnsafeTestCommand=true の場合、Unsafeなコマンドでも拡張機能で実行される
@@ -502,7 +504,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const doc = await vscode.workspace.openTextDocument(reports[0]);
     const text = doc.getText();
     assert.ok(text.includes('status: executed'), '実行ステータスになること');
-    assert.ok(text.includes('WARN\ntestCommand は VS Code を別プロセスで起動する可能性'), 'ログに警告が含まれること');
+    assert.ok(text.includes('testCommand は VS Code（拡張機能テスト用の Extension Host）を別プロセスで起動する可能性'), 'ログに警告が含まれること');
   });
 
   // TC-CMD-10: cursor-agent の出力にマーカーがない場合、パースエラーとして扱われる
@@ -810,7 +812,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const doc = await vscode.workspace.openTextDocument(reports[0]);
     const text = doc.getText();
     assert.ok(text.includes('fallback-success'), '拡張機能側で実行されたコマンドの出力が含まれること');
-    assert.ok(text.includes('WARN\ncursor-agent によるコマンド実行が拒否されたため、拡張機能側でフォールバック実行します'), 'フォールバック警告ログが含まれること');
+    assert.ok(text.includes('WARN cursor-agent によるコマンド実行が拒否されたため、拡張機能側でフォールバック実行します'), 'フォールバック警告ログが含まれること');
   });
 
   // TC-RWA-02: cursor-agent が実行拒否 -> Unsafeならフォールバックせずスキップ
@@ -999,9 +1001,9 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(reports.length > 0);
   });
 
-  // TC-CMD-14: 実行ログが全て除去対象の場合、レポートには「(ログなし)」と記録される
-  test('TC-CMD-14: 実行ログが全て除去対象（system_reminder等）の場合、レポートには「(ログなし)」と記録される', async () => {
-    // Given: 除去対象のみのログを吐く Provider
+  // TC-CMD-14: 実行ログから除去対象（system_reminder等）が除去される
+  test('TC-CMD-14: 実行ログから除去対象（system_reminder等）が除去されていること', async () => {
+    // Given: 除去対象のログと通常のログを吐く Provider
     const taskId = `task-14-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-14');
 
@@ -1056,14 +1058,17 @@ suite('commands/runWithArtifacts.ts', () => {
       }
     });
 
-    // Then: レポートに (ログなし) が含まれること
+    // Then: 除去対象がレポートに含まれないこと
     const reportUri = vscode.Uri.file(path.join(workspaceRoot, reportDir));
     const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
     assert.ok(reports.length > 0);
 
     const doc = await vscode.workspace.openTextDocument(reports[0]);
     const text = doc.getText();
-    assert.ok(text.includes('(ログなし)'), '有効なログがない場合は「(ログなし)」と表示されること');
+    // 除去対象が含まれていないこと
+    assert.ok(!text.includes('Ignore me'), 'system_reminder内のテキストが除去されること');
+    assert.ok(!text.includes('<system_reminder>'), 'system_reminderタグが除去されること');
+    // STARTやDONEなどの基本ログは残っている可能性があるので、そこは検証しない
   });
 
   // TC-CMD-15: cursor-agent 出力が途中で切れた場合（終了マーカーなし）
@@ -1186,7 +1191,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const text = doc.getText();
     
     // サニタイズ結果を検証するため、ログセクションを探す
-    const logSectionIndex = text.indexOf('## 実行ログ（拡張機能）');
+    const logSectionIndex = text.indexOf('実行ログ（拡張機能）（クリックで展開）');
     const logContent = text.slice(logSectionIndex);
     
     assert.ok(logContent.includes('Line 1'), 'Line 1 がある');
@@ -1733,7 +1738,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const text = doc.getText();
 
     // Log section extraction
-    const logSection = text.split('## 実行ログ（拡張機能）')[1] || '';
+    const logSection = text.split('実行ログ（拡張機能）（クリックで展開）')[1] || '';
 
     // TC-CMD-01
     assert.ok(logSection.includes('Standard Log Message'), 'TC-CMD-01: 通常のログは含まれること');

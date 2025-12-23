@@ -31,6 +31,14 @@ export interface ArtifactSettings {
    * 既定は false とし、必要な場合のみ明示的に有効化する。
    */
   cursorAgentForceForTestExecution: boolean;
+  /**
+   * テストコード生成後に型チェック/Lintを実行し、エラーがあれば自動修正を試みる。
+   */
+  enablePreTestCheck: boolean;
+  /**
+   * 生成後に実行する型チェック/Lintコマンド（例: npm run compile）。
+   */
+  preTestCheckCommand: string;
 }
 
 export interface SavedArtifact {
@@ -76,6 +84,8 @@ export function getArtifactSettings(): ArtifactSettings {
     testExecutionRunner: runner,
     allowUnsafeTestCommand: config.get<boolean>('allowUnsafeTestCommand', false),
     cursorAgentForceForTestExecution: config.get<boolean>('cursorAgentForceForTestExecution', false),
+    enablePreTestCheck: config.get<boolean>('enablePreTestCheck', true),
+    preTestCheckCommand: (config.get<string>('preTestCheckCommand', 'npm run compile') ?? 'npm run compile').trim(),
   };
 }
 

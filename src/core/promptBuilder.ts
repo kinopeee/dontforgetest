@@ -38,8 +38,13 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     .map((p) => `- ${p}`)
     .join('\n');
 
+  // 型チェック/Lintの設定（オプション引数 > 設定 > デフォルト）
+  const config = vscode.workspace.getConfiguration('testgen-agent');
+  const enablePreTestCheck = options.enablePreTestCheck ?? config.get<boolean>('enablePreTestCheck', true);
+  const preTestCheckCommand = options.preTestCheckCommand?.trim() ?? (config.get<string>('preTestCheckCommand', 'npm run compile') ?? 'npm run compile').trim();
+
   // cursor-agent はプロンプト中にファイルパスが含まれると、必要に応じて読み取り/編集を行える。
-  const prompt = [
+  const promptParts: string[] = [
     `あなたはソフトウェアエンジニアです。以下の対象に対して、ユニットテストを追加/更新してください。`,
     ``,
     `## 対象`,
@@ -47,15 +52,46 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     `- 対象ファイル:`,
     targetsText,
     ``,
-    `## 実行フロー（必須）`,
-    `この拡張機能の所定フローは **「テスト生成 →（拡張機能がオーケストレーションして）テスト実行（testCommand）→ レポート保存」** です。`,
-    `※ テスト実行は拡張機能側が担当し、設定により「拡張機能プロセスで実行」または「cursor-agent 経由で実行」します。`,
-    `あなた（cursor-agent）は次を厳守してください。`,
-    `- **あなた自身でテストを実行しない**（shellツールは使わない / \`npm test\` 等を走らせない）`,
-    `- **デバッグ開始・ウォッチ開始・対話的セッション開始をしない**（テスト実行後にデバッグへ移行しない）`,
-    `- **修正（プロダクションコードの変更）は行わない**（テストコードの追加/更新のみ行う）`,
-    `- 必要なら「追加したテストの概要」と「注意点（既知の制約/未対応）」を短く文章で報告して終了する`,
-    ``,
+  ];
+
+  // 実行フローセクション（preTestCheck の有無で内容が変わる）
+  if (enablePreTestCheck && preTestCheckCommand.length > 0) {
+    promptParts.push(
+      `## 実行フロー（必須）`,
+      `この拡張機能の所定フローは **「テスト生成 → 型チェック/Lint → テスト実行（testCommand）→ レポート保存」** です。`,
+      `あなた（cursor-agent）の担当は **テスト生成** と **型チェック/Lintによるエラー修正** です。`,
+      ``,
+      `### あなたのタスク`,
+      `1. テストコードを追加/更新する`,
+      `2. 以下のコマンドを実行して、型エラー/Lintエラーがないか確認する:`,
+      `   \`\`\`bash`,
+      `   ${preTestCheckCommand}`,
+      `   \`\`\``,
+      `3. エラーがあれば **テストコードを修正** して再度チェックする（最大3回まで）`,
+      `4. エラーが解消したら、またはリトライ上限に達したら終了する`,
+      ``,
+      `### 制約`,
+      `- **テスト実行（\`npm test\` 等）は行わない**（拡張機能が後で担当する）`,
+      `- **デバッグ開始・ウォッチ開始・対話的セッション開始をしない**`,
+      `- **プロダクションコードの変更は行わない**（テストコードの追加/更新のみ）`,
+      `- 必要なら「追加したテストの概要」と「注意点（既知の制約/未対応）」を短く文章で報告して終了する`,
+      ``,
+    );
+  } else {
+    promptParts.push(
+      `## 実行フロー（必須）`,
+      `この拡張機能の所定フローは **「テスト生成 →（拡張機能がオーケストレーションして）テスト実行（testCommand）→ レポート保存」** です。`,
+      `※ テスト実行は拡張機能側が担当し、設定により「拡張機能プロセスで実行」または「cursor-agent 経由で実行」します。`,
+      `あなた（cursor-agent）は次を厳守してください。`,
+      `- **あなた自身でテストを実行しない**（shellツールは使わない / \`npm test\` 等を走らせない）`,
+      `- **デバッグ開始・ウォッチ開始・対話的セッション開始をしない**（テスト実行後にデバッグへ移行しない）`,
+      `- **修正（プロダクションコードの変更）は行わない**（テストコードの追加/更新のみ行う）`,
+      `- 必要なら「追加したテストの概要」と「注意点（既知の制約/未対応）」を短く文章で報告して終了する`,
+      ``,
+    );
+  }
+
+  promptParts.push(
     `## 出力言語（必須）`,
     `- 説明文（テーブル以外）: ${languages.answerLanguage}`,
     `- テストコード内コメント: ${languages.commentLanguage}`,
@@ -66,11 +102,29 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     `- アプリ本体/拡張機能本体の実装（\`src/**\` のうちテスト以外）を「直す」ための編集は禁止`,
     `- もしテストを成立させるために実装側の修正が必要だと判断した場合は、**修正せず**に、その旨と理由を報告して終了する`,
     ``,
-    `## ツール使用制約（必須）`,
-    `- **shell（コマンド実行）ツールは使用禁止**（\`git diff\` / \`npm test\` 等を実行しない）`,
-    `- **VS Code / Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）`,
-    `- 必要な情報は、対象ファイルの読み取り（read）と、こちらから提示する差分/対象パスから判断すること`,
-    ``,
+  );
+
+  // ツール使用制約セクション（preTestCheck の有無で内容が変わる）
+  if (enablePreTestCheck && preTestCheckCommand.length > 0) {
+    promptParts.push(
+      `## ツール使用制約（必須）`,
+      `- **許可されたコマンドのみ実行可能**: \`${preTestCheckCommand}\``,
+      `- **テスト実行コマンド（\`npm test\` / \`pnpm test\` / \`pytest\` 等）は禁止**`,
+      `- **VS Code / Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）`,
+      `- 必要な情報は、対象ファイルの読み取り（read）と、こちらから提示する差分/対象パスから判断すること`,
+      ``,
+    );
+  } else {
+    promptParts.push(
+      `## ツール使用制約（必須）`,
+      `- **shell（コマンド実行）ツールは使用禁止**（\`git diff\` / \`npm test\` 等を実行しない）`,
+      `- **VS Code / Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）`,
+      `- 必要な情報は、対象ファイルの読み取り（read）と、こちらから提示する差分/対象パスから判断すること`,
+      ``,
+    );
+  }
+
+  promptParts.push(
     `## テスト戦略ルール（必須）`,
     `以下のルールを必ず遵守してください（原文を貼り付けます）。`,
     ``,
@@ -80,7 +134,9 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     `- 既存のテストフレームワーク/テスト配置規約があればそれに従うこと`,
     `- テストは実行可能な状態で追加すること（必要な import / setup を含める）`,
     `- 既存テストの軽微な修正だけで済む場合でも、ルールに反しないこと`,
-  ].join('\n');
+  );
+
+  const prompt = promptParts.join('\n');
 
   return { prompt, languages };
 }

@@ -37,6 +37,9 @@ suite('core/artifacts.ts', () => {
       'boolean',
       'cursorAgentForceForTestExecution は boolean であるべき',
     );
+    // TC-CONF-01: 新規設定値のチェック (enablePreTestCheck, preTestCheckCommand)
+    assert.strictEqual(typeof settings.enablePreTestCheck, 'boolean', 'enablePreTestCheck は boolean であるべき');
+    assert.strictEqual(typeof settings.preTestCheckCommand, 'string', 'preTestCheckCommand は string であるべき');
 
     // デフォルト値の整合性チェック
     // ワークスペース設定などで上書きされていなければ、以下のデフォルト値であるべき
@@ -59,6 +62,55 @@ suite('core/artifacts.ts', () => {
     const forceInfo = config.inspect('cursorAgentForceForTestExecution');
     if (!forceInfo?.workspaceValue && !forceInfo?.globalValue) {
       assert.strictEqual(settings.cursorAgentForceForTestExecution, false, 'cursorAgentForceForTestExecution のデフォルトは false であるべき');
+    }
+
+    // TC-CONF-01: enablePreTestCheck default
+    const preCheckInfo = config.inspect('enablePreTestCheck');
+    if (!preCheckInfo?.workspaceValue && !preCheckInfo?.globalValue) {
+      assert.strictEqual(settings.enablePreTestCheck, true, 'enablePreTestCheck のデフォルトは true であるべき');
+    }
+
+    // TC-CONF-01: preTestCheckCommand default
+    const preCmdInfo = config.inspect('preTestCheckCommand');
+    if (!preCmdInfo?.workspaceValue && !preCmdInfo?.globalValue) {
+      assert.strictEqual(settings.preTestCheckCommand, 'npm run compile', 'preTestCheckCommand のデフォルトは npm run compile であるべき');
+    }
+  });
+
+  // TC-CONF-02: Config overwrite (enablePreTestCheck: false)
+  test('TC-CONF-02: 設定で enablePreTestCheck=false にした場合、false が返される', async () => {
+    // Given: 設定値を変更
+    const config = vscode.workspace.getConfiguration('testgen-agent');
+    await config.update('enablePreTestCheck', false, vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings を呼び出す
+      const settings = getArtifactSettings();
+
+      // Then: 設定値 false が反映されること
+      assert.strictEqual(settings.enablePreTestCheck, false, '設定値 false が反映されるべき');
+    } finally {
+      // Cleanup: 設定を元に戻す
+      await config.update('enablePreTestCheck', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // TC-CONF-03: Config overwrite (preTestCheckCommand: custom)
+  test('TC-CONF-03: 設定で preTestCheckCommand を変更した場合、その値が返される', async () => {
+    // Given: 設定値を変更
+    const config = vscode.workspace.getConfiguration('testgen-agent');
+    const customCmd = 'npm run lint';
+    await config.update('preTestCheckCommand', customCmd, vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings を呼び出す
+      const settings = getArtifactSettings();
+
+      // Then: 設定値が反映されること
+      assert.strictEqual(settings.preTestCheckCommand, customCmd, '設定値が反映されるべき');
+    } finally {
+      // Cleanup: 設定を元に戻す
+      await config.update('preTestCheckCommand', undefined, vscode.ConfigurationTarget.Global);
     }
   });
 
