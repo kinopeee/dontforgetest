@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "Chottotest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.14",
+  "version": "0.0.21",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -11,7 +11,19 @@
     "Other"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:testgen-agent.controlPanel",
+    "onCommand:testgen-agent.openPanel",
+    "onCommand:testgen-agent.generateTest",
+    "onCommand:testgen-agent.generateTestFromFile",
+    "onCommand:testgen-agent.generateTestFromCommit",
+    "onCommand:testgen-agent.generateTestFromCommitRange",
+    "onCommand:testgen-agent.generateTestFromWorkingTree",
+    "onCommand:testgen-agent.previewLastRun",
+    "onCommand:testgen-agent.rollbackLastRun",
+    "onCommand:testgen-agent.showTestGeneratorOutput",
+    "onCommand:testgen-agent.selectDefaultModel"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -123,6 +135,25 @@
           "type": "string",
           "default": "npm test",
           "description": "テスト実行コマンド（空の場合は実行しない。例: npm test, pnpm test, pytest）"
+        },
+        "testgen-agent.testExecutionRunner": {
+          "type": "string",
+          "enum": [
+            "cursorAgent",
+            "extension"
+          ],
+          "default": "cursorAgent",
+          "description": "テスト実行の担当者（cursorAgent=cursor-agentに実行させて結果を抽出、extension=拡張機能が直接実行）"
+        },
+        "testgen-agent.allowUnsafeTestCommand": {
+          "type": "boolean",
+          "default": false,
+          "description": "testExecutionRunner=extension の場合に、VS Code を別プロセスで起動しそうなテストコマンドでも実行する（重複起動で不安定になる可能性があります）"
+        },
+        "testgen-agent.cursorAgentForceForTestExecution": {
+          "type": "boolean",
+          "default": false,
+          "description": "testExecutionRunner=cursorAgent のテスト実行で cursor-agent に --force を付与する（コマンド実行の拒否回避を試す。ファイル編集も可能になるため注意）"
         }
       }
     }
@@ -133,7 +164,8 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "lint": "eslint src/",
-    "test": "node ./out/test/runTest.js"
+    "test": "node ./out/test/runTest.js",
+    "package:vsix": "npm run compile && VERSION=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce package --out \"chottotest-$VERSION.vsix\" --allow-missing-repository --no-rewrite-relative-links"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

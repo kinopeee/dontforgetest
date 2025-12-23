@@ -11,6 +11,7 @@ import {
   saveTestPerspectiveTable,
   type SavedArtifact,
   type ArtifactSettings,
+  type TestExecutionResult,
 } from '../core/artifacts';
 import { buildTestPerspectivePrompt } from '../core/promptBuilder';
 import { runTestCommand } from '../core/testRunner';
@@ -89,6 +90,91 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
   const baseSettings = getArtifactSettings();
   const settings: ArtifactSettings = { ...baseSettings, ...options.settingsOverride };
   const timestamp = formatTimestamp(new Date());
+  // テスト実行レポートに載せるのは「テスト実行（またはスキップ）」に関するログだけに限定する。
+  // 生成（cursor-agent）の長文ログまで混ぜると、テスト実行レポートとして読みにくくなるため。
+  const testExecutionLogLines: string[] = [];
+
+  /**
+   * cursor-agent の出力には、実行環境向けのメタ情報（system_reminder 等）が混ざることがある。
+   * レポートにはユーザー向けの内容だけ残すため、保存前に最低限の正規化を行う。
+   */
+  const sanitizeLogMessageForReport = (message: string): string => {
+    let text = message.replace(/\r\n/g, '\n');
+
+    // <system_reminder> ... </system_reminder> ブロックはユーザー向けでないため除去
+    text = text.replace(/<system_reminder>[\s\S]*?<\/system_reminder>/g, '');
+
+    // 行単位でノイズを除去
+    const rawLines = text.split('\n').map((l) => l.replace(/\s+$/g, '')); // 末尾空白を落とす
+    const filtered: string[] = [];
+    for (const line of rawLines) {
+      const trimmed = line.trim();
+      // 空行は後段で畳むため一旦残す
+      if (trimmed === 'event:tool_call') {
+        continue;
+      }
+      if (trimmed === 'system:init') {
+        continue;
+      }
+      filtered.push(line);
+    }
+
+    // 空行を最大1つに畳む
+    const collapsed: string[] = [];
+    let prevBlank = false;
+    for (const line of filtered) {
+      const isBlank = line.trim().length === 0;
+      if (isBlank) {
+        if (prevBlank) {
+          continue;
+        }
+        prevBlank = true;
+        collapsed.push('');
+        continue;
+      }
+      prevBlank = false;
+      collapsed.push(line);
+    }
+
+    return collapsed.join('\n').trim();
+  };
+
+  const captureEvent = (event: TestGenEvent): void => {
+    const tsIso = new Date(event.timestampMs).toISOString();
+    switch (event.type) {
+      case 'started':
+        testExecutionLogLines.push(`[${tsIso}] [${event.taskId}] START ${event.label}${event.detail ? ` (${event.detail})` : ''}`);
+        break;
+      case 'log':
+        // Output Channel と同等の情報を残しつつ、レポート向けに整形する（message は改行を含み得る）
+        const sanitized = sanitizeLogMessageForReport(event.message);
+        if (sanitized.length === 0) {
+          break;
+        }
+        const lines = sanitized.split('\n');
+        const level = event.level.toUpperCase();
+        testExecutionLogLines.push(`[${tsIso}] [${event.taskId}] ${level} ${lines[0] ?? ''}`.trimEnd());
+        for (let i = 1; i < lines.length; i += 1) {
+          testExecutionLogLines.push(`  ${lines[i] ?? ''}`.trimEnd());
+        }
+        break;
+      case 'fileWrite':
+        testExecutionLogLines.push(
+          `[${tsIso}] [${event.taskId}] WRITE ${event.path}` +
+          `${event.linesCreated !== undefined ? ` lines=${event.linesCreated}` : ''}` +
+          `${event.bytesWritten !== undefined ? ` bytes=${event.bytesWritten}` : ''}`,
+        );
+        break;
+      case 'completed':
+        testExecutionLogLines.push(`[${tsIso}] [${event.taskId}] DONE exit=${event.exitCode ?? 'null'}`);
+        break;
+      default: {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const _exhaustive: never = event;
+        break;
+      }
+    }
+  };
 
   try {
     showTestGenOutput(true);
@@ -149,24 +235,196 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       const msg = 'testgen-agent.testCommand が空のため、テスト実行はスキップします。';
       const ev = emitLogEvent(`${options.generationTaskId}-test`, 'warn', msg);
       handleTestGenEventForStatusBar({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
+      captureEvent({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
       appendEventToOutput(ev);
+      captureEvent(ev);
       handleTestGenEventForStatusBar({ type: 'completed', taskId: ev.taskId, exitCode: null, timestampMs: nowMs() });
-      appendEventToOutput({ type: 'completed', taskId: ev.taskId, exitCode: null, timestampMs: nowMs() });
+      const completedEv: TestGenEvent = { type: 'completed', taskId: ev.taskId, exitCode: null, timestampMs: nowMs() };
+      appendEventToOutput(completedEv);
+      captureEvent(completedEv);
+      const skippedResult: TestExecutionResult = {
+        command: settings.testCommand,
+        cwd: options.workspaceRoot,
+        exitCode: null,
+        signal: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+        skipped: true,
+        skipReason: msg,
+        extensionLog: testExecutionLogLines.join('\n'),
+      };
+      const saved = await saveTestExecutionReport({
+        workspaceRoot: options.workspaceRoot,
+        generationLabel: options.generationLabel,
+        targetPaths: options.targetPaths,
+        model: options.model,
+        reportDir: settings.testExecutionReportDir,
+        timestamp,
+        result: skippedResult,
+      });
+      appendEventToOutput(emitLogEvent(ev.taskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
       return;
     }
 
     const testTaskId = `${options.generationTaskId}-test`;
 
-    // VS Code を起動しそうなテストコマンドは、拡張機能内の自動実行を避ける
+    // VS Code を起動しそうなテストコマンドは、拡張機能（extension runner）での自動実行を避ける。
+    // ただし runner=cursorAgent の場合は「cursor-agent に実行させて結果だけ回収」するため、ここではスキップしない。
     const willLaunchVsCode = await looksLikeVsCodeLaunchingTestCommand(options.workspaceRoot, settings.testCommand);
-    if (willLaunchVsCode) {
+    if (willLaunchVsCode && settings.testExecutionRunner === 'extension' && !settings.allowUnsafeTestCommand) {
       const msg =
         'このプロジェクトの testCommand は VS Code を別プロセスで起動する可能性があるため、拡張機能内の自動テスト実行をスキップします（必要ならターミナルで手動実行してください）。';
       const ev = emitLogEvent(testTaskId, 'warn', msg);
       handleTestGenEventForStatusBar({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped (would launch VS Code)', timestampMs: nowMs() });
+      captureEvent({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped (would launch VS Code)', timestampMs: nowMs() });
       appendEventToOutput(ev);
+      captureEvent(ev);
       handleTestGenEventForStatusBar({ type: 'completed', taskId: ev.taskId, exitCode: null, timestampMs: nowMs() });
-      appendEventToOutput({ type: 'completed', taskId: ev.taskId, exitCode: null, timestampMs: nowMs() });
+      const completedEv: TestGenEvent = { type: 'completed', taskId: ev.taskId, exitCode: null, timestampMs: nowMs() };
+      appendEventToOutput(completedEv);
+      captureEvent(completedEv);
+      const skippedResult: TestExecutionResult = {
+        command: settings.testCommand,
+        cwd: options.workspaceRoot,
+        exitCode: null,
+        signal: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+        skipped: true,
+        skipReason: msg,
+        extensionLog: testExecutionLogLines.join('\n'),
+      };
+      const saved = await saveTestExecutionReport({
+        workspaceRoot: options.workspaceRoot,
+        generationLabel: options.generationLabel,
+        targetPaths: options.targetPaths,
+        model: options.model,
+        reportDir: settings.testExecutionReportDir,
+        timestamp,
+        result: skippedResult,
+      });
+      appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+      return;
+    }
+
+    // runner に応じて実行
+    if (settings.testExecutionRunner === 'cursorAgent') {
+      // VS Code 起動の可能性がある場合は注意ログを残して実行する（runner=cursorAgent ではスキップしない）
+      if (willLaunchVsCode) {
+        const warn = emitLogEvent(
+          testTaskId,
+          'warn',
+          'testCommand は VS Code（拡張機能テスト用の Extension Host）を別プロセスで起動する可能性があります。runner=cursorAgent のため結果取得を優先して実行します（重複起動で不安定になる場合があります）。',
+        );
+        appendEventToOutput(warn);
+        captureEvent(warn);
+      }
+
+      const started: TestGenEvent = {
+        type: 'started',
+        taskId: testTaskId,
+        label: 'test-command',
+        detail: `runner=cursorAgent cmd=${settings.testCommand}`,
+        timestampMs: nowMs(),
+      };
+      handleTestGenEventForStatusBar(started);
+      appendEventToOutput(started);
+      captureEvent(started);
+
+      const result = await runTestCommandViaCursorAgent({
+        provider: options.provider,
+        taskId: `${testTaskId}-agent`,
+        workspaceRoot: options.workspaceRoot,
+        cursorAgentCommand: options.cursorAgentCommand,
+        model: options.model,
+        testCommand: settings.testCommand,
+        allowForce: settings.cursorAgentForceForTestExecution,
+        onEvent: (event) => {
+          handleTestGenEventForStatusBar(event);
+          appendEventToOutput(event);
+          captureEvent(event);
+        },
+      });
+      // cursor-agent 経由だと、テスト側（npm test の子プロセス）から debug ingest へ到達できない場合がある。
+      // そのため、取得できた stdout から「VS Code（Extension Host）起動回数」を数えて拡張機能側で記録する。
+
+      const stderrLower = result.stderr.toLowerCase();
+      const toolExecutionRejected =
+        // cursor-agent / 実行環境側のポリシーでコマンド実行が拒否されるケース
+        (stderrLower.includes('rejected') && (stderrLower.includes('execution') || stderrLower.includes('tool') || stderrLower.includes('command'))) ||
+        // 既存の代表的な文言
+        result.stderr.includes('Tool execution rejected') ||
+        result.stderr.includes('Execution rejected') ||
+        // 日本語メッセージ
+        (result.errorMessage?.includes('ツール') ?? false);
+
+      // cursor-agent 側でコマンド実行が拒否された場合、結果が空になってしまう。
+      // ユーザーが許可している場合のみ、拡張機能側（extension runner）でフォールバック実行して結果を保存する。
+      if (toolExecutionRejected) {
+        const canFallback = !willLaunchVsCode || settings.allowUnsafeTestCommand;
+        const warnMessage = canFallback
+          ? 'cursor-agent によるコマンド実行が拒否されたため、拡張機能側でフォールバック実行します。'
+          : 'cursor-agent によるコマンド実行が拒否されました。VS Code 起動の可能性があるため、拡張機能側への自動フォールバックも行いません（allowUnsafeTestCommand を有効化するとフォールバックできます）。';
+        const warn = emitLogEvent(testTaskId, 'warn', warnMessage);
+        appendEventToOutput(warn);
+        captureEvent(warn);
+
+        if (!canFallback) {
+          const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: null, timestampMs: nowMs() };
+          handleTestGenEventForStatusBar(completed);
+          appendEventToOutput(completed);
+          captureEvent(completed);
+
+          const saved = await saveTestExecutionReport({
+            workspaceRoot: options.workspaceRoot,
+            generationLabel: options.generationLabel,
+            targetPaths: options.targetPaths,
+            model: options.model,
+            reportDir: settings.testExecutionReportDir,
+            timestamp,
+            result: { ...result, exitCode: null, skipped: true, skipReason: warnMessage, extensionLog: testExecutionLogLines.join('\n') },
+          });
+          appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+          return;
+        }
+
+        // フォールバック（extension runner）
+        const fallbackResult = await runTestCommand({ command: settings.testCommand, cwd: options.workspaceRoot });
+        const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: fallbackResult.exitCode, timestampMs: nowMs() };
+        handleTestGenEventForStatusBar(completed);
+        appendEventToOutput(completed);
+        captureEvent(completed);
+
+        const saved = await saveTestExecutionReport({
+          workspaceRoot: options.workspaceRoot,
+          generationLabel: options.generationLabel,
+          targetPaths: options.targetPaths,
+          model: options.model,
+          reportDir: settings.testExecutionReportDir,
+          timestamp,
+          result: { ...fallbackResult, extensionLog: testExecutionLogLines.join('\n') },
+        });
+        appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+        return;
+      }
+
+      const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: result.exitCode, timestampMs: nowMs() };
+      handleTestGenEventForStatusBar(completed);
+      appendEventToOutput(completed);
+      captureEvent(completed);
+
+      const saved = await saveTestExecutionReport({
+        workspaceRoot: options.workspaceRoot,
+        generationLabel: options.generationLabel,
+        targetPaths: options.targetPaths,
+        model: options.model,
+        reportDir: settings.testExecutionReportDir,
+        timestamp,
+        result: { ...result, extensionLog: testExecutionLogLines.join('\n') },
+      });
+      appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
       return;
     }
 
@@ -179,6 +437,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     };
     handleTestGenEventForStatusBar(started);
     appendEventToOutput(started);
+    captureEvent(started);
 
     const result = await runTestCommand({ command: settings.testCommand, cwd: options.workspaceRoot });
 
@@ -189,10 +448,18 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         `テスト実行が完了しました: exit=${result.exitCode ?? 'null'} durationMs=${result.durationMs}`,
       ),
     );
+    captureEvent(
+      emitLogEvent(
+        testTaskId,
+        result.exitCode === 0 ? 'info' : 'error',
+        `テスト実行が完了しました: exit=${result.exitCode ?? 'null'} durationMs=${result.durationMs}`,
+      ),
+    );
 
     const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: result.exitCode, timestampMs: nowMs() };
     handleTestGenEventForStatusBar(completed);
     appendEventToOutput(completed);
+    captureEvent(completed);
 
     const saved = await saveTestExecutionReport({
       workspaceRoot: options.workspaceRoot,
@@ -201,7 +468,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       model: options.model,
       reportDir: settings.testExecutionReportDir,
       timestamp,
-      result,
+      result: { ...result, extensionLog: testExecutionLogLines.join('\n') },
     });
 
     appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
@@ -209,6 +476,126 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     throw err;
   }
+}
+
+async function runTestCommandViaCursorAgent(params: {
+  provider: AgentProvider;
+  taskId: string;
+  workspaceRoot: string;
+  cursorAgentCommand: string;
+  model: string | undefined;
+  testCommand: string;
+  allowForce: boolean;
+  onEvent: (event: TestGenEvent) => void;
+}): Promise<TestExecutionResult> {
+  const startedAt = nowMs();
+
+  const markerBegin = '<!-- BEGIN TEST EXECUTION RESULT -->';
+  const markerEnd = '<!-- END TEST EXECUTION RESULT -->';
+  const stdoutBegin = '<!-- BEGIN STDOUT -->';
+  const stdoutEnd = '<!-- END STDOUT -->';
+  const stderrBegin = '<!-- BEGIN STDERR -->';
+  const stderrEnd = '<!-- END STDERR -->';
+
+  const prompt = [
+    'あなたはテスト実行担当です。',
+    '目的は「指定されたテストコマンドを実行し、その結果（stdout/stderr/exitCode）を機械的に抽出できる形式で返す」ことです。',
+    '',
+    '## 制約（必須）',
+    '- **ファイルの編集・作成は禁止**（読み取りのみ）',
+    '- **デバッグ開始・ウォッチ開始・対話的セッション開始は禁止**',
+    '- テストコマンドは **1回だけ** 実行する（同じコマンドを繰り返さない）',
+    '- 可能なら余計なコマンドを実行しない（cd など最低限は可）',
+    '- VS Code / Cursor を手動で起動するコマンドは禁止（ただし、テストコマンド自体が起動する場合はそのまま実行してよい）',
+    '',
+    '## 実行するコマンド（必須）',
+    '以下をそのまま実行し、終了コードを取得してください。',
+    '',
+    '```bash',
+    params.testCommand,
+    '```',
+    '',
+    '## 出力フォーマット（必須）',
+    `- 出力は次のマーカーで囲むこと: ${markerBegin} ... ${markerEnd}`,
+    '- マーカー外には何も出力しない（説明文は禁止）',
+    '',
+    markerBegin,
+    'exitCode: <number|null>',
+    'signal: <string|null>',
+    'durationMs: <number>',
+    stdoutBegin,
+    '(stdout をそのまま貼り付け)',
+    stdoutEnd,
+    stderrBegin,
+    '(stderr をそのまま貼り付け)',
+    stderrEnd,
+    markerEnd,
+    '',
+  ].join('\n');
+
+  const logs: string[] = [];
+  let sawFileWrite = false;
+  const exit = await runProviderToCompletion({
+    provider: params.provider,
+    run: {
+      taskId: params.taskId,
+      workspaceRoot: params.workspaceRoot,
+      agentCommand: params.cursorAgentCommand,
+      prompt,
+      model: params.model,
+      outputFormat: 'stream-json',
+      allowWrite: params.allowForce,
+    },
+    onEvent: (event) => {
+      params.onEvent(event);
+      if (event.type === 'fileWrite') {
+        sawFileWrite = true;
+      }
+      if (event.type === 'log') {
+        logs.push(event.message);
+      }
+    },
+  });
+
+  const raw = logs.join('\n');
+  const extracted = extractBetweenMarkers(raw, markerBegin, markerEnd);
+  const durationMs = Math.max(0, nowMs() - startedAt);
+
+  if (!extracted) {
+    return {
+      command: params.testCommand,
+      cwd: params.workspaceRoot,
+      exitCode: exit,
+      signal: null,
+      durationMs,
+      stdout: '',
+      stderr: raw,
+      errorMessage: 'cursor-agent の出力からテスト結果を抽出できませんでした（マーカーが見つかりません）。',
+    };
+  }
+
+  const exitMatch = extracted.match(/^\s*exitCode:\s*(.+)\s*$/m);
+  const signalMatch = extracted.match(/^\s*signal:\s*(.+)\s*$/m);
+  const durMatch = extracted.match(/^\s*durationMs:\s*(\d+)\s*$/m);
+  const stdout = extractBetweenMarkers(extracted, stdoutBegin, stdoutEnd) ?? '';
+  const stderr = extractBetweenMarkers(extracted, stderrBegin, stderrEnd) ?? '';
+
+  const exitCodeRaw = exitMatch?.[1]?.trim();
+  const exitCode =
+    !exitCodeRaw || exitCodeRaw === 'null' ? null : Number.isFinite(Number(exitCodeRaw)) ? Number(exitCodeRaw) : exit ?? null;
+  const signalRaw = signalMatch?.[1]?.trim();
+  const signal = !signalRaw || signalRaw === 'null' ? null : (signalRaw as NodeJS.Signals);
+  const parsedDurationMs = durMatch?.[1] ? Number(durMatch[1]) : durationMs;
+
+  return {
+    command: params.testCommand,
+    cwd: params.workspaceRoot,
+    exitCode,
+    signal,
+    durationMs: Number.isFinite(parsedDurationMs) ? parsedDurationMs : durationMs,
+    stdout,
+    stderr,
+  };
 }
 
 async function runPerspectiveTableStep(params: {
@@ -261,11 +648,11 @@ async function runPerspectiveTableStep(params: {
     extracted?.trim().length
       ? extracted.trim()
       : [
-          '> 観点表の抽出に失敗したため、取得できたログをそのまま保存します。',
-          `> provider exit=${exitCode ?? 'null'}`,
-          '',
-          raw.trim().length > 0 ? raw.trim() : '(ログが空でした)',
-        ].join('\n');
+        '> 観点表の抽出に失敗したため、取得できたログをそのまま保存します。',
+        `> provider exit=${exitCode ?? 'null'}`,
+        '',
+        raw.trim().length > 0 ? raw.trim() : '(ログが空でした)',
+      ].join('\n');
 
   const saved = await saveTestPerspectiveTable({
     workspaceRoot: params.workspaceRoot,

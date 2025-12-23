@@ -461,6 +461,10 @@ export class CursorAgentProvider implements AgentProvider {
 
         return undefined;
       }
+
+      // editToolCall 以外の tool_call は、頻度が高く Output Channel/レポートを汚染しやすい。
+      // ここではログに落とさず無視する（必要になったら個別に正規化を追加する）。
+      return undefined;
     }
 
     // それ以外は最低限ログに残す（必要になったら正規化を拡張する）

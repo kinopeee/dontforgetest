@@ -90,6 +90,11 @@ suite('core/promptBuilder.ts', () => {
         assert.ok(result.prompt.includes('テスト対象'), 'targetLabelが含まれている');
         assert.ok(result.prompt.includes('src/test.ts'), 'targetPathsが含まれている');
         assert.ok(result.prompt.includes('テスト戦略ルール'), 'テスト戦略ルールが含まれている');
+        assert.ok(result.prompt.includes('テスト生成 →（拡張機能がオーケストレーションして）テスト実行（testCommand）→ レポート保存'), '実行フローが含まれている');
+        assert.ok(result.prompt.includes('修正（プロダクションコードの変更）は行わない'), '修正禁止が明記されている');
+        assert.ok(result.prompt.includes('デバッグ開始・ウォッチ開始・対話的セッション開始をしない'), 'デバッグ禁止が明記されている');
+        assert.ok(result.prompt.includes('## 変更範囲の制約（必須）'), '変更範囲の制約セクションが含まれている');
+        assert.ok(result.prompt.includes('## ツール使用制約（必須）'), 'ツール使用制約セクションが含まれている');
         assert.strictEqual(result.languages.answerLanguage, 'ja');
         assert.strictEqual(result.languages.commentLanguage, 'ja');
         assert.strictEqual(result.languages.perspectiveTableLanguage, 'ja');

@@ -8,6 +8,24 @@ export interface ArtifactSettings {
   testExecutionReportDir: string;
   /** 空文字の場合は実行しない */
   testCommand: string;
+  /**
+   * テスト実行の担当者。
+   * - extension: 拡張機能（Node child_process）で実行
+   * - cursorAgent: cursor-agent に実行させ、結果を抽出して保存
+   */
+  testExecutionRunner: 'extension' | 'cursorAgent';
+  /**
+   * VS Code を別プロセスで起動しそうなテストコマンドを、あえて実行するか。
+   * 既定は安全のため false（重複起動で不安定になる可能性があるため）。
+   */
+  allowUnsafeTestCommand: boolean;
+  /**
+   * cursor-agent の `--force` をテスト実行時にも付与するか。
+   *
+   * `--force` はコマンド実行の承認を省略できる一方、ファイル編集も可能にするため、
+   * 既定は false とし、必要な場合のみ明示的に有効化する。
+   */
+  cursorAgentForceForTestExecution: boolean;
 }
 
 export interface SavedArtifact {
@@ -24,6 +42,18 @@ export interface TestExecutionResult {
   stdout: string;
   stderr: string;
   errorMessage?: string;
+  /**
+   * 実行が「意図的にスキップ」された場合に true。
+   * - 例: VS Code を起動しそうなテストコマンドを検出したため拡張機能内実行を回避
+   */
+  skipped?: boolean;
+  /** スキップ理由（ユーザー表示用） */
+  skipReason?: string;
+  /**
+   * 拡張機能が収集した実行ログ（Output Channel 相当）。
+   * - 例: cursor-agent の長文レポート、WRITE イベント、警告ログなど
+   */
+  extensionLog?: string;
 }
 
 /**
@@ -31,11 +61,16 @@ export interface TestExecutionResult {
  */
 export function getArtifactSettings(): ArtifactSettings {
   const config = vscode.workspace.getConfiguration('testgen-agent');
+  const runnerRaw = (config.get<string>('testExecutionRunner', 'cursorAgent') ?? 'cursorAgent').trim();
+  const runner: ArtifactSettings['testExecutionRunner'] = runnerRaw === 'extension' ? 'extension' : 'cursorAgent';
   return {
     includeTestPerspectiveTable: config.get<boolean>('includeTestPerspectiveTable', true),
     perspectiveReportDir: (config.get<string>('perspectiveReportDir', 'docs/test-perspectives') ?? 'docs/test-perspectives').trim(),
     testExecutionReportDir: (config.get<string>('testExecutionReportDir', 'docs/test-execution-reports') ?? 'docs/test-execution-reports').trim(),
     testCommand: (config.get<string>('testCommand', 'npm test') ?? 'npm test').trim(),
+    testExecutionRunner: runner,
+    allowUnsafeTestCommand: config.get<boolean>('allowUnsafeTestCommand', false),
+    cursorAgentForceForTestExecution: config.get<boolean>('cursorAgentForceForTestExecution', false),
   };
 }
 
@@ -156,6 +191,13 @@ export function buildTestExecutionArtifactMarkdown(params: {
   const stdoutBlock = toCodeBlock('text', truncate(stripAnsi(params.result.stdout), 200_000));
   const stderrBlock = toCodeBlock('text', truncate(stripAnsi(params.result.stderr), 200_000));
   const errMsg = params.result.errorMessage ? `\n- spawn error: ${params.result.errorMessage}` : '';
+  const statusLine = params.result.skipped ? '- status: skipped' : '- status: executed';
+  const skipReasonLine =
+    params.result.skipped && params.result.skipReason && params.result.skipReason.trim().length > 0
+      ? `- skipReason: ${params.result.skipReason.trim()}`
+      : '';
+  const extensionLog = (params.result.extensionLog ?? '').trim();
+  const extensionLogBlock = toCodeBlock('text', truncate(stripAnsi(extensionLog.length > 0 ? extensionLog : '(ログなし)'), 200_000));
   const modelLine = params.model && params.model.trim().length > 0 ? `- model: ${params.model}` : '- model: (auto)';
 
   return [
@@ -174,6 +216,8 @@ export function buildTestExecutionArtifactMarkdown(params: {
     toCodeBlock('bash', params.result.command),
     '',
     '## 実行結果',
+    statusLine,
+    skipReasonLine,
     `- exitCode: ${params.result.exitCode ?? 'null'}`,
     `- signal: ${params.result.signal ?? 'null'}`,
     `- durationMs: ${params.result.durationMs}`,
@@ -184,6 +228,9 @@ export function buildTestExecutionArtifactMarkdown(params: {
     '',
     '## stderr',
     stderrBlock,
+    '',
+    '## 実行ログ（拡張機能）',
+    extensionLogBlock,
     '',
   ]
     .filter((line) => line !== '')

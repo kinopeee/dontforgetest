@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 suite('src/extension.ts', () => {
   suite('Extension Activation', () => {
@@ -71,6 +72,37 @@ suite('src/extension.ts', () => {
       assert.strictEqual(config.get('perspectiveReportDir'), 'docs/test-perspectives', 'perspectiveReportDirのデフォルト値が不正');
       assert.strictEqual(config.get('testExecutionReportDir'), 'docs/test-execution-reports', 'testExecutionReportDirのデフォルト値が不正');
       assert.strictEqual(config.get('testCommand'), 'npm test', 'testCommandのデフォルト値が不正');
+      assert.strictEqual(config.get('testExecutionRunner'), 'cursorAgent', 'testExecutionRunnerのデフォルト値が不正');
+      assert.strictEqual(config.get('allowUnsafeTestCommand'), false, 'allowUnsafeTestCommandのデフォルト値が不正');
+      assert.strictEqual(config.get('cursorAgentForceForTestExecution'), false, 'cursorAgentForceForTestExecutionのデフォルト値が不正');
+    });
+  });
+
+  suite('Metadata', () => {
+    // Given: 拡張機能がインストールされている
+    // When: package.json のメタデータを取得する
+    // Then: ライセンスが AGPL-3.0 であること
+    test('TC-META-01: ライセンス情報の確認', () => {
+      const ext = vscode.extensions.getExtension('local.testgen-agent');
+      assert.ok(ext, '拡張機能が見つかりません');
+      
+      const packageJSON = ext.packageJSON;
+      assert.strictEqual(packageJSON.license, 'AGPL-3.0', 'ライセンスが AGPL-3.0 ではありません');
+    });
+
+    // Given: 拡張機能がインストールされている
+    // When: LICENSE ファイルの存在を確認する
+    // Then: ファイルが存在すること
+    test('TC-META-02: ライセンスファイルの存在確認', async () => {
+      const ext = vscode.extensions.getExtension('local.testgen-agent');
+      assert.ok(ext, '拡張機能が見つかりません');
+
+      const licenseUri = vscode.Uri.file(path.join(ext.extensionPath, 'LICENSE'));
+      try {
+        await vscode.workspace.fs.stat(licenseUri);
+      } catch (error) {
+        assert.fail('LICENSE ファイルが存在しません');
+      }
     });
   });
 });

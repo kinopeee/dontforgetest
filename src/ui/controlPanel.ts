@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getModelCandidates, getModelSettings, setDefaultModel } from '../core/modelSettings';
 
-type PanelRunSource = 'activeFile' | 'latestCommit' | 'commitRange' | 'workingTree';
+type PanelRunSource = 'workingTree' | 'latestCommit' | 'commitRange';
 
 type WebviewMessage =
   | { type: 'ready' }
@@ -11,7 +11,6 @@ type WebviewMessage =
 
 type AllowedCommand =
   | 'testgen-agent.generateTest'
-  | 'testgen-agent.generateTestFromFile'
   | 'testgen-agent.generateTestFromCommit'
   | 'testgen-agent.generateTestFromCommitRange'
   | 'testgen-agent.generateTestFromWorkingTree'
@@ -139,14 +138,12 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
 
   private sourceToCommand(source: PanelRunSource): AllowedCommand | undefined {
     switch (source) {
-      case 'activeFile':
-        return 'testgen-agent.generateTestFromFile';
+      case 'workingTree':
+        return 'testgen-agent.generateTestFromWorkingTree';
       case 'latestCommit':
         return 'testgen-agent.generateTestFromCommit';
       case 'commitRange':
         return 'testgen-agent.generateTestFromCommitRange';
-      case 'workingTree':
-        return 'testgen-agent.generateTestFromWorkingTree';
       default: {
         const _exhaustive: never = source;
         return _exhaustive;
@@ -243,10 +240,9 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '    <div class="title">実行</div>',
       '    <div class="row">',
       '      <select id="sourceSelect" aria-label="source">',
-      '        <option value="activeFile">現在のファイル</option>',
+      '        <option value="workingTree">未コミット差分</option>',
       '        <option value="latestCommit">最新コミット差分</option>',
       '        <option value="commitRange">コミット範囲差分</option>',
-      '        <option value="workingTree">未コミット差分</option>',
       '      </select>',
       '    </div>',
       '    <div class="row">',
