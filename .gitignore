@@ -5,3 +5,7 @@ dist
 .vscode-test
 .DS_Store
 .cursor/debug.log
+
+# テスト生成物
+docs/test-execution-reports/
+docs/test-perspectives/
