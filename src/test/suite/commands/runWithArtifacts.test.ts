@@ -9,14 +9,18 @@ class MockProvider implements AgentProvider {
   readonly id = 'mock';
   readonly displayName = 'Mock';
   public lastRunOptions: AgentRunOptions | undefined;
+  public history: AgentRunOptions[] = [];
 
   constructor(
     private readonly exitCode: number | null = 0,
-    private readonly customBehavior?: (options: AgentRunOptions) => void
+    private readonly customBehavior?: (options: AgentRunOptions) => void,
+    private readonly perspectiveOutput?: string // 観点表生成時の出力を制御用
   ) { }
 
   run(options: AgentRunOptions): RunningTask {
     this.lastRunOptions = options;
+    this.history.push(options);
+
     // 非同期イベントを模倣
     setTimeout(() => {
       options.onEvent({
@@ -33,8 +37,16 @@ class MockProvider implements AgentProvider {
 
       // 観点表生成ステップでのログ出力を模倣
       if (options.taskId.endsWith('-perspectives')) {
-        // exitCode が 0 の場合のみマーカー付きログを出力（失敗時はマーカーなし）
-        if (this.exitCode === 0) {
+        // perspectiveOutput が指定されていればそれを優先、なければ exitCode で分岐
+        if (this.perspectiveOutput !== undefined) {
+          options.onEvent({
+            type: 'log',
+            taskId: options.taskId,
+            level: 'info',
+            message: this.perspectiveOutput,
+            timestampMs: Date.now(),
+          });
+        } else if (this.exitCode === 0) {
           options.onEvent({
             type: 'log',
             taskId: options.taskId,
@@ -1439,5 +1451,215 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(prompt.includes('デバッグ開始・ウォッチ開始・対話的セッション開始は禁止'), '対話禁止制約が含まれること');
     assert.ok(prompt.includes('<!-- BEGIN TEST EXECUTION RESULT -->'), '開始マーカー指示が含まれること');
     assert.ok(prompt.includes('npm test'), '実行すべきコマンドが含まれること');
+  });
+
+  // TC-N-01: 観点表抽出成功 -> プロンプト注入成功
+  test('TC-N-01: 観点表抽出に成功した場合、テスト生成プロンプトに観点表が注入される', async () => {
+    // Given: 正常な観点表マーカーを返す Provider
+    const perspectiveContent = '| ID | Case |\n|--|--|\n| 1 | Test |';
+    const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${perspectiveContent}\n<!-- END TEST PERSPECTIVES -->`;
+    const provider = new MockProvider(0, undefined, perspectiveLog);
+    const taskId = `task-n01-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-n01');
+
+    // When: runWithArtifacts
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Perspective Injection',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'Base Prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: true,
+        perspectiveReportDir: path.join(baseTempDir, 'perspectives-n01'),
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: メイン生成タスクのプロンプトに観点表が含まれていること
+    const mainTask = provider.history.find(h => h.taskId === taskId);
+    assert.ok(mainTask, 'メイン生成タスクが実行されること');
+    assert.ok(mainTask.prompt.includes('## 生成済みテスト観点表（必須）'), '観点表ヘッダーがプロンプトに含まれること');
+    assert.ok(mainTask.prompt.includes(perspectiveContent), '観点表の内容がプロンプトに含まれること');
+    assert.ok(mainTask.prompt.includes('Base Prompt'), '元のプロンプトも含まれること');
+  });
+
+  // TC-N-02: 観点表抽出失敗 -> プロンプト注入なし
+  test('TC-N-02: 観点表抽出に失敗した場合、テスト生成プロンプトは変更されない', async () => {
+    // Given: マーカーがないログを返す Provider
+    const provider = new MockProvider(0, undefined, 'Some logs without markers');
+    const taskId = `task-n02-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-n02');
+
+    // When: runWithArtifacts
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Perspective Fail Injection',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'Base Prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: true,
+        perspectiveReportDir: path.join(baseTempDir, 'perspectives-n02'),
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: プロンプトに変更がないこと
+    const mainTask = provider.history.find(h => h.taskId === taskId);
+    assert.ok(mainTask);
+    assert.strictEqual(mainTask.prompt, 'Base Prompt', '抽出失敗時はプロンプトが元のままであること');
+  });
+
+  // TC-N-03: 機能無効 -> プロンプト注入なし
+  test('TC-N-03: includeTestPerspectiveTable=false の場合、観点表生成タスクは走らずプロンプトも変更されない', async () => {
+    // Given: includeTestPerspectiveTable: false
+    const provider = new MockProvider(0);
+    const taskId = `task-n03-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-n03');
+
+    // When: runWithArtifacts
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Perspective Disabled',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'Base Prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false, // OFF
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: 観点表生成タスクがなく、プロンプトも変更なし
+    const perspectiveTask = provider.history.find(h => h.taskId.endsWith('-perspectives'));
+    assert.strictEqual(perspectiveTask, undefined, '観点表生成タスクは実行されないこと');
+
+    const mainTask = provider.history.find(h => h.taskId === taskId);
+    assert.ok(mainTask);
+    assert.strictEqual(mainTask.prompt, 'Base Prompt', 'プロンプトが元のままであること');
+  });
+
+  // TC-B-01: 観点表空文字 -> 注入なし
+  test('TC-B-01: 抽出された観点表が空文字列の場合、プロンプト注入は行われない', async () => {
+    // Given: 空の観点表マーカー
+    const emptyLog = '<!-- BEGIN TEST PERSPECTIVES --><!-- END TEST PERSPECTIVES -->';
+    const provider = new MockProvider(0, undefined, emptyLog);
+    const taskId = `task-b01-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-b01');
+
+    // When: runWithArtifacts
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Empty Perspective',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'Base Prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: true,
+        perspectiveReportDir: path.join(baseTempDir, 'perspectives-b01'),
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: プロンプト変更なし
+    const mainTask = provider.history.find(h => h.taskId === taskId);
+    assert.ok(mainTask);
+    assert.strictEqual(mainTask.prompt, 'Base Prompt', '空の観点表は注入されないこと');
+  });
+
+  // TC-B-02: 観点表空白のみ -> 注入なし
+  test('TC-B-02: 抽出された観点表が空白のみの場合、プロンプト注入は行われない', async () => {
+    // Given: 空白のみの観点表マーカー
+    const blankLog = '<!-- BEGIN TEST PERSPECTIVES -->   \n   <!-- END TEST PERSPECTIVES -->';
+    const provider = new MockProvider(0, undefined, blankLog);
+    const taskId = `task-b02-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-b02');
+
+    // When: runWithArtifacts
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Blank Perspective',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'Base Prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: true,
+        perspectiveReportDir: path.join(baseTempDir, 'perspectives-b02'),
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: プロンプト変更なし
+    const mainTask = provider.history.find(h => h.taskId === taskId);
+    assert.ok(mainTask);
+    assert.strictEqual(mainTask.prompt, 'Base Prompt', '空白のみの観点表は注入されないこと');
+  });
+
+  // TC-B-03: 元プロンプト空 -> 注入あり
+  test('TC-B-03: 元のプロンプトが空の場合でも、観点表があれば注入される', async () => {
+    // Given: 元プロンプトが空文字、観点表はあり
+    const perspectiveContent = '| ID | Case |';
+    const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${perspectiveContent}\n<!-- END TEST PERSPECTIVES -->`;
+    const provider = new MockProvider(0, undefined, perspectiveLog);
+    const taskId = `task-b03-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-b03');
+
+    // When: runWithArtifacts
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Empty Base Prompt',
+      targetPaths: ['test.ts'],
+      generationPrompt: '', // Empty
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: true,
+        perspectiveReportDir: path.join(baseTempDir, 'perspectives-b03'),
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: プロンプトに観点表が含まれる
+    const mainTask = provider.history.find(h => h.taskId === taskId);
+    assert.ok(mainTask);
+    assert.ok(mainTask.prompt.includes('## 生成済みテスト観点表（必須）'), 'ヘッダーが含まれること');
+    assert.ok(mainTask.prompt.includes(perspectiveContent), '観点表が含まれること');
+    // 空文字 + \n + ヘッダー... となるので、先頭が改行コードなどで始まる可能性があるが、内容は含まれているはず
   });
 });

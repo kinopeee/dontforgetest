@@ -179,9 +179,10 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
   try {
     showTestGenOutput(true);
 
-    // 1) 生成前: 観点表を生成して保存
+    // 1) 生成前: 観点表を生成して保存し、テスト生成プロンプトに注入
+    let finalPrompt = options.generationPrompt;
     if (settings.includeTestPerspectiveTable) {
-      await runPerspectiveTableStep({
+      const perspectiveResult = await runPerspectiveTableStep({
         provider: options.provider,
         workspaceRoot: options.workspaceRoot,
         cursorAgentCommand: options.cursorAgentCommand,
@@ -194,6 +195,11 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         timestamp,
         baseTaskId: options.generationTaskId,
       });
+
+      // 観点表が正常に抽出できた場合のみ、テスト生成プロンプトに注入する
+      if (perspectiveResult?.extracted) {
+        finalPrompt = appendPerspectiveToPrompt(options.generationPrompt, perspectiveResult.markdown);
+      }
     }
 
     // 2) 生成（本体）
@@ -206,7 +212,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         taskId: options.generationTaskId,
         workspaceRoot: options.workspaceRoot,
         agentCommand: options.cursorAgentCommand,
-        prompt: options.generationPrompt,
+        prompt: finalPrompt,
         model: options.model,
         outputFormat: 'stream-json',
         allowWrite: true,
@@ -598,6 +604,18 @@ async function runTestCommandViaCursorAgent(params: {
   };
 }
 
+/**
+ * テスト観点表生成ステップの結果。
+ * 保存した成果物情報と、テスト生成に注入できる観点表のマークダウンを含む。
+ */
+interface PerspectiveStepResult {
+  saved: SavedArtifact;
+  /** 抽出された観点表のマークダウン（抽出成功時のみテスト生成に使用可能） */
+  markdown: string;
+  /** マーカーから正常に抽出できたかどうか */
+  extracted: boolean;
+}
+
 async function runPerspectiveTableStep(params: {
   provider: AgentProvider;
   workspaceRoot: string;
@@ -610,7 +628,7 @@ async function runPerspectiveTableStep(params: {
   reportDir: string;
   timestamp: string;
   baseTaskId: string;
-}): Promise<SavedArtifact | undefined> {
+}): Promise<PerspectiveStepResult | undefined> {
   const taskId = `${params.baseTaskId}-perspectives`;
 
   const { prompt } = await buildTestPerspectivePrompt({
@@ -644,15 +662,15 @@ async function runPerspectiveTableStep(params: {
 
   const raw = logs.join('\n');
   const extracted = extractBetweenMarkers(raw, '<!-- BEGIN TEST PERSPECTIVES -->', '<!-- END TEST PERSPECTIVES -->');
-  const perspectiveMarkdown =
-    extracted?.trim().length
-      ? extracted.trim()
-      : [
-        '> 観点表の抽出に失敗したため、取得できたログをそのまま保存します。',
-        `> provider exit=${exitCode ?? 'null'}`,
-        '',
-        raw.trim().length > 0 ? raw.trim() : '(ログが空でした)',
-      ].join('\n');
+  const wasExtracted = Boolean(extracted?.trim().length);
+  const perspectiveMarkdown = wasExtracted
+    ? extracted!.trim()
+    : [
+      '> 観点表の抽出に失敗したため、取得できたログをそのまま保存します。',
+      `> provider exit=${exitCode ?? 'null'}`,
+      '',
+      raw.trim().length > 0 ? raw.trim() : '(ログが空でした)',
+    ].join('\n');
 
   const saved = await saveTestPerspectiveTable({
     workspaceRoot: params.workspaceRoot,
@@ -664,7 +682,7 @@ async function runPerspectiveTableStep(params: {
   });
 
   appendEventToOutput(emitLogEvent(taskId, 'info', `テスト観点表を保存しました: ${saved.relativePath ?? saved.absolutePath}`));
-  return saved;
+  return { saved, markdown: perspectiveMarkdown, extracted: wasExtracted };
 }
 
 async function runProviderToCompletion(params: {
@@ -721,3 +739,18 @@ function extractBetweenMarkers(text: string, begin: string, end: string): string
   return text.slice(afterStart, stop).trim();
 }
 
+/**
+ * テスト生成プロンプトに観点表を追加する。
+ * 生成されたテストが観点表に記載されたすべてのケースを網羅するよう指示を含める。
+ */
+function appendPerspectiveToPrompt(basePrompt: string, perspectiveMarkdown: string): string {
+  return [
+    basePrompt,
+    '',
+    '## 生成済みテスト観点表（必須）',
+    '以下の観点表に記載された **すべてのケース** をテストとして実装してください。',
+    '観点表のケースを漏れなく網羅し、各テストケースに対応する Case ID をコメントで記載すること。',
+    '',
+    perspectiveMarkdown,
+  ].join('\n');
+}
