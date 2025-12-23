@@ -88,21 +88,21 @@ export async function previewLastRun(): Promise<void> {
 
 export async function rollbackLastRun(): Promise<void> {
   if (!lastRun) {
-    void vscode.window.showInformationMessage('ロールバック対象の直近実行がありません。');
+    void vscode.window.showInformationMessage('元に戻す対象の直近実行がありません。');
     return;
   }
 
   const picked = await vscode.window.showWarningMessage(
-    `直近実行（${lastRun.label}）の変更をロールバックします。よろしいですか？`,
+    `直近実行（${lastRun.label}）の変更を元に戻します(Undo)。よろしいですか？`,
     { modal: true },
-    'ロールバックする',
+    '元に戻す',
   );
-  if (picked !== 'ロールバックする') {
+  if (picked !== '元に戻す') {
     return;
   }
 
   await restoreWorkspaceSnapshot(lastRun.snapshot);
-  void vscode.window.showInformationMessage(`ロールバックが完了しました: ${lastRun.label}`);
+  void vscode.window.showInformationMessage(`変更を元に戻しました: ${lastRun.label}`);
 }
 
 function normalizeToWorkspaceRelative(workspaceRoot: string, inputPath: string): string | undefined {

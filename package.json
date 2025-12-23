@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "Chottotest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -74,7 +74,7 @@
       },
       {
         "command": "testgen-agent.rollbackLastRun",
-        "title": "Chottotest: 直近実行をロールバック"
+        "title": "Chottotest: 直近実行を元に戻す(Undo)"
       },
       {
         "command": "testgen-agent.showTestGeneratorOutput",
