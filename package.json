@@ -83,8 +83,22 @@
       {
         "command": "testgen-agent.selectDefaultModel",
         "title": "Chottotest: デフォルトモデルを選択"
+      },
+      {
+        "command": "testgen-agent.openSettings",
+        "title": "Chottotest: 設定を開く",
+        "icon": "$(gear)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "testgen-agent.openSettings",
+          "when": "view == testgen-agent.controlPanel",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "Chottotest",
       "properties": {

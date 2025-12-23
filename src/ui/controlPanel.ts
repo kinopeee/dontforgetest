@@ -1,13 +1,11 @@
 import * as vscode from 'vscode';
-import { getModelCandidates, getModelSettings, setDefaultModel } from '../core/modelSettings';
 
 type PanelRunSource = 'workingTree' | 'latestCommit' | 'commitRange';
 
 type WebviewMessage =
   | { type: 'ready' }
   | { type: 'run'; source: PanelRunSource }
-  | { type: 'runCommand'; command: AllowedCommand }
-  | { type: 'setDefaultModel'; model: string | null };
+  | { type: 'runCommand'; command: AllowedCommand };
 
 type AllowedCommand =
   | 'testgen-agent.generateTest'
@@ -17,19 +15,10 @@ type AllowedCommand =
   | 'testgen-agent.previewLastRun'
   | 'testgen-agent.rollbackLastRun'
   | 'testgen-agent.showTestGeneratorOutput'
-  | 'testgen-agent.selectDefaultModel'
-  | 'workbench.action.openSettings';
-
-interface PanelState {
-  defaultModel?: string;
-  modelCandidates: string[];
-}
+  | 'testgen-agent.selectDefaultModel';
 
 interface ControlPanelDeps {
   executeCommand: (command: AllowedCommand) => Thenable<unknown>;
-  openSettings: () => Thenable<unknown>;
-  setDefaultModel: (model: string | undefined) => Promise<void>;
-  getPanelState: () => PanelState;
 }
 
 /**
@@ -37,7 +26,7 @@ interface ControlPanelDeps {
  *
  * 方針:
  * - UI は最小構成（既存コマンド呼び出しに寄せる）
- * - モデルは「設定 → 未設定なら自動選択」に統一（動的取得はしない）
+ * - 設定はビュータイトルバーのギアアイコンから開く
  */
 export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = 'testgen-agent.controlPanel';
@@ -64,26 +53,12 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       // ローカル読み込みは現状不要（script/style はインライン）
     };
 
-    webviewView.webview.html = this.buildHtml(webviewView.webview);
+    webviewView.webview.html = this.buildHtml();
 
     webviewView.webview.onDidReceiveMessage(async (raw: unknown) => {
       const msg = raw as WebviewMessage;
       await this.handleMessage(msg);
     });
-
-    // 初期状態を送る
-    this.postState();
-
-    // 設定変更を UI へ反映
-    const disposable = vscode.workspace.onDidChangeConfiguration((e) => {
-      if (
-        e.affectsConfiguration('testgen-agent.defaultModel') ||
-        e.affectsConfiguration('testgen-agent.customModels')
-      ) {
-        this.postState();
-      }
-    });
-    this.context.subscriptions.push(disposable);
   }
 
   private async handleMessage(msg: WebviewMessage): Promise<void> {
@@ -92,7 +67,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
     }
 
     if (msg.type === 'ready') {
-      this.postState();
+      // 状態を送る必要がなくなったため何もしない
       return;
     }
 
@@ -107,33 +82,9 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
 
     if (msg.type === 'runCommand') {
       // セキュリティのため、許可したコマンドのみ実行する
-      await this.executeAllowedCommand(msg.command);
+      await this.deps.executeCommand(msg.command);
       return;
     }
-
-    if (msg.type === 'setDefaultModel') {
-      // null: 自動選択（未設定）
-      if (msg.model === null) {
-        await this.deps.setDefaultModel(undefined);
-        this.postState();
-        return;
-      }
-      const trimmed = msg.model.trim();
-      if (trimmed.length === 0) {
-        return;
-      }
-      await this.deps.setDefaultModel(trimmed);
-      this.postState();
-      return;
-    }
-  }
-
-  private async executeAllowedCommand(command: AllowedCommand): Promise<void> {
-    if (command === 'workbench.action.openSettings') {
-      await this.deps.openSettings();
-      return;
-    }
-    await this.deps.executeCommand(command);
   }
 
   private sourceToCommand(source: PanelRunSource): AllowedCommand | undefined {
@@ -151,21 +102,8 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
     }
   }
 
-  private getPanelState(): PanelState {
-    return this.deps.getPanelState();
-  }
-
-  private postState(): void {
-    if (!this.view) {
-      return;
-    }
-    void this.view.webview.postMessage({ type: 'state', state: this.getPanelState() });
-  }
-
-  private buildHtml(webview: vscode.Webview): string {
+  private buildHtml(): string {
     const nonce = getNonce();
-    const initial = this.getPanelState();
-    const initialJson = JSON.stringify(initial);
 
     return [
       '<!DOCTYPE html>',
@@ -173,7 +111,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '<head>',
       '  <meta charset="UTF-8" />',
       '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
-      `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />`,
+      `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';" />`,
       '  <title>Chottotest</title>',
       '  <style>',
       '    :root {',
@@ -230,9 +168,6 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '      font-size: 11px;',
       '      line-height: 1.35;',
       '    }',
-      '    .mono {',
-      '      font-family: var(--vscode-editor-font-family);',
-      '    }',
       '  </style>',
       '</head>',
       '<body>',
@@ -255,17 +190,6 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '  </div>',
       '',
       '  <div class="section">',
-      '    <div class="title">モデル（設定 → 自動選択フォールバック）</div>',
-      '    <div class="row">',
-      '      <select id="modelSelect" aria-label="model"></select>',
-      '    </div>',
-      '    <div class="row">',
-      '      <button class="secondary" id="openSettingsBtn">設定を開く</button>',
-      '    </div>',
-      '    <div class="muted">現在の defaultModel: <span class="mono" id="currentModel"></span></div>',
-      '  </div>',
-      '',
-      '  <div class="section">',
       '    <div class="title">差分 / ロールバック</div>',
       '    <div class="row"><button class="secondary" id="previewBtn">直近実行の差分を表示</button></div>',
       '    <div class="row"><button class="secondary" id="rollbackBtn">直近実行をロールバック</button></div>',
@@ -278,52 +202,13 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '',
       `  <script nonce="${nonce}">`,
       '    const vscode = acquireVsCodeApi();',
-      `    let state = ${initialJson};`,
       '',
       '    const sourceSelect = document.getElementById("sourceSelect");',
       '    const runBtn = document.getElementById("runBtn");',
       '    const quickPickBtn = document.getElementById("quickPickBtn");',
-      '    const modelSelect = document.getElementById("modelSelect");',
-      '    const openSettingsBtn = document.getElementById("openSettingsBtn");',
-      '    const currentModel = document.getElementById("currentModel");',
       '    const previewBtn = document.getElementById("previewBtn");',
       '    const rollbackBtn = document.getElementById("rollbackBtn");',
       '    const openLogBtn = document.getElementById("openLogBtn");',
-      '',
-      '    function renderModel() {',
-      '      const dm = state.defaultModel ? state.defaultModel : "（未設定: 自動選択）";',
-      '      currentModel.textContent = dm;',
-      '',
-      '      // 既存 options を全消し',
-      '      while (modelSelect.firstChild) modelSelect.removeChild(modelSelect.firstChild);',
-      '',
-      '      const optAuto = document.createElement("option");',
-      '      optAuto.value = "__AUTO__";',
-      '      optAuto.textContent = "自動選択（未設定）";',
-      '      modelSelect.appendChild(optAuto);',
-      '',
-      '      (state.modelCandidates || []).forEach((m) => {',
-      '        const opt = document.createElement("option");',
-      '        opt.value = m;',
-      '        opt.textContent = m;',
-      '        modelSelect.appendChild(opt);',
-      '      });',
-      '',
-      '      if (state.defaultModel) {',
-      '        modelSelect.value = state.defaultModel;',
-      '      } else {',
-      '        modelSelect.value = "__AUTO__";',
-      '      }',
-      '    }',
-      '',
-      '    window.addEventListener("message", (event) => {',
-      '      const msg = event.data;',
-      '      if (!msg || typeof msg !== "object") return;',
-      '      if (msg.type === "state") {',
-      '        state = msg.state;',
-      '        renderModel();',
-      '      }',
-      '    });',
       '',
       '    runBtn.addEventListener("click", () => {',
       '      vscode.postMessage({ type: "run", source: sourceSelect.value });',
@@ -331,19 +216,6 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '',
       '    quickPickBtn.addEventListener("click", () => {',
       '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.generateTest" });',
-      '    });',
-      '',
-      '    modelSelect.addEventListener("change", () => {',
-      '      const v = modelSelect.value;',
-      '      if (v === "__AUTO__") {',
-      '        vscode.postMessage({ type: "setDefaultModel", model: null });',
-      '        return;',
-      '      }',
-      '      vscode.postMessage({ type: "setDefaultModel", model: v });',
-      '    });',
-      '',
-      '    openSettingsBtn.addEventListener("click", () => {',
-      '      vscode.postMessage({ type: "runCommand", command: "workbench.action.openSettings" });',
       '    });',
       '',
       '    previewBtn.addEventListener("click", () => {',
@@ -357,10 +229,6 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '    openLogBtn.addEventListener("click", () => {',
       '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.showTestGeneratorOutput" });',
       '    });',
-      '',
-      '    // 初回レンダリング',
-      '    renderModel();',
-      '    vscode.postMessage({ type: "ready" });',
       '  </script>',
       '</body>',
       '</html>',
@@ -380,15 +248,6 @@ function getNonce(): string {
 function createDefaultDeps(): ControlPanelDeps {
   return {
     executeCommand: async (command) => await vscode.commands.executeCommand(command),
-    openSettings: async () => await vscode.commands.executeCommand('workbench.action.openSettings', 'testgen-agent'),
-    setDefaultModel: async (model) => await setDefaultModel(model),
-    getPanelState: () => {
-      const settings = getModelSettings();
-      return {
-        defaultModel: settings.defaultModel,
-        modelCandidates: getModelCandidates(settings),
-      };
-    },
   };
 }
 

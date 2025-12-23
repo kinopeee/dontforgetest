@@ -86,6 +86,12 @@ export function activate(context: vscode.ExtensionContext) {
       await rollbackLastRun();
     }),
   );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('testgen-agent.openSettings', async () => {
+      await vscode.commands.executeCommand('workbench.action.openSettings', 'testgen-agent');
+    }),
+  );
 }
 
 /**

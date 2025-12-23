@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
 import { generateTestFromLatestCommit } from '../commands/generateFromCommit';
 import { generateTestFromCommitRange } from '../commands/generateFromCommitRange';
-import { generateTestFromActiveFile } from '../commands/generateFromFile';
 import { generateTestFromWorkingTree } from '../commands/generateFromWorkingTree';
 import { getModelSettings } from '../core/modelSettings';
 import { ensurePreflight } from '../core/preflight';
 import { type AgentProvider } from '../providers/provider';
 
-type SourceKind = 'activeFile' | 'latestCommit' | 'commitRange' | 'workingTree';
+type SourceKind = 'workingTree' | 'latestCommit' | 'commitRange';
 type SourcePickItem = vscode.QuickPickItem & { source: SourceKind };
 type ModelPickMode = 'useConfig' | 'useCandidate' | 'input' | 'separator';
 type ModelPickItem = vscode.QuickPickItem & { mode: ModelPickMode; modelValue?: string };
@@ -34,17 +33,14 @@ export async function generateTestWithQuickPick(provider: AgentProvider): Promis
   }
 
   switch (source) {
-    case 'activeFile':
-      await generateTestFromActiveFile(provider, modelOverride);
+    case 'workingTree':
+      await generateTestFromWorkingTree(provider, modelOverride);
       return;
     case 'latestCommit':
       await generateTestFromLatestCommit(provider, modelOverride);
       return;
     case 'commitRange':
       await generateTestFromCommitRange(provider, modelOverride);
-      return;
-    case 'workingTree':
-      await generateTestFromWorkingTree(provider, modelOverride);
       return;
     default: {
       const _exhaustive: never = source;
@@ -56,10 +52,9 @@ export async function generateTestWithQuickPick(provider: AgentProvider): Promis
 async function pickSource(): Promise<SourceKind | undefined> {
   const picked = await vscode.window.showQuickPick<SourcePickItem>(
     [
-      { label: '現在のファイル', description: 'アクティブエディタのファイル', source: 'activeFile' },
+      { label: '未コミット差分', description: 'staged / unstaged を選択', source: 'workingTree' },
       { label: '最新コミット差分', description: 'HEAD の差分', source: 'latestCommit' },
       { label: 'コミット範囲差分', description: 'main..HEAD 等を指定', source: 'commitRange' },
-      { label: '未コミット差分', description: 'staged / unstaged を選択', source: 'workingTree' },
     ],
     { title: 'Chottotest: 実行ソースを選択', placeHolder: 'どの差分/対象からテストを生成しますか？' },
   );
