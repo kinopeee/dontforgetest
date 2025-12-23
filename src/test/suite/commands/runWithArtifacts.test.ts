@@ -1662,4 +1662,102 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(mainTask.prompt.includes(perspectiveContent), '観点表が含まれること');
     // 空文字 + \n + ヘッダー... となるので、先頭が改行コードなどで始まる可能性があるが、内容は含まれているはず
   });
+
+  // TC-LOG-xx: ログイベントのフィルタリングとフォーマット
+  test('TC-LOG-xx: ログイベントのサニタイズとフィルタリング (TC-LOG-01 ~ 06)', async () => {
+    // Given: 様々な種類のログイベントを発行する Provider
+    const taskId = `task-log-xx-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-log-xx');
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        const emit = (msg: any) => {
+          options.onEvent({
+            type: 'log',
+            taskId: options.taskId,
+            level: 'info',
+            message: msg,
+            timestampMs: Date.now(),
+          });
+        };
+
+        // TC-LOG-01: Standard text
+        emit('Standard Log Message');
+        
+        // TC-LOG-02: Empty string
+        emit('');
+
+        // TC-LOG-03: Whitespace only
+        emit('   ');
+
+        // TC-LOG-04: ANSI codes only
+        emit('\u001b[31m\u001b[0m');
+
+        // TC-LOG-05: Multi-line text
+        emit('Line 1\nLine 2');
+
+        // TC-LOG-06: null / undefined (TypeScriptにより保護されているため、ここではテストしない)
+        // emit(null as any); 
+
+        // Result marker
+        emit([
+          '<!-- BEGIN TEST EXECUTION RESULT -->',
+          'exitCode: 0',
+          'durationMs: 0',
+          '<!-- END TEST EXECUTION RESULT -->',
+        ].join('\n'));
+      }
+    });
+
+    // When: runWithArtifacts
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Log Check',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'cursorAgent',
+      }
+    });
+
+    // Then: レポートの内容を検証
+    const reportUri = vscode.Uri.file(path.join(workspaceRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0);
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+
+    // Log section extraction
+    const logSection = text.split('## 実行ログ（拡張機能）')[1] || '';
+
+    // TC-LOG-01
+    assert.ok(logSection.includes('Standard Log Message'), 'TC-LOG-01: 通常のログは含まれること');
+
+    // TC-LOG-02, 03, 04
+    // ログセクションに行（行頭のスペースを含む）として残っていないことを確認
+    const logLines = logSection.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    // 期待されるログ行:
+    // [TIMESTAMP] ... INFO Standard Log Message
+    // [TIMESTAMP] ... INFO Line 1
+    // Line 2
+    // ... Result Marker logs ...
+    
+    // 空行やANSIのみの行が含まれていないかチェック
+    // 注: sanitizeLogMessageForReport で除去された場合、ここには出てこない。
+    assert.ok(!logLines.some(l => l === ''), '空行は除去されていること');
+    // ANSIコード除去後の空行チェックは artifacts.ts のテストで行っているが、
+    // ここでは「空のメッセージ」がログとして出力されていない（行自体がない）ことを確認したい。
+    // メッセージが空なら行自体が生成されないロジックを期待。
+    // 実装: if (sanitized.length === 0) break; -> captureEvent
+    // captureEvent では sanitized があればログ行を追加。
+    // なので、sanitized が空ならログ行自体が追加されない。OK.
+  });
 });

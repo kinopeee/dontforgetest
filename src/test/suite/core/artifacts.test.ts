@@ -457,6 +457,7 @@ suite('core/artifacts.ts', () => {
   });
 
   // TC-ART-20: parseMochaOutput (正常系: パス)
+  // Covers TC-ART-01: Call parseMochaOutput via artifacts module (Success output)
   test('TC-ART-20: parseMochaOutput がパスしたテストを正しく解析する', () => {
     // Given: 成功パターンの出力
     const stdout = `
@@ -478,6 +479,7 @@ suite('core/artifacts.ts', () => {
   });
 
   // TC-ART-21: parseMochaOutput (正常系: 失敗)
+  // Covers TC-ART-02: Call parseMochaOutput via artifacts module (Fail output)
   test('TC-ART-21: parseMochaOutput が失敗したテストを正しく解析する', () => {
     // Given: 失敗パターンの出力（数字やバツ印）
     const stdout = `

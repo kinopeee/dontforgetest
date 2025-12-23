@@ -145,7 +145,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       case 'started':
         testExecutionLogLines.push(`[${tsIso}] [${event.taskId}] START ${event.label}${event.detail ? ` (${event.detail})` : ''}`);
         break;
-      case 'log':
+      case 'log': {
         // Output Channel と同等の情報を残しつつ、レポート向けに整形する（message は改行を含み得る）
         const sanitized = sanitizeLogMessageForReport(event.message);
         if (sanitized.length === 0) {
@@ -158,6 +158,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
           testExecutionLogLines.push(`  ${lines[i] ?? ''}`.trimEnd());
         }
         break;
+      }
       case 'fileWrite':
         testExecutionLogLines.push(
           `[${tsIso}] [${event.taskId}] WRITE ${event.path}` +
@@ -176,8 +177,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     }
   };
 
-  try {
-    showTestGenOutput(true);
+  showTestGenOutput(true);
 
     // 1) 生成前: 観点表を生成して保存し、テスト生成プロンプトに注入
     let finalPrompt = options.generationPrompt;
@@ -478,10 +478,6 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     });
 
     appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
-  } catch (err) {
-    const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    throw err;
-  }
 }
 
 async function runTestCommandViaCursorAgent(params: {
@@ -540,7 +536,6 @@ async function runTestCommandViaCursorAgent(params: {
   ].join('\n');
 
   const logs: string[] = [];
-  let sawFileWrite = false;
   const exit = await runProviderToCompletion({
     provider: params.provider,
     run: {
@@ -554,9 +549,6 @@ async function runTestCommandViaCursorAgent(params: {
     },
     onEvent: (event) => {
       params.onEvent(event);
-      if (event.type === 'fileWrite') {
-        sawFileWrite = true;
-      }
       if (event.type === 'log') {
         logs.push(event.message);
       }

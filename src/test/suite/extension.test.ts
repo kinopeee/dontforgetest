@@ -100,7 +100,7 @@ suite('src/extension.ts', () => {
       const licenseUri = vscode.Uri.file(path.join(ext.extensionPath, 'LICENSE'));
       try {
         await vscode.workspace.fs.stat(licenseUri);
-      } catch (error) {
+      } catch {
         assert.fail('LICENSE ファイルが存在しません');
       }
     });

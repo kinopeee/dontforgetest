@@ -3,6 +3,19 @@ import * as vscode from 'vscode';
 import { generateTestWithQuickPick } from '../../../ui/quickPick';
 import { AgentProvider } from '../../../providers/provider';
 
+// QuickPick アイテムの型定義
+interface MockQuickPickItem extends vscode.QuickPickItem {
+  source?: string;
+  mode?: string;
+  modelValue?: string;
+}
+
+// QuickPick 呼び出し履歴の型
+interface QuickPickCall {
+  items: MockQuickPickItem[];
+  options: vscode.QuickPickOptions;
+}
+
 // テスト用のモックプロバイダー
 const mockProvider: AgentProvider = {
   id: 'mock-provider',
@@ -23,12 +36,12 @@ suite('src/ui/quickPick.ts', () => {
   let originalWindow: typeof vscode.window;
   let originalWorkspace: typeof vscode.workspace;
   
-  let showQuickPickStub: (items: any, options: any) => Promise<any>;
-  let showInputBoxStub: (options: any) => Promise<any>;
+  let showQuickPickStub: (items: MockQuickPickItem[], options: vscode.QuickPickOptions) => Promise<MockQuickPickItem | undefined>;
+  let showInputBoxStub: (options: vscode.InputBoxOptions) => Promise<string | undefined>;
   let showErrorMessageStub: (message: string, ...items: string[]) => Promise<string | undefined>;
   
   // 呼び出し履歴
-  let quickPickCalls: any[] = [];
+  let quickPickCalls: QuickPickCall[] = [];
   let errorMessages: string[] = [];
 
   setup(() => {
@@ -45,46 +58,46 @@ suite('src/ui/quickPick.ts', () => {
 
     // vscode.window のモック化
     try {
-      // @ts-ignore
-      vscode.window.showQuickPick = async (items: any, options: any) => {
+      // @ts-expect-error テスト用にAPIをモック化
+      vscode.window.showQuickPick = async (items: MockQuickPickItem[], options: vscode.QuickPickOptions) => {
         quickPickCalls.push({ items, options });
         return showQuickPickStub(items, options);
       };
-      // @ts-ignore
-      vscode.window.showInputBox = async (options: any) => {
+      // @ts-expect-error テスト用にAPIをモック化
+      vscode.window.showInputBox = async (options: vscode.InputBoxOptions) => {
         return showInputBoxStub(options);
       };
-      // @ts-ignore
+      // @ts-expect-error テスト用にAPIをモック化
       vscode.window.showErrorMessage = async (message: string, ...items: string[]) => {
         errorMessages.push(message);
         return showErrorMessageStub(message, ...items);
       };
-    } catch (e) {
-      console.warn('vscode APIのモック化に失敗しました。この環境ではテストできません。', e);
+    } catch {
+      console.warn('vscode APIのモック化に失敗しました。この環境ではテストできません。');
     }
 
     // preflight をパスさせるための workspace モック
     try {
       // workspaceRoot のモック
-      // @ts-ignore
+      // @ts-expect-error テスト用にAPIをモック化
       vscode.workspace.workspaceFolders = [{ uri: { fsPath: '/mock/root' } }];
       
       // getConfiguration のモック
-      // @ts-ignore
-      vscode.workspace.getConfiguration = (section: string) => {
+      // @ts-expect-error テスト用にAPIをモック化
+      vscode.workspace.getConfiguration = (_section: string) => {
         return {
-            get: (key: string, defaultValue?: any) => {
+            get: <T>(key: string, defaultValue?: T): T | undefined => {
                 // cursorAgentPath に echo コマンドを指定して実行可能に見せかける
-                if (key === 'cursorAgentPath') return 'echo';
+                if (key === 'cursorAgentPath') return 'echo' as T;
                 // testStrategyPath
-                if (key === 'testStrategyPath') return 'docs/test-strategy.md';
+                if (key === 'testStrategyPath') return 'docs/test-strategy.md' as T;
                 return defaultValue;
             }
         };
       };
       
       // fs.stat のモック (testStrategyPath の存在確認用)
-      // @ts-ignore
+      // @ts-expect-error テスト用にAPIをモック化
       vscode.workspace.fs = {
           stat: async (uri: vscode.Uri) => {
               if (uri.fsPath.endsWith('docs/test-strategy.md')) {
@@ -94,29 +107,35 @@ suite('src/ui/quickPick.ts', () => {
           }
       };
 
-    } catch (e) {
-      console.warn('vscode workspace APIのモック化に失敗しました。', e);
+    } catch {
+      console.warn('vscode workspace APIのモック化に失敗しました。');
     }
   });
 
   teardown(() => {
     // 復元
     try {
-        // @ts-ignore
         vscode.window.showQuickPick = originalWindow.showQuickPick;
-        // @ts-ignore
         vscode.window.showInputBox = originalWindow.showInputBox;
-        // @ts-ignore
         vscode.window.showErrorMessage = originalWindow.showErrorMessage;
         
-        // @ts-ignore
+        // @ts-expect-error テスト用にAPIを復元（read-onlyプロパティへの代入）
         vscode.workspace.workspaceFolders = originalWorkspace.workspaceFolders;
-        // @ts-ignore
         vscode.workspace.getConfiguration = originalWorkspace.getConfiguration;
-        // @ts-ignore
+        // @ts-expect-error テスト用にAPIを復元（read-onlyプロパティへの代入）
         vscode.workspace.fs = originalWorkspace.fs;
-    } catch (e) {
+    } catch {
         // 無視
+    }
+  });
+
+  // TC-QP-02 (Perspective): Mock showQuickPick with invalid types
+  test('TC-QP-TypeCheck-02: Mock showQuickPick with invalid types', async () => {
+    try {
+      // @ts-expect-error テスト用に不正な型を渡す
+      await vscode.window.showQuickPick('invalid', {});
+    } catch {
+       // モック実装が配列を期待して落ちる可能性があるが、型チェックのテストとしてはOK
     }
   });
 
@@ -125,15 +144,15 @@ suite('src/ui/quickPick.ts', () => {
   // Then: generateTestFromWorkingTree に関連する次のQuickPickが表示される
   test('TC-QP-01: workingTree 選択時の挙動', async () => {
     // 1回目の QuickPick (Source選択)
-    showQuickPickStub = async (items: any, options: any) => {
+    showQuickPickStub = async (items: MockQuickPickItem[], options: vscode.QuickPickOptions) => {
         if (options.title === 'Chottotest: 実行ソースを選択') {
             // itemsの中から workingTree を持つものを探して返す
-            const found = items.find((i: any) => i.source === 'workingTree');
+            const found = items.find((i: MockQuickPickItem) => i.source === 'workingTree');
             return found;
         }
         // 2回目の QuickPick (Model選択 - pickModelOverride) -> useConfig
         if (options.title === 'Chottotest: モデルを選択') {
-            const found = items.find((i: any) => i.mode === 'useConfig');
+            const found = items.find((i: MockQuickPickItem) => i.mode === 'useConfig');
             return found;
         }
         // 3回目の QuickPick (Staged/Unstaged選択 - generateTestFromWorkingTree内)
@@ -155,12 +174,12 @@ suite('src/ui/quickPick.ts', () => {
   // When: generateTestWithQuickPick を実行
   // Then: generateTestFromLatestCommit が実行される（エラーメッセージ等で検証）
   test('TC-QP-02: latestCommit 選択時の挙動', async () => {
-    showQuickPickStub = async (items: any, options: any) => {
+    showQuickPickStub = async (items: MockQuickPickItem[], options: vscode.QuickPickOptions) => {
         if (options.title === 'Chottotest: 実行ソースを選択') {
-            return items.find((i: any) => i.source === 'latestCommit');
+            return items.find((i: MockQuickPickItem) => i.source === 'latestCommit');
         }
         if (options.title === 'Chottotest: モデルを選択') {
-            return items.find((i: any) => i.mode === 'useConfig');
+            return items.find((i: MockQuickPickItem) => i.mode === 'useConfig');
         }
         return undefined;
     };
@@ -179,19 +198,19 @@ suite('src/ui/quickPick.ts', () => {
   // When: generateTestWithQuickPick を実行
   // Then: コミット範囲入力のInputBoxが表示される
   test('TC-QP-03: commitRange 選択時の挙動', async () => {
-    showQuickPickStub = async (items: any, options: any) => {
+    showQuickPickStub = async (items: MockQuickPickItem[], options: vscode.QuickPickOptions) => {
         if (options.title === 'Chottotest: 実行ソースを選択') {
-            return items.find((i: any) => i.source === 'commitRange');
+            return items.find((i: MockQuickPickItem) => i.source === 'commitRange');
         }
         if (options.title === 'Chottotest: モデルを選択') {
-            return items.find((i: any) => i.mode === 'useConfig');
+            return items.find((i: MockQuickPickItem) => i.mode === 'useConfig');
         }
         return undefined;
     };
     
     // generateTestFromCommitRange は内部で InputBox を呼ぶ
     let inputBoxCalled = false;
-    showInputBoxStub = async (options: any) => {
+    showInputBoxStub = async (options: vscode.InputBoxOptions) => {
         if (options.title === 'コミット範囲を指定') {
             inputBoxCalled = true;
             return undefined; // キャンセル
@@ -221,9 +240,9 @@ suite('src/ui/quickPick.ts', () => {
   // When: generateTestWithQuickPick を実行
   // Then: 何も実行されない
   test('TC-QP-05: モデル選択キャンセル', async () => {
-    showQuickPickStub = async (items: any, options: any) => {
+    showQuickPickStub = async (items: MockQuickPickItem[], options: vscode.QuickPickOptions) => {
       if (options.title === 'Chottotest: 実行ソースを選択') {
-        return items.find((i: any) => i.source === 'workingTree');
+        return items.find((i: MockQuickPickItem) => i.source === 'workingTree');
       }
       if (options.title === 'Chottotest: モデルを選択') {
         return undefined; // キャンセル
@@ -242,18 +261,18 @@ suite('src/ui/quickPick.ts', () => {
   // When: モデル名を入力
   // Then: 入力されたモデル名が使用される（検証困難だがフローは通る）
   test('TC-QP-06: モデル入力', async () => {
-    showQuickPickStub = async (items: any, options: any) => {
+    showQuickPickStub = async (items: MockQuickPickItem[], options: vscode.QuickPickOptions) => {
         if (options.title === 'Chottotest: 実行ソースを選択') {
-            return items.find((i: any) => i.source === 'workingTree'); // workingTreeを選択
+            return items.find((i: MockQuickPickItem) => i.source === 'workingTree'); // workingTreeを選択
         }
         if (options.title === 'Chottotest: モデルを選択') {
-            return items.find((i: any) => i.mode === 'input'); // 入力モード
+            return items.find((i: MockQuickPickItem) => i.mode === 'input'); // 入力モード
         }
         return undefined; // generateTestFromWorkingTree内でのキャンセル
     };
 
     let modelInputCalled = false;
-    showInputBoxStub = async (options: any) => {
+    showInputBoxStub = async (options: vscode.InputBoxOptions) => {
         if (options.title === 'モデルを入力') {
             modelInputCalled = true;
             return 'my-custom-model';
