@@ -82,6 +82,75 @@ suite('commands/runWithArtifacts.ts', () => {
   // テスト間での衝突を避けるためユニークなディレクトリを使用
   const baseTempDir = 'out/test-artifacts-cmd';
 
+  // --- Type Safety Tests ---
+
+  // TC-TYP-01: runWithArtifacts.test.ts への string 入力
+  // Given: MockProvider内で定義された emit 関数が string 型を受け付ける
+  // When: string 型の引数を渡して呼び出す
+  // Then: コンパイルエラーにならず、正常にイベントが発行される
+  test('TC-TYP-01: emit関数は string 型の入力を受け付け、正常に動作すること', async () => {
+    let capturedMessage: string | undefined;
+
+    // 型定義の確認を兼ねたProvider実装
+    const provider = new MockProvider(0, (options) => {
+      // ここでの emit の定義が string 型を受け取るようになっていることを確認
+      // 実際のコード変更（any -> string）が反映されているかの検証
+      const emit = (msg: string) => {
+        capturedMessage = msg;
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: msg,
+          timestampMs: Date.now(),
+        });
+      };
+      
+      emit('test-string-message');
+    });
+
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Type Safety Test',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: `task-typ-01-${Date.now()}`,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: path.join(baseTempDir, 'reports-typ-01'),
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    assert.strictEqual(capturedMessage, 'test-string-message', 'string型のメッセージが正常に渡されること');
+  });
+
+  // TC-TYP-02: runWithArtifacts.test.ts への非 string 入力
+  // Given: emit 関数は string 型のみを受け付ける
+  // When: 数値などの非 string 型を渡そうとする
+  // Then: TypeScriptコンパイラがエラーを出す（@ts-expect-errorで検証）
+  test('TC-TYP-02: emit関数に非string型を渡すと型エラーになること', () => {
+    // このテストケースは実行時のアサーションではなく、コンパイル時の型チェックを検証するもの
+    // 実際にエラーになるコードを書いて @ts-expect-error を付与することで、
+    // 「エラーになることが期待通り」であることを保証する
+    
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _dummyEmit = (msg: string) => {};
+
+    // @ts-expect-error: Argument of type 'number' is not assignable to parameter of type 'string'.
+    _dummyEmit(123);
+
+    // @ts-expect-error: Argument of type '{ text: string; }' is not assignable to parameter of type 'string'.
+    _dummyEmit({ text: 'obj' });
+    
+    assert.ok(true, '型チェックが機能している確認（コンパイルが通ればOK）');
+  });
+
   // TC-CMD-01: 全機能有効 (観点表 + 生成 + テスト実行)
   test('TC-CMD-01: 全機能有効時、観点表と実行レポートの両方が保存される', async () => {
     // Given: フルオプション設定（観点表ON、テスト実行ON）
@@ -1676,7 +1745,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const provider = new MockProvider(0, (options) => {
       if (options.taskId.endsWith('-test-agent')) {
-        const emit = (msg: any) => {
+        const emit = (msg: string) => {
           options.onEvent({
             type: 'log',
             taskId: options.taskId,

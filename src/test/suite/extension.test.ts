@@ -78,7 +78,7 @@ suite('src/extension.ts', () => {
     });
   });
 
-  suite('Metadata', () => {
+  suite('Metadata & Resources', () => {
     // Given: 拡張機能がインストールされている
     // When: package.json のメタデータを取得する
     // Then: ライセンスが AGPL-3.0 であること
@@ -103,6 +103,41 @@ suite('src/extension.ts', () => {
       } catch {
         assert.fail('LICENSE ファイルが存在しません');
       }
+    });
+
+    // TC-RES-01: package.json / lock バージョン確認
+    // Given: 拡張機能の package.json
+    // When: バージョンを確認する
+    // Then: バージョンが 0.0.30 であること
+    test('TC-RES-01: パッケージバージョンの確認', () => {
+      const ext = vscode.extensions.getExtension('local.chottotest');
+      assert.ok(ext, '拡張機能が見つかりません');
+      
+      const packageJSON = ext.packageJSON;
+      assert.strictEqual(packageJSON.version, '0.0.30', 'package.json のバージョンが 0.0.30 ではありません');
+    });
+
+    // TC-RES-02: testgen-view.svg のレンダリング
+    // Given: media/testgen-view.svg ファイル
+    // When: ファイル内容を読み込む
+    // Then: 有効なSVGであり、更新されたパス（試験管）を含んでいること
+    test('TC-RES-02: testgen-view.svg の内容確認', async () => {
+      const ext = vscode.extensions.getExtension('local.chottotest');
+      assert.ok(ext, '拡張機能が見つかりません');
+
+      const svgUri = vscode.Uri.file(path.join(ext.extensionPath, 'media', 'testgen-view.svg'));
+      const svgContent = (await vscode.workspace.fs.readFile(svgUri)).toString();
+
+      assert.ok(svgContent.includes('<svg'), 'SVGタグが含まれていること');
+      assert.ok(svgContent.includes('width="24"'), '幅が24であること');
+      assert.ok(svgContent.includes('height="24"'), '高さが24であること');
+      
+      // 新しいアイコンの特徴（試験管のパス）を確認
+      // "シンプルな試験管" コメントが含まれているか
+      assert.ok(svgContent.includes('シンプルな試験管'), '新しいアイコン（試験管）のコメントが含まれていること');
+      // パスデータの断片
+      assert.ok(svgContent.includes('d="M9 3h6M10 3v7l-4 8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l-4-8V3"'), '試験管のパスデータが含まれていること');
+      assert.ok(svgContent.includes('d="M7 15h10"'), '液体の線が含まれていること');
     });
   });
 });
