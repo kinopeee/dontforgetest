@@ -15,6 +15,10 @@ export interface BuildPromptOptions {
   targetPaths: string[];
   /** テスト戦略ルールファイル（既定: docs/test-strategy.md） */
   testStrategyPath: string;
+  /** 生成後の型チェック/Lintを有効化（デフォルト: true） */
+  enablePreTestCheck?: boolean;
+  /** 型チェック/Lintコマンド（例: npm run compile） */
+  preTestCheckCommand?: string;
 }
 
 export interface BuildPerspectivePromptOptions extends BuildPromptOptions {

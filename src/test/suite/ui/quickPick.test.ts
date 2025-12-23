@@ -129,20 +129,32 @@ suite('src/ui/quickPick.ts', () => {
     }
   });
 
-  // TC-QP-02 (Perspective): Mock showQuickPick with invalid types
-  test('TC-QP-TypeCheck-02: Mock showQuickPick with invalid types', async () => {
+  // TC-UI-01: Mock Setup: valid items
+  test('TC-UI-01: Mock Setup: showQuickPick with valid items executes safely', async () => {
+    // Given: Valid MockQuickPickItem[]
+    const items: MockQuickPickItem[] = [{ label: 'item1' }, { label: 'item2' }];
+    // When: showQuickPick is called
+    await vscode.window.showQuickPick(items, {});
+    // Then: No error throws
+    assert.ok(true);
+  });
+
+  // TC-UI-02: Mock Setup: invalid item types
+  test('TC-UI-02: Mock Setup: showQuickPick with invalid types handles gracefully (type check)', async () => {
+    // Given: Invalid input (not an array)
     try {
-      // @ts-expect-error テスト用に不正な型を渡す
+      // @ts-expect-error Testing invalid input
       await vscode.window.showQuickPick('invalid', {});
     } catch {
-       // モック実装が配列を期待して落ちる可能性があるが、型チェックのテストとしてはOK
+       // Should be caught or handled by mock
     }
+    assert.ok(true);
   });
 
   // Given: ユーザーが「未コミット差分」を選択する
   // When: generateTestWithQuickPick を実行
   // Then: generateTestFromWorkingTree に関連する次のQuickPickが表示される
-  test('TC-QP-01: workingTree 選択時の挙動', async () => {
+  test('TC-UI-03: workingTree 選択時の挙動', async () => {
     // 1回目の QuickPick (Source選択)
     showQuickPickStub = async (items: MockQuickPickItem[], options: vscode.QuickPickOptions) => {
         if (options.title === 'Chottotest: 実行ソースを選択') {
@@ -173,7 +185,7 @@ suite('src/ui/quickPick.ts', () => {
   // Given: ユーザーが「最新コミット差分」を選択する
   // When: generateTestWithQuickPick を実行
   // Then: generateTestFromLatestCommit が実行される（エラーメッセージ等で検証）
-  test('TC-QP-02: latestCommit 選択時の挙動', async () => {
+  test('TC-UI-04: latestCommit 選択時の挙動', async () => {
     showQuickPickStub = async (items: MockQuickPickItem[], options: vscode.QuickPickOptions) => {
         if (options.title === 'Chottotest: 実行ソースを選択') {
             return items.find((i: MockQuickPickItem) => i.source === 'latestCommit');

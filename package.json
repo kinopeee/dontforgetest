@@ -168,6 +168,16 @@
           "type": "boolean",
           "default": false,
           "description": "testExecutionRunner=cursorAgent のテスト実行で cursor-agent に --force を付与する（コマンド実行の拒否回避を試す。ファイル編集も可能になるため注意）"
+        },
+        "testgen-agent.enablePreTestCheck": {
+          "type": "boolean",
+          "default": true,
+          "description": "テストコード生成後に型チェック/Lintを実行し、エラーがあれば自動修正を試みる"
+        },
+        "testgen-agent.preTestCheckCommand": {
+          "type": "string",
+          "default": "npm run compile",
+          "description": "生成後に実行する型チェック/Lintコマンド（例: npm run compile, npm run lint, tsc --noEmit）"
         }
       }
     }

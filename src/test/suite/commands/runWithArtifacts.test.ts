@@ -1663,11 +1663,11 @@ suite('commands/runWithArtifacts.ts', () => {
     // 空文字 + \n + ヘッダー... となるので、先頭が改行コードなどで始まる可能性があるが、内容は含まれているはず
   });
 
-  // TC-LOG-xx: ログイベントのフィルタリングとフォーマット
-  test('TC-LOG-xx: ログイベントのサニタイズとフィルタリング (TC-LOG-01 ~ 06)', async () => {
+  // TC-CMD-01~05: ログイベントのフィルタリングとフォーマット
+  test('TC-CMD-01~05: ログイベントのサニタイズとフィルタリング', async () => {
     // Given: 様々な種類のログイベントを発行する Provider
-    const taskId = `task-log-xx-${Date.now()}`;
-    const reportDir = path.join(baseTempDir, 'reports-log-xx');
+    const taskId = `task-cmd-log-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cmd-log');
 
     const provider = new MockProvider(0, (options) => {
       if (options.taskId.endsWith('-test-agent')) {
@@ -1681,23 +1681,20 @@ suite('commands/runWithArtifacts.ts', () => {
           });
         };
 
-        // TC-LOG-01: Standard text
+        // TC-CMD-01: Standard text
         emit('Standard Log Message');
         
-        // TC-LOG-02: Empty string
+        // TC-CMD-02: Empty string
         emit('');
 
-        // TC-LOG-03: Whitespace only
+        // TC-CMD-03: Whitespace only
         emit('   ');
 
-        // TC-LOG-04: ANSI codes only
+        // TC-CMD-04: ANSI codes only
         emit('\u001b[31m\u001b[0m');
 
-        // TC-LOG-05: Multi-line text
+        // TC-CMD-05: Multi-line text
         emit('Line 1\nLine 2');
-
-        // TC-LOG-06: null / undefined (TypeScriptにより保護されているため、ここではテストしない)
-        // emit(null as any); 
 
         // Result marker
         emit([
@@ -1738,26 +1735,17 @@ suite('commands/runWithArtifacts.ts', () => {
     // Log section extraction
     const logSection = text.split('## 実行ログ（拡張機能）')[1] || '';
 
-    // TC-LOG-01
-    assert.ok(logSection.includes('Standard Log Message'), 'TC-LOG-01: 通常のログは含まれること');
+    // TC-CMD-01
+    assert.ok(logSection.includes('Standard Log Message'), 'TC-CMD-01: 通常のログは含まれること');
 
-    // TC-LOG-02, 03, 04
-    // ログセクションに行（行頭のスペースを含む）として残っていないことを確認
+    // TC-CMD-02, 03, 04
     const logLines = logSection.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    // 期待されるログ行:
-    // [TIMESTAMP] ... INFO Standard Log Message
-    // [TIMESTAMP] ... INFO Line 1
-    // Line 2
-    // ... Result Marker logs ...
     
     // 空行やANSIのみの行が含まれていないかチェック
-    // 注: sanitizeLogMessageForReport で除去された場合、ここには出てこない。
-    assert.ok(!logLines.some(l => l === ''), '空行は除去されていること');
-    // ANSIコード除去後の空行チェックは artifacts.ts のテストで行っているが、
-    // ここでは「空のメッセージ」がログとして出力されていない（行自体がない）ことを確認したい。
-    // メッセージが空なら行自体が生成されないロジックを期待。
-    // 実装: if (sanitized.length === 0) break; -> captureEvent
-    // captureEvent では sanitized があればログ行を追加。
-    // なので、sanitized が空ならログ行自体が追加されない。OK.
+    assert.ok(!logLines.some(l => l === ''), 'TC-CMD-02/03/04: 空行やANSIのみの行は除去されていること');
+    
+    // TC-CMD-05
+    assert.ok(logSection.includes('Line 1'), 'TC-CMD-05: 複数行ログ Line 1');
+    assert.ok(logSection.includes('Line 2'), 'TC-CMD-05: 複数行ログ Line 2');
   });
 });

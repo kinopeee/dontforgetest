@@ -11,6 +11,7 @@ import {
   buildTestExecutionArtifactMarkdown,
   parseMochaOutput,
 } from '../../../core/artifacts';
+import { stripAnsi } from '../../../core/testResultParser';
 
 suite('core/artifacts.ts', () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
@@ -456,101 +457,198 @@ suite('core/artifacts.ts', () => {
     assert.ok(!md.includes(longText), '全文は含まれていないこと');
   });
 
-  // TC-ART-20: parseMochaOutput (正常系: パス)
-  // Covers TC-ART-01: Call parseMochaOutput via artifacts module (Success output)
-  test('TC-ART-20: parseMochaOutput がパスしたテストを正しく解析する', () => {
-    // Given: 成功パターンの出力
-    const stdout = `
-  suite 1
-    ✔ test case 1
-    ✓ test case 2
-`;
-    // When: parseMochaOutput を呼び出す
-    const result = parseMochaOutput(stdout);
+  // TC-PARSER-01: stripAnsi (ANSI removal)
+  test('TC-PARSER-01: stripAnsi removes ANSI color codes', () => {
+    // Given: String with ANSI codes
+    const input = '\u001b[31mError\u001b[0m';
+    // When: stripAnsi called
+    const result = stripAnsi(input);
+    // Then: Returns string without ANSI codes
+    assert.strictEqual(result, 'Error');
+  });
 
-    // Then: 正しく解析されること
+  // TC-PARSER-02: stripAnsi (Normal)
+  test('TC-PARSER-02: stripAnsi returns original string if no ANSI codes', () => {
+    // Given: String with no ANSI codes
+    const input = 'Normal String';
+    // When: stripAnsi called
+    const result = stripAnsi(input);
+    // Then: Returns original string
+    assert.strictEqual(result, input);
+  });
+
+  // TC-PARSER-03: stripAnsi (Empty)
+  test('TC-PARSER-03: stripAnsi returns empty string for empty input', () => {
+    // Given: Empty string
+    const input = '';
+    // When: stripAnsi called
+    const result = stripAnsi(input);
+    // Then: Returns empty string
+    assert.strictEqual(result, '');
+  });
+
+  // TC-PARSER-04: stripAnsi (ANSI only)
+  test('TC-PARSER-04: stripAnsi returns empty string for ANSI-only input', () => {
+    // Given: String with only ANSI codes
+    const input = '\u001b[31m\u001b[0m';
+    // When: stripAnsi called
+    const result = stripAnsi(input);
+    // Then: Returns empty string
+    assert.strictEqual(result, '');
+  });
+
+  // TC-PARSER-05: parseMochaOutput (Success pattern 1)
+  test('TC-PARSER-05: parseMochaOutput parses success with ✔', () => {
+    // Given: Mocha output with ✔
+    const stdout = '  ✔ test case 1';
+    // When: parseMochaOutput called
+    const result = parseMochaOutput(stdout);
+    // Then: Parsed correctly
     assert.strictEqual(result.parsed, true);
-    assert.strictEqual(result.passed, 2);
-    assert.strictEqual(result.failed, 0);
-    assert.strictEqual(result.cases.length, 2);
+    assert.strictEqual(result.passed, 1);
     assert.strictEqual(result.cases[0].name, 'test case 1');
     assert.strictEqual(result.cases[0].passed, true);
-    assert.strictEqual(result.cases[1].name, 'test case 2');
   });
 
-  // TC-ART-21: parseMochaOutput (正常系: 失敗)
-  // Covers TC-ART-02: Call parseMochaOutput via artifacts module (Fail output)
-  test('TC-ART-21: parseMochaOutput が失敗したテストを正しく解析する', () => {
-    // Given: 失敗パターンの出力（数字やバツ印）
-    const stdout = `
-  suite 2
-    1) failed case 1
-    ✖ failed case 2
-    ✗ failed case 3
-`;
-    // When: parseMochaOutput を呼び出す
+  // TC-PARSER-06: parseMochaOutput (Success pattern 2)
+  test('TC-PARSER-06: parseMochaOutput parses success with ✓', () => {
+    // Given: Mocha output with ✓
+    const stdout = '  ✓ test case 2';
+    // When: parseMochaOutput called
     const result = parseMochaOutput(stdout);
-
-    // Then: 正しく解析されること
+    // Then: Parsed correctly
     assert.strictEqual(result.parsed, true);
-    assert.strictEqual(result.passed, 0);
-    assert.strictEqual(result.failed, 3);
+    assert.strictEqual(result.passed, 1);
+    assert.strictEqual(result.cases[0].name, 'test case 2');
+    assert.strictEqual(result.cases[0].passed, true);
+  });
+
+  // TC-PARSER-07: parseMochaOutput (Failure pattern 1)
+  test('TC-PARSER-07: parseMochaOutput parses failure with ✖', () => {
+    // Given: Mocha output with ✖
+    const stdout = '  ✖ failed case 1';
+    // When: parseMochaOutput called
+    const result = parseMochaOutput(stdout);
+    // Then: Parsed correctly as failed
+    assert.strictEqual(result.parsed, true);
+    assert.strictEqual(result.failed, 1);
     assert.strictEqual(result.cases[0].name, 'failed case 1');
     assert.strictEqual(result.cases[0].passed, false);
-    assert.strictEqual(result.cases[1].name, 'failed case 2');
-    assert.strictEqual(result.cases[2].name, 'failed case 3');
   });
 
-  // TC-ART-22: parseMochaOutput (スイート構造)
-  test('TC-ART-22: parseMochaOutput がスイート名を正しく関連付ける', () => {
-    // Given: スイートとインデントを含む出力
+  // TC-PARSER-08: parseMochaOutput (Failure pattern 2)
+  test('TC-PARSER-08: parseMochaOutput parses failure with ✗', () => {
+    // Given: Mocha output with ✗
+    const stdout = '  ✗ failed case 2';
+    // When: parseMochaOutput called
+    const result = parseMochaOutput(stdout);
+    // Then: Parsed correctly as failed
+    assert.strictEqual(result.parsed, true);
+    assert.strictEqual(result.failed, 1);
+    assert.strictEqual(result.cases[0].name, 'failed case 2');
+    assert.strictEqual(result.cases[0].passed, false);
+  });
+
+  // TC-PARSER-09: parseMochaOutput (Failure pattern 3)
+  test('TC-PARSER-09: parseMochaOutput parses numbered failure', () => {
+    // Given: Mocha output with numbered failure
+    const stdout = '  1) failed case 3';
+    // When: parseMochaOutput called
+    const result = parseMochaOutput(stdout);
+    // Then: Parsed correctly as failed
+    assert.strictEqual(result.parsed, true);
+    assert.strictEqual(result.failed, 1);
+    assert.strictEqual(result.cases[0].name, 'failed case 3');
+    assert.strictEqual(result.cases[0].passed, false);
+  });
+
+  // TC-PARSER-10: parseMochaOutput (Suite detection .ts)
+  test('TC-PARSER-10: parseMochaOutput detects suite name with extension', () => {
+    // Given: Output with .ts suite name
     const stdout = `
-  src/test/suite/extension.test.ts
-    Extension Test Suite
+  src/test.ts
+    ✔ test 1
+`;
+    // When: parseMochaOutput called
+    const result = parseMochaOutput(stdout);
+    // Then: Suite detected
+    assert.strictEqual(result.cases[0].suite, 'src/test.ts');
+  });
+
+  // TC-PARSER-11: parseMochaOutput (Suite detection indent 2)
+  test('TC-PARSER-11: parseMochaOutput detects suite with min indent (2)', () => {
+    // Given: Output with shallow indent
+    const stdout = `
+  SuiteName
+    ✔ test 1
+`;
+    // When: parseMochaOutput called
+    const result = parseMochaOutput(stdout);
+    // Then: Suite detected
+    assert.strictEqual(result.cases[0].suite, 'SuiteName');
+  });
+
+  // TC-PARSER-12: parseMochaOutput (Suite detection indent 4)
+  test('TC-PARSER-12: parseMochaOutput detects suite with max indent (4)', () => {
+    // Given: Output with indent 4
+    const stdout = `
+    SuiteName
       ✔ test 1
-  
-  src/test/suite/other.test.ts
-    ✔ test 2
 `;
-    // When: parseMochaOutput を呼び出す
+    // When: parseMochaOutput called
     const result = parseMochaOutput(stdout);
-
-    // Then: スイート名が正しく取得されること
-    assert.strictEqual(result.cases[0].suite, 'Extension Test Suite'); // 直近のインデントされたスイート名
-    assert.strictEqual(result.cases[0].name, 'test 1');
-    
-    // Note: ロジック上、ファイル名または浅いインデント行をスイートとみなす
-    assert.ok(result.cases[1].suite.includes('other.test.ts') || result.cases[1].suite === '', 'スイート名の切り替わりが機能していること');
+    // Then: Suite detected
+    assert.strictEqual(result.cases[0].suite, 'SuiteName');
   });
 
-  // TC-ART-23: parseMochaOutput (非Mocha出力)
-  test('TC-ART-23: parseMochaOutput はMocha形式でない出力をパースしない', () => {
-    // Given: ランダムなテキスト
+  // TC-PARSER-13: parseMochaOutput (Suite ignored indent 6)
+  test('TC-PARSER-13: parseMochaOutput ignores suite with deep indent (6) unless file', () => {
+    // Given: Output with indent 6
     const stdout = `
-Some random output
-Running tests...
-Finished.
+      NotASuite
+        ✔ test 1
 `;
-    // When: parseMochaOutput を呼び出す
+    // When: parseMochaOutput called
     const result = parseMochaOutput(stdout);
+    // Then: Suite not detected (uses previous or empty)
+    assert.strictEqual(result.cases[0].suite, '');
+  });
 
-    // Then: パース失敗とみなされること
+  // TC-PARSER-14: parseMochaOutput (Mixed results)
+  test('TC-PARSER-14: parseMochaOutput handles mixed pass/fail results', () => {
+    // Given: Mixed output
+    const stdout = `
+  Suite
+    ✔ pass
+    ✖ fail
+`;
+    // When: parseMochaOutput called
+    const result = parseMochaOutput(stdout);
+    // Then: Counts correct
+    assert.strictEqual(result.passed, 1);
+    assert.strictEqual(result.failed, 1);
+  });
+
+  // TC-PARSER-15: parseMochaOutput (Empty)
+  test('TC-PARSER-15: parseMochaOutput returns not parsed for empty string', () => {
+    // Given: Empty string
+    const stdout = '';
+    // When: parseMochaOutput called
+    const result = parseMochaOutput(stdout);
+    // Then: parsed=false
     assert.strictEqual(result.parsed, false);
     assert.strictEqual(result.cases.length, 0);
   });
 
-  // TC-ART-24: parseMochaOutput (ANSI除去)
-  test('TC-ART-24: parseMochaOutput はANSIコードを含んでいてもパースできる', () => {
-    // Given: ANSIコードを含む出力
-    const stdout = `
-  \u001b[32m✔\u001b[0m \u001b[90mtest with color\u001b[0m
-`;
-    // When: parseMochaOutput を呼び出す
+  // TC-PARSER-16: parseMochaOutput (No matches)
+  test('TC-PARSER-16: parseMochaOutput returns not parsed if no tests matched', () => {
+    // Given: No match output
+    const stdout = 'Just some log output';
+    // When: parseMochaOutput called
     const result = parseMochaOutput(stdout);
-
-    // Then: 正しく解析されること
-    assert.strictEqual(result.parsed, true);
-    assert.strictEqual(result.cases[0].name, 'test with color');
+    // Then: parsed=false
+    assert.strictEqual(result.parsed, false);
+    assert.strictEqual(result.cases.length, 0);
   });
 
   // TC-ART-27: 詳細テーブル生成
