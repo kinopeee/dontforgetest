@@ -182,57 +182,62 @@ export function buildTestExecutionArtifactMarkdown(params: {
 }): string {
   const tsIso = new Date(params.generatedAtMs).toISOString();
   const targets = params.targetPaths.map((p) => `- ${p}`).join('\n');
+  const modelLine = params.model && params.model.trim().length > 0 ? `- model: ${params.model}` : '- model: (auto)';
+
+  // stdoutをパースしてテスト結果を抽出
+  const testResult = parseMochaOutput(params.result.stdout);
+  const summarySection = buildTestSummarySection(params.result.exitCode, params.result.durationMs, testResult);
+  const detailsSection = buildTestDetailsSection(testResult);
+
+  // 実行情報
   const envLines = [
     `- OS: ${process.platform} (${process.arch})`,
     `- Node.js: ${process.version}`,
     `- VS Code: ${vscode.version}`,
   ].join('\n');
-
-  const stdoutBlock = toCodeBlock('text', truncate(stripAnsi(params.result.stdout), 200_000));
-  const stderrBlock = toCodeBlock('text', truncate(stripAnsi(params.result.stderr), 200_000));
-  const errMsg = params.result.errorMessage ? `\n- spawn error: ${params.result.errorMessage}` : '';
+  const errMsg = params.result.errorMessage ? `- spawn error: ${params.result.errorMessage}` : '';
   const statusLine = params.result.skipped ? '- status: skipped' : '- status: executed';
   const skipReasonLine =
     params.result.skipped && params.result.skipReason && params.result.skipReason.trim().length > 0
       ? `- skipReason: ${params.result.skipReason.trim()}`
       : '';
-  const extensionLog = (params.result.extensionLog ?? '').trim();
-  const extensionLogBlock = toCodeBlock('text', truncate(stripAnsi(extensionLog.length > 0 ? extensionLog : '(ログなし)'), 200_000));
-  const modelLine = params.model && params.model.trim().length > 0 ? `- model: ${params.model}` : '- model: (auto)';
 
-  return [
+  // 折りたたみ式の詳細ログセクション
+  const stdoutContent = truncate(stripAnsi(params.result.stdout), 200_000);
+  const stderrContent = truncate(stripAnsi(params.result.stderr), 200_000);
+  const extensionLog = (params.result.extensionLog ?? '').trim();
+  const extensionLogContent = truncate(stripAnsi(extensionLog.length > 0 ? extensionLog : ''), 200_000);
+  const stdoutCollapsible = buildCollapsibleSection('stdout', stdoutContent);
+  const stderrCollapsible = buildCollapsibleSection('stderr', stderrContent);
+  const extensionLogCollapsible = buildCollapsibleSection('実行ログ（拡張機能）', extensionLogContent);
+
+  const sections: string[] = [
     '# テスト実行レポート（自動生成）',
+    '',
+    summarySection,
+    detailsSection,
+    '## 実行情報',
     '',
     `- 生成日時: ${tsIso}`,
     `- 生成対象: ${params.generationLabel}`,
     modelLine,
+    `- 実行コマンド: \`${params.result.command}\``,
+    statusLine,
+    skipReasonLine,
+    errMsg,
+    envLines,
+    '',
     `- 対象ファイル:`,
     targets.length > 0 ? targets : '- (なし)',
     '',
-    '## 実行環境',
-    envLines,
+    '## 詳細ログ',
     '',
-    '## 実行コマンド',
-    toCodeBlock('bash', params.result.command),
-    '',
-    '## 実行結果',
-    statusLine,
-    skipReasonLine,
-    `- exitCode: ${params.result.exitCode ?? 'null'}`,
-    `- signal: ${params.result.signal ?? 'null'}`,
-    `- durationMs: ${params.result.durationMs}`,
-    errMsg.trim().length > 0 ? errMsg.trim() : '',
-    '',
-    '## stdout',
-    stdoutBlock,
-    '',
-    '## stderr',
-    stderrBlock,
-    '',
-    '## 実行ログ（拡張機能）',
-    extensionLogBlock,
-    '',
-  ]
+    stdoutCollapsible,
+    stderrCollapsible,
+    extensionLogCollapsible,
+  ];
+
+  return sections
     .filter((line) => line !== '')
     .join('\n');
 }
@@ -278,3 +283,175 @@ function toCodeBlock(lang: 'bash' | 'text', content: string): string {
   return ['```' + lang, content, '```'].join('\n');
 }
 
+/**
+ * テスト結果の詳細を表す型
+ */
+export interface TestCaseResult {
+  /** テストファイル名またはスイート名 */
+  suite: string;
+  /** テストケース名 */
+  name: string;
+  /** 成功/失敗 */
+  passed: boolean;
+}
+
+/**
+ * Mocha出力のパース結果
+ */
+export interface ParsedTestResult {
+  /** 成功件数 */
+  passed: number;
+  /** 失敗件数 */
+  failed: number;
+  /** テストケースごとの詳細（パース可能な場合） */
+  cases: TestCaseResult[];
+  /** パースに成功したか */
+  parsed: boolean;
+}
+
+/**
+ * Mocha形式のテスト出力をパースしてテスト結果を抽出する。
+ * @param stdout テストコマンドの標準出力
+ * @returns パースされたテスト結果
+ */
+export function parseMochaOutput(stdout: string): ParsedTestResult {
+  const lines = stripAnsi(stdout).split('\n');
+  const cases: TestCaseResult[] = [];
+  let currentSuite = '';
+
+  // ✔ または ✓ でパスしたテストを検出
+  // 例: "      ✔ TC-EXT-01: 拡張機能の存在確認"
+  const passPattern = /^\s*[✔✓]\s+(.+)$/;
+  // ✖ または 数字) で失敗したテストを検出
+  // 例: "  1) should fail"
+  const failPattern = /^\s*(?:[✖✗]|\d+\))\s+(.+)$/;
+  // スイート名（インデントが浅い行）
+  // 例: "  src/extension.ts" または "    Extension Activation"
+  const suitePattern = /^(\s{2,6})(\S.*)$/;
+
+  for (const line of lines) {
+    // スイート名の検出（✔ ✓ ✖ で始まらない、適度なインデントの行）
+    const suiteMatch = suitePattern.exec(line);
+    if (suiteMatch && !passPattern.test(line) && !failPattern.test(line)) {
+      const indent = suiteMatch[1].length;
+      const suiteName = suiteMatch[2].trim();
+      // ファイル名っぽい場合（.ts, .js で終わる）またはインデントが浅い場合
+      if (suiteName.match(/\.(ts|js)$/) || indent <= 4) {
+        currentSuite = suiteName;
+      }
+    }
+
+    // パスしたテスト
+    const passMatch = passPattern.exec(line);
+    if (passMatch) {
+      cases.push({
+        suite: currentSuite,
+        name: passMatch[1].trim(),
+        passed: true,
+      });
+      continue;
+    }
+
+    // 失敗したテスト
+    const failMatch = failPattern.exec(line);
+    if (failMatch) {
+      cases.push({
+        suite: currentSuite,
+        name: failMatch[1].trim(),
+        passed: false,
+      });
+    }
+  }
+
+  const passed = cases.filter((c) => c.passed).length;
+  const failed = cases.filter((c) => !c.passed).length;
+
+  return {
+    passed,
+    failed,
+    cases,
+    parsed: cases.length > 0,
+  };
+}
+
+/**
+ * テスト結果サマリーのMarkdownを生成する。
+ */
+function buildTestSummarySection(exitCode: number | null, durationMs: number, testResult: ParsedTestResult): string {
+  const isSuccess = exitCode === 0;
+  const statusEmoji = isSuccess ? '✅' : '❌';
+  const statusText = isSuccess ? '成功' : '失敗';
+  const durationSec = (durationMs / 1000).toFixed(1);
+
+  const lines: string[] = [
+    '## テスト結果サマリー',
+    '',
+    `${statusEmoji} **${statusText}** (exitCode: ${exitCode ?? 'null'})`,
+    '',
+  ];
+
+  if (testResult.parsed) {
+    lines.push(
+      '| 項目 | 結果 |',
+      '|------|------|',
+      `| 成功 | ${testResult.passed} |`,
+      `| 失敗 | ${testResult.failed} |`,
+      `| 合計 | ${testResult.passed + testResult.failed} |`,
+      `| 実行時間 | ${durationSec}秒 |`,
+      '',
+    );
+  } else {
+    lines.push(`- 実行時間: ${durationSec}秒`, '');
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * テスト詳細表のMarkdownを生成する。
+ */
+function buildTestDetailsSection(testResult: ParsedTestResult): string {
+  if (!testResult.parsed || testResult.cases.length === 0) {
+    return '';
+  }
+
+  const lines: string[] = [
+    '## テスト詳細',
+    '',
+    '| スイート | テスト名 | 結果 |',
+    '|---------|---------|------|',
+  ];
+
+  for (const c of testResult.cases) {
+    const resultEmoji = c.passed ? '✅' : '❌';
+    const suite = c.suite || '(root)';
+    // テーブルセル内のパイプ文字をエスケープ
+    const safeName = c.name.replace(/\|/g, '\\|');
+    const safeSuite = suite.replace(/\|/g, '\\|');
+    lines.push(`| ${safeSuite} | ${safeName} | ${resultEmoji} |`);
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
+
+/**
+ * 折りたたみ可能な詳細ログセクションを生成する。
+ */
+function buildCollapsibleSection(title: string, content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.length === 0 || trimmed === '(ログなし)') {
+    return '';
+  }
+  return [
+    '<details>',
+    `<summary>${title}（クリックで展開）</summary>`,
+    '',
+    '```text',
+    trimmed,
+    '```',
+    '',
+    '</details>',
+    '',
+  ].join('\n');
+}

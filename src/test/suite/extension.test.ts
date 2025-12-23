@@ -8,7 +8,7 @@ suite('src/extension.ts', () => {
     // When: 拡張機能をID指定で取得する
     // Then: 拡張機能オブジェクトが存在する
     test('TC-EXT-01: 拡張機能の存在確認', () => {
-      const ext = vscode.extensions.getExtension('local.testgen-agent');
+      const ext = vscode.extensions.getExtension('local.chottotest');
       assert.ok(ext, '拡張機能が見つかりません');
     });
 
@@ -16,7 +16,7 @@ suite('src/extension.ts', () => {
     // When: activate()を実行する
     // Then: 拡張機能がアクティブ状態になる
     test('TC-EXT-02: 拡張機能のアクティブ化', async () => {
-      const ext = vscode.extensions.getExtension('local.testgen-agent');
+      const ext = vscode.extensions.getExtension('local.chottotest');
       assert.ok(ext);
       
       if (!ext.isActive) {
@@ -83,7 +83,7 @@ suite('src/extension.ts', () => {
     // When: package.json のメタデータを取得する
     // Then: ライセンスが AGPL-3.0 であること
     test('TC-META-01: ライセンス情報の確認', () => {
-      const ext = vscode.extensions.getExtension('local.testgen-agent');
+      const ext = vscode.extensions.getExtension('local.chottotest');
       assert.ok(ext, '拡張機能が見つかりません');
       
       const packageJSON = ext.packageJSON;
@@ -94,7 +94,7 @@ suite('src/extension.ts', () => {
     // When: LICENSE ファイルの存在を確認する
     // Then: ファイルが存在すること
     test('TC-META-02: ライセンスファイルの存在確認', async () => {
-      const ext = vscode.extensions.getExtension('local.testgen-agent');
+      const ext = vscode.extensions.getExtension('local.chottotest');
       assert.ok(ext, '拡張機能が見つかりません');
 
       const licenseUri = vscode.Uri.file(path.join(ext.extensionPath, 'LICENSE'));

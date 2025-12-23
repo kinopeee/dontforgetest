@@ -9,6 +9,7 @@ import {
   saveTestExecutionReport,
   buildTestPerspectiveArtifactMarkdown,
   buildTestExecutionArtifactMarkdown,
+  parseMochaOutput,
 } from '../../../core/artifacts';
 
 suite('core/artifacts.ts', () => {
@@ -160,9 +161,9 @@ suite('core/artifacts.ts', () => {
       // Then: フォーマットが正しく、終了コードや出力が含まれること
       assert.ok(md.includes('# テスト実行レポート（自動生成）'), 'タイトルが含まれること');
       assert.ok(md.includes('exitCode: 0'), 'exitCodeが含まれること');
-      assert.ok(md.includes('```text\nout\n```'), 'stdoutブロックが含まれること');
+      assert.ok(md.includes('## テスト結果サマリー'), 'サマリーセクションが含まれること');
       assert.ok(md.includes('status: executed'), 'status: executed が含まれること');
-      assert.ok(md.includes('## 実行ログ（拡張機能）'), '実行ログセクションが含まれること');
+      assert.ok(md.includes('<summary>実行ログ（拡張機能）（クリックで展開）</summary>'), '実行ログセクションが含まれること');
       assert.ok(md.includes('[INFO] Extension Log'), '拡張機能ログが含まれること');
       // Added: model未指定時のデフォルト表示確認
       assert.ok(md.includes('- model: (auto)'), 'model未指定時は (auto) と表示されること');
@@ -240,7 +241,7 @@ suite('core/artifacts.ts', () => {
   });
 
   // TC-ART-10: 実行レポートMarkdown生成（空出力）
-  test('TC-ART-10: 出力が空の場合でもコードブロックが生成される', () => {
+  test('TC-ART-10: 出力が空の場合は折りたたみセクションが省略される', () => {
     // Given: 出力が空の結果
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
@@ -257,9 +258,12 @@ suite('core/artifacts.ts', () => {
       }
     });
 
-    // Then: 空のコードブロックが含まれること
-    assert.ok(md.includes('## stdout\n```text\n\n```'), '空のstdoutブロックが含まれること');
-    assert.ok(md.includes('## stderr\n```text\n\n```'), '空のstderrブロックが含まれること');
+    // Then: 空の場合は折りたたみセクションが省略されること
+    assert.ok(!md.includes('<summary>stdout'), '空のstdoutセクションは省略されること');
+    assert.ok(!md.includes('<summary>stderr'), '空のstderrセクションは省略されること');
+    // 基本情報は含まれること
+    assert.ok(md.includes('## テスト結果サマリー'), 'サマリーセクションは含まれること');
+    assert.ok(md.includes('## 詳細ログ'), '詳細ログセクションヘッダーは含まれること');
   });
 
   // TC-ART-13: 実行レポートMarkdown生成（スキップ）
@@ -287,13 +291,13 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes('status: skipped'), 'status: skipped が含まれること');
     assert.ok(md.includes('skipReason: 安全のためスキップしました'), 'skipReason が含まれること');
     
-    // And: 実行ログが含まれること
-    assert.ok(md.includes('## 実行ログ（拡張機能）'), '実行ログセクションが含まれること');
+    // And: 実行ログが折りたたみセクションとして含まれること
+    assert.ok(md.includes('<summary>実行ログ（拡張機能）（クリックで展開）</summary>'), '実行ログセクションが含まれること');
     assert.ok(md.includes('[INFO] Something happened'), 'ログ内容が含まれること');
   });
 
   // TC-ART-14: 実行レポートMarkdown生成（ログなし）
-  test('TC-ART-14: extensionLog が未定義の場合でもレポート生成が成功し、ログなしと表示される', () => {
+  test('TC-ART-14: extensionLog が未定義の場合、折りたたみセクションが省略される', () => {
     // Given: extensionLog が undefined の結果
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
@@ -311,9 +315,10 @@ suite('core/artifacts.ts', () => {
       },
     });
 
-    // Then: 実行ログセクションがあり、(ログなし) と表示されること
-    assert.ok(md.includes('## 実行ログ（拡張機能）'), '実行ログセクションが含まれること');
-    assert.ok(md.includes('(ログなし)'), 'ログなしの表示が含まれること');
+    // Then: 空の場合は折りたたみセクションが省略されること
+    assert.ok(!md.includes('<summary>実行ログ（拡張機能）'), '空のログセクションは省略されること');
+    // 基本情報は含まれること
+    assert.ok(md.includes('## 詳細ログ'), '詳細ログセクションヘッダーは含まれること');
   });
 
   // TC-ART-11: 観点表保存
@@ -377,7 +382,7 @@ suite('core/artifacts.ts', () => {
   });
 
   // TC-ART-15: 実行レポートMarkdown生成（ログ空文字）
-  test('TC-ART-15: extensionLog が空文字の場合、(ログなし) と表示される', () => {
+  test('TC-ART-15: extensionLog が空文字の場合、折りたたみセクションが省略される', () => {
     // Given: extensionLog が '' の結果
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
@@ -395,9 +400,8 @@ suite('core/artifacts.ts', () => {
       },
     });
 
-    // Then: (ログなし) と表示されること
-    assert.ok(md.includes('## 実行ログ（拡張機能）'), '実行ログセクションが含まれること');
-    assert.ok(md.includes('(ログなし)'), 'ログなしの表示が含まれること');
+    // Then: 空の場合は折りたたみセクションが省略されること
+    assert.ok(!md.includes('<summary>実行ログ（拡張機能）'), '空のログセクションは省略されること');
   });
 
   // TC-ART-18: レポート生成時にANSIエスケープシーケンスが除去される
@@ -450,5 +454,148 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes('200000 chars'), '制限文字数が示されていること');
     // 全文は含まれていないこと
     assert.ok(!md.includes(longText), '全文は含まれていないこと');
+  });
+
+  // TC-ART-20: parseMochaOutput (正常系: パス)
+  test('TC-ART-20: parseMochaOutput がパスしたテストを正しく解析する', () => {
+    // Given: 成功パターンの出力
+    const stdout = `
+  suite 1
+    ✔ test case 1
+    ✓ test case 2
+`;
+    // When: parseMochaOutput を呼び出す
+    const result = parseMochaOutput(stdout);
+
+    // Then: 正しく解析されること
+    assert.strictEqual(result.parsed, true);
+    assert.strictEqual(result.passed, 2);
+    assert.strictEqual(result.failed, 0);
+    assert.strictEqual(result.cases.length, 2);
+    assert.strictEqual(result.cases[0].name, 'test case 1');
+    assert.strictEqual(result.cases[0].passed, true);
+    assert.strictEqual(result.cases[1].name, 'test case 2');
+  });
+
+  // TC-ART-21: parseMochaOutput (正常系: 失敗)
+  test('TC-ART-21: parseMochaOutput が失敗したテストを正しく解析する', () => {
+    // Given: 失敗パターンの出力（数字やバツ印）
+    const stdout = `
+  suite 2
+    1) failed case 1
+    ✖ failed case 2
+    ✗ failed case 3
+`;
+    // When: parseMochaOutput を呼び出す
+    const result = parseMochaOutput(stdout);
+
+    // Then: 正しく解析されること
+    assert.strictEqual(result.parsed, true);
+    assert.strictEqual(result.passed, 0);
+    assert.strictEqual(result.failed, 3);
+    assert.strictEqual(result.cases[0].name, 'failed case 1');
+    assert.strictEqual(result.cases[0].passed, false);
+    assert.strictEqual(result.cases[1].name, 'failed case 2');
+    assert.strictEqual(result.cases[2].name, 'failed case 3');
+  });
+
+  // TC-ART-22: parseMochaOutput (スイート構造)
+  test('TC-ART-22: parseMochaOutput がスイート名を正しく関連付ける', () => {
+    // Given: スイートとインデントを含む出力
+    const stdout = `
+  src/test/suite/extension.test.ts
+    Extension Test Suite
+      ✔ test 1
+  
+  src/test/suite/other.test.ts
+    ✔ test 2
+`;
+    // When: parseMochaOutput を呼び出す
+    const result = parseMochaOutput(stdout);
+
+    // Then: スイート名が正しく取得されること
+    assert.strictEqual(result.cases[0].suite, 'Extension Test Suite'); // 直近のインデントされたスイート名
+    assert.strictEqual(result.cases[0].name, 'test 1');
+    
+    // Note: ロジック上、ファイル名または浅いインデント行をスイートとみなす
+    assert.ok(result.cases[1].suite.includes('other.test.ts') || result.cases[1].suite === '', 'スイート名の切り替わりが機能していること');
+  });
+
+  // TC-ART-23: parseMochaOutput (非Mocha出力)
+  test('TC-ART-23: parseMochaOutput はMocha形式でない出力をパースしない', () => {
+    // Given: ランダムなテキスト
+    const stdout = `
+Some random output
+Running tests...
+Finished.
+`;
+    // When: parseMochaOutput を呼び出す
+    const result = parseMochaOutput(stdout);
+
+    // Then: パース失敗とみなされること
+    assert.strictEqual(result.parsed, false);
+    assert.strictEqual(result.cases.length, 0);
+  });
+
+  // TC-ART-24: parseMochaOutput (ANSI除去)
+  test('TC-ART-24: parseMochaOutput はANSIコードを含んでいてもパースできる', () => {
+    // Given: ANSIコードを含む出力
+    const stdout = `
+  \u001b[32m✔\u001b[0m \u001b[90mtest with color\u001b[0m
+`;
+    // When: parseMochaOutput を呼び出す
+    const result = parseMochaOutput(stdout);
+
+    // Then: 正しく解析されること
+    assert.strictEqual(result.parsed, true);
+    assert.strictEqual(result.cases[0].name, 'test with color');
+  });
+
+  // TC-ART-27: 詳細テーブル生成
+  test('TC-ART-27: レポートに詳細テーブルが含まれる', () => {
+    // Given: パース可能な結果を含むデータ
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Detail Check',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'cmd',
+        cwd: '/tmp',
+        exitCode: 1,
+        signal: null,
+        durationMs: 100,
+        stdout: '  ✔ test passed\n  1) test failed',
+        stderr: '',
+        extensionLog: '',
+      },
+    });
+
+    // Then: 詳細テーブルが含まれること
+    assert.ok(md.includes('| スイート | テスト名 | 結果 |'), 'テーブルヘッダが含まれること');
+    assert.ok(md.includes('| test passed | ✅ |'), '成功行が含まれること');
+    assert.ok(md.includes('| test failed | ❌ |'), '失敗行が含まれること');
+  });
+
+  // TC-ART-28: パイプ文字エスケープ
+  test('TC-ART-28: テスト名にパイプが含まれる場合エスケープされる', () => {
+    // Given: パイプを含むテスト名
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Pipe Check',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'cmd',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 100,
+        stdout: '  ✔ test | with | pipe',
+        stderr: '',
+        extensionLog: '',
+      },
+    });
+
+    // Then: パイプがエスケープされていること
+    assert.ok(md.includes('test \\| with \\| pipe'), 'パイプがエスケープされていること');
   });
 });

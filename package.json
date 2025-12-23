@@ -1,9 +1,9 @@
 {
-  "name": "testgen-agent",
+  "name": "chottotest",
   "publisher": "local",
   "displayName": "Chottotest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.21",
+  "version": "0.0.22",
   "engines": {
     "vscode": "^1.85.0"
   },
