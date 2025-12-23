@@ -1,9 +1,9 @@
 {
   "name": "testgen-agent",
   "publisher": "local",
-  "displayName": "TestGenie",
+  "displayName": "Chottotest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.9",
+  "version": "0.0.14",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -11,47 +11,70 @@
     "Other"
   ],
   "main": "./out/extension.js",
+  "activationEvents": [],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "testgen-agent",
+          "title": "Chottotest",
+          "icon": "media/testgen-view.svg"
+        }
+      ]
+    },
+    "views": {
+      "testgen-agent": [
+        {
+          "id": "testgen-agent.controlPanel",
+          "name": "Chottotest",
+          "type": "webview"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "testgen-agent.generateTest",
-        "title": "TestGenie: テスト生成（QuickPick）"
+        "title": "Chottotest: テスト生成（QuickPick）"
+      },
+      {
+        "command": "testgen-agent.openPanel",
+        "title": "Chottotest: パネルを開く"
       },
       {
         "command": "testgen-agent.generateTestFromFile",
-        "title": "TestGenie: 現在のファイルからテスト生成"
+        "title": "Chottotest: 現在のファイルからテスト生成"
       },
       {
         "command": "testgen-agent.generateTestFromCommit",
-        "title": "TestGenie: 最新コミット差分からテスト生成"
+        "title": "Chottotest: 最新コミット差分からテスト生成"
       },
       {
         "command": "testgen-agent.generateTestFromCommitRange",
-        "title": "TestGenie: コミット範囲差分からテスト生成"
+        "title": "Chottotest: コミット範囲差分からテスト生成"
       },
       {
         "command": "testgen-agent.generateTestFromWorkingTree",
-        "title": "TestGenie: 未コミット差分からテスト生成"
+        "title": "Chottotest: 未コミット差分からテスト生成"
       },
       {
         "command": "testgen-agent.previewLastRun",
-        "title": "TestGenie: 直近実行の差分を表示"
+        "title": "Chottotest: 直近実行の差分を表示"
       },
       {
         "command": "testgen-agent.rollbackLastRun",
-        "title": "TestGenie: 直近実行をロールバック"
+        "title": "Chottotest: 直近実行をロールバック"
       },
       {
         "command": "testgen-agent.showTestGeneratorOutput",
-        "title": "TestGenie: 出力ログを表示"
+        "title": "Chottotest: 出力ログを表示"
       },
       {
         "command": "testgen-agent.selectDefaultModel",
-        "title": "TestGenie: デフォルトモデルを選択"
+        "title": "Chottotest: デフォルトモデルを選択"
       }
     ],
     "configuration": {
-      "title": "TestGenie",
+      "title": "Chottotest",
       "properties": {
         "testgen-agent.cursorAgentPath": {
           "type": "string",
@@ -80,6 +103,26 @@
           "type": "string",
           "default": "docs/test-strategy.md",
           "description": "テスト戦略ルールファイルのパス（ワークスペース相対または絶対）"
+        },
+        "testgen-agent.includeTestPerspectiveTable": {
+          "type": "boolean",
+          "default": true,
+          "description": "テスト生成前にテスト観点表（Markdown）を生成してファイル保存する"
+        },
+        "testgen-agent.perspectiveReportDir": {
+          "type": "string",
+          "default": "docs/test-perspectives",
+          "description": "テスト観点表（自動生成）の保存先ディレクトリ（ワークスペース相対または絶対）"
+        },
+        "testgen-agent.testExecutionReportDir": {
+          "type": "string",
+          "default": "docs/test-execution-reports",
+          "description": "テスト実行レポート（自動生成）の保存先ディレクトリ（ワークスペース相対または絶対）"
+        },
+        "testgen-agent.testCommand": {
+          "type": "string",
+          "default": "npm test",
+          "description": "テスト実行コマンド（空の場合は実行しない。例: npm test, pnpm test, pytest）"
         }
       }
     }
@@ -89,21 +132,34 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
-    "lint": "eslint src --ext ts",
+    "lint": "eslint src/",
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
+    "@eslint/js": "^9.17.0",
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "^22.10.5",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.4.1",
     "esbuild": "^0.24.2",
+    "eslint": "^9.17.0",
     "glob": "^10.3.10",
     "mocha": "^10.2.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.19.1"
   },
-  "keywords": [],
+  "keywords": [
+    "test",
+    "testing",
+    "test-generation",
+    "cursor",
+    "ai"
+  ],
   "author": "",
-  "license": "ISC"
+  "license": "CC-BY-NC-SA-4.0",
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
 }

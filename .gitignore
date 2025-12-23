@@ -4,3 +4,4 @@ dist
 *.vsix
 .vscode-test
 .DS_Store
+.cursor/debug.log

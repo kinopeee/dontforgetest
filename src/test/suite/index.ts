@@ -17,35 +17,35 @@ export function run(): Promise<void> {
 
   const testsRoot = path.resolve(__dirname, '..');
 
-  return new Promise(async (c, e) => {
-    try {
-      const files = await glob('**/**.test.js', { cwd: testsRoot });
-
-      if (files.length === 0) {
-        console.warn('テストファイルが見つかりませんでした');
-        c();
-        return;
-      }
-
-      console.log(`見つかったテストファイル: ${files.length}個`);
-      files.forEach((f: string) => {
-        const filePath = path.resolve(testsRoot, f);
-        console.log(`  追加: ${filePath}`);
-        mocha.addFile(filePath);
-      });
-
-      // テストスイートを実行
-      mocha.run((failures: number) => {
-        console.log(`テスト実行完了。失敗: ${failures}個`);
-        if (failures > 0) {
-          e(new Error(`${failures} 個のテストが失敗しました。`));
-        } else {
+  return new Promise((c, e) => {
+    glob('**/**.test.js', { cwd: testsRoot })
+      .then((files) => {
+        if (files.length === 0) {
+          console.warn('テストファイルが見つかりませんでした');
           c();
+          return;
         }
+
+        console.log(`見つかったテストファイル: ${files.length}個`);
+        files.forEach((f: string) => {
+          const filePath = path.resolve(testsRoot, f);
+          console.log(`  追加: ${filePath}`);
+          mocha.addFile(filePath);
+        });
+
+        // テストスイートを実行
+        mocha.run((failures: number) => {
+          console.log(`テスト実行完了。失敗: ${failures}個`);
+          if (failures > 0) {
+            e(new Error(`${failures} 個のテストが失敗しました。`));
+          } else {
+            c();
+          }
+        });
+      })
+      .catch((err) => {
+        console.error('テストスイートの実行中にエラーが発生しました:', err);
+        e(err);
       });
-    } catch (err) {
-      console.error('テストスイートの実行中にエラーが発生しました:', err);
-      e(err);
-    }
   });
 }

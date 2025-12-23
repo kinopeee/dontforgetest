@@ -32,6 +32,7 @@ suite('src/extension.ts', () => {
     test('TC-EXT-03: コマンド登録の確認', async () => {
       const expectedCommands = [
         'testgen-agent.generateTest',
+        'testgen-agent.openPanel',
         'testgen-agent.generateTestFromFile',
         'testgen-agent.generateTestFromCommit',
         'testgen-agent.generateTestFromCommitRange',
@@ -66,6 +67,10 @@ suite('src/extension.ts', () => {
       assert.strictEqual(config.get('defaultModel'), '', 'defaultModelのデフォルト値が不正');
       assert.deepStrictEqual(config.get('customModels'), [], 'customModelsのデフォルト値が不正');
       assert.strictEqual(config.get('testStrategyPath'), 'docs/test-strategy.md', 'testStrategyPathのデフォルト値が不正');
+      assert.strictEqual(config.get('includeTestPerspectiveTable'), true, 'includeTestPerspectiveTableのデフォルト値が不正');
+      assert.strictEqual(config.get('perspectiveReportDir'), 'docs/test-perspectives', 'perspectiveReportDirのデフォルト値が不正');
+      assert.strictEqual(config.get('testExecutionReportDir'), 'docs/test-execution-reports', 'testExecutionReportDirのデフォルト値が不正');
+      assert.strictEqual(config.get('testCommand'), 'npm test', 'testCommandのデフォルト値が不正');
     });
   });
 });

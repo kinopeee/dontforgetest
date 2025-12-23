@@ -1,11 +1,9 @@
 import * as vscode from 'vscode';
-import { recordTouchedPathFromEventPath, startLastRun } from '../apply/patchApplier';
 import { ensurePreflight } from '../core/preflight';
 import { buildTestGenPrompt } from '../core/promptBuilder';
 import { analyzeGitUnifiedDiff, extractChangedPaths, getWorkingTreeDiff, type WorkingTreeDiffMode } from '../git/diffAnalyzer';
 import { type AgentProvider } from '../providers/provider';
-import { appendEventToOutput, showTestGenOutput } from '../ui/outputChannel';
-import { handleTestGenEventForStatusBar } from '../ui/statusBar';
+import { runWithArtifacts } from './runWithArtifacts';
 
 /**
  * 未コミット差分（staged / unstaged）に対してテスト生成を実行する。
@@ -70,39 +68,20 @@ export async function generateTestFromWorkingTree(provider: AgentProvider, model
     diffForPrompt,
   ].join('\n');
 
-  showTestGenOutput(true);
   const taskId = `fromWorkingTree-${Date.now()}`;
-  await startLastRun(taskId, `未コミット差分(${selected.label})`, workspaceRoot, changedFiles);
-
-  provider.run({
-    taskId,
+  const generationLabel = `未コミット差分 (${selected.label})`;
+  await runWithArtifacts({
+    provider,
     workspaceRoot,
-    agentCommand: cursorAgentCommand,
-    prompt: finalPrompt,
+    cursorAgentCommand,
+    testStrategyPath,
+    generationLabel,
+    targetPaths: changedFiles,
+    generationPrompt: finalPrompt,
+    perspectiveReferenceText: diffForPrompt,
     model: modelOverride ?? defaultModel,
-    outputFormat: 'stream-json',
-    allowWrite: true,
-    onEvent: (event) => {
-      handleTestGenEventForStatusBar(event);
-      appendEventToOutput(event);
-      if (event.type === 'fileWrite') {
-        recordTouchedPathFromEventPath(workspaceRoot, event.path);
-      }
-      if (event.type === 'completed') {
-        const msg =
-          event.exitCode === 0
-            ? `テスト生成が完了しました: 未コミット差分 (${selected.label})`
-            : `テスト生成に失敗しました: 未コミット差分 (${selected.label}) (exit=${event.exitCode ?? 'null'})`;
-        if (event.exitCode === 0) {
-          vscode.window.showInformationMessage(msg);
-        } else {
-          vscode.window.showErrorMessage(msg);
-        }
-      }
-    },
+    generationTaskId: taskId,
   });
-
-  vscode.window.showInformationMessage(`テスト生成を開始しました: 未コミット差分 (${selected.label})`);
 }
 
 function truncateText(text: string, maxChars: number): string {

@@ -95,3 +95,58 @@
 | TC-A-02 | 変更ファイルがない | Boundary – no changes | 情報メッセージが表示され、処理が中断される | - |
 | TC-A-03 | gitコマンド実行エラー | Boundary – git error | エラーメッセージが表示されるか、空配列/空文字が返される | 例外型を検証 |
 | TC-A-04 | プリフライトチェック失敗 | Boundary – preflight failed | エラーメッセージが表示され、処理が中断される | - |
+
+## 8. 成果物保存（観点表/テスト実行レポート）のテスト観点表（概要）
+
+| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+|---------|---------------------|--------------------------------------|-----------------|-------|
+| TC-N-01 | includeTestPerspectiveTable=true | Equivalence – normal | 生成前に観点表が生成され、`docs/test-perspectives/test-perspectives_*.md` に新規保存される | `src/commands/runWithArtifacts.ts` |
+| TC-N-02 | testCommandが設定されている（例: npm test） | Equivalence – normal | 生成後にテストが実行され、`docs/test-execution-reports/test-execution_*.md` に新規保存される | 失敗時も保存 |
+| TC-A-01 | testCommandが空文字 | Boundary – empty | テスト実行はスキップされ、ログにスキップ理由が出力される | - |
+| TC-A-02 | provider error（spawn失敗等） | Boundary – provider failure | completedイベントが発行され、ステータスバーの「実行中」が残留しない | `providers/cursorAgentProvider.ts` 改修 |
+
+### 直近の自動生成観点表（例）
+- `docs/test-perspectives/test-perspectives_20251223_022649.md`
+
+## 9. core/artifacts.ts (成果物処理) のテスト観点表
+
+| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+|---------|---------------------|--------------------------------------|-----------------|-------|
+| TC-ART-01 | 設定値の取得 | Equivalence - normal | `getArtifactSettings()` が正しいデフォルト値または設定値を返す | `includeTestPerspectiveTable`=true 等 |
+| TC-ART-02 | タイムスタンプ生成 | Equivalence - normal | `formatTimestamp()` が `YYYYMMDD_HHmmss` 形式を返す | |
+| TC-ART-03 | 絶対パス解決（絶対パス入力） | Equivalence - normal | そのまま返される | |
+| TC-ART-04 | 絶対パス解決（相対パス入力） | Equivalence - normal | ワークスペースルートと結合して返される | |
+| TC-ART-05 | 絶対パス解決（空文字） | Boundary - empty | ワークスペースルートが返される | |
+| TC-ART-06 | 観点表Markdown生成（正常） | Equivalence - normal | タイトル、対象、Markdownコンテンツが含まれる | |
+| TC-ART-07 | 観点表Markdown生成（対象なし） | Boundary - empty list | 「(なし)」と表示される | |
+| TC-ART-08 | 実行レポートMarkdown生成（正常） | Equivalence - normal | タイトル、環境、コマンド、終了コード0、出力が含まれる | |
+| TC-ART-09 | 実行レポートMarkdown生成（エラー） | Boundary - error | エラーメッセージ（spawn errorなど）が含まれる | |
+| TC-ART-10 | 実行レポートMarkdown生成（空出力） | Boundary - empty output | 空のコードブロックが含まれる | |
+| TC-ART-11 | 観点表保存（ファイル書き込み） | Equivalence - IO | 指定ディレクトリにファイルが生成され、内容が正しい | |
+| TC-ART-12 | 実行レポート保存（ファイル書き込み） | Equivalence - IO | 指定ディレクトリにファイルが生成され、内容が正しい | |
+
+## 10. core/testRunner.ts (テスト実行) のテスト観点表
+
+| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+|---------|---------------------|--------------------------------------|-----------------|-------|
+| TC-RUN-01 | 正常コマンド実行 | Equivalence - normal | exitCode=0, stdoutあり, stderrなし | echoコマンド |
+| TC-RUN-02 | 無効コマンド実行 | Boundary - error | exitCode!=0 または errorMessageあり | |
+| TC-RUN-03 | 失敗コマンド実行 | Boundary - exit code | exitCode=1 | exit 1 |
+| TC-RUN-04 | 大量出力コマンド | Boundary - large output | stdoutが切り詰められ、サイズ制限内である | |
+
+## 11. commands/runWithArtifacts.ts (統合フロー) のテスト観点表
+
+| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+|---------|---------------------|--------------------------------------|-----------------|-------|
+| TC-CMD-01 | 全機能有効（観点表+テスト実行） | Equivalence - flow | 観点表と実行レポートの両方が保存される | MockProvider使用 |
+| TC-CMD-02 | 観点表無効 | Equivalence - config | 観点表は保存されないが、テスト生成は行われる | |
+| TC-CMD-03 | テストコマンド空 | Boundary - config | テスト実行がスキップされ、レポートは保存されない | |
+| TC-CMD-04 | テスト実行失敗 | Boundary - runtime | レポートが保存され、失敗（exitCode!=0）が記録される | |
+| TC-CMD-05 | 観点表生成失敗（Provider） | Boundary - runtime | ログがそのまま観点表として保存される | フォールバック動作 |
+| TC-CMD-06 | VS Code起動テストコマンド | Equivalence - config | テスト実行がスキップされる（再帰起動防止） | |
+
+## 12. テスト実行情報
+
+- **実行コマンド**: `npm test`
+- **カバレッジ**: 現状は `vscode-test` による統合テスト実行のため、カバレッジレポートは出力されません（将来対応予定）。
+

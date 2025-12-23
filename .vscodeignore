@@ -12,3 +12,5 @@ vsc-extension-quickstart.md
 **/*.ts
 out/test/**
 docs/test-*.md
+docs/test-execution-reports/**
+docs/test-perspectives/**

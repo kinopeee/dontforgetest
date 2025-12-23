@@ -1,4 +1,4 @@
-# テスト生成エージェント（TestGen Agent）
+# テスト生成エージェント（Chottotest）
 
 Cursor CLI（`cursor-agent`）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する VS Code / Cursor 拡張機能です。
 
@@ -48,8 +48,28 @@ npm test
 
 1. VS Code / Cursor でこのリポジトリを開く
 2. F5（Run Extension）
-3. Extension Development Host のコマンドパレットで `TestGen:` を実行
+3. Extension Development Host のコマンドパレットで `Chottotest:` を実行
 
 ## ライセンス
 
-ISC
+このプロジェクトは **CC BY-NC-SA 4.0**（Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International）ライセンスの下で公開されています。
+
+### 許可される利用
+
+- ✅ **非商用利用**: 個人利用、教育、研究目的での使用
+- ✅ **改変**: ソースコードの改変・カスタマイズ
+- ✅ **再配布**: 改変版の再配布（同じライセンスで）
+
+### 制限事項
+
+- ❌ **商用利用禁止**: 営利目的での使用は許可されません
+- ⚠️ **著作権表示義務**: 利用時は必ず著作権表示とライセンスへのリンクを含めてください
+- ⚠️ **継承義務（ShareAlike）**: 派生物も同じCC BY-NC-SA 4.0ライセンスで公開する必要があります
+
+### 商用利用について
+
+商用利用を希望される場合は、別途ライセンス契約が必要です。お問い合わせください。
+
+詳細は [LICENSE](LICENSE) ファイルをご確認ください。
+
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)

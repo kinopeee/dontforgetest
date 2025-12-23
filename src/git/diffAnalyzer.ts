@@ -138,7 +138,9 @@ export async function getWorkingTreeDiff(workspaceRoot: string, mode: WorkingTre
 }
 
 async function execGit(workspaceRoot: string, args: string[], maxBufferBytes: number): Promise<string> {
-  const { stdout } = await execFileAsync('git', args, {
+  // core.quotepath=false で、非ASCIIパスが \343... のようにクォートされるのを抑止する
+  const fullArgs = ['-c', 'core.quotepath=false', ...args];
+  const { stdout } = await execFileAsync('git', fullArgs, {
     cwd: workspaceRoot,
     encoding: 'utf8',
     maxBuffer: maxBufferBytes,
@@ -179,28 +181,94 @@ function splitGitTokens(input: string): string[] {
       break;
     }
 
-    let token = '';
     if (input[i] === '"') {
       i += 1;
+      const bytes: number[] = [];
       while (i < input.length) {
         const ch = input[i];
-        if (ch === '\\' && i + 1 < input.length) {
-          // \" や \\ を最低限解釈
-          token += input[i + 1];
-          i += 2;
-          continue;
-        }
         if (ch === '"') {
           i += 1;
           break;
         }
-        token += ch;
+
+        if (ch === '\\' && i + 1 < input.length) {
+          const next = input[i + 1] ?? '';
+
+          // \343 のような「最大3桁の8進数エスケープ」をデコードする（gitのquotepath）
+          if (next >= '0' && next <= '7') {
+            let oct = '';
+            let j = i + 1;
+            while (j < input.length && oct.length < 3) {
+              const c = input[j] ?? '';
+              if (c < '0' || c > '7') {
+                break;
+              }
+              oct += c;
+              j += 1;
+            }
+            if (oct.length > 0) {
+              bytes.push(parseInt(oct, 8));
+              i = i + 1 + oct.length;
+              continue;
+            }
+          }
+
+          // 代表的なエスケープ
+          switch (next) {
+            case 'n':
+              bytes.push(0x0a);
+              i += 2;
+              continue;
+            case 'r':
+              bytes.push(0x0d);
+              i += 2;
+              continue;
+            case 't':
+              bytes.push(0x09);
+              i += 2;
+              continue;
+            case 'b':
+              bytes.push(0x08);
+              i += 2;
+              continue;
+            case 'f':
+              bytes.push(0x0c);
+              i += 2;
+              continue;
+            case 'v':
+              bytes.push(0x0b);
+              i += 2;
+              continue;
+            case '\\':
+              bytes.push(0x5c);
+              i += 2;
+              continue;
+            case '"':
+              bytes.push(0x22);
+              i += 2;
+              continue;
+            default: {
+              // 不明なエスケープは「次の1文字」をそのまま扱う
+              for (const b of Buffer.from(next, 'utf8')) {
+                bytes.push(b);
+              }
+              i += 2;
+              continue;
+            }
+          }
+        }
+
+        // 通常文字はUTF-8バイト列として積む（quotepath=falseでも安全）
+        for (const b of Buffer.from(ch, 'utf8')) {
+          bytes.push(b);
+        }
         i += 1;
       }
-      tokens.push(token);
+      tokens.push(Buffer.from(bytes).toString('utf8'));
       continue;
     }
 
+    let token = '';
     while (i < input.length && input[i] !== ' ') {
       token += input[i];
       i += 1;

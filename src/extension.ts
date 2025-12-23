@@ -6,6 +6,7 @@ import { generateTestFromActiveFile } from './commands/generateFromFile';
 import { generateTestFromWorkingTree } from './commands/generateFromWorkingTree';
 import { selectDefaultModel } from './commands/selectDefaultModel';
 import { CursorAgentProvider } from './providers/cursorAgentProvider';
+import { TestGenControlPanelViewProvider } from './ui/controlPanel';
 import { showTestGenOutput } from './ui/outputChannel';
 import { generateTestWithQuickPick } from './ui/quickPick';
 import { initializeTestGenStatusBar } from './ui/statusBar';
@@ -17,11 +18,24 @@ export function activate(context: vscode.ExtensionContext) {
   console.log('拡張機能 "testgen-agent" が有効化されました');
 
   const provider = new CursorAgentProvider();
+  const controlPanelProvider = new TestGenControlPanelViewProvider(context);
   initializeTestGenStatusBar(context);
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(TestGenControlPanelViewProvider.viewId, controlPanelProvider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('testgen-agent.generateTest', async () => {
       await generateTestWithQuickPick(provider);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('testgen-agent.openPanel', async () => {
+      await vscode.commands.executeCommand('workbench.view.extension.testgen-agent');
     }),
   );
 

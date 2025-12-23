@@ -1,12 +1,10 @@
 import { execFile } from 'child_process';
 import * as vscode from 'vscode';
 import { promisify } from 'util';
-import { recordTouchedPathFromEventPath, startLastRun } from '../apply/patchApplier';
 import { ensurePreflight } from '../core/preflight';
 import { buildTestGenPrompt } from '../core/promptBuilder';
+import { runWithArtifacts } from './runWithArtifacts';
 import { type AgentProvider } from '../providers/provider';
-import { appendEventToOutput, showTestGenOutput } from '../ui/outputChannel';
-import { handleTestGenEventForStatusBar } from '../ui/statusBar';
 
 const execFileAsync = promisify(execFile);
 
@@ -51,39 +49,20 @@ export async function generateTestFromLatestCommit(provider: AgentProvider, mode
     diffForPrompt,
   ].join('\n');
 
-  showTestGenOutput(true);
   const taskId = `fromCommit-${Date.now()}`;
-  await startLastRun(taskId, `最新コミット(${commit.slice(0, 7)})`, workspaceRoot, changedFiles);
-
-  provider.run({
-    taskId,
+  const generationLabel = `最新コミット (${commit.slice(0, 7)})`;
+  await runWithArtifacts({
+    provider,
     workspaceRoot,
-    agentCommand: cursorAgentCommand,
-    prompt: finalPrompt,
+    cursorAgentCommand,
+    testStrategyPath,
+    generationLabel,
+    targetPaths: changedFiles,
+    generationPrompt: finalPrompt,
+    perspectiveReferenceText: diffForPrompt,
     model: modelOverride ?? defaultModel,
-    outputFormat: 'stream-json',
-    allowWrite: true,
-    onEvent: (event) => {
-      handleTestGenEventForStatusBar(event);
-      appendEventToOutput(event);
-      if (event.type === 'fileWrite') {
-        recordTouchedPathFromEventPath(workspaceRoot, event.path);
-      }
-      if (event.type === 'completed') {
-        const msg =
-          event.exitCode === 0
-            ? `テスト生成が完了しました: 最新コミット (${commit.slice(0, 7)})`
-            : `テスト生成に失敗しました: 最新コミット (${commit.slice(0, 7)}) (exit=${event.exitCode ?? 'null'})`;
-        if (event.exitCode === 0) {
-          vscode.window.showInformationMessage(msg);
-        } else {
-          vscode.window.showErrorMessage(msg);
-        }
-      }
-    },
+    generationTaskId: taskId,
   });
-
-  vscode.window.showInformationMessage(`テスト生成を開始しました: 最新コミット (${commit.slice(0, 7)})`);
 }
 
 async function getHeadCommitHash(cwd: string): Promise<string | undefined> {

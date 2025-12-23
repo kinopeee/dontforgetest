@@ -45,14 +45,14 @@ function update(): void {
     return;
   }
 
-  statusBar.text = `$(beaker) TestGen: ${count} 実行中`;
+  statusBar.text = `$(beaker) Chottotest: ${count} 実行中`;
   statusBar.tooltip = buildTooltip();
   statusBar.show();
 }
 
 function buildTooltip(): string {
   const lines: string[] = [];
-  lines.push('TestGen Agent');
+  lines.push('Chottotest');
   lines.push('');
   lines.push(`実行中: ${running.size}`);
   for (const [taskId, info] of running.entries()) {

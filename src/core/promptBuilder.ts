@@ -17,19 +17,18 @@ export interface BuildPromptOptions {
   testStrategyPath: string;
 }
 
+export interface BuildPerspectivePromptOptions extends BuildPromptOptions {
+  /** 差分など参考情報（任意） */
+  referenceText?: string;
+}
+
 /**
  * テスト生成用のプロンプトを構築する。
  * - docs/test-strategy.md を読み取り、ルールをプロンプトへ注入する
  * - 先頭の testgen-agent-config コメントから出力言語を解決する
  */
 export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{ prompt: string; languages: TestGenLanguageConfig }> {
-  const strategyAbsolutePath = toAbsolutePath(options.workspaceRoot, options.testStrategyPath);
-  const strategyText = await readTextFile(strategyAbsolutePath);
-  const languages = parseLanguageConfig(strategyText) ?? {
-    answerLanguage: 'ja',
-    commentLanguage: 'ja',
-    perspectiveTableLanguage: 'ja',
-  };
+  const { strategyText, languages } = await readStrategyAndLanguages(options.workspaceRoot, options.testStrategyPath);
 
   const targetsText = options.targetPaths
     .map((p) => `- ${p}`)
@@ -49,6 +48,11 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     `- テストコード内コメント: ${languages.commentLanguage}`,
     `- テスト観点表（Markdown）: ${languages.perspectiveTableLanguage}`,
     ``,
+    `## ツール使用制約（必須）`,
+    `- **shell（コマンド実行）ツールは使用禁止**（\`git diff\` / \`npm test\` 等を実行しない）`,
+    `- **VS Code / Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）`,
+    `- 必要な情報は、対象ファイルの読み取り（read）と、こちらから提示する差分/対象パスから判断すること`,
+    ``,
     `## テスト戦略ルール（必須）`,
     `以下のルールを必ず遵守してください（原文を貼り付けます）。`,
     ``,
@@ -63,6 +67,73 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
   return { prompt, languages };
 }
 
+/**
+ * テスト観点表「だけ」を生成させるプロンプトを構築する。
+ *
+ * 方針:
+ * - 観点表（Markdown）以外の文章やコードは出力させない
+ * - マーカーで囲わせ、保存側が抽出できるようにする
+ */
+export async function buildTestPerspectivePrompt(
+  options: BuildPerspectivePromptOptions,
+): Promise<{ prompt: string; languages: TestGenLanguageConfig }> {
+  const { strategyText, languages } = await readStrategyAndLanguages(options.workspaceRoot, options.testStrategyPath);
+
+  const markerBegin = '<!-- BEGIN TEST PERSPECTIVES -->';
+  const markerEnd = '<!-- END TEST PERSPECTIVES -->';
+
+  const targetsText = options.targetPaths
+    .map((p) => `- ${p}`)
+    .join('\n');
+
+  const parts: string[] = [];
+  parts.push('あなたはソフトウェアエンジニアです。');
+  parts.push('以下の対象について、テスト観点表（Markdown）**だけ**を作成してください。');
+  parts.push('テストコードの生成、ファイルの編集、追加の説明文の出力は不要です。');
+  parts.push('');
+  parts.push('## 対象');
+  parts.push(`- 実行種別: ${options.targetLabel}`);
+  parts.push('- 対象ファイル:');
+  parts.push(targetsText.length > 0 ? targetsText : '- (なし)');
+  parts.push('');
+  parts.push('## 出力言語（必須）');
+  parts.push(`- テスト観点表（Markdown）: ${languages.perspectiveTableLanguage}`);
+  parts.push('');
+  parts.push('## 出力要件（必須）');
+  parts.push('- 返答は **Markdown の観点表（テーブル）だけ** にする');
+  parts.push('- 次のマーカーで出力全体を囲むこと（マーカー行も必ず含める）');
+  parts.push(`  - ${markerBegin}`);
+  parts.push(`  - ${markerEnd}`);
+  parts.push('- テーブルの列は次を含めること: `Case ID`, `Input / Precondition`, `Perspective (Equivalence / Boundary)`, `Expected Result`, `Notes`');
+  parts.push('- 正常系・異常系・境界値を網羅し、境界値は最低でも `0 / 最小値 / 最大値 / ±1 / 空 / NULL` を含める');
+  parts.push('');
+  parts.push('## ツール使用制約（必須）');
+  parts.push('- **shell（コマンド実行）ツールは使用禁止**（`git diff` / `npm test` 等を実行しない）');
+  parts.push('- **VS Code / Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）');
+  parts.push('- ファイルの編集/追加は不要（実施しない）');
+  parts.push('');
+  parts.push('## テスト戦略ルール（参考）');
+  parts.push(strategyText.trim());
+
+  if (options.referenceText && options.referenceText.trim().length > 0) {
+    parts.push('');
+    parts.push('## 参考（差分/補足情報）');
+    parts.push('必要に応じて参照してください。');
+    parts.push('');
+    parts.push(options.referenceText.trim());
+  }
+
+  parts.push('');
+  parts.push('## 出力フォーマット（必須）');
+  parts.push(markerBegin);
+  parts.push('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |');
+  parts.push('|--------|----------------------|---------------------------------------|-----------------|-------|');
+  parts.push('| TC-N-01 | ... | Equivalence – normal | ... | - |');
+  parts.push(markerEnd);
+
+  return { prompt: parts.join('\n'), languages };
+}
+
 function toAbsolutePath(workspaceRoot: string, maybeRelativePath: string): string {
   return path.isAbsolute(maybeRelativePath) ? maybeRelativePath : path.join(workspaceRoot, maybeRelativePath);
 }
@@ -70,6 +141,20 @@ function toAbsolutePath(workspaceRoot: string, maybeRelativePath: string): strin
 async function readTextFile(absolutePath: string): Promise<string> {
   const data = await vscode.workspace.fs.readFile(vscode.Uri.file(absolutePath));
   return Buffer.from(data).toString('utf8');
+}
+
+async function readStrategyAndLanguages(
+  workspaceRoot: string,
+  testStrategyPath: string,
+): Promise<{ strategyText: string; languages: TestGenLanguageConfig }> {
+  const strategyAbsolutePath = toAbsolutePath(workspaceRoot, testStrategyPath);
+  const strategyText = await readTextFile(strategyAbsolutePath);
+  const languages = parseLanguageConfig(strategyText) ?? {
+    answerLanguage: 'ja',
+    commentLanguage: 'ja',
+    perspectiveTableLanguage: 'ja',
+  };
+  return { strategyText, languages };
 }
 
 /**

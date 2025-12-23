@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { buildTestGenPrompt, parseLanguageConfig, type TestGenLanguageConfig } from '../../../core/promptBuilder';
+import { buildTestGenPrompt, buildTestPerspectivePrompt, parseLanguageConfig } from '../../../core/promptBuilder';
 
 suite('core/promptBuilder.ts', () => {
   suite('parseLanguageConfig', () => {
@@ -241,6 +241,39 @@ suite('core/promptBuilder.ts', () => {
       try {
         await buildTestGenPrompt(options);
         // エラーが投げられなければ成功（絶対パスが正しく使用された）
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('ENOENT')) {
+          return;
+        }
+        throw err;
+      }
+    });
+  });
+
+  suite('buildTestPerspectivePrompt', () => {
+    // Given: 正常なワークスペースと設定ファイル
+    // When: buildTestPerspectivePromptを呼び出す
+    // Then: マーカー付きの観点表プロンプトが生成される
+    test('TC-N-07: 観点表プロンプト（マーカー付き）', async () => {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('ワークスペースが開かれていません');
+        return;
+      }
+
+      const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
+      try {
+        const result = await buildTestPerspectivePrompt({
+          workspaceRoot,
+          targetLabel: 'テスト対象',
+          targetPaths: ['src/test.ts'],
+          testStrategyPath,
+          referenceText: 'diff snippet',
+        });
+
+        assert.ok(result.prompt.includes('<!-- BEGIN TEST PERSPECTIVES -->'));
+        assert.ok(result.prompt.includes('<!-- END TEST PERSPECTIVES -->'));
+        assert.ok(result.prompt.includes('| Case ID |'), 'テーブルヘッダが含まれる');
       } catch (err) {
         if (err instanceof Error && err.message.includes('ENOENT')) {
           return;

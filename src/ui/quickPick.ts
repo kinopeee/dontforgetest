@@ -61,7 +61,7 @@ async function pickSource(): Promise<SourceKind | undefined> {
       { label: 'コミット範囲差分', description: 'main..HEAD 等を指定', source: 'commitRange' },
       { label: '未コミット差分', description: 'staged / unstaged を選択', source: 'workingTree' },
     ],
-    { title: 'TestGen: 実行ソースを選択', placeHolder: 'どの差分/対象からテストを生成しますか？' },
+    { title: 'Chottotest: 実行ソースを選択', placeHolder: 'どの差分/対象からテストを生成しますか？' },
   );
   return picked?.source;
 }
@@ -106,7 +106,7 @@ async function pickModelOverride(): Promise<string | undefined | null> {
   });
 
   const picked = await vscode.window.showQuickPick<ModelPickItem>(items, {
-    title: 'TestGen: モデルを選択',
+    title: 'Chottotest: モデルを選択',
     placeHolder: '使用するモデルを選択してください',
   });
 

@@ -1,11 +1,9 @@
 import * as vscode from 'vscode';
-import { recordTouchedPathFromEventPath, startLastRun } from '../apply/patchApplier';
 import { ensurePreflight } from '../core/preflight';
 import { buildTestGenPrompt } from '../core/promptBuilder';
 import { analyzeGitUnifiedDiff, extractChangedPaths, getCommitRangeDiff } from '../git/diffAnalyzer';
 import { type AgentProvider } from '../providers/provider';
-import { appendEventToOutput, showTestGenOutput } from '../ui/outputChannel';
-import { handleTestGenEventForStatusBar } from '../ui/statusBar';
+import { runWithArtifacts } from './runWithArtifacts';
 
 /**
  * 指定したコミット範囲の差分に対してテスト生成を実行する。
@@ -71,39 +69,20 @@ export async function generateTestFromCommitRange(provider: AgentProvider, model
     diffForPrompt,
   ].join('\n');
 
-  showTestGenOutput(true);
   const taskId = `fromCommitRange-${Date.now()}`;
-  await startLastRun(taskId, `コミット範囲(${trimmedRange})`, workspaceRoot, changedFiles);
-
-  provider.run({
-    taskId,
+  const generationLabel = `コミット範囲 (${trimmedRange})`;
+  await runWithArtifacts({
+    provider,
     workspaceRoot,
-    agentCommand: cursorAgentCommand,
-    prompt: finalPrompt,
+    cursorAgentCommand,
+    testStrategyPath,
+    generationLabel,
+    targetPaths: changedFiles,
+    generationPrompt: finalPrompt,
+    perspectiveReferenceText: diffForPrompt,
     model: modelOverride ?? defaultModel,
-    outputFormat: 'stream-json',
-    allowWrite: true,
-    onEvent: (event) => {
-      handleTestGenEventForStatusBar(event);
-      appendEventToOutput(event);
-      if (event.type === 'fileWrite') {
-        recordTouchedPathFromEventPath(workspaceRoot, event.path);
-      }
-      if (event.type === 'completed') {
-        const msg =
-          event.exitCode === 0
-            ? `テスト生成が完了しました: コミット範囲 (${trimmedRange})`
-            : `テスト生成に失敗しました: コミット範囲 (${trimmedRange}) (exit=${event.exitCode ?? 'null'})`;
-        if (event.exitCode === 0) {
-          vscode.window.showInformationMessage(msg);
-        } else {
-          vscode.window.showErrorMessage(msg);
-        }
-      }
-    },
+    generationTaskId: taskId,
   });
-
-  vscode.window.showInformationMessage(`テスト生成を開始しました: コミット範囲 (${trimmedRange})`);
 }
 
 function truncateText(text: string, maxChars: number): string {

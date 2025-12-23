@@ -83,9 +83,25 @@ export class CursorAgentProvider implements AgentProvider {
     // prompt は最後に付与（引数として渡す）
     args.push(options.prompt);
 
+    // cursor-agent が内部で $EDITOR / $PAGER を呼び、GUI（VS Code 等）起動で待ち続けるケースがある。
+    // Extension Host からの起動時は、明示的に「非対話」なコマンドへ差し替えてブロックを避ける。
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    const runningInVsCode =
+      typeof process.env.VSCODE_IPC_HOOK_CLI === 'string' ||
+      typeof process.env.VSCODE_PID === 'string' ||
+      typeof process.env.VSCODE_CWD === 'string';
+    if (runningInVsCode) {
+      env.EDITOR = 'true';
+      env.VISUAL = 'true';
+      env.GIT_EDITOR = 'true';
+      env.PAGER = 'cat';
+      env.GIT_PAGER = 'cat';
+      env.LESS = 'FRX';
+    }
+
     const child = spawn(command, args, {
       cwd: options.workspaceRoot,
-      env: process.env,
+      env,
       stdio: 'pipe',
     });
 
@@ -104,6 +120,7 @@ export class CursorAgentProvider implements AgentProvider {
     let stdoutBuffer = '';
     let lastWritePath: string | undefined;
     const startedAtMs = nowMs();
+    let completedEmitted = false;
     let hasAnyOutput = false;
     let lastOutputAtMs = startedAtMs;
     let lastEmitAtMs = startedAtMs;
@@ -113,10 +130,25 @@ export class CursorAgentProvider implements AgentProvider {
     let ignoredThinkingCount = 0;
     let ignoredUserCount = 0;
     let lastParsedType: string | undefined;
+    let maxAssistantTextLength = 0;
+    let highOutputLogged = false;
 
     const emitEvent = (event: TestGenEvent): void => {
       lastEmitAtMs = event.timestampMs;
       options.onEvent(event);
+    };
+
+    const emitCompleted = (exitCode: number | null): void => {
+      if (completedEmitted) {
+        return;
+      }
+      completedEmitted = true;
+      emitEvent({
+        type: 'completed',
+        taskId: options.taskId,
+        exitCode,
+        timestampMs: nowMs(),
+      });
     };
 
     // cursor-agent が無音で長時間待つケースがあるため、一定時間出力が無い場合だけ心拍ログを出す。
@@ -240,6 +272,21 @@ export class CursorAgentProvider implements AgentProvider {
             } else if (parsedType === 'user') {
               ignoredUserCount += 1;
             }
+
+            if (parsedType === 'assistant') {
+              const text = extractAssistantText(parsed.message);
+              if (text) {
+                if (text.length > maxAssistantTextLength) {
+                  maxAssistantTextLength = text.length;
+                }
+              }
+            }
+
+            // 大量出力（巨大メッセージ or 高イベント数）が原因でExtension Hostが不安定になる可能性を切り分ける
+            if (!highOutputLogged && (maxAssistantTextLength >= 50_000 || parsedEventCount >= 5_000)) {
+              highOutputLogged = true;
+            }
+
             const nextWritePath = this.handleStreamJson(parsed, options, lastWritePath, emitEvent);
             if (nextWritePath) {
               lastWritePath = nextWritePath;
@@ -275,6 +322,7 @@ export class CursorAgentProvider implements AgentProvider {
       }
 
       onLog('error', `cursor-agent 実行エラー: ${err.message}`);
+      emitCompleted(null);
     });
 
     child.on('close', (code: number | null) => {
@@ -289,12 +337,7 @@ export class CursorAgentProvider implements AgentProvider {
         this.activeTaskId = undefined;
       }
 
-      emitEvent({
-        type: 'completed',
-        taskId: options.taskId,
-        exitCode: code,
-        timestampMs: nowMs(),
-      });
+      emitCompleted(code);
     });
   }
 
@@ -360,6 +403,7 @@ export class CursorAgentProvider implements AgentProvider {
     if (type === 'tool_call') {
       const subtype = getString(obj, 'subtype');
       const toolCall = asRecord(obj.tool_call);
+
       if (!toolCall) {
         return undefined;
       }
@@ -502,4 +546,3 @@ function toWorkspaceRelative(filePath: string, workspaceRoot: string): string | 
   }
   return relative;
 }
-

@@ -42,7 +42,7 @@ export async function selectDefaultModel(): Promise<void> {
   });
 
   const picked = await vscode.window.showQuickPick<DefaultModelPickItem>(items, {
-    title: 'TestGen: defaultModel を設定',
+    title: 'Chottotest: defaultModel を設定',
     placeHolder: defaultModel ? `現在: ${defaultModel}` : '現在: （未設定）',
   });
 
