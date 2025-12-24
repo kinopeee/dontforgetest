@@ -71,4 +71,3 @@ export function _resetForTesting(): void {
   statusBar = undefined;
   running.clear();
 }
-
