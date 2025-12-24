@@ -9,7 +9,7 @@ export type TestGenEvent =
   | {
       type: 'started';
       taskId: string;
-      /** ユーザーに表示するラベル（例: generateFromFile, generateFromCommit） */
+      /** ユーザーに表示するラベル（例: generateFromCommit, generateFromWorkingTree） */
       label: string;
       /** 追加情報（例: 対象ファイルパス） */
       detail?: string;

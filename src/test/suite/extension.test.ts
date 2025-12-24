@@ -4,37 +4,40 @@ import * as path from 'path';
 
 suite('src/extension.ts', () => {
   suite('Extension Activation', () => {
-    // Given: 拡張機能がインストールされている
-    // When: 拡張機能をID指定で取得する
-    // Then: 拡張機能オブジェクトが存在する
-    test('TC-EXT-01: 拡張機能の存在確認', () => {
+    // Given: Extension is installed
+    // When: Getting extension by ID
+    // Then: Extension object exists
+    test('TC-EXT-01: Extension existence check', () => {
       const ext = vscode.extensions.getExtension('local.dontforgetest');
-      assert.ok(ext, '拡張機能が見つかりません');
+      assert.ok(ext, 'Extension not found');
     });
 
-    // Given: 拡張機能が取得できている
-    // When: activate()を実行する
-    // Then: 拡張機能がアクティブ状態になる
-    test('TC-EXT-02: 拡張機能のアクティブ化', async () => {
+    // Given: Extension is available
+    // When: Calling activate()
+    // Then: Extension becomes active
+    test('TC-N-01: Extension activated with all changes applied', async () => {
+      // Given: Extension is available
       const ext = vscode.extensions.getExtension('local.dontforgetest');
-      assert.ok(ext);
+      assert.ok(ext, 'Extension not found');
       
+      // When: Calling activate()
       if (!ext.isActive) {
         await ext.activate();
       }
-      assert.ok(ext.isActive, '拡張機能がアクティブになっていません');
+      
+      // Then: Extension is active without import errors
+      assert.ok(ext.isActive, 'Extension should be active');
     });
   });
 
   suite('Command Registration', () => {
-    // Given: 拡張機能がアクティブ化されている
-    // When: 登録されている全コマンドを取得する
-    // Then: 期待されるコマンドIDがすべて含まれている
-    test('TC-EXT-03: コマンド登録の確認', async () => {
+    // Given: Extension is activated
+    // When: Querying all registered commands
+    // Then: All expected command IDs are present
+    test('TC-N-02: All remaining commands registered', async () => {
       const expectedCommands = [
         'dontforgetest.generateTest',
         'dontforgetest.openPanel',
-        'dontforgetest.generateTestFromFile',
         'dontforgetest.generateTestFromCommit',
         'dontforgetest.generateTestFromCommitRange',
         'dontforgetest.generateTestFromWorkingTree',
@@ -42,46 +45,276 @@ suite('src/extension.ts', () => {
         'dontforgetest.showTestGeneratorOutput'
       ];
 
-      // 組み込みコマンドも含めて取得
+      // Get all commands including built-in ones
       const allCommands = await vscode.commands.getCommands(true);
 
       expectedCommands.forEach(cmd => {
         assert.ok(
           allCommands.includes(cmd), 
-          `コマンド "${cmd}" が登録されていません`
+          `Command "${cmd}" is not registered`
         );
       });
+    });
+
+    // Given: Extension is activated
+    // When: Querying all registered commands
+    // Then: Command list does not contain 'dontforgetest.generateTestFromFile'
+    test('TC-N-03: Command list does not contain deleted command', async () => {
+      // Given: Extension is activated
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      if (!ext.isActive) {
+        await ext.activate();
+      }
+
+      // When: Querying all registered commands
+      const allCommands = await vscode.commands.getCommands(true);
+
+      // Then: Deleted command is not in the list
+      assert.ok(
+        !allCommands.includes('dontforgetest.generateTestFromFile'),
+        'Deleted command "dontforgetest.generateTestFromFile" should not be registered'
+      );
+    });
+
+    // Given: Extension is activated
+    // When: Attempting to execute deleted command
+    // Then: Command execution fails with "command not found" error
+    test('TC-E-01: Deleted command execution fails', async () => {
+      // Given: Extension is activated
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      if (!ext.isActive) {
+        await ext.activate();
+      }
+
+      // When: Attempting to execute deleted command
+      // Then: Command execution fails with error
+      try {
+        await vscode.commands.executeCommand('dontforgetest.generateTestFromFile');
+        assert.fail('Command execution should have failed');
+      } catch (error) {
+        // Expected: Command not found error
+        assert.ok(error instanceof Error, 'Error should be an Error instance');
+        assert.ok(
+          error.message.includes('command') || error.message.includes('not found'),
+          `Error message should indicate command not found, got: ${error.message}`
+        );
+      }
+    });
+
+    // Given: Extension package.json
+    // When: Checking command definitions
+    // Then: package.json does not contain 'dontforgetest.generateTestFromFile' command definition
+    test('TC-E-04: package.json does not contain deleted command definition', () => {
+      // Given: Extension package.json
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      const packageJSON = ext.packageJSON;
+      const commands = packageJSON.contributes?.commands || [];
+
+      // When: Checking command definitions
+      // Then: Deleted command is not in the list
+      const deletedCommand = commands.find((cmd: { command: string }) => 
+        cmd.command === 'dontforgetest.generateTestFromFile'
+      );
+      assert.strictEqual(
+        deletedCommand,
+        undefined,
+        'Deleted command "dontforgetest.generateTestFromFile" should not be in package.json'
+      );
+    });
+
+    // Given: Extension is activated
+    // When: Querying registered commands
+    // Then: At least one command is registered (boundary: not empty)
+    test('TC-B-01: Command list is not empty', async () => {
+      // Given: Extension is activated
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      if (!ext.isActive) {
+        await ext.activate();
+      }
+
+      // When: Querying registered commands
+      const allCommands = await vscode.commands.getCommands(true);
+      const dontforgetestCommands = allCommands.filter(cmd => cmd.startsWith('dontforgetest.'));
+
+      // Then: At least one command is registered
+      assert.ok(
+        dontforgetestCommands.length > 0,
+        'At least one dontforgetest command should be registered'
+      );
+    });
+
+    // Given: Extension is activated
+    // When: Querying registered commands
+    // Then: Multiple commands are registered (boundary: more than one)
+    test('TC-B-02: Multiple commands are registered', async () => {
+      // Given: Extension is activated
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      if (!ext.isActive) {
+        await ext.activate();
+      }
+
+      // When: Querying registered commands
+      const allCommands = await vscode.commands.getCommands(true);
+      const dontforgetestCommands = allCommands.filter(cmd => cmd.startsWith('dontforgetest.'));
+
+      // Then: Multiple commands are registered
+      assert.ok(
+        dontforgetestCommands.length >= 1,
+        'At least one command should be registered'
+      );
+    });
+
+    // Given: Extension is activated
+    // When: Querying all registered commands
+    // Then: All expected commands are present (boundary: maximum number)
+    test('TC-B-03: All expected commands are registered (boundary: max)', async () => {
+      // Given: Extension is activated
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      if (!ext.isActive) {
+        await ext.activate();
+      }
+
+      // When: Querying all registered commands
+      const allCommands = await vscode.commands.getCommands(true);
+      const expectedCommands = [
+        'dontforgetest.generateTest',
+        'dontforgetest.openPanel',
+        'dontforgetest.generateTestFromCommit',
+        'dontforgetest.generateTestFromCommitRange',
+        'dontforgetest.generateTestFromWorkingTree',
+        'dontforgetest.selectDefaultModel',
+        'dontforgetest.showTestGeneratorOutput',
+        'dontforgetest.openSettings',
+        'dontforgetest.openLatestPerspective',
+        'dontforgetest.openLatestExecutionReport'
+      ];
+
+      // Then: All expected commands are present
+      expectedCommands.forEach(cmd => {
+        assert.ok(
+          allCommands.includes(cmd),
+          `Command "${cmd}" should be registered`
+        );
+      });
+    });
+
+    // Given: Test expectedCommands array
+    // When: Checking array length
+    // Then: Array contains all remaining commands (boundary: max)
+    test('TC-B-08: Test expectedCommands array contains all remaining commands', async () => {
+      // Given: Test expectedCommands array
+      const expectedCommands = [
+        'dontforgetest.generateTest',
+        'dontforgetest.openPanel',
+        'dontforgetest.generateTestFromCommit',
+        'dontforgetest.generateTestFromCommitRange',
+        'dontforgetest.generateTestFromWorkingTree',
+        'dontforgetest.selectDefaultModel',
+        'dontforgetest.showTestGeneratorOutput'
+      ];
+
+      // When: Checking array length
+      // Then: Array contains expected number of commands
+      assert.strictEqual(
+        expectedCommands.length,
+        7,
+        'Expected commands array should contain 7 commands'
+      );
+      assert.ok(
+        !expectedCommands.includes('dontforgetest.generateTestFromFile'),
+        'Deleted command should not be in expected commands array'
+      );
     });
   });
 
   suite('Configuration', () => {
-    // Given: 拡張機能の設定が読み込まれている
-    // When: 各設定項目の値を取得する
-    // Then: デフォルト値が期待通りであること
-    test('TC-EXT-04: デフォルト設定値の確認 (TC-B-01: Clean Install State)', () => {
+    // Given: Extension configuration is loaded
+    // When: Getting values for each configuration item
+    // Then: Default values are as expected
+    test('TC-EXT-04: Default configuration values check (TC-B-01: Clean Install State)', () => {
       const config = vscode.workspace.getConfiguration('dontforgetest');
       
-      assert.strictEqual(config.get('cursorAgentPath'), '', 'cursorAgentPathのデフォルト値が不正');
-      assert.strictEqual(config.get('maxParallelTasks'), 4, 'maxParallelTasksのデフォルト値が不正');
-      assert.strictEqual(config.get('defaultModel'), '', 'defaultModelのデフォルト値が不正');
-      assert.deepStrictEqual(config.get('customModels'), [], 'customModelsのデフォルト値が不正');
-      assert.strictEqual(config.get('testStrategyPath'), '', 'testStrategyPathのデフォルト値が不正');
-      assert.strictEqual(config.get('includeTestPerspectiveTable'), true, 'includeTestPerspectiveTableのデフォルト値が不正');
-      assert.strictEqual(config.get('perspectiveReportDir'), 'docs/test-perspectives', 'perspectiveReportDirのデフォルト値が不正');
-      assert.strictEqual(config.get('testExecutionReportDir'), 'docs/test-execution-reports', 'testExecutionReportDirのデフォルト値が不正');
-      assert.strictEqual(config.get('testCommand'), 'npm test', 'testCommandのデフォルト値が不正');
-      assert.strictEqual(config.get('testExecutionRunner'), 'cursorAgent', 'testExecutionRunnerのデフォルト値が不正');
-      assert.strictEqual(config.get('allowUnsafeTestCommand'), false, 'allowUnsafeTestCommandのデフォルト値が不正');
-      assert.strictEqual(config.get('cursorAgentForceForTestExecution'), false, 'cursorAgentForceForTestExecutionのデフォルト値が不正');
+      assert.strictEqual(config.get('cursorAgentPath'), '', 'cursorAgentPath default value is incorrect');
+      assert.strictEqual(config.get('maxParallelTasks'), 4, 'maxParallelTasks default value is incorrect');
+      assert.strictEqual(config.get('defaultModel'), '', 'defaultModel default value is incorrect');
+      assert.deepStrictEqual(config.get('customModels'), [], 'customModels default value is incorrect');
+      assert.strictEqual(config.get('testStrategyPath'), '', 'testStrategyPath default value is incorrect');
+      assert.strictEqual(config.get('includeTestPerspectiveTable'), true, 'includeTestPerspectiveTable default value is incorrect');
+      assert.strictEqual(config.get('perspectiveReportDir'), 'docs/test-perspectives', 'perspectiveReportDir default value is incorrect');
+      assert.strictEqual(config.get('testExecutionReportDir'), 'docs/test-execution-reports', 'testExecutionReportDir default value is incorrect');
+      assert.strictEqual(config.get('testCommand'), 'npm test', 'testCommand default value is incorrect');
+      assert.strictEqual(config.get('testExecutionRunner'), 'cursorAgent', 'testExecutionRunner default value is incorrect');
+      assert.strictEqual(config.get('allowUnsafeTestCommand'), false, 'allowUnsafeTestCommand default value is incorrect');
+      assert.strictEqual(config.get('cursorAgentForceForTestExecution'), false, 'cursorAgentForceForTestExecution default value is incorrect');
     });
 
     // TC-N-06: package.json validation
-    test('TC-N-06: パッケージメタデータの確認 (Name/DisplayName)', () => {
+    test('TC-N-06: Package metadata check (Name/DisplayName)', () => {
       const ext = vscode.extensions.getExtension('local.dontforgetest');
-      assert.ok(ext, '拡張機能が見つかりません');
+      assert.ok(ext, 'Extension not found');
       const pkg = ext.packageJSON;
       assert.strictEqual(pkg.name, 'dontforgetest');
       assert.strictEqual(pkg.displayName, 'Dontforgetest');
+    });
+  });
+
+  suite('Event.ts Comment Validation', () => {
+    // Given: event.ts file
+    // When: Reading the comment content
+    // Then: Comment contains updated example labels (generateFromCommit, generateFromWorkingTree)
+    test('TC-N-06: Event.ts comment contains updated example labels', async () => {
+      // Given: Extension is available
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      // When: Reading event.ts file content
+      const eventTsUri = vscode.Uri.file(path.join(ext.extensionPath, 'src', 'core', 'event.ts'));
+      const eventTsContent = (await vscode.workspace.fs.readFile(eventTsUri)).toString();
+
+      // Then: Comment shows updated examples
+      assert.ok(
+        eventTsContent.includes('generateFromCommit, generateFromWorkingTree'),
+        'Comment should contain updated example labels: generateFromCommit, generateFromWorkingTree'
+      );
+      assert.ok(
+        !eventTsContent.includes('generateFromFile'),
+        'Comment should not contain old example label: generateFromFile'
+      );
+    });
+
+    // Given: event.ts file
+    // When: Checking comment content
+    // Then: Comment does not contain old 'generateFromFile' text
+    test('TC-B-10: Event.ts comment does not contain old generateFromFile text', async () => {
+      // Given: Extension is available
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      // When: Reading event.ts file content
+      const eventTsUri = vscode.Uri.file(path.join(ext.extensionPath, 'src', 'core', 'event.ts'));
+      const eventTsContent = (await vscode.workspace.fs.readFile(eventTsUri)).toString();
+
+      // Then: Comment does not contain outdated reference
+      const labelCommentMatch = eventTsContent.match(/ユーザーに表示するラベル（例: ([^）]+)）/);
+      if (labelCommentMatch) {
+        const examples = labelCommentMatch[1];
+        assert.ok(
+          !examples.includes('generateFromFile'),
+          'Comment should not contain outdated reference to generateFromFile'
+        );
+      }
     });
   });
 

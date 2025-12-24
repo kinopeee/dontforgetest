@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { findLatestArtifact, getArtifactSettings } from './core/artifacts';
 import { generateTestFromLatestCommit } from './commands/generateFromCommit';
 import { generateTestFromCommitRange } from './commands/generateFromCommitRange';
-import { generateTestFromActiveFile } from './commands/generateFromFile';
 import { generateTestFromWorkingTree } from './commands/generateFromWorkingTree';
 import { selectDefaultModel } from './commands/selectDefaultModel';
 import { CursorAgentProvider } from './providers/cursorAgentProvider';
@@ -36,12 +35,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('dontforgetest.openPanel', async () => {
       await vscode.commands.executeCommand('workbench.view.extension.dontforgetest');
-    }),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('dontforgetest.generateTestFromFile', async () => {
-      await generateTestFromActiveFile(provider);
     }),
   );
 

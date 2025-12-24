@@ -41,10 +41,6 @@
         "title": "Dontforgetest: パネルを開く"
       },
       {
-        "command": "dontforgetest.generateTestFromFile",
-        "title": "Dontforgetest: 現在のファイルからテスト生成"
-      },
-      {
         "command": "dontforgetest.generateTestFromCommit",
         "title": "Dontforgetest: 最新コミット差分からテスト生成"
       },
