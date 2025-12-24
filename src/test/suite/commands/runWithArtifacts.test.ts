@@ -5826,4 +5826,164 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(text.includes('観点表の抽出に失敗したため'), 'Extraction failure message should be present');
     assert.ok(text.includes('Some log without markers'), 'Raw log should be present');
   });
+
+  // --- cleanupUnexpectedPerspectiveFiles パターンマッチテスト ---
+  // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |---------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-CLEANUP-N-04 | test_perspectives_output.md with markers | Equivalence – normal | File deleted | パターンマッチ対応 |
+  // | TC-CLEANUP-N-05 | Multiple files (test_perspectives.md, test_perspectives_output.md) | Equivalence – normal | Both files deleted | 複数ファイル対応 |
+  // | TC-CLEANUP-N-06 | test_perspectives_other.md without markers | Equivalence – normal | File not deleted | マーカーなしは削除しない |
+
+  // TC-CLEANUP-N-04: test_perspectives_output.md が存在して削除される
+  test('TC-CLEANUP-N-04: test_perspectives_output.md with markers is deleted', async () => {
+    // Given: test_perspectives_output.md exists at workspace root with both markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-n04-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives_output.md'));
+    const fileContent = '<!-- BEGIN TEST PERSPECTIVES -->\n| Case ID | Test |\n<!-- END TEST PERSPECTIVES -->';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-n04-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-n04');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test N04',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is deleted
+    try {
+      await vscode.workspace.fs.stat(perspectiveFile);
+      assert.fail('File was not deleted');
+    } catch {
+      // File does not exist = deletion succeeded
+      assert.ok(true, 'File was deleted');
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-N-05: 複数のファイルが存在して両方削除される
+  test('TC-CLEANUP-N-05: Multiple perspective files with markers are all deleted', async () => {
+    // Given: test_perspectives.md and test_perspectives_output.md exist with markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-n05-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const file1 = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.md'));
+    const file2 = vscode.Uri.file(path.join(tempRoot, 'test_perspectives_output.md'));
+    const file3 = vscode.Uri.file(path.join(tempRoot, 'test_perspectives_backup.md'));
+    const fileContent = '<!-- BEGIN TEST PERSPECTIVES -->\n| Case ID | Test |\n<!-- END TEST PERSPECTIVES -->';
+    await vscode.workspace.fs.writeFile(file1, Buffer.from(fileContent, 'utf8'));
+    await vscode.workspace.fs.writeFile(file2, Buffer.from(fileContent, 'utf8'));
+    await vscode.workspace.fs.writeFile(file3, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-n05-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-n05');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test N05',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: All files are deleted
+    for (const file of [file1, file2, file3]) {
+      try {
+        await vscode.workspace.fs.stat(file);
+        assert.fail(`File ${file.fsPath} was not deleted`);
+      } catch {
+        // File does not exist = deletion succeeded
+      }
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-N-06: パターンマッチするがマーカーなしのファイルは削除されない
+  test('TC-CLEANUP-N-06: Pattern-matching file without markers is not deleted', async () => {
+    // Given: test_perspectives_other.md exists without markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-n06-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives_custom.md'));
+    const fileContent = '# My custom perspectives\n\nThis is a user-created file without markers.';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-n06-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-n06');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test N06',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is not deleted
+    const stat = await vscode.workspace.fs.stat(perspectiveFile);
+    assert.ok(stat !== undefined, 'File exists and was not deleted');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
 });

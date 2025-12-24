@@ -277,25 +277,27 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     });
 
     // 生成（allowWrite=true）の副産物として、所定フロー外のファイルが作られることがある。
-    // 代表例: 生成済みの観点表をルート直下に `test_perspectives.md` として保存してしまう。
+    // 代表例: 生成済みの観点表をルート直下に `test_perspectives.md` や `test_perspectives_output.md` として保存してしまう。
     // これは拡張機能の所定フロー（docs 配下への成果物保存）と競合し、ユーザー体験を悪化させるため削除する。
-    const cleanup = await cleanupUnexpectedPerspectiveFile(options.workspaceRoot);
-    if (cleanup.deleted) {
-      appendEventToOutput(
-        emitLogEvent(
-          `${options.generationTaskId}-guard`,
-          'warn',
-          `所定フロー外で作成された観点表ファイルを削除しました: ${cleanup.relativePath}`,
-        ),
-      );
-    } else if (cleanup.errorMessage) {
-      appendEventToOutput(
-        emitLogEvent(
-          `${options.generationTaskId}-guard`,
-          'warn',
-          `所定フロー外の観点表ファイル削除を試みましたが失敗しました: ${cleanup.errorMessage}`,
-        ),
-      );
+    const cleanupResults = await cleanupUnexpectedPerspectiveFiles(options.workspaceRoot);
+    for (const cleanup of cleanupResults) {
+      if (cleanup.deleted) {
+        appendEventToOutput(
+          emitLogEvent(
+            `${options.generationTaskId}-guard`,
+            'warn',
+            `所定フロー外で作成された観点表ファイルを削除しました: ${cleanup.relativePath}`,
+          ),
+        );
+      } else if (cleanup.errorMessage) {
+        appendEventToOutput(
+          emitLogEvent(
+            `${options.generationTaskId}-guard`,
+            'warn',
+            `所定フロー外の観点表ファイル削除を試みましたが失敗しました: ${cleanup.relativePath} - ${cleanup.errorMessage}`,
+          ),
+        );
+      }
     }
 
     const genMsg =
@@ -861,30 +863,44 @@ function appendPerspectiveToPrompt(basePrompt: string, perspectiveMarkdown: stri
   ].join('\n');
 }
 
-async function cleanupUnexpectedPerspectiveFile(
+interface CleanupResult {
+  deleted: boolean;
+  relativePath: string;
+  errorMessage?: string;
+}
+
+/**
+ * ワークスペースルート直下に生成された所定フロー外の観点表ファイルを削除する。
+ * `test_perspectives*.md` にマッチするファイルのうち、内部マーカーを含むものを削除対象とする。
+ */
+async function cleanupUnexpectedPerspectiveFiles(
   workspaceRoot: string,
-): Promise<{ deleted: boolean; relativePath: string; errorMessage?: string }> {
-  const relativePath = 'test_perspectives.md';
-  const absolutePath = path.join(workspaceRoot, relativePath);
-  const uri = vscode.Uri.file(absolutePath);
+): Promise<CleanupResult[]> {
+  const results: CleanupResult[] = [];
 
-  try {
-    await vscode.workspace.fs.stat(uri);
-  } catch {
-    return { deleted: false, relativePath };
-  }
+  // ワークスペースルート直下の test_perspectives*.md を検索
+  const pattern = new vscode.RelativePattern(workspaceRoot, 'test_perspectives*.md');
+  const files = await vscode.workspace.findFiles(pattern);
 
-  try {
-    const raw = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
-    // 内部マーカー付きの観点表は「抽出用フォーマット」であり、所定フロー外の副産物として扱う。
-    const hasMarkers = raw.includes('<!-- BEGIN TEST PERSPECTIVES -->') && raw.includes('<!-- END TEST PERSPECTIVES -->');
-    if (!hasMarkers) {
-      return { deleted: false, relativePath };
+  for (const uri of files) {
+    const relativePath = path.relative(workspaceRoot, uri.fsPath);
+
+    try {
+      const raw = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+      // 内部マーカー付きの観点表は「抽出用フォーマット」であり、所定フロー外の副産物として扱う。
+      const hasMarkers =
+        raw.includes('<!-- BEGIN TEST PERSPECTIVES -->') &&
+        raw.includes('<!-- END TEST PERSPECTIVES -->');
+      if (!hasMarkers) {
+        continue;
+      }
+      await vscode.workspace.fs.delete(uri, { useTrash: false });
+      results.push({ deleted: true, relativePath });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      results.push({ deleted: false, relativePath, errorMessage: msg });
     }
-    await vscode.workspace.fs.delete(uri, { useTrash: false });
-    return { deleted: true, relativePath };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { deleted: false, relativePath, errorMessage: msg };
   }
+
+  return results;
 }
