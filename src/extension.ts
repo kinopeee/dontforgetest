@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { previewLastRun, rollbackLastRun } from './apply/patchApplier';
 import { findLatestArtifact, getArtifactSettings } from './core/artifacts';
 import { generateTestFromLatestCommit } from './commands/generateFromCommit';
 import { generateTestFromCommitRange } from './commands/generateFromCommitRange';
@@ -73,18 +72,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('testgen-agent.selectDefaultModel', async () => {
       await selectDefaultModel();
-    }),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.previewLastRun', async () => {
-      await previewLastRun();
-    }),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.rollbackLastRun', async () => {
-      await rollbackLastRun();
     }),
   );
 

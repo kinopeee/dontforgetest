@@ -39,8 +39,6 @@ suite('src/extension.ts', () => {
         'testgen-agent.generateTestFromCommitRange',
         'testgen-agent.generateTestFromWorkingTree',
         'testgen-agent.selectDefaultModel',
-        'testgen-agent.previewLastRun',
-        'testgen-agent.rollbackLastRun',
         'testgen-agent.showTestGeneratorOutput'
       ];
 

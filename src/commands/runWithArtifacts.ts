@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { recordTouchedPathFromEventPath, startLastRun } from '../apply/patchApplier';
 import { type TestGenEvent, nowMs } from '../core/event';
 import {
   emitLogEvent,
@@ -203,7 +202,6 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     }
 
     // 2) 生成（本体）
-    await startLastRun(options.generationTaskId, options.generationLabel, options.workspaceRoot, options.targetPaths);
     void vscode.window.showInformationMessage(`テスト生成を開始しました: ${options.generationLabel}`);
 
     const genExit = await runProviderToCompletion({
@@ -220,9 +218,6 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       onEvent: (event) => {
         handleTestGenEventForStatusBar(event);
         appendEventToOutput(event);
-        if (event.type === 'fileWrite') {
-          recordTouchedPathFromEventPath(options.workspaceRoot, event.path);
-        }
       },
     });
 

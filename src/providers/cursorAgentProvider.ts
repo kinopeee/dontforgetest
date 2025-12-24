@@ -430,7 +430,6 @@ export class CursorAgentProvider implements AgentProvider {
           const finalPath = pathFromArgs ?? lastWritePath;
           if (finalPath) {
             const relative = toWorkspaceRelative(finalPath, options.workspaceRoot);
-            // 先に fileWrite を出しておく（patchApplier がこの時点の内容をスナップショットできる）
             emitEvent({
               type: 'fileWrite',
               taskId: options.taskId,

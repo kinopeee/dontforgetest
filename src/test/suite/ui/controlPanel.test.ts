@@ -134,7 +134,7 @@ suite('src/ui/controlPanel.ts', () => {
     assert.ok(html.includes('vscode.postMessage({ type: "run", source: sourceSelect.value })'), '正しいメッセージ送信処理が含まれる');
   });
 
-  // TC-UI-06: アコーディオンメニュー（差分/ログ）の開閉
+  // TC-UI-06: アコーディオンメニュー（成果物）の開閉
   // Given: Webview HTML
   // When: details タグがレンダリングされる
   // Then: summary と content が正しく構造化されていること
@@ -143,7 +143,7 @@ suite('src/ui/controlPanel.ts', () => {
     const html = webviewView.webview.html;
     
     assert.ok(html.includes('<details class="section">'), 'detailsタグが存在する');
-    assert.ok(html.includes('<summary><span class="chevron">›</span> 差分 / 元に戻す</summary>'), 'summaryタグとシェブロンが存在する');
+    assert.ok(html.includes('<summary><span class="chevron">›</span> 成果物</summary>'), 'summaryタグとシェブロンが存在する');
     // CSSで chevron の回転アニメーションが定義されているか
     assert.ok(html.includes('details.section[open] summary .chevron {'), '開閉時のCSSが含まれる');
     assert.ok(html.includes('transform: rotate(90deg);'), '90度回転スタイルが含まれる');

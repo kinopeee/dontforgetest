@@ -12,8 +12,6 @@ type AllowedCommand =
   | 'testgen-agent.generateTestFromCommit'
   | 'testgen-agent.generateTestFromCommitRange'
   | 'testgen-agent.generateTestFromWorkingTree'
-  | 'testgen-agent.previewLastRun'
-  | 'testgen-agent.rollbackLastRun'
   | 'testgen-agent.showTestGeneratorOutput'
   | 'testgen-agent.selectDefaultModel'
   | 'testgen-agent.openLatestPerspective'
@@ -247,14 +245,6 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '  </div>',
       '',
       '  <details class="section">',
-      '    <summary><span class="chevron">›</span> 差分 / 元に戻す</summary>',
-      '    <div class="content">',
-      '      <div class="row"><button class="secondary" id="previewBtn">差分を表示</button></div>',
-      '      <div class="row"><button class="secondary" id="rollbackBtn">元に戻す</button></div>',
-      '    </div>',
-      '  </details>',
-      '',
-      '  <details class="section">',
       '    <summary><span class="chevron">›</span> 成果物</summary>',
       '    <div class="content">',
       '      <div class="row"><button class="secondary" id="openPerspectiveBtn">最新の観点表</button></div>',
@@ -268,8 +258,6 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '    const sourceSelect = document.getElementById("sourceSelect");',
       '    const optionDesc = document.getElementById("optionDesc");',
       '    const runBtn = document.getElementById("runBtn");',
-      '    const previewBtn = document.getElementById("previewBtn");',
-      '    const rollbackBtn = document.getElementById("rollbackBtn");',
       '    const openPerspectiveBtn = document.getElementById("openPerspectiveBtn");',
       '    const openReportBtn = document.getElementById("openReportBtn");',
       '',
@@ -285,14 +273,6 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '',
       '    runBtn.addEventListener("click", () => {',
       '      vscode.postMessage({ type: "run", source: sourceSelect.value });',
-      '    });',
-      '',
-      '    previewBtn.addEventListener("click", () => {',
-      '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.previewLastRun" });',
-      '    });',
-      '',
-      '    rollbackBtn.addEventListener("click", () => {',
-      '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.rollbackLastRun" });',
       '    });',
       '',
       '    openPerspectiveBtn.addEventListener("click", () => {',

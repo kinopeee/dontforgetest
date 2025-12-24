@@ -57,14 +57,6 @@
         "title": "Chottotest: 未コミット差分からテスト生成"
       },
       {
-        "command": "testgen-agent.previewLastRun",
-        "title": "Chottotest: 直近実行の差分を表示"
-      },
-      {
-        "command": "testgen-agent.rollbackLastRun",
-        "title": "Chottotest: 直近実行を元に戻す(Undo)"
-      },
-      {
         "command": "testgen-agent.showTestGeneratorOutput",
         "title": "Chottotest: 出力ログを表示"
       },
