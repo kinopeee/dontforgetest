@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "Chottotest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.35",
+  "version": "0.0.36",
   "engines": {
     "vscode": "^1.85.0"
   },
