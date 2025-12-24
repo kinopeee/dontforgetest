@@ -149,7 +149,7 @@ export async function findLatestArtifact(
     }
 
     return matchingFiles[0].path;
-  } catch (error) {
+  } catch {
     // ディレクトリが存在しない場合などは undefined を返す
     return undefined;
   }

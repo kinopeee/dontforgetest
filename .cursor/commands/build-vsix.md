@@ -14,6 +14,43 @@
 - 依存関係がインストール済みであること（未実行なら `npm install`）
 - `.vsix` は `.gitignore` で無視される（成果物はGit管理しない）
 
+## ⚠️ Cursor 実行中のテスト実行について
+
+**注意**: macOS + Cursor 環境では、`@vscode/test-electron` が起動するテスト用 VS Code プロセスが `code=15`（SIGTERM相当）で終了する場合があります。
+
+本リポジトリでは `src/test/runTest.ts` で以下の回避策を実装し、Cursor 実行中でも `npm test` が完走しやすいようにしています：
+
+- VS Code（テスト用）のダウンロード/cache、`user-data-dir`、`extensions-dir`、ワークスペースを **OSの一時ディレクトリ配下に隔離**
+- macOS では VS Code を **`open -n -W` 経由で起動**（親子関係を切って kill に巻き込まれにくくする）
+- 拡張機能本体を **一時ディレクトリへ退避（staging）**して起動（Cursor の検知条件から外すため）。依存解決のため `node_modules` はシンボリックリンクで参照
+
+それでも不安定な場合は、起動方式を環境変数で切り替えできます：
+
+- `DONTFORGETEST_VSCODE_TEST_LAUNCHER=open`：`open` 起動を強制
+- `DONTFORGETEST_VSCODE_TEST_LAUNCHER=direct`：従来の `spawn` 起動を強制
+
+### 対策1: 起動方式を切り替えてテスト
+
+```bash
+DONTFORGETEST_VSCODE_TEST_LAUNCHER=open npm test
+# または
+DONTFORGETEST_VSCODE_TEST_LAUNCHER=direct npm test
+```
+
+### 対策2: Cursor を終了してからテスト
+
+```bash
+pkill -f Cursor && sleep 2 && npm test
+```
+
+### 対策3: テストをスキップしてビルド
+
+テストは CI 環境（GitHub Actions 等）で実行し、ローカルでは手順 C) を使用。
+
+### 対策4: CI/CD でテスト
+
+GitHub Actions 等では問題なく全テストが完走します。
+
 ## 実行手順
 
 ### A) パッチバージョンを上げて VSIX を生成（推奨）

@@ -3,6 +3,16 @@ import { CursorAgentProvider } from '../../../providers/cursorAgentProvider';
 import { type AgentRunOptions } from '../../../providers/provider';
 import { type TestGenEvent } from '../../../core/event';
 
+/**
+ * テストで spawn されたプロセスの非同期イベント（error, close）が
+ * 収束するのを待つためのヘルパー関数。
+ * dispose() 呼び出し後、少し待機することで
+ * タイマーや子プロセスイベントが処理されるのを保証する。
+ */
+function waitForAsyncCleanup(ms: number = 100): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 suite('providers/cursorAgentProvider.ts', () => {
   suite('CursorAgentProvider', () => {
     // Given: CursorAgentProviderインスタンス
@@ -18,7 +28,7 @@ suite('providers/cursorAgentProvider.ts', () => {
     // Given: agentCommandが指定されている
     // When: runを呼び出す
     // Then: 指定されたコマンドが使用される
-    test('TC-N-04: agentCommandが指定されている', () => {
+    test('TC-N-04: agentCommandが指定されている', async () => {
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -46,14 +56,15 @@ suite('providers/cursorAgentProvider.ts', () => {
         assert.ok(startedEvent.detail?.includes('/custom/path/cursor-agent'), 'カスタムコマンドが使用される');
       }
 
-      // クリーンアップ
+      // クリーンアップ & 非同期イベントの収束を待つ
       task.dispose();
+      await waitForAsyncCleanup();
     });
 
     // Given: agentCommandが未指定
     // When: runを呼び出す
     // Then: デフォルトの 'cursor-agent' が使用される
-    test('TC-N-05: agentCommandが未指定', () => {
+    test('TC-N-05: agentCommandが未指定', async () => {
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -79,14 +90,15 @@ suite('providers/cursorAgentProvider.ts', () => {
         assert.ok(startedEvent.detail?.includes('cursor-agent'), 'デフォルトコマンドが使用される');
       }
 
-      // クリーンアップ
+      // クリーンアップ & 非同期イベントの収束を待つ
       task.dispose();
+      await waitForAsyncCleanup();
     });
 
     // Given: modelが指定されている
     // When: runを呼び出す
     // Then: --model オプションが追加される
-    test('TC-N-06: modelが指定されている', () => {
+    test('TC-N-06: modelが指定されている', async () => {
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -110,14 +122,15 @@ suite('providers/cursorAgentProvider.ts', () => {
         assert.ok(startedEvent.detail?.includes('model=claude-3.5-sonnet'), 'modelが含まれる');
       }
 
-      // クリーンアップ
+      // クリーンアップ & 非同期イベントの収束を待つ
       task.dispose();
+      await waitForAsyncCleanup();
     });
 
     // Given: allowWrite=true
     // When: runを呼び出す
     // Then: --force オプションが追加される
-    test('TC-N-07: allowWrite=true', () => {
+    test('TC-N-07: allowWrite=true', async () => {
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -140,14 +153,15 @@ suite('providers/cursorAgentProvider.ts', () => {
         assert.ok(startedEvent.detail?.includes('write=on'), 'write=onが含まれる');
       }
 
-      // クリーンアップ
+      // クリーンアップ & 非同期イベントの収束を待つ
       task.dispose();
+      await waitForAsyncCleanup();
     });
 
     // Given: allowWrite=false
     // When: runを呼び出す
     // Then: --force オプションが追加されない
-    test('TC-N-08: allowWrite=false', () => {
+    test('TC-N-08: allowWrite=false', async () => {
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -170,14 +184,15 @@ suite('providers/cursorAgentProvider.ts', () => {
         assert.ok(startedEvent.detail?.includes('write=off'), 'write=offが含まれる');
       }
 
-      // クリーンアップ
+      // クリーンアップ & 非同期イベントの収束を待つ
       task.dispose();
+      await waitForAsyncCleanup();
     });
 
     // Given: dispose呼び出し
     // When: disposeを呼び出す
     // Then: プロセスがkillされる
-    test('TC-A-07: dispose呼び出し', () => {
+    test('TC-A-07: dispose呼び出し', async () => {
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -198,6 +213,9 @@ suite('providers/cursorAgentProvider.ts', () => {
       assert.doesNotThrow(() => {
         task.dispose();
       });
+
+      // 非同期イベントの収束を待つ
+      await waitForAsyncCleanup();
     });
   });
 });

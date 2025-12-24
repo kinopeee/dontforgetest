@@ -106,11 +106,3 @@ async function canSpawnCommand(command: string, args: string[], cwd: string): Pr
     });
   });
 }
-
-async function showConfigError(message: string, settingKey: string): Promise<void> {
-  const picked = await vscode.window.showErrorMessage(message, '設定を開く');
-  if (picked === '設定を開く') {
-    await vscode.commands.executeCommand('workbench.action.openSettings', settingKey);
-  }
-}
-

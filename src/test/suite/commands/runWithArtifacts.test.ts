@@ -274,7 +274,10 @@ suite('commands/runWithArtifacts.ts', () => {
     const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
     assert.ok(reports.length > 0, 'コマンドが空の場合でも、スキップ理由付きレポートが作成されること');
 
-    const reportDoc = await vscode.workspace.openTextDocument(reports[0]);
+    // 最新のレポートを取得（ファイル名に日時が含まれているためソートして最後を取る）
+    const sortedReports = reports.sort((a, b) => a.fsPath.localeCompare(b.fsPath));
+    const latestReport = sortedReports[sortedReports.length - 1];
+    const reportDoc = await vscode.workspace.openTextDocument(latestReport);
     const text = reportDoc.getText();
     assert.ok(text.includes('status: skipped'), 'レポートに skipped ステータスが含まれること');
     assert.ok(text.includes('testCommand が空のため'), '適切なスキップ理由が含まれること');
