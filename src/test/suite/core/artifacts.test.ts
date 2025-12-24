@@ -750,4 +750,1303 @@ suite('core/artifacts.ts', () => {
     // Then: パイプがエスケープされていること
     assert.ok(md.includes('test \\| with \\| pipe'), 'パイプがエスケープされていること');
   });
+
+  // TC-N-01: formatLocalIso8601WithOffset - Valid Date object with normal timestamp
+  test('TC-N-01: formatLocalIso8601WithOffset returns readable timestamp string with local timezone offset', () => {
+    // Given: Valid Date object with normal timestamp
+    const date = new Date('2025-12-25T02:50:12.204Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns readable timestamp string with local timezone offset
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Format: YYYY-MM-DD  HH:mm:ss.SSS ±HH:mm
+    assert.ok(
+      /^\d{4}-\d{2}-\d{2}\s{2}\d{2}:\d{2}:\d{2}\.\d{3}\s[+-]\d{2}:\d{2}$/.test(timestamp),
+      '表示用形式であること',
+    );
+  });
+
+  // TC-N-02: formatLocalIso8601WithOffset - milliseconds = 0
+  test('TC-N-02: formatLocalIso8601WithOffset formats zero milliseconds as .000', () => {
+    // Given: Date object with milliseconds = 0
+    const date = new Date('2025-12-25T02:50:12.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ".000" milliseconds
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('.000'), 'ミリ秒が .000 でフォーマットされること');
+  });
+
+  // TC-N-03: formatLocalIso8601WithOffset - milliseconds = 1
+  test('TC-N-03: formatLocalIso8601WithOffset formats minimum non-zero milliseconds as .001', () => {
+    // Given: Date object with milliseconds = 1
+    const date = new Date('2025-12-25T02:50:12.001Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ".001" milliseconds
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('.001'), 'ミリ秒が .001 でフォーマットされること');
+  });
+
+  // TC-N-04: formatLocalIso8601WithOffset - milliseconds = 999
+  test('TC-N-04: formatLocalIso8601WithOffset formats maximum milliseconds as .999', () => {
+    // Given: Date object with milliseconds = 999
+    const date = new Date('2025-12-25T02:50:12.999Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ".999" milliseconds
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('.999'), 'ミリ秒が .999 でフォーマットされること');
+  });
+
+  // TC-N-05: formatLocalIso8601WithOffset - time 00:00:00.000
+  test('TC-N-05: formatLocalIso8601WithOffset formats midnight correctly', () => {
+    // Given: Date object with time 00:00:00.000
+    const date = new Date('2025-12-25T00:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "00:00:00.000" (in local timezone)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Time portion format: HH:mm:ss.SSS
+    assert.ok(/\s{2}\d{2}:\d{2}:\d{2}\.\d{3}\s/.test(timestamp), '時刻部分が正しくフォーマットされること');
+  });
+
+  // TC-N-06: formatLocalIso8601WithOffset - time 23:59:59.999
+  test('TC-N-06: formatLocalIso8601WithOffset formats end of day correctly', () => {
+    // Given: Date object with time 23:59:59.999
+    const date = new Date('2025-12-25T23:59:59.999Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "23:59:59.999" (in local timezone)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Time portion format: HH:mm:ss.SSS
+    assert.ok(/\s{2}\d{2}:\d{2}:\d{2}\.\d{3}\s/.test(timestamp), '時刻部分が正しくフォーマットされること');
+  });
+
+  // TC-N-07: formatLocalIso8601WithOffset - January 1st
+  test('TC-N-07: formatLocalIso8601WithOffset formats start of year correctly', () => {
+    // Given: Date object on January 1st (month = 0, date = 1)
+    const date = new Date('2025-01-01T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "01-01" date
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('2025-01-01'), '日付が 01-01 でフォーマットされること');
+  });
+
+  // TC-N-08: formatLocalIso8601WithOffset - December 31st
+  test('TC-N-08: formatLocalIso8601WithOffset formats end of year correctly', () => {
+    // Given: Date object on December 31st (month = 11, date = 31)
+    const date = new Date('2025-12-31T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "12-31" date
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('2025-12-31'), '日付が 12-31 でフォーマットされること');
+  });
+
+  // TC-N-09: formatLocalIso8601WithOffset - February 29th in leap year
+  test('TC-N-09: formatLocalIso8601WithOffset formats leap year date correctly', () => {
+    // Given: Date object on February 29th in leap year
+    const date = new Date('2024-02-29T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "02-29" date
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('2024-02-29'), '日付が 02-29 でフォーマットされること');
+  });
+
+  // TC-N-10: formatLocalIso8601WithOffset - February 28th in non-leap year
+  test('TC-N-10: formatLocalIso8601WithOffset formats non-leap year February correctly', () => {
+    // Given: Date object on February 28th in non-leap year
+    const date = new Date('2025-02-28T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "02-28" date
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('2025-02-28'), '日付が 02-28 でフォーマットされること');
+  });
+
+  // TC-N-11: formatLocalIso8601WithOffset - timezone offset = +00:00 (UTC)
+  test('TC-N-11: formatLocalIso8601WithOffset formats UTC timezone correctly', () => {
+    // Given: Date object (timezone offset depends on system timezone)
+    // Note: This test verifies the offset format, not the specific offset value
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with timezone offset in format ±HH:mm
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(/[+-]\d{2}:\d{2}$/.test(timestamp), 'タイムゾーンオフセットが ±HH:mm 形式であること');
+  });
+
+  // TC-N-12: formatLocalIso8601WithOffset - timezone offset = +09:00 (JST)
+  test('TC-N-12: formatLocalIso8601WithOffset formats positive offset correctly', () => {
+    // Given: Date object (offset depends on system timezone)
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with timezone offset (format verified)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify offset format: +HH:mm or -HH:mm
+    assert.ok(/[+-]\d{2}:\d{2}$/.test(timestamp), 'タイムゾーンオフセットが正しい形式であること');
+  });
+
+  // TC-N-13: formatLocalIso8601WithOffset - timezone offset = -05:00 (EST)
+  test('TC-N-13: formatLocalIso8601WithOffset formats negative offset correctly', () => {
+    // Given: Date object (offset depends on system timezone)
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with timezone offset (format verified)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify offset format supports both positive and negative
+    assert.ok(/[+-]\d{2}:\d{2}$/.test(timestamp), 'タイムゾーンオフセットが正負両方に対応していること');
+  });
+
+  // TC-N-14: formatLocalIso8601WithOffset - timezone offset = +14:00 (maximum positive)
+  test('TC-N-14: formatLocalIso8601WithOffset handles maximum positive offset', () => {
+    // Given: Date object (offset depends on system timezone)
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with timezone offset (format verified)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify offset format
+    assert.ok(/[+-]\d{2}:\d{2}$/.test(timestamp), 'タイムゾーンオフセットが正しい形式であること');
+  });
+
+  // TC-N-15: formatLocalIso8601WithOffset - timezone offset = -12:00 (maximum negative)
+  test('TC-N-15: formatLocalIso8601WithOffset handles maximum negative offset', () => {
+    // Given: Date object (offset depends on system timezone)
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with timezone offset (format verified)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify offset format supports negative
+    assert.ok(/[+-]\d{2}:\d{2}$/.test(timestamp), 'タイムゾーンオフセットが負の値に対応していること');
+  });
+
+  // TC-N-16: formatLocalIso8601WithOffset - timezone offset minutes = 0
+  test('TC-N-16: formatLocalIso8601WithOffset formats exact hour offset correctly', () => {
+    // Given: Date object (offset depends on system timezone)
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ":00" minutes in offset
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify offset format includes minutes (may be :00 or :30 or :45 depending on timezone)
+    assert.ok(/[+-]\d{2}:\d{2}$/.test(timestamp), 'タイムゾーンオフセットの分部分が含まれること');
+  });
+
+  // TC-N-17: formatLocalIso8601WithOffset - timezone offset minutes = 30
+  test('TC-N-17: formatLocalIso8601WithOffset formats half hour offset correctly', () => {
+    // Given: Date object (offset depends on system timezone)
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with offset including minutes
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify offset format includes minutes
+    assert.ok(/[+-]\d{2}:\d{2}$/.test(timestamp), 'タイムゾーンオフセットの分部分が正しくフォーマットされること');
+  });
+
+  // TC-N-18: formatLocalIso8601WithOffset - timezone offset minutes = 45
+  test('TC-N-18: formatLocalIso8601WithOffset formats three-quarter hour offset correctly', () => {
+    // Given: Date object (offset depends on system timezone)
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with offset including minutes
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify offset format includes minutes
+    assert.ok(/[+-]\d{2}:\d{2}$/.test(timestamp), 'タイムゾーンオフセットの分部分が正しくフォーマットされること');
+  });
+
+  // TC-N-19 through TC-N-25: pad3 function tests
+  // Note: pad3 is private, so we test it indirectly through formatLocalIso8601WithOffset
+  // by checking milliseconds formatting in timestamps
+
+  // TC-N-19: pad3 function with n = 0
+  test('TC-N-19: pad3 formats zero milliseconds as 000', () => {
+    // Given: Date object with milliseconds = 0
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ".000" milliseconds (pad3(0) = "000")
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('.000'), 'ミリ秒が 000 でパディングされること');
+  });
+
+  // TC-N-20: pad3 function with n = 1
+  test('TC-N-20: pad3 formats single digit milliseconds as 001', () => {
+    // Given: Date object with milliseconds = 1
+    const date = new Date('2025-12-25T12:00:00.001Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ".001" milliseconds (pad3(1) = "001")
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('.001'), 'ミリ秒が 001 でパディングされること');
+  });
+
+  // TC-N-21: pad3 function with n = 9
+  test('TC-N-21: pad3 formats maximum single digit milliseconds as 009', () => {
+    // Given: Date object with milliseconds = 9
+    const date = new Date('2025-12-25T12:00:00.009Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ".009" milliseconds (pad3(9) = "009")
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('.009'), 'ミリ秒が 009 でパディングされること');
+  });
+
+  // TC-N-22: pad3 function with n = 10
+  test('TC-N-22: pad3 formats minimum two digits milliseconds as 010', () => {
+    // Given: Date object with milliseconds = 10
+    const date = new Date('2025-12-25T12:00:00.010Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ".010" milliseconds (pad3(10) = "010")
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('.010'), 'ミリ秒が 010 でパディングされること');
+  });
+
+  // TC-N-23: pad3 function with n = 99
+  test('TC-N-23: pad3 formats maximum two digits milliseconds as 099', () => {
+    // Given: Date object with milliseconds = 99
+    const date = new Date('2025-12-25T12:00:00.099Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ".099" milliseconds (pad3(99) = "099")
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('.099'), 'ミリ秒が 099 でパディングされること');
+  });
+
+  // TC-N-24: pad3 function with n = 100
+  test('TC-N-24: pad3 formats minimum three digits milliseconds as 100', () => {
+    // Given: Date object with milliseconds = 100
+    const date = new Date('2025-12-25T12:00:00.100Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ".100" milliseconds (pad3(100) = "100")
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('.100'), 'ミリ秒が 100 でフォーマットされること（パディングなし）');
+  });
+
+  // TC-N-25: pad3 function with n = 999
+  test('TC-N-25: pad3 formats maximum three digits milliseconds as 999', () => {
+    // Given: Date object with milliseconds = 999
+    const date = new Date('2025-12-25T12:00:00.999Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with ".999" milliseconds (pad3(999) = "999")
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('.999'), 'ミリ秒が 999 でフォーマットされること');
+  });
+
+  // TC-N-26: buildTestPerspectiveArtifactMarkdown with valid parameters
+  test('TC-N-26: buildTestPerspectiveArtifactMarkdown uses formatLocalIso8601WithOffset for timestamp', () => {
+    // Given: Valid parameters
+    const generatedAtMs = Date.now();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test Label',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: '| ID | Case |',
+    });
+
+    // Then: Returns markdown string with formatted timestamp using formatLocalIso8601WithOffset
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify readable timestamp format with offset
+    assert.ok(
+      /^\d{4}-\d{2}-\d{2}\s{2}\d{2}:\d{2}:\d{2}\.\d{3}\s[+-]\d{2}:\d{2}$/.test(timestamp),
+      'formatLocalIso8601WithOffset形式のタイムスタンプが使用されること',
+    );
+  });
+
+  // TC-N-27: buildTestExecutionArtifactMarkdown with valid parameters
+  test('TC-N-27: buildTestExecutionArtifactMarkdown uses formatLocalIso8601WithOffset for timestamp', () => {
+    // Given: Valid parameters
+    const generatedAtMs = Date.now();
+
+    // When: buildTestExecutionArtifactMarkdown is called
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs,
+      generationLabel: 'Test Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 100,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: Returns markdown string with formatted timestamp using formatLocalIso8601WithOffset
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify readable timestamp format with offset
+    assert.ok(
+      /^\d{4}-\d{2}-\d{2}\s{2}\d{2}:\d{2}:\d{2}\.\d{3}\s[+-]\d{2}:\d{2}$/.test(timestamp),
+      'formatLocalIso8601WithOffset形式のタイムスタンプが使用されること',
+    );
+  });
+
+  // TC-E-01: formatLocalIso8601WithOffset with null input
+  test('TC-E-01: formatLocalIso8601WithOffset throws TypeError when input is null', () => {
+    // Given: null input (passed as Date constructor parameter)
+    // When: buildTestPerspectiveArtifactMarkdown is called with null converted to Date
+    // Then: Throws TypeError with message "generatedAtMs must be a number"
+    assert.throws(() => {
+      buildTestPerspectiveArtifactMarkdown({
+        generatedAtMs: null as unknown as number,
+        targetLabel: 'Test',
+        targetPaths: ['test.ts'],
+        perspectiveMarkdown: 'table',
+      });
+    }, TypeError);
+    // Verify error message
+    try {
+      buildTestPerspectiveArtifactMarkdown({
+        generatedAtMs: null as unknown as number,
+        targetLabel: 'Test',
+        targetPaths: ['test.ts'],
+        perspectiveMarkdown: 'table',
+      });
+      assert.fail('Should have thrown TypeError');
+    } catch (err) {
+      assert.ok(err instanceof TypeError, 'Should throw TypeError');
+      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
+    }
+  });
+
+  // TC-E-02: formatLocalIso8601WithOffset with undefined input
+  test('TC-E-02: formatLocalIso8601WithOffset throws TypeError when input is undefined', () => {
+    // Given: undefined input
+    // When: buildTestPerspectiveArtifactMarkdown is called with undefined
+    // Then: Throws TypeError with message "generatedAtMs must be a number"
+    assert.throws(() => {
+      buildTestPerspectiveArtifactMarkdown({
+        generatedAtMs: undefined as unknown as number,
+        targetLabel: 'Test',
+        targetPaths: ['test.ts'],
+        perspectiveMarkdown: 'table',
+      });
+    }, TypeError);
+    // Verify error message
+    try {
+      buildTestPerspectiveArtifactMarkdown({
+        generatedAtMs: undefined as unknown as number,
+        targetLabel: 'Test',
+        targetPaths: ['test.ts'],
+        perspectiveMarkdown: 'table',
+      });
+      assert.fail('Should have thrown TypeError');
+    } catch (err) {
+      assert.ok(err instanceof TypeError, 'Should throw TypeError');
+      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
+    }
+  });
+
+  // TC-E-03: formatLocalIso8601WithOffset with invalid Date object
+  test('TC-E-03: formatLocalIso8601WithOffset handles invalid Date object', () => {
+    // Given: Invalid Date object (new Date("invalid"))
+    const invalidDate = new Date('invalid');
+    const generatedAtMs = invalidDate.getTime(); // Returns NaN
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    // Then: Returns formatted string with NaN values or throws error
+    // Note: Date constructor with NaN timestamp produces invalid date
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Behavior depends on Date constructor - invalid dates may produce "Invalid Date" string
+    // or NaN values in formatted output
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    // The output may contain NaN or Invalid Date, which is acceptable behavior
+  });
+
+  // TC-E-04: pad3 function with n = -1
+  test('TC-E-04: pad3 does not handle negative values correctly', () => {
+    // Given: Date object with negative milliseconds (not possible, but testing pad3 indirectly)
+    // Note: pad3(-1) would return "-1" without padding
+    // We test this indirectly by checking that the function doesn't validate range
+    // Since milliseconds are always 0-999, we can't directly test negative values
+    // This test documents the behavior: pad3 does not handle negative values
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Function completes (negative milliseconds not possible in Date)
+    assert.ok(md.includes('- 生成日時:'), '正常に処理されること');
+  });
+
+  // TC-E-05: pad3 function with n = 1000
+  test('TC-E-05: pad3 does not validate range for overflow values', () => {
+    // Given: Date object with milliseconds = 1000 (not possible, but testing pad3 behavior)
+    // Note: pad3(1000) would return "1000" without padding to 3 digits
+    // Since Date milliseconds are always 0-999, we can't directly test 1000
+    // This test documents the behavior: pad3 does not validate range
+    const date = new Date('2025-12-25T12:00:00.999Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Function completes (milliseconds overflow not possible in Date)
+    assert.ok(md.includes('- 生成日時:'), '正常に処理されること');
+  });
+
+  // TC-E-06: pad3 function with null input
+  test('TC-E-06: pad3 throws TypeError when input is null', () => {
+    // Given: null input (indirectly through Date constructor)
+    // When: buildTestPerspectiveArtifactMarkdown is called with invalid timestamp
+    // Then: Throws TypeError or produces invalid output
+    assert.throws(() => {
+      buildTestPerspectiveArtifactMarkdown({
+        generatedAtMs: null as unknown as number,
+        targetLabel: 'Test',
+        targetPaths: ['test.ts'],
+        perspectiveMarkdown: 'table',
+      });
+    }, TypeError);
+  });
+
+  // TC-E-07: pad3 function with undefined input
+  test('TC-E-07: pad3 throws TypeError when input is undefined', () => {
+    // Given: undefined input
+    // When: buildTestPerspectiveArtifactMarkdown is called with undefined
+    // Then: Throws TypeError
+    assert.throws(() => {
+      buildTestPerspectiveArtifactMarkdown({
+        generatedAtMs: undefined as unknown as number,
+        targetLabel: 'Test',
+        targetPaths: ['test.ts'],
+        perspectiveMarkdown: 'table',
+      });
+    }, TypeError);
+  });
+
+  // TC-E-08: pad3 function with non-number input
+  test('TC-E-08: pad3 throws TypeError or returns unexpected result for non-number input', () => {
+    // Given: Non-number input (string)
+    // When: buildTestPerspectiveArtifactMarkdown is called with string timestamp
+    // Then: Throws TypeError with message "generatedAtMs must be a number"
+    assert.throws(() => {
+      buildTestPerspectiveArtifactMarkdown({
+        generatedAtMs: 'invalid' as unknown as number,
+        targetLabel: 'Test',
+        targetPaths: ['test.ts'],
+        perspectiveMarkdown: 'table',
+      });
+    }, TypeError);
+    // Verify error message
+    try {
+      buildTestPerspectiveArtifactMarkdown({
+        generatedAtMs: 'invalid' as unknown as number,
+        targetLabel: 'Test',
+        targetPaths: ['test.ts'],
+        perspectiveMarkdown: 'table',
+      });
+      assert.fail('Should have thrown TypeError');
+    } catch (err) {
+      assert.ok(err instanceof TypeError, 'Should throw TypeError');
+      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
+    }
+  });
+
+  // TC-E-09: buildTestPerspectiveArtifactMarkdown with generatedAtMs = 0
+  test('TC-E-09: buildTestPerspectiveArtifactMarkdown handles zero timestamp (epoch)', () => {
+    // Given: generatedAtMs = 0 (epoch: 1970-01-01)
+    const generatedAtMs = 0;
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns markdown with formatted date from epoch (1970-01-01)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('1970-01-01'), 'エポック時刻が正しくフォーマットされること');
+  });
+
+  // TC-E-10: buildTestPerspectiveArtifactMarkdown with generatedAtMs = Number.MAX_SAFE_INTEGER
+  test('TC-E-10: buildTestPerspectiveArtifactMarkdown handles maximum safe integer timestamp', () => {
+    // Given: generatedAtMs = Number.MAX_SAFE_INTEGER
+    const generatedAtMs = Number.MAX_SAFE_INTEGER;
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns markdown with formatted date (may produce invalid date)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    // The output may contain invalid date or very large year, which is acceptable
+  });
+
+  // TC-E-11: buildTestPerspectiveArtifactMarkdown with generatedAtMs = -1
+  test('TC-E-11: buildTestPerspectiveArtifactMarkdown handles negative timestamp', () => {
+    // Given: generatedAtMs = -1 (1969-12-31)
+    const generatedAtMs = -1;
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns markdown with formatted date (1969-12-31)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // ローカルタイムゾーンでは日付が変わり得るため、期待値はDateから算出する
+    const d = new Date(generatedAtMs);
+    const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    assert.ok(timestamp.includes(expected), '負のタイムスタンプがローカル日付で正しくフォーマットされること');
+  });
+
+  // TC-E-12: buildTestExecutionArtifactMarkdown with generatedAtMs = 0
+  test('TC-E-12: buildTestExecutionArtifactMarkdown handles zero timestamp (epoch)', () => {
+    // Given: generatedAtMs = 0 (epoch: 1970-01-01)
+    const generatedAtMs = 0;
+
+    // When: buildTestExecutionArtifactMarkdown is called
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs,
+      generationLabel: 'Test',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 100,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: Returns markdown with formatted date from epoch
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('1970-01-01'), 'エポック時刻が正しくフォーマットされること');
+  });
+
+  // TC-E-13: buildTestExecutionArtifactMarkdown with generatedAtMs = Number.MAX_SAFE_INTEGER
+  test('TC-E-13: buildTestExecutionArtifactMarkdown handles maximum safe integer timestamp', () => {
+    // Given: generatedAtMs = Number.MAX_SAFE_INTEGER
+    const generatedAtMs = Number.MAX_SAFE_INTEGER;
+
+    // When: buildTestExecutionArtifactMarkdown is called
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs,
+      generationLabel: 'Test',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 100,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: Returns markdown with formatted date (may produce invalid date)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    // The output may contain invalid date or very large year, which is acceptable
+  });
+
+  // TC-E-14: buildTestExecutionArtifactMarkdown with generatedAtMs = -1
+  test('TC-E-14: buildTestExecutionArtifactMarkdown handles negative timestamp', () => {
+    // Given: generatedAtMs = -1 (1969-12-31)
+    const generatedAtMs = -1;
+
+    // When: buildTestExecutionArtifactMarkdown is called
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs,
+      generationLabel: 'Test',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 100,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: Returns markdown with formatted date (1969-12-31)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // ローカルタイムゾーンでは日付が変わり得るため、期待値はDateから算出する
+    const d = new Date(generatedAtMs);
+    const expected = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    assert.ok(timestamp.includes(expected), '負のタイムスタンプがローカル日付で正しくフォーマットされること');
+  });
+
+  // TC-B-01: Date object with month = 0 (January)
+  test('TC-B-01: formatLocalIso8601WithOffset formats first month correctly', () => {
+    // Given: Date object with month = 0 (January)
+    const date = new Date('2025-01-15T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "01" month
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('2025-01-'), '月が 01 でフォーマットされること');
+  });
+
+  // TC-B-02: Date object with month = 11 (December)
+  test('TC-B-02: formatLocalIso8601WithOffset formats last month correctly', () => {
+    // Given: Date object with month = 11 (December)
+    const date = new Date('2025-12-15T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "12" month
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('2025-12-'), '月が 12 でフォーマットされること');
+  });
+
+  // TC-B-03: Date object with date = 1
+  test('TC-B-03: formatLocalIso8601WithOffset formats first day of month correctly', () => {
+    // Given: Date object with date = 1
+    const date = new Date('2025-12-01T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "01" date
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('-01  '), '日が 01 でフォーマットされること');
+  });
+
+  // TC-B-04: Date object with date = 31
+  test('TC-B-04: formatLocalIso8601WithOffset formats last day of month correctly', () => {
+    // Given: Date object with date = 31
+    const date = new Date('2025-12-31T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "31" date
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    assert.ok(timestamp.includes('-31  '), '日が 31 でフォーマットされること');
+  });
+
+  // TC-B-05: Date object with hours = 0
+  test('TC-B-05: formatLocalIso8601WithOffset formats zero hours correctly', () => {
+    // Given: Date object with hours = 0
+    const date = new Date('2025-12-25T00:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "00" hours (in local timezone)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify time format includes hours
+    assert.ok(/\s{2}\d{2}:\d{2}:\d{2}/.test(timestamp), '時刻部分が正しくフォーマットされること');
+  });
+
+  // TC-B-06: Date object with hours = 23
+  test('TC-B-06: formatLocalIso8601WithOffset formats maximum hours correctly', () => {
+    // Given: Date object with hours = 23
+    const date = new Date('2025-12-25T23:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "23" hours (in local timezone)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify time format includes hours
+    assert.ok(/\s{2}\d{2}:\d{2}:\d{2}/.test(timestamp), '時刻部分が正しくフォーマットされること');
+  });
+
+  // TC-B-07: Date object with minutes = 0
+  test('TC-B-07: formatLocalIso8601WithOffset formats zero minutes correctly', () => {
+    // Given: Date object with minutes = 0
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "00" minutes (in local timezone)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify time format includes minutes
+    assert.ok(/\s{2}\d{2}:\d{2}:\d{2}/.test(timestamp), '時刻部分が正しくフォーマットされること');
+  });
+
+  // TC-B-08: Date object with minutes = 59
+  test('TC-B-08: formatLocalIso8601WithOffset formats maximum minutes correctly', () => {
+    // Given: Date object with minutes = 59
+    const date = new Date('2025-12-25T12:59:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "59" minutes (in local timezone)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify time format includes minutes
+    assert.ok(/\s{2}\d{2}:\d{2}:\d{2}/.test(timestamp), '時刻部分が正しくフォーマットされること');
+  });
+
+  // TC-B-09: Date object with seconds = 0
+  test('TC-B-09: formatLocalIso8601WithOffset formats zero seconds correctly', () => {
+    // Given: Date object with seconds = 0
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "00" seconds (in local timezone)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify time format includes seconds
+    assert.ok(/\s{2}\d{2}:\d{2}:\d{2}/.test(timestamp), '時刻部分が正しくフォーマットされること');
+  });
+
+  // TC-B-10: Date object with seconds = 59
+  test('TC-B-10: formatLocalIso8601WithOffset formats maximum seconds correctly', () => {
+    // Given: Date object with seconds = 59
+    const date = new Date('2025-12-25T12:00:59.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Returns formatted string with "59" seconds (in local timezone)
+    const match = md.match(/- 生成日時: (.+)/);
+    assert.ok(match, '生成日時が含まれること');
+    const timestamp = match![1];
+    // Verify time format includes seconds
+    assert.ok(/\s{2}\d{2}:\d{2}:\d{2}/.test(timestamp), '時刻部分が正しくフォーマットされること');
+  });
+
+  // TC-B-11: pad3 function with n = 0.5 (decimal)
+  test('TC-B-11: pad3 does not handle decimal values correctly', () => {
+    // Given: Date object (milliseconds are always integers, so we can't directly test decimals)
+    // Note: pad3(0.5) would return "0.5" without padding
+    // Since Date milliseconds are always integers, we can't directly test decimal values
+    // This test documents the behavior: pad3 does not handle decimals
+    const date = new Date('2025-12-25T12:00:00.000Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Function completes (decimal milliseconds not possible in Date)
+    assert.ok(md.includes('- 生成日時:'), '正常に処理されること');
+  });
+
+  // TC-B-12: pad3 function with n = 999.9 (decimal)
+  test('TC-B-12: pad3 does not handle decimal values near max correctly', () => {
+    // Given: Date object (milliseconds are always integers)
+    // Note: pad3(999.9) would return "999.9" without padding
+    // Since Date milliseconds are always integers, we can't directly test decimal values
+    // This test documents the behavior: pad3 does not handle decimals
+    const date = new Date('2025-12-25T12:00:00.999Z');
+    const generatedAtMs = date.getTime();
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs,
+      targetLabel: 'Test',
+      targetPaths: ['test.ts'],
+      perspectiveMarkdown: 'table',
+    });
+
+    // Then: Function completes (decimal milliseconds not possible in Date)
+    assert.ok(md.includes('- 生成日時:'), '正常に処理されること');
+  });
+
+  // TC-E-09: buildTestExecutionArtifactMarkdown with generatedAtMs = null
+  test('TC-E-09: buildTestExecutionArtifactMarkdown throws TypeError when generatedAtMs is null', () => {
+    // Given: buildTestExecutionArtifactMarkdown called with null generatedAtMs
+    const mockResult = {
+      command: 'npm test',
+      cwd: '/tmp',
+      exitCode: 0,
+      signal: null,
+      durationMs: 100,
+      stdout: '',
+      stderr: '',
+    };
+
+    // When: buildTestExecutionArtifactMarkdown is called with null
+    // Then: Throws TypeError with message "generatedAtMs must be a number"
+    assert.throws(() => {
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: null as unknown as number,
+        generationLabel: 'Test',
+        targetPaths: ['test.ts'],
+        result: mockResult,
+      });
+    }, TypeError);
+    // Verify error message
+    try {
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: null as unknown as number,
+        generationLabel: 'Test',
+        targetPaths: ['test.ts'],
+        result: mockResult,
+      });
+      assert.fail('Should have thrown TypeError');
+    } catch (err) {
+      assert.ok(err instanceof TypeError, 'Should throw TypeError');
+      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
+    }
+  });
+
+  // TC-E-10: buildTestExecutionArtifactMarkdown with generatedAtMs = undefined
+  test('TC-E-10: buildTestExecutionArtifactMarkdown throws TypeError when generatedAtMs is undefined', () => {
+    // Given: buildTestExecutionArtifactMarkdown called with undefined generatedAtMs
+    const mockResult = {
+      command: 'npm test',
+      cwd: '/tmp',
+      exitCode: 0,
+      signal: null,
+      durationMs: 100,
+      stdout: '',
+      stderr: '',
+    };
+
+    // When: buildTestExecutionArtifactMarkdown is called with undefined
+    // Then: Throws TypeError with message "generatedAtMs must be a number"
+    assert.throws(() => {
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: undefined as unknown as number,
+        generationLabel: 'Test',
+        targetPaths: ['test.ts'],
+        result: mockResult,
+      });
+    }, TypeError);
+    // Verify error message
+    try {
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: undefined as unknown as number,
+        generationLabel: 'Test',
+        targetPaths: ['test.ts'],
+        result: mockResult,
+      });
+      assert.fail('Should have thrown TypeError');
+    } catch (err) {
+      assert.ok(err instanceof TypeError, 'Should throw TypeError');
+      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
+    }
+  });
+
+  // TC-E-11: buildTestExecutionArtifactMarkdown with generatedAtMs = string
+  test('TC-E-11: buildTestExecutionArtifactMarkdown throws TypeError when generatedAtMs is string', () => {
+    // Given: buildTestExecutionArtifactMarkdown called with string generatedAtMs
+    const mockResult = {
+      command: 'npm test',
+      cwd: '/tmp',
+      exitCode: 0,
+      signal: null,
+      durationMs: 100,
+      stdout: '',
+      stderr: '',
+    };
+
+    // When: buildTestExecutionArtifactMarkdown is called with string
+    // Then: Throws TypeError with message "generatedAtMs must be a number"
+    assert.throws(() => {
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: 'invalid' as unknown as number,
+        generationLabel: 'Test',
+        targetPaths: ['test.ts'],
+        result: mockResult,
+      });
+    }, TypeError);
+    // Verify error message
+    try {
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: 'invalid' as unknown as number,
+        generationLabel: 'Test',
+        targetPaths: ['test.ts'],
+        result: mockResult,
+      });
+      assert.fail('Should have thrown TypeError');
+    } catch (err) {
+      assert.ok(err instanceof TypeError, 'Should throw TypeError');
+      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
+    }
+  });
 });

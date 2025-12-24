@@ -259,13 +259,14 @@ export function buildTestPerspectiveArtifactMarkdown(params: {
   targetPaths: string[];
   perspectiveMarkdown: string;
 }): string {
-  const tsIso = new Date(params.generatedAtMs).toISOString();
+  assertNumber(params.generatedAtMs, 'generatedAtMs');
+  const tsLocal = formatLocalIso8601WithOffset(new Date(params.generatedAtMs));
   const targets = params.targetPaths.map((p) => `- ${p}`).join('\n');
   const table = params.perspectiveMarkdown.trim();
   return [
     '# テスト観点表（自動生成）',
     '',
-    `- 生成日時: ${tsIso}`,
+    `- 生成日時: ${tsLocal}`,
     `- 対象: ${params.targetLabel}`,
     `- 対象ファイル:`,
     targets.length > 0 ? targets : '- (なし)',
@@ -284,7 +285,8 @@ export function buildTestExecutionArtifactMarkdown(params: {
   model?: string;
   result: TestExecutionResult;
 }): string {
-  const tsIso = new Date(params.generatedAtMs).toISOString();
+  assertNumber(params.generatedAtMs, 'generatedAtMs');
+  const tsLocal = formatLocalIso8601WithOffset(new Date(params.generatedAtMs));
   const targets = params.targetPaths.map((p) => `- ${p}`).join('\n');
   const modelLine = params.model && params.model.trim().length > 0 ? `- model: ${params.model}` : '- model: (auto)';
 
@@ -322,7 +324,7 @@ export function buildTestExecutionArtifactMarkdown(params: {
     detailsSection,
     '## 実行情報',
     '',
-    `- 生成日時: ${tsIso}`,
+    `- 生成日時: ${tsLocal}`,
     `- 生成対象: ${params.generationLabel}`,
     modelLine,
     `- 実行コマンド: \`${params.result.command}\``,
@@ -365,6 +367,47 @@ function toWorkspaceRelativePath(workspaceRoot: string, absolutePath: string): s
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
+}
+
+function assertNumber(value: unknown, label: string): asserts value is number {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${label} must be a number`);
+  }
+}
+
+function pad3(n: number): string {
+  if (n < 10) {
+    return `00${n}`;
+  }
+  if (n < 100) {
+    return `0${n}`;
+  }
+  return String(n);
+}
+
+/**
+ * ローカル時刻を視認性の良い形式（UTCオフセット付き）で整形する。
+ *
+ * 例: 2025-12-25  02:50:12.204 +09:00
+ */
+function formatLocalIso8601WithOffset(date: Date): string {
+  const yyyy = String(date.getFullYear());
+  const MM = pad2(date.getMonth() + 1);
+  const dd = pad2(date.getDate());
+  const hh = pad2(date.getHours());
+  const mm = pad2(date.getMinutes());
+  const ss = pad2(date.getSeconds());
+  const SSS = pad3(date.getMilliseconds());
+
+  // Date#getTimezoneOffset は「UTC - ローカル」の分。ISO表記の符号とは逆になるので反転する。
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetMinutes);
+  const offH = pad2(Math.floor(abs / 60));
+  const offM = pad2(abs % 60);
+
+  // 例: 2025-12-25␠␠04:25:26.549␠+09:00
+  return `${yyyy}-${MM}-${dd}  ${hh}:${mm}:${ss}.${SSS} ${sign}${offH}:${offM}`;
 }
 
 function truncate(text: string, maxChars: number): string {

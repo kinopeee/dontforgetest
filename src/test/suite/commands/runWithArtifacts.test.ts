@@ -3917,8 +3917,8 @@ suite('commands/runWithArtifacts.ts', () => {
     }
   });
 
-  // TC-REJECTED-B-07: stderr is null
-  test('TC-REJECTED-B-07: When stderr is null, throws TypeError or handles gracefully', async () => {
+  // TC-REJECTED-B-09: stderr is null
+  test('TC-REJECTED-B-09: When stderr is null, throws TypeError or handles gracefully', async () => {
     // Given: Result with null stderr
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
     const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b07-null-${Date.now()}`);
@@ -3984,8 +3984,8 @@ suite('commands/runWithArtifacts.ts', () => {
     }
   });
 
-  // TC-REJECTED-B-08: stderr is undefined
-  test('TC-REJECTED-B-08: When stderr is undefined, throws TypeError or handles gracefully', async () => {
+  // TC-REJECTED-B-10: stderr is undefined
+  test('TC-REJECTED-B-10: When stderr is undefined, throws TypeError or handles gracefully', async () => {
     // Given: Result with undefined stderr
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
     const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b08-undefined-${Date.now()}`);
@@ -4037,6 +4037,132 @@ suite('commands/runWithArtifacts.ts', () => {
     });
 
     // Then: Should complete without error (empty stderr is handled gracefully)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-E-01: result.stderr is null
+  test('TC-REJECTED-E-01: When result.stderr is null, throws TypeError or handles gracefully', async () => {
+    // Given: Result with null stderr (parser converts to empty string)
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-e01-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        // Simulate result with null stderr by not including stderr in the message
+        // The parser converts missing stderr to empty string, so this tests graceful handling
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: 0',
+            'durationMs: 100',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-e01-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-e01');
+
+    // When: runWithArtifacts is called
+    // Then: Should handle null stderr gracefully (parser converts to empty string)
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test E01',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo success',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Should complete without error (null stderr is converted to empty string by parser)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-E-02: result.stderr is undefined
+  test('TC-REJECTED-E-02: When result.stderr is undefined, handles gracefully', async () => {
+    // Given: Result with undefined stderr (parser converts to empty string)
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-e02-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        // Simulate result with undefined stderr by not including stderr in the message
+        // The parser converts missing stderr to empty string, so this tests graceful handling
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: 0',
+            'durationMs: 100',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-e02-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-e02');
+
+    // When: runWithArtifacts is called
+    // Then: Should handle undefined stderr gracefully (parser converts to empty string)
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test E02',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo success',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Should complete without error (undefined stderr is converted to empty string by parser)
     const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
     const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
     assert.ok(reports.length > 0, 'Report should be generated');
