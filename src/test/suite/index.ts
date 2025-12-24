@@ -5,17 +5,100 @@ const Mocha = require('mocha');
 import { glob } from 'glob';
 import * as vscode from 'vscode';
 
-interface FailedTestInfo {
+export type TestCaseState = 'passed' | 'failed' | 'pending';
+
+export interface FailedTestInfo {
   title: string;
   fullTitle: string;
   error: string;
 }
 
-interface TestResultFile {
+export interface TestCaseInfo {
+  /** スイート名（fullTitle から title を除いたもの） */
+  suite: string;
+  /** テストケース名 */
+  title: string;
+  /** fullTitle（Mocha が提供する完全名） */
+  fullTitle: string;
+  /** 成否 */
+  state: TestCaseState;
+  /** 実行時間（ミリ秒。取得できた場合のみ） */
+  durationMs?: number;
+}
+
+export interface TestResultFile {
   timestamp: number;
   vscodeVersion: string;
   failures: number;
+  passes: number;
+  pending: number;
+  total: number;
+  /** Mocha Runner の実行時間（ミリ秒。取得できた場合のみ） */
+  durationMs?: number;
+  /** テストケースごとの結果 */
+  tests: TestCaseInfo[];
   failedTests?: FailedTestInfo[];
+}
+
+export function resolveSuiteFromFullTitle(fullTitle: string, title: string): string {
+  // fullTitle は「Suite1 Suite2 Test Title」のように連結されることが多い。
+  // 末尾の title を取り除いた残りを suite として扱う。
+  // 不正な入力は明示的に弾く（テスト観点上、TypeError を期待するケースがある）
+  if (typeof fullTitle !== 'string' || typeof title !== 'string') {
+    throw new TypeError('fullTitle と title は文字列である必要があります');
+  }
+  // title が空の場合、endsWith('') は常に true になるため例外扱いにする
+  if (title.trim() === '') {
+    return '';
+  }
+  if (!fullTitle.endsWith(title)) {
+    return '';
+  }
+  const suite = fullTitle.slice(0, Math.max(0, fullTitle.length - title.length)).trim();
+  return suite;
+}
+
+interface MochaRunnerLike {
+  stats?: { duration?: number };
+  on(event: 'pass', cb: (test: { title: string; fullTitle: () => string; duration?: number }) => void): void;
+  on(event: 'fail', cb: (test: { title: string; fullTitle: () => string }, err: Error) => void): void;
+  on(event: 'pending', cb: (test: { title: string; fullTitle: () => string }) => void): void;
+  on(event: string, cb: (...args: unknown[]) => void): void;
+}
+
+/**
+ * テスト結果ファイル（test-result.json）を同期的に書き出す。
+ * open 起動時は exitCode を取得できないため、このファイルが成否判定の根拠になる。
+ *
+ * 例外が発生してもテストハーネス側が ENOENT で落ちないよう、可能な限り書き込みを試みる。
+ */
+function writeTestResultFileSafely(params: {
+  resultFilePath: string;
+  failures: number;
+  tests: TestCaseInfo[];
+  failedTests: FailedTestInfo[];
+  durationMs?: number;
+}): void {
+  try {
+    fs.mkdirSync(path.dirname(params.resultFilePath), { recursive: true });
+    const passes = params.tests.filter((t) => t.state === 'passed').length;
+    const pending = params.tests.filter((t) => t.state === 'pending').length;
+    const total = params.tests.length;
+    const result: TestResultFile = {
+      timestamp: Date.now(),
+      vscodeVersion: vscode.version,
+      failures: params.failures,
+      passes,
+      pending,
+      total,
+      durationMs: params.durationMs,
+      tests: params.tests,
+      failedTests: params.failedTests,
+    };
+    fs.writeFileSync(params.resultFilePath, JSON.stringify(result, null, 2), 'utf8');
+  } catch (writeErr) {
+    console.warn('テスト結果ファイルの書き込みに失敗しました:', writeErr);
+  }
 }
 
 function resolveTestResultFilePathFromArgv(): string | undefined {
@@ -69,6 +152,7 @@ export function run(): Promise<void> {
       .then((files) => {
         if (files.length === 0) {
           console.warn('テストファイルが見つかりませんでした');
+          writeTestResultFileSafely({ resultFilePath, failures: 0, tests: [], failedTests: [] });
           c();
           return;
         }
@@ -102,6 +186,7 @@ export function run(): Promise<void> {
 
         if (runnableFiles.length === 0) {
           console.warn('実行可能なテストファイルが見つかりませんでした（すべてスキップ対象）');
+          writeTestResultFileSafely({ resultFilePath, failures: 0, tests: [], failedTests: [] });
           c();
           return;
         }
@@ -115,40 +200,98 @@ export function run(): Promise<void> {
 
         // 失敗したテスト情報を収集するための配列
         const failedTests: FailedTestInfo[] = [];
+        // テストケースごとの結果を収集する
+        const byFullTitle = new Map<string, TestCaseInfo>();
+        const order: string[] = [];
+
+        const upsertTest = (info: TestCaseInfo): void => {
+          const existing = byFullTitle.get(info.fullTitle);
+          if (!existing) {
+            byFullTitle.set(info.fullTitle, info);
+            order.push(info.fullTitle);
+            return;
+          }
+          // 既存がある場合は、より詳細な情報で上書きする（duration 等）
+          byFullTitle.set(info.fullTitle, { ...existing, ...info });
+        };
 
         // テストスイートを実行
-        const runner = mocha.run((failures: number) => {
-          console.log(`テスト実行完了。失敗: ${failures}個`);
+        let runner: MochaRunnerLike;
+        try {
+          runner = mocha.run((failures: number) => {
+            console.log(`テスト実行完了。失敗: ${failures}個`);
 
-          // テスト結果をファイルに保存（外部プロセス起動時の成否判定に使用）
-          // - Cursor 実行中に VS Code 側が kill される場合があるため、終了直前に同期書き込みする
-          try {
-            fs.mkdirSync(path.dirname(resultFilePath), { recursive: true });
-            const result: TestResultFile = { timestamp: Date.now(), vscodeVersion: vscode.version, failures, failedTests };
-            fs.writeFileSync(resultFilePath, JSON.stringify(result, null, 2), 'utf8');
-          } catch (writeErr) {
-            console.warn('テスト結果ファイルの書き込みに失敗しました:', writeErr);
-          }
+            const tests = order.map((key) => byFullTitle.get(key)).filter((x): x is TestCaseInfo => x !== undefined);
+            const durationMs = typeof runner.stats?.duration === 'number' ? runner.stats.duration : undefined;
+            writeTestResultFileSafely({ resultFilePath, failures, tests, failedTests, durationMs });
 
-          if (failures > 0) {
-            e(new Error(`${failures} 個のテストが失敗しました。`));
-          } else {
-            c();
-          }
-        });
+            if (failures > 0) {
+              e(new Error(`${failures} 個のテストが失敗しました。`));
+            } else {
+              c();
+            }
+          }) as unknown as MochaRunnerLike;
+        } catch (runErr) {
+          const err = runErr instanceof Error ? runErr : new Error(String(runErr));
+          console.error('テストスイートの実行中にエラーが発生しました:', err);
+          writeTestResultFileSafely({
+            resultFilePath,
+            failures: 1,
+            tests: [],
+            failedTests: [{ title: '(test suite)', fullTitle: '(test suite)', error: err.message }],
+          });
+          e(err);
+          return;
+        }
+
+        // 成功時のイベントハンドラを追加
+        runner.on(
+          'pass',
+          (test: { title: string; fullTitle: () => string; duration?: number | undefined }) => {
+            const title = test.title;
+            const fullTitle = test.fullTitle();
+            const suite = resolveSuiteFromFullTitle(fullTitle, title);
+            upsertTest({
+              suite,
+              title,
+              fullTitle,
+              state: 'passed',
+              durationMs: typeof test.duration === 'number' ? test.duration : undefined,
+            });
+          },
+        );
 
         // 失敗時のイベントハンドラを追加
         runner.on('fail', (test: { title: string; fullTitle: () => string }, err: Error) => {
+          const title = test.title;
+          const fullTitle = test.fullTitle();
+          const suite = resolveSuiteFromFullTitle(fullTitle, title);
+          upsertTest({ suite, title, fullTitle, state: 'failed' });
           failedTests.push({
             title: test.title,
             fullTitle: test.fullTitle(),
             error: err.message || String(err),
           });
         });
+
+        // pending（スキップ/未実装）のイベントハンドラ
+        runner.on('pending', (test: { title: string; fullTitle: () => string }) => {
+          const title = test.title;
+          const fullTitle = test.fullTitle();
+          const suite = resolveSuiteFromFullTitle(fullTitle, title);
+          upsertTest({ suite, title, fullTitle, state: 'pending' });
+        });
       })
       .catch((err) => {
-        console.error('テストスイートの実行中にエラーが発生しました:', err);
-        e(err);
+        const normalized = err instanceof Error ? err : new Error(String(err));
+        console.error('テストスイートの実行中にエラーが発生しました:', normalized);
+        writeTestResultFileSafely({
+          resultFilePath,
+          failures: 1,
+          tests: [],
+          failedTests: [{ title: '(test suite)', fullTitle: '(test suite)', error: normalized.message }],
+        });
+        e(normalized);
       });
   });
 }

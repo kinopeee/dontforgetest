@@ -2753,6 +2753,7 @@ suite('commands/runWithArtifacts.ts', () => {
   // | TC-REJECTED-B-08 | stderr includes 'コマンドの実行が拒否されました' | Boundary – Japanese rejection message 1 | rejectedJpMessage is true | - |
   // | TC-REJECTED-B-09 | stderr includes '実行が拒否されました' | Boundary – Japanese rejection message 2 | rejectedJpMessage is true | - |
   // | TC-REJECTED-B-10 | errorMessage includes '拒否' | Boundary – Japanese rejection in errorMessage | rejectedJpMessage is true | - |
+  // | TC-REJECTED-B-12 | stderr includes 'コマンドが拒否されました' | Boundary – Japanese rejection message 3 | rejectedJpMessage is true | - |
   // | TC-REJECTED-B-11 | stderr is empty, errorMessage is null | Boundary – null errorMessage | rejectedJpMessage is false | - |
   // | TC-REJECTED-E-01 | result is null | Error – null result | Throws TypeError or returns false | - |
   // | TC-REJECTED-E-02 | result.stderr is null | Error – null stderr | Throws TypeError or handles gracefully | - |
@@ -3302,6 +3303,810 @@ suite('commands/runWithArtifacts.ts', () => {
     const doc = await vscode.workspace.openTextDocument(reports[0]);
     const text = doc.getText();
     assert.ok(text.includes('fallback'), 'Fallback should be triggered for alternative Japanese rejection message');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-N-01: shouldTreatAsRejected - Japanese rejection message (コマンドが拒否されました) - normal case
+  test('TC-REJECTED-N-01: When stderr includes "コマンドが拒否されました", rejectedJpMessage is true', async () => {
+    // Given: Result with Japanese rejection message in stderr (new pattern)
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-n01-new-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: null',
+            'durationMs: 0',
+            '<!-- BEGIN STDERR -->',
+            'コマンドが拒否されました。npm test を実行できませんでした。',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-n01-new-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-n01-new');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test N01 New',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo fallback',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Fallback is triggered (rejectedJpMessage is true)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+    
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('fallback'), 'Fallback should be triggered for Japanese rejection message (コマンドが拒否されました)');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-N-02: shouldTreatAsRejected - Japanese rejection message (手動で承認が必要) - normal case
+  test('TC-REJECTED-N-02: When stderr includes "手動で承認が必要", rejectedJpMessage is true', async () => {
+    // Given: Result with Japanese rejection message in stderr (new pattern)
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-n02-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: null',
+            'durationMs: 0',
+            '<!-- BEGIN STDERR -->',
+            '手動で承認が必要です。npm test を実行できませんでした。',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-n02-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-n02');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test N02',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo fallback',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Fallback is triggered (rejectedJpMessage is true)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+    
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('fallback'), 'Fallback should be triggered for Japanese rejection message (手動で承認が必要)');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-B-01: stderr is empty string
+  test('TC-REJECTED-B-01: When stderr is empty string, rejectedJpMessage is false', async () => {
+    // Given: Result with empty stderr
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b01-empty-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: 0',
+            'durationMs: 100',
+            '<!-- BEGIN STDERR -->',
+            '',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-b01-empty-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-b01-empty');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test B01 Empty',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo success',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Normal execution (rejectedJpMessage is false, no fallback)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+    
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    // Empty stderr should not trigger rejection, so normal execution should proceed
+    assert.ok(!text.includes('cursor-agent によるコマンド実行が拒否されたため'), 'Should not trigger fallback for empty stderr');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-B-06: stderr includes partial match '拒否' but not full pattern
+  test('TC-REJECTED-B-06: When stderr includes partial match "拒否" but not full pattern, rejectedJpMessage is false', async () => {
+    // Given: Result with partial match in stderr (not full pattern)
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b06-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: 0',
+            'durationMs: 100',
+            '<!-- BEGIN STDERR -->',
+            'このコマンドは拒否されていません',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-b06-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-b06');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test B06',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo success',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Normal execution (rejectedJpMessage is false, partial match should not trigger)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+    
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    // Partial match should not trigger rejection
+    assert.ok(!text.includes('cursor-agent によるコマンド実行が拒否されたため'), 'Should not trigger fallback for partial match');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-B-07: stderr includes 'コマンドが拒否されました' at start
+  test('TC-REJECTED-B-07: When stderr includes "コマンドが拒否されました" at start, rejectedJpMessage is true', async () => {
+    // Given: Result with Japanese rejection message at start of stderr
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b07-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: null',
+            'durationMs: 0',
+            '<!-- BEGIN STDERR -->',
+            'コマンドが拒否されました。追加のメッセージです。',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-b07-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-b07');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test B07',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo fallback',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Fallback is triggered (rejectedJpMessage is true)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+    
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('fallback'), 'Fallback should be triggered when message is at start');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-B-08: stderr includes 'コマンドが拒否されました' at end
+  test('TC-REJECTED-B-08: When stderr includes "コマンドが拒否されました" at end, rejectedJpMessage is true', async () => {
+    // Given: Result with Japanese rejection message at end of stderr
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b08-pos-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: null',
+            'durationMs: 0',
+            '<!-- BEGIN STDERR -->',
+            '追加のメッセージです。コマンドが拒否されました。',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-b08-pos-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-b08-pos');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test B08 Pos',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo fallback',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Fallback is triggered (rejectedJpMessage is true)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+    
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('fallback'), 'Fallback should be triggered when message is at end');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-B-09: stderr includes 'コマンドが拒否されました' in middle
+  test('TC-REJECTED-B-09: When stderr includes "コマンドが拒否されました" in middle, rejectedJpMessage is true', async () => {
+    // Given: Result with Japanese rejection message in middle of stderr
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b09-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: null',
+            'durationMs: 0',
+            '<!-- BEGIN STDERR -->',
+            '前のメッセージ。コマンドが拒否されました。後のメッセージ。',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-b09-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-b09');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test B09',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo fallback',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Fallback is triggered (rejectedJpMessage is true)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+    
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('fallback'), 'Fallback should be triggered when message is in middle');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-B-10: stderr includes '手動で承認が必要' at start
+  test('TC-REJECTED-B-10: When stderr includes "手動で承認が必要" at start, rejectedJpMessage is true', async () => {
+    // Given: Result with Japanese rejection message at start of stderr
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b10-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: null',
+            'durationMs: 0',
+            '<!-- BEGIN STDERR -->',
+            '手動で承認が必要です。追加のメッセージです。',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-b10-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-b10');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test B10',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo fallback',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Fallback is triggered (rejectedJpMessage is true)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+    
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('fallback'), 'Fallback should be triggered when message is at start');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-B-11: stderr includes '手動で承認が必要' at end
+  test('TC-REJECTED-B-11: When stderr includes "手動で承認が必要" at end, rejectedJpMessage is true', async () => {
+    // Given: Result with Japanese rejection message at end of stderr
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b11-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: null',
+            'durationMs: 0',
+            '<!-- BEGIN STDERR -->',
+            '追加のメッセージです。手動で承認が必要です。',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-b11-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-b11');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test B11',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo fallback',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Fallback is triggered (rejectedJpMessage is true)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+    
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('fallback'), 'Fallback should be triggered when message is at end');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-B-07: stderr is null
+  test('TC-REJECTED-B-07: When stderr is null, throws TypeError or handles gracefully', async () => {
+    // Given: Result with null stderr
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b07-null-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        // Simulate result with null stderr by not including stderr in the message
+        // However, the actual parser may convert this to empty string
+        // We'll test that the code handles this gracefully
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: null',
+            'durationMs: 0',
+            '<!-- BEGIN STDERR -->',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-b07-null-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-b07-null');
+
+    // When: runWithArtifacts is called
+    // Then: Should handle null stderr gracefully (empty string from parser)
+    // Note: The actual parser converts missing stderr to empty string, so this tests the empty case
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test B07 Null',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo success',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Should complete without error (empty stderr is handled gracefully)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-B-08: stderr is undefined
+  test('TC-REJECTED-B-08: When stderr is undefined, throws TypeError or handles gracefully', async () => {
+    // Given: Result with undefined stderr
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b08-undefined-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        // Simulate result with undefined stderr by not including stderr in the message
+        // However, the actual parser may convert this to empty string
+        // We'll test that the code handles this gracefully
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: null',
+            'durationMs: 0',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-b08-undefined-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-b08-undefined');
+
+    // When: runWithArtifacts is called
+    // Then: Should handle undefined stderr gracefully (empty string from parser)
+    // Note: The actual parser converts missing stderr to empty string, so this tests the empty case
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test B08 Undefined',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo success',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Should complete without error (empty stderr is handled gracefully)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-REJECTED-B-12: stderr includes '手動で承認が必要' in middle
+  test('TC-REJECTED-B-12: When stderr includes "手動で承認が必要" in middle, rejectedJpMessage is true', async () => {
+    // Given: Result with Japanese rejection message in middle of stderr
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-rejected-b12-middle-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: null',
+            'durationMs: 0',
+            '<!-- BEGIN STDERR -->',
+            '前のメッセージ。手動で承認が必要です。後のメッセージ。',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    const taskId = `task-rejected-b12-middle-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-rejected-b12-middle');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Rejected Test B12 Middle',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo fallback',
+        testExecutionRunner: 'cursorAgent',
+        allowUnsafeTestCommand: false,
+      }
+    });
+
+    // Then: Fallback is triggered (rejectedJpMessage is true)
+    const reportUri = vscode.Uri.file(path.join(tempRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report should be generated');
+    
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('fallback'), 'Fallback should be triggered when message is in middle');
 
     // Cleanup
     try {

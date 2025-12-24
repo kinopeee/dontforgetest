@@ -437,7 +437,9 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
       const rejectedJpMessage =
         result.stderr.includes('コマンドの実行が拒否されました') ||
+        result.stderr.includes('コマンドが拒否されました') ||
         result.stderr.includes('実行が拒否されました') ||
+        result.stderr.includes('手動で承認が必要') ||
         (result.errorMessage?.includes('拒否') ?? false);
 
       const shouldTreatAsRejected = toolExecutionRejected || suspiciousEmptyResult || rejectedJpMessage;

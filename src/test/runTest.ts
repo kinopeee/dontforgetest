@@ -5,6 +5,106 @@ import * as os from 'os';
 import { downloadAndUnzipVSCode, TestRunFailedError } from '@vscode/test-electron';
 import { getProfileArguments } from '@vscode/test-electron/out/util';
 
+export type TestCaseState = 'passed' | 'failed' | 'pending';
+
+export interface TestCaseInfo {
+  suite?: string;
+  title?: string;
+  fullTitle?: string;
+  state?: TestCaseState;
+  durationMs?: number;
+}
+
+export interface TestResultFile {
+  timestamp?: number;
+  vscodeVersion?: string;
+  failures?: number;
+  passes?: number;
+  pending?: number;
+  total?: number;
+  durationMs?: number;
+  tests?: TestCaseInfo[];
+}
+
+export function resolveSuiteFromFullTitle(fullTitle: string, title: string): string {
+  // 不正な入力は明示的に弾く（テスト観点上、TypeError を期待するケースがある）
+  if (typeof fullTitle !== 'string' || typeof title !== 'string') {
+    throw new TypeError('fullTitle と title は文字列である必要があります');
+  }
+  // title が空の場合、endsWith('') は常に true になるため例外扱いにする
+  if (title.trim() === '') {
+    return '';
+  }
+  if (!fullTitle.endsWith(title)) {
+    return '';
+  }
+  return fullTitle.slice(0, Math.max(0, fullTitle.length - title.length)).trim();
+}
+
+export function printMochaLikeResultsFromTestResultFile(
+  result: TestResultFile,
+  log: (message?: unknown, ...optionalParams: unknown[]) => void = console.log,
+): void {
+  const tests = Array.isArray(result.tests) ? result.tests : [];
+  if (tests.length === 0) {
+    return;
+  }
+
+  log('');
+  log('[dontforgetest] --- テスト結果（test-result.json から再構築） ---');
+  log('');
+
+  // suite ごとにまとめて出力する（src/core/testResultParser.ts の parseMochaOutput で拾える形式に寄せる）
+  const suiteOrder: string[] = [];
+  const bySuite = new Map<string, TestCaseInfo[]>();
+
+  const normalizeSuite = (t: TestCaseInfo): string => {
+    if (typeof t.suite === 'string' && t.suite.trim() !== '') {
+      return t.suite.trim();
+    }
+    const fullTitle = typeof t.fullTitle === 'string' ? t.fullTitle : '';
+    const title = typeof t.title === 'string' ? t.title : '';
+    if (fullTitle !== '' && title !== '') {
+      const derived = resolveSuiteFromFullTitle(fullTitle, title);
+      if (derived !== '') {
+        return derived;
+      }
+    }
+    return '(root)';
+  };
+
+  for (const t of tests) {
+    const suite = normalizeSuite(t);
+    if (!bySuite.has(suite)) {
+      bySuite.set(suite, []);
+      suiteOrder.push(suite);
+    }
+    bySuite.get(suite)?.push(t);
+  }
+
+  let failureIndex = 1;
+  for (const suite of suiteOrder) {
+    log(`  ${suite}`);
+    const suiteTests = bySuite.get(suite) ?? [];
+    for (const t of suiteTests) {
+      const title = typeof t.title === 'string' && t.title.trim() !== '' ? t.title.trim() : '(no title)';
+      const state = t.state;
+      if (state === 'failed') {
+        log(`      ${failureIndex}) ${title}`);
+        failureIndex += 1;
+        continue;
+      }
+      if (state === 'passed') {
+        log(`      ✔ ${title}`);
+        continue;
+      }
+      // pending は parseMochaOutput が拾えないが、情報としては出しておく
+      log(`      - ${title}`);
+    }
+    log('');
+  }
+}
+
 async function stageExtensionToTemp(params: {
   sourceExtensionRoot: string;
   stageExtensionRoot: string;
@@ -241,11 +341,13 @@ async function main() {
     // open 起動の場合はプロセスのexit codeが取れない可能性があるため、結果ファイルを参照して最終判定する
     try {
       const raw = await fs.promises.readFile(testResultFilePath, 'utf8');
-      const parsed = JSON.parse(raw) as { failures?: unknown };
+      const parsed = JSON.parse(raw) as TestResultFile;
       const failures = typeof parsed.failures === 'number' ? parsed.failures : undefined;
       if (failures === undefined) {
         throw new Error('testResultFileの形式が不正です');
       }
+      // stdout に Mocha 風の結果を出す（open 起動だと Extension Host の stdout が拾えないため）
+      printMochaLikeResultsFromTestResultFile(parsed);
       if (failures > 0) {
         throw new Error(`テスト失敗: ${failures}個`);
       }
@@ -284,4 +386,8 @@ async function main() {
   }
 }
 
-main();
+// テストから import される場合は main を実行しない（副作用で VS Code を起動してしまうため）
+// node ./out/test/runTest.js で直接実行された場合のみ main を起動する。
+if (require.main === module) {
+  void main();
+}
