@@ -221,6 +221,28 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       },
     });
 
+    // 生成（allowWrite=true）の副産物として、所定フロー外のファイルが作られることがある。
+    // 代表例: 生成済みの観点表をルート直下に `test_perspectives.md` として保存してしまう。
+    // これは拡張機能の所定フロー（docs 配下への成果物保存）と競合し、ユーザー体験を悪化させるため削除する。
+    const cleanup = await cleanupUnexpectedPerspectiveFile(options.workspaceRoot);
+    if (cleanup.deleted) {
+      appendEventToOutput(
+        emitLogEvent(
+          `${options.generationTaskId}-guard`,
+          'warn',
+          `所定フロー外で作成された観点表ファイルを削除しました: ${cleanup.relativePath}`,
+        ),
+      );
+    } else if (cleanup.errorMessage) {
+      appendEventToOutput(
+        emitLogEvent(
+          `${options.generationTaskId}-guard`,
+          'warn',
+          `所定フロー外の観点表ファイル削除を試みましたが失敗しました: ${cleanup.errorMessage}`,
+        ),
+      );
+    }
+
     const genMsg =
       genExit === 0
         ? `テスト生成が完了しました: ${options.generationLabel}`
@@ -361,9 +383,26 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         // 日本語メッセージ
         (result.errorMessage?.includes('ツール') ?? false);
 
+      // cursor-agent の拒否/失敗が「空の結果」として返ってくる場合がある（stderr に明示メッセージが無い）。
+      // 例: exitCode=null, durationMs=0, stdout/stderr空, errorMessageなし
+      const suspiciousEmptyResult =
+        result.exitCode === null &&
+        result.durationMs === 0 &&
+        result.signal === null &&
+        result.stdout.trim().length === 0 &&
+        result.stderr.trim().length === 0 &&
+        (result.errorMessage?.trim().length ?? 0) === 0;
+
+      const rejectedJpMessage =
+        result.stderr.includes('コマンドの実行が拒否されました') ||
+        result.stderr.includes('実行が拒否されました') ||
+        (result.errorMessage?.includes('拒否') ?? false);
+
+      const shouldTreatAsRejected = toolExecutionRejected || suspiciousEmptyResult || rejectedJpMessage;
+
       // cursor-agent 側でコマンド実行が拒否された場合、結果が空になってしまう。
       // ユーザーが許可している場合のみ、拡張機能側（extension runner）でフォールバック実行して結果を保存する。
-      if (toolExecutionRejected) {
+      if (shouldTreatAsRejected) {
         const canFallback = !willLaunchVsCode || settings.allowUnsafeTestCommand;
         const warnMessage = canFallback
           ? 'cursor-agent によるコマンド実行が拒否されたため、拡張機能側でフォールバック実行します。'
@@ -393,6 +432,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
         // フォールバック（extension runner）
         const fallbackResult = await runTestCommand({ command: settings.testCommand, cwd: options.workspaceRoot });
+
         const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: fallbackResult.exitCode, timestampMs: nowMs() };
         handleTestGenEventForStatusBar(completed);
         appendEventToOutput(completed);
@@ -738,6 +778,39 @@ function appendPerspectiveToPrompt(basePrompt: string, perspectiveMarkdown: stri
     '以下の観点表に記載された **すべてのケース** をテストとして実装してください。',
     '観点表のケースを漏れなく網羅し、各テストケースに対応する Case ID をコメントで記載すること。',
     '',
+    '## 重要: 観点表の保存について（必須）',
+    '- 観点表は拡張機能が所定フローで保存済みです（docs 配下に保存されます）。',
+    '- **観点表を別ファイルに保存しない**（例: ルート直下の `test_perspectives.md` を作らない）。',
+    '- **docs/** や *.md の編集/作成は禁止**（テストコードのみを変更してください）。',
+    '',
     perspectiveMarkdown,
   ].join('\n');
+}
+
+async function cleanupUnexpectedPerspectiveFile(
+  workspaceRoot: string,
+): Promise<{ deleted: boolean; relativePath: string; errorMessage?: string }> {
+  const relativePath = 'test_perspectives.md';
+  const absolutePath = path.join(workspaceRoot, relativePath);
+  const uri = vscode.Uri.file(absolutePath);
+
+  try {
+    await vscode.workspace.fs.stat(uri);
+  } catch {
+    return { deleted: false, relativePath };
+  }
+
+  try {
+    const raw = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+    // 内部マーカー付きの観点表は「抽出用フォーマット」であり、所定フロー外の副産物として扱う。
+    const hasMarkers = raw.includes('<!-- BEGIN TEST PERSPECTIVES -->') && raw.includes('<!-- END TEST PERSPECTIVES -->');
+    if (!hasMarkers) {
+      return { deleted: false, relativePath };
+    }
+    await vscode.workspace.fs.delete(uri, { useTrash: false });
+    return { deleted: true, relativePath };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { deleted: false, relativePath, errorMessage: msg };
+  }
 }
