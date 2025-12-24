@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "Chottotest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.30",
+  "version": "0.0.32",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -127,8 +127,8 @@
         },
         "testgen-agent.testStrategyPath": {
           "type": "string",
-          "default": "docs/test-strategy.md",
-          "description": "テスト戦略ルールファイルのパス（ワークスペース相対または絶対）"
+          "default": "",
+          "description": "テスト戦略ルールファイルのパス（空の場合は内蔵デフォルトを使用）"
         },
         "testgen-agent.includeTestPerspectiveTable": {
           "type": "boolean",

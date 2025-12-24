@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { DEFAULT_TEST_STRATEGY, DEFAULT_LANGUAGE_CONFIG } from './defaultTestStrategy';
 
 export interface TestGenLanguageConfig {
   answerLanguage: string;
@@ -217,17 +218,42 @@ async function readTextFile(absolutePath: string): Promise<string> {
   return Buffer.from(data).toString('utf8');
 }
 
+async function fileExists(absolutePath: string): Promise<boolean> {
+  try {
+    await vscode.workspace.fs.stat(vscode.Uri.file(absolutePath));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function readStrategyAndLanguages(
   workspaceRoot: string,
   testStrategyPath: string,
 ): Promise<{ strategyText: string; languages: TestGenLanguageConfig }> {
+  // 1. testStrategyPath が空の場合は内蔵デフォルトを使用
+  if (!testStrategyPath || testStrategyPath.trim().length === 0) {
+    return {
+      strategyText: DEFAULT_TEST_STRATEGY,
+      languages: { ...DEFAULT_LANGUAGE_CONFIG },
+    };
+  }
+
+  // 2. ファイルが存在するか確認
   const strategyAbsolutePath = toAbsolutePath(workspaceRoot, testStrategyPath);
+  const exists = await fileExists(strategyAbsolutePath);
+
+  if (!exists) {
+    // ファイルが見つからない場合は内蔵デフォルトにフォールバック
+    return {
+      strategyText: DEFAULT_TEST_STRATEGY,
+      languages: { ...DEFAULT_LANGUAGE_CONFIG },
+    };
+  }
+
+  // 3. 外部ファイルを読み込む
   const strategyText = await readTextFile(strategyAbsolutePath);
-  const languages = parseLanguageConfig(strategyText) ?? {
-    answerLanguage: 'ja',
-    commentLanguage: 'ja',
-    perspectiveTableLanguage: 'ja',
-  };
+  const languages = parseLanguageConfig(strategyText) ?? { ...DEFAULT_LANGUAGE_CONFIG };
   return { strategyText, languages };
 }
 

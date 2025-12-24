@@ -27,32 +27,24 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
 
   const config = vscode.workspace.getConfiguration('testgen-agent');
   const { defaultModel } = getModelSettings();
-  const testStrategyPath = (config.get<string>('testStrategyPath', 'docs/test-strategy.md') ?? '').trim();
+  const testStrategyPath = (config.get<string>('testStrategyPath', '') ?? '').trim();
   const cursorAgentPath = (config.get<string>('cursorAgentPath') ?? '').trim();
   const cursorAgentCommand = cursorAgentPath.length > 0 ? cursorAgentPath : 'cursor-agent';
 
-  if (testStrategyPath.length === 0) {
-    await showConfigError('testgen-agent.testStrategyPath が未設定です。', 'testgen-agent.testStrategyPath');
-    return undefined;
-  }
+  // testStrategyPath が空、またはファイルが存在しない場合は内蔵デフォルトを使用
+  // → エラーにせず、そのまま続行（promptBuilder側でフォールバック）
+  let effectiveTestStrategyPath = testStrategyPath;
 
-  const strategyAbsPath = toAbsolutePath(workspaceRoot, testStrategyPath);
-  const strategyExists = await fileExists(strategyAbsPath);
-  if (!strategyExists) {
-    const picked = await vscode.window.showErrorMessage(
-      `テスト戦略ファイルが見つかりません: ${testStrategyPath}`,
-      '設定を開く',
-      'ファイルを開く',
-    );
-    if (picked === '設定を開く') {
-      await vscode.commands.executeCommand('workbench.action.openSettings', 'testgen-agent.testStrategyPath');
+  if (testStrategyPath.length > 0) {
+    const strategyAbsPath = toAbsolutePath(workspaceRoot, testStrategyPath);
+    const strategyExists = await fileExists(strategyAbsPath);
+    if (!strategyExists) {
+      // 警告を出すが、処理は続行（内蔵デフォルトにフォールバック）
+      void vscode.window.showWarningMessage(
+        `テスト戦略ファイルが見つかりません: ${testStrategyPath}（内蔵デフォルトを使用します）`
+      );
+      effectiveTestStrategyPath = ''; // 空にして内蔵デフォルト使用を示す
     }
-    if (picked === 'ファイルを開く') {
-      // 既定パスの場合、まずは想定場所を開く（存在しない場合は作成を促す）
-      const uri = vscode.Uri.file(strategyAbsPath);
-      await vscode.commands.executeCommand('vscode.open', uri);
-    }
-    return undefined;
   }
 
   const agentAvailable = await canSpawnCommand(cursorAgentCommand, ['--version'], workspaceRoot);
@@ -74,7 +66,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
   return {
     workspaceRoot,
     defaultModel,
-    testStrategyPath,
+    testStrategyPath: effectiveTestStrategyPath,
     cursorAgentCommand,
   };
 }

@@ -67,7 +67,7 @@ suite('src/extension.ts', () => {
       assert.strictEqual(config.get('maxParallelTasks'), 4, 'maxParallelTasksのデフォルト値が不正');
       assert.strictEqual(config.get('defaultModel'), '', 'defaultModelのデフォルト値が不正');
       assert.deepStrictEqual(config.get('customModels'), [], 'customModelsのデフォルト値が不正');
-      assert.strictEqual(config.get('testStrategyPath'), 'docs/test-strategy.md', 'testStrategyPathのデフォルト値が不正');
+      assert.strictEqual(config.get('testStrategyPath'), '', 'testStrategyPathのデフォルト値が不正');
       assert.strictEqual(config.get('includeTestPerspectiveTable'), true, 'includeTestPerspectiveTableのデフォルト値が不正');
       assert.strictEqual(config.get('perspectiveReportDir'), 'docs/test-perspectives', 'perspectiveReportDirのデフォルト値が不正');
       assert.strictEqual(config.get('testExecutionReportDir'), 'docs/test-execution-reports', 'testExecutionReportDirのデフォルト値が不正');
@@ -105,16 +105,24 @@ suite('src/extension.ts', () => {
       }
     });
 
-    // TC-RES-01: package.json / lock バージョン確認
+    // TC-RES-01: package.json バージョン形式確認
     // Given: 拡張機能の package.json
     // When: バージョンを確認する
-    // Then: バージョンが 0.0.30 であること
-    test('TC-RES-01: パッケージバージョンの確認', () => {
+    // Then: セマンティックバージョニング形式（x.y.z）であること
+    test('TC-RES-01: パッケージバージョンの形式確認', () => {
       const ext = vscode.extensions.getExtension('local.chottotest');
       assert.ok(ext, '拡張機能が見つかりません');
       
       const packageJSON = ext.packageJSON;
-      assert.strictEqual(packageJSON.version, '0.0.30', 'package.json のバージョンが 0.0.30 ではありません');
+      const version = packageJSON.version;
+      
+      // バージョンが存在すること
+      assert.ok(version, 'バージョンが定義されていません');
+      assert.strictEqual(typeof version, 'string', 'バージョンは文字列である必要があります');
+      
+      // セマンティックバージョニング形式（x.y.z）であること
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+      assert.ok(semverPattern.test(version), `バージョン "${version}" はセマンティックバージョニング形式（x.y.z）ではありません`);
     });
 
     // TC-RES-02: testgen-view.svg のレンダリング

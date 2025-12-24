@@ -1,7 +1,39 @@
 import * as assert from 'assert';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 import * as vscode from 'vscode';
 import { buildTestGenPrompt, buildTestPerspectivePrompt, parseLanguageConfig } from '../../../core/promptBuilder';
+
+/**
+ * テスト用の一時戦略ファイルを作成するヘルパー
+ */
+function createTempStrategyFile(content: string): string {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'testgen-test-'));
+  const tempFile = path.join(tempDir, 'test-strategy.md');
+  fs.writeFileSync(tempFile, content, 'utf-8');
+  return tempFile;
+}
+
+/**
+ * 一時ファイルとディレクトリを削除するヘルパー
+ */
+function cleanupTempFile(filePath: string): void {
+  try {
+    fs.unlinkSync(filePath);
+    fs.rmdirSync(path.dirname(filePath));
+  } catch {
+    // クリーンアップ失敗は無視
+  }
+}
+
+/** 日本語テスト戦略ファイルの内容 */
+const JAPANESE_STRATEGY_CONTENT = `<!-- testgen-agent-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->
+
+## テスト戦略ルール
+
+これはテスト用の日本語戦略ファイルです。
+`;
 
 suite('core/promptBuilder.ts', () => {
   suite('parseLanguageConfig', () => {
@@ -75,15 +107,17 @@ suite('core/promptBuilder.ts', () => {
         return;
       }
 
-      const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
-      const options = {
-        workspaceRoot,
-        targetLabel: 'テスト対象',
-        targetPaths: ['src/test.ts'],
-        testStrategyPath,
-      };
+      // 一時ファイルを作成
+      const testStrategyPath = createTempStrategyFile(JAPANESE_STRATEGY_CONTENT);
 
       try {
+        const options = {
+          workspaceRoot,
+          targetLabel: 'テスト対象',
+          targetPaths: ['src/test.ts'],
+          testStrategyPath,
+        };
+
         const result = await buildTestGenPrompt(options);
 
         assert.ok(result.prompt.length > 0, 'プロンプトが生成されている');
@@ -100,12 +134,8 @@ suite('core/promptBuilder.ts', () => {
         assert.strictEqual(result.languages.answerLanguage, 'ja');
         assert.strictEqual(result.languages.commentLanguage, 'ja');
         assert.strictEqual(result.languages.perspectiveTableLanguage, 'ja');
-      } catch (err) {
-        // ファイルが存在しない場合はスキップ
-        if (err instanceof Error && err.message.includes('ENOENT')) {
-          return;
-        }
-        throw err;
+      } finally {
+        cleanupTempFile(testStrategyPath);
       }
     });
 
@@ -119,26 +149,19 @@ suite('core/promptBuilder.ts', () => {
         return;
       }
 
-      const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
+      // 内蔵デフォルト戦略を使用（空文字）
       const options = {
         workspaceRoot,
         targetLabel: 'テスト対象',
         targetPaths: ['src/file1.ts', 'src/file2.ts', 'src/file3.ts'],
-        testStrategyPath,
+        testStrategyPath: '',
       };
 
-      try {
-        const result = await buildTestGenPrompt(options);
+      const result = await buildTestGenPrompt(options);
 
-        assert.ok(result.prompt.includes('src/file1.ts'), 'file1が含まれている');
-        assert.ok(result.prompt.includes('src/file2.ts'), 'file2が含まれている');
-        assert.ok(result.prompt.includes('src/file3.ts'), 'file3が含まれている');
-      } catch (err) {
-        if (err instanceof Error && err.message.includes('ENOENT')) {
-          return;
-        }
-        throw err;
-      }
+      assert.ok(result.prompt.includes('src/file1.ts'), 'file1が含まれている');
+      assert.ok(result.prompt.includes('src/file2.ts'), 'file2が含まれている');
+      assert.ok(result.prompt.includes('src/file3.ts'), 'file3が含まれている');
     });
 
     // Given: 空のtargetPaths配列
@@ -151,104 +174,83 @@ suite('core/promptBuilder.ts', () => {
         return;
       }
 
-      const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
+      // 内蔵デフォルト戦略を使用（空文字）
       const options = {
         workspaceRoot,
         targetLabel: 'テスト対象',
         targetPaths: [],
-        testStrategyPath,
+        testStrategyPath: '',
       };
 
-      try {
-        const result = await buildTestGenPrompt(options);
+      const result = await buildTestGenPrompt(options);
 
-        assert.ok(result.prompt.length > 0, 'プロンプトが生成されている');
-        // 対象ファイルリストは空だが、プロンプト自体は生成される
-        assert.ok(result.prompt.includes('対象ファイル:'), '対象ファイルセクションが含まれている');
-      } catch (err) {
-        if (err instanceof Error && err.message.includes('ENOENT')) {
-          return;
-        }
-        throw err;
-      }
+      assert.ok(result.prompt.length > 0, 'プロンプトが生成されている');
+      // 対象ファイルリストは空だが、プロンプト自体は生成される
+      assert.ok(result.prompt.includes('対象ファイル:'), '対象ファイルセクションが含まれている');
     });
 
     // TC-PB-01: enablePreTestCheck=true (Options)
     test('TC-PB-01: enablePreTestCheck=true かつコマンドありの場合、プロンプトにPreTestCheckフローが含まれる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) { assert.fail('No workspace'); return; }
-      const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
       
-      // Options enablePreTestCheck: true
+      // 内蔵デフォルト戦略を使用（空文字）
       const options = {
         workspaceRoot,
         targetLabel: 'Target',
         targetPaths: ['src/t.ts'],
-        testStrategyPath,
+        testStrategyPath: '',
         enablePreTestCheck: true,
         preTestCheckCommand: 'npm run lint'
       };
 
-      try {
-        const result = await buildTestGenPrompt(options);
-        assert.ok(result.prompt.includes('型チェック/Lint'), '型チェックフローへの言及が含まれる');
-        assert.ok(result.prompt.includes('npm run lint'), 'コマンドが含まれる');
-        assert.ok(result.prompt.includes('許可されたコマンドのみ実行可能'), 'ツール制約が含まれる');
-      } catch (err) {
-         if (err instanceof Error && err.message.includes('ENOENT')) return;
-         throw err;
-      }
+      const result = await buildTestGenPrompt(options);
+      assert.ok(result.prompt.includes('型チェック/Lint'), '型チェックフローへの言及が含まれる');
+      assert.ok(result.prompt.includes('npm run lint'), 'コマンドが含まれる');
+      assert.ok(result.prompt.includes('許可されたコマンドのみ実行可能'), 'ツール制約が含まれる');
     });
 
     // TC-PB-02: enablePreTestCheck=false (Options)
     test('TC-PB-02: enablePreTestCheck=false の場合、標準フローになる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) { assert.fail('No workspace'); return; }
-      const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
       
+      // 内蔵デフォルト戦略を使用（空文字）
       const options = {
         workspaceRoot,
         targetLabel: 'Target',
         targetPaths: ['src/t.ts'],
-        testStrategyPath,
+        testStrategyPath: '',
         enablePreTestCheck: false
       };
 
-      try {
-        const result = await buildTestGenPrompt(options);
-        assert.ok(!result.prompt.includes('型チェック/Lint'), '型チェックフローは含まれない');
-        assert.ok(result.prompt.includes('shell（コマンド実行）ツールは使用禁止'), '標準のツール制約が含まれる');
-      } catch (err) {
-         if (err instanceof Error && err.message.includes('ENOENT')) return;
-         throw err;
-      }
+      const result = await buildTestGenPrompt(options);
+      assert.ok(!result.prompt.includes('型チェック/Lint'), '型チェックフローは含まれない');
+      assert.ok(result.prompt.includes('shell（コマンド実行）ツールは使用禁止'), '標準のツール制約が含まれる');
     });
 
     // TC-PB-03: Options Priority (True > Config False)
     test('TC-PB-03: Optionsでtrueを指定すればConfigがfalseでも有効になる', async () => {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!workspaceRoot) return;
-        const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
 
         // Configをfalseに設定
         const config = vscode.workspace.getConfiguration('testgen-agent');
         await config.update('enablePreTestCheck', false, vscode.ConfigurationTarget.Global);
 
         try {
+            // 内蔵デフォルト戦略を使用（空文字）
             const options = {
                 workspaceRoot,
                 targetLabel: 'Target',
                 targetPaths: ['src/t.ts'],
-                testStrategyPath,
+                testStrategyPath: '',
                 enablePreTestCheck: true, // Force Enable
                 preTestCheckCommand: 'npm run check'
             };
             const result = await buildTestGenPrompt(options);
             assert.ok(result.prompt.includes('型チェック/Lint'), 'Optionsが優先され有効になる');
             assert.ok(result.prompt.includes('npm run check'), 'コマンドが含まれる');
-        } catch (err) {
-             if (err instanceof Error && err.message.includes('ENOENT')) return;
-             throw err;
         } finally {
             await config.update('enablePreTestCheck', undefined, vscode.ConfigurationTarget.Global);
         }
@@ -258,25 +260,22 @@ suite('core/promptBuilder.ts', () => {
     test('TC-PB-04: Optionsでfalseを指定すればConfigがtrueでも無効になる', async () => {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!workspaceRoot) return;
-        const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
 
         // Configをtrueに設定
         const config = vscode.workspace.getConfiguration('testgen-agent');
         await config.update('enablePreTestCheck', true, vscode.ConfigurationTarget.Global);
 
         try {
+            // 内蔵デフォルト戦略を使用（空文字）
             const options = {
                 workspaceRoot,
                 targetLabel: 'Target',
                 targetPaths: ['src/t.ts'],
-                testStrategyPath,
+                testStrategyPath: '',
                 enablePreTestCheck: false // Force Disable
             };
             const result = await buildTestGenPrompt(options);
             assert.ok(!result.prompt.includes('型チェック/Lint'), 'Optionsが優先され無効になる');
-        } catch (err) {
-             if (err instanceof Error && err.message.includes('ENOENT')) return;
-             throw err;
         } finally {
             await config.update('enablePreTestCheck', undefined, vscode.ConfigurationTarget.Global);
         }
@@ -286,55 +285,44 @@ suite('core/promptBuilder.ts', () => {
     test('TC-PB-05: コマンドが空文字の場合、flag=trueでも無効になる', async () => {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!workspaceRoot) return;
-        const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
 
+        // 内蔵デフォルト戦略を使用（空文字）
         const options = {
             workspaceRoot,
             targetLabel: 'Target',
             targetPaths: ['src/t.ts'],
-            testStrategyPath,
+            testStrategyPath: '',
             enablePreTestCheck: true,
             preTestCheckCommand: '' // Empty
         };
 
-        try {
-            const result = await buildTestGenPrompt(options);
-            assert.ok(!result.prompt.includes('型チェック/Lint'), 'コマンドが空なら無効になる');
-        } catch (err) {
-             if (err instanceof Error && err.message.includes('ENOENT')) return;
-             throw err;
-        }
+        const result = await buildTestGenPrompt(options);
+        assert.ok(!result.prompt.includes('型チェック/Lint'), 'コマンドが空なら無効になる');
     });
 
     // TC-PB-06: Whitespace Command -> Disable
     test('TC-PB-06: コマンドが空白のみの場合、無効になる', async () => {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!workspaceRoot) return;
-        const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
 
+        // 内蔵デフォルト戦略を使用（空文字）
         const options = {
             workspaceRoot,
             targetLabel: 'Target',
             targetPaths: ['src/t.ts'],
-            testStrategyPath,
+            testStrategyPath: '',
             enablePreTestCheck: true,
             preTestCheckCommand: '   ' // Whitespace
         };
 
-        try {
-            const result = await buildTestGenPrompt(options);
-            assert.ok(!result.prompt.includes('型チェック/Lint'), 'コマンドが空白なら無効になる');
-        } catch (err) {
-             if (err instanceof Error && err.message.includes('ENOENT')) return;
-             throw err;
-        }
+        const result = await buildTestGenPrompt(options);
+        assert.ok(!result.prompt.includes('型チェック/Lint'), 'コマンドが空白なら無効になる');
     });
 
     // TC-PB-07: Option undefined -> Use Config
     test('TC-PB-07: Optionsで未指定(undefined)の場合、Configの値が使用される', async () => {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!workspaceRoot) return;
-        const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
 
         // Config setup
         const config = vscode.workspace.getConfiguration('testgen-agent');
@@ -342,20 +330,18 @@ suite('core/promptBuilder.ts', () => {
         await config.update('preTestCheckCommand', 'npm run config-cmd', vscode.ConfigurationTarget.Global);
 
         try {
+            // 内蔵デフォルト戦略を使用（空文字）
             const options = {
                 workspaceRoot,
                 targetLabel: 'Target',
                 targetPaths: ['src/t.ts'],
-                testStrategyPath,
+                testStrategyPath: '',
                 enablePreTestCheck: undefined, // Undefined
                 preTestCheckCommand: undefined // Undefined
             };
             const result = await buildTestGenPrompt(options);
             assert.ok(result.prompt.includes('型チェック/Lint'), 'Configの値(true)が使われる');
             assert.ok(result.prompt.includes('npm run config-cmd'), 'Configのコマンドが使われる');
-        } catch (err) {
-             if (err instanceof Error && err.message.includes('ENOENT')) return;
-             throw err;
         } finally {
             await config.update('enablePreTestCheck', undefined, vscode.ConfigurationTarget.Global);
             await config.update('preTestCheckCommand', undefined, vscode.ConfigurationTarget.Global);
@@ -364,8 +350,8 @@ suite('core/promptBuilder.ts', () => {
 
     // Given: 存在しないtestStrategyPath
     // When: buildTestGenPromptを呼び出す
-    // Then: エラーが投げられる
-    test('TC-A-01: 存在しないtestStrategyPath', async () => {
+    // Then: フォールバックで内蔵デフォルト戦略が使用される
+    test('TC-A-01: 存在しないtestStrategyPath（フォールバック動作）', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) {
         assert.fail('ワークスペースが開かれていません');
@@ -379,13 +365,10 @@ suite('core/promptBuilder.ts', () => {
         testStrategyPath: path.join(workspaceRoot, 'non-existent-file.md'),
       };
 
-      try {
-        await buildTestGenPrompt(options);
-        assert.fail('エラーが投げられるべき');
-      } catch (err) {
-        assert.ok(err instanceof Error, 'エラーが投げられている');
-        // vscode.workspace.fs.readFileはFileSystemErrorを投げる
-      }
+      // 存在しないファイルの場合はフォールバックで内蔵デフォルトを使用
+      const result = await buildTestGenPrompt(options);
+      assert.ok(result.prompt.includes('Test Strategy Rules'), '内蔵デフォルト戦略が含まれている');
+      assert.strictEqual(result.languages.answerLanguage, 'en', '英語の言語設定が返される');
     });
 
     // Given: 相対パスのtestStrategyPath
@@ -398,21 +381,28 @@ suite('core/promptBuilder.ts', () => {
         return;
       }
 
-      const options = {
-        workspaceRoot,
-        targetLabel: 'テスト対象',
-        targetPaths: ['src/test.ts'],
-        testStrategyPath: 'docs/test-strategy.md',
-      };
+      // 一時ディレクトリに戦略ファイルを作成
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'testgen-rel-'));
+      const relPath = 'custom/strategy.md';
+      const fullPath = path.join(tempDir, relPath);
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, JAPANESE_STRATEGY_CONTENT, 'utf-8');
 
       try {
-        await buildTestGenPrompt(options);
+        const options = {
+          workspaceRoot: tempDir,  // 一時ディレクトリをワークスペースルートとして扱う
+          targetLabel: 'テスト対象',
+          targetPaths: ['src/test.ts'],
+          testStrategyPath: relPath,  // 相対パス
+        };
+
+        const result = await buildTestGenPrompt(options);
         // エラーが投げられなければ成功（パスが正しく解決された）
-      } catch (err) {
-        if (err instanceof Error && err.message.includes('ENOENT')) {
-          return;
-        }
-        throw err;
+        assert.ok(result.prompt.includes('テスト戦略ルール'), '相対パスが解決され戦略が読み込まれた');
+      } finally {
+        fs.unlinkSync(fullPath);
+        fs.rmdirSync(path.dirname(fullPath));
+        fs.rmdirSync(tempDir);
       }
     });
 
@@ -426,22 +416,22 @@ suite('core/promptBuilder.ts', () => {
         return;
       }
 
-      const absolutePath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
-      const options = {
-        workspaceRoot,
-        targetLabel: 'テスト対象',
-        targetPaths: ['src/test.ts'],
-        testStrategyPath: absolutePath,
-      };
+      // 一時ファイルを作成（絶対パス）
+      const absolutePath = createTempStrategyFile(JAPANESE_STRATEGY_CONTENT);
 
       try {
-        await buildTestGenPrompt(options);
+        const options = {
+          workspaceRoot,
+          targetLabel: 'テスト対象',
+          targetPaths: ['src/test.ts'],
+          testStrategyPath: absolutePath,
+        };
+
+        const result = await buildTestGenPrompt(options);
         // エラーが投げられなければ成功（絶対パスが正しく使用された）
-      } catch (err) {
-        if (err instanceof Error && err.message.includes('ENOENT')) {
-          return;
-        }
-        throw err;
+        assert.ok(result.prompt.includes('テスト戦略ルール'), '絶対パスで戦略が読み込まれた');
+      } finally {
+        cleanupTempFile(absolutePath);
       }
     });
   });
@@ -457,25 +447,149 @@ suite('core/promptBuilder.ts', () => {
         return;
       }
 
-      const testStrategyPath = path.join(workspaceRoot, 'docs', 'test-strategy.md');
+      // 内蔵デフォルト戦略を使用（空文字）
+      const result = await buildTestPerspectivePrompt({
+        workspaceRoot,
+        targetLabel: 'テスト対象',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '',
+        referenceText: 'diff snippet',
+      });
+
+      assert.ok(result.prompt.includes('<!-- BEGIN TEST PERSPECTIVES -->'));
+      assert.ok(result.prompt.includes('<!-- END TEST PERSPECTIVES -->'));
+      assert.ok(result.prompt.includes('| Case ID |'), 'テーブルヘッダが含まれる');
+    });
+  });
+
+  suite('デフォルト戦略フォールバック', () => {
+    // Given: testStrategyPath が空文字
+    // When: buildTestGenPrompt を呼び出す
+    // Then: 内蔵デフォルト戦略が使用され、英語の言語設定が返される
+    test('TC-PB-01: 引数 testStrategyPath が空文字', async () => {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('ワークスペースが開かれていません');
+        return;
+      }
+
+      const options = {
+        workspaceRoot,
+        targetLabel: 'テスト対象',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '', // 空文字
+      };
+
+      const result = await buildTestGenPrompt(options);
+
+      assert.ok(result.prompt.length > 0, 'プロンプトが生成されている');
+      assert.ok(result.prompt.includes('Test Strategy Rules'), '内蔵デフォルト戦略が含まれている');
+      assert.ok(result.prompt.includes('MANDATORY'), '内蔵デフォルト戦略の内容が含まれている');
+      assert.strictEqual(result.languages.answerLanguage, 'en', '英語の言語設定が返される');
+      assert.strictEqual(result.languages.commentLanguage, 'en', '英語の言語設定が返される');
+      assert.strictEqual(result.languages.perspectiveTableLanguage, 'en', '英語の言語設定が返される');
+    });
+
+    // Given: testStrategyPath が空白文字のみ
+    // When: buildTestGenPrompt を呼び出す
+    // Then: TC-PB-01 と同様にデフォルト値を返す
+    test('TC-PB-02: 引数 testStrategyPath が空白文字のみ', async () => {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('ワークスペースが開かれていません');
+        return;
+      }
+
+      const options = {
+        workspaceRoot,
+        targetLabel: 'テスト対象',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '   ', // 空白
+      };
+
+      const result = await buildTestGenPrompt(options);
+
+      assert.ok(result.prompt.includes('Test Strategy Rules'), '内蔵デフォルト戦略が含まれている');
+      assert.strictEqual(result.languages.answerLanguage, 'en', '英語の言語設定が返される');
+    });
+
+    // Given: 存在しないファイルパス
+    // When: buildTestGenPrompt を呼び出す
+    // Then: エラーにならず、内蔵デフォルト戦略が使用される
+    test('TC-PB-03: 引数 testStrategyPath が存在しないファイルパス', async () => {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('ワークスペースが開かれていません');
+        return;
+      }
+
+      const options = {
+        workspaceRoot,
+        targetLabel: 'テスト対象',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: path.join(workspaceRoot, 'non-existent-strategy.md'),
+      };
+
+      const result = await buildTestGenPrompt(options);
+
+      assert.ok(result.prompt.length > 0, 'プロンプトが生成されている');
+      assert.ok(result.prompt.includes('Test Strategy Rules'), '内蔵デフォルト戦略が含まれている');
+      assert.strictEqual(result.languages.answerLanguage, 'en', '英語の言語設定が返される');
+    });
+
+    // Given: 存在する外部ファイル
+    // When: buildTestGenPrompt を呼び出す
+    // Then: 外部ファイルの内容が使用される
+    test('TC-PB-04: 引数 testStrategyPath が存在するファイルパス', async () => {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('ワークスペースが開かれていません');
+        return;
+      }
+
+      // 一時ファイルを作成
+      const testStrategyPath = createTempStrategyFile(JAPANESE_STRATEGY_CONTENT);
+
       try {
-        const result = await buildTestPerspectivePrompt({
+        const options = {
           workspaceRoot,
           targetLabel: 'テスト対象',
           targetPaths: ['src/test.ts'],
           testStrategyPath,
-          referenceText: 'diff snippet',
-        });
+        };
 
-        assert.ok(result.prompt.includes('<!-- BEGIN TEST PERSPECTIVES -->'));
-        assert.ok(result.prompt.includes('<!-- END TEST PERSPECTIVES -->'));
-        assert.ok(result.prompt.includes('| Case ID |'), 'テーブルヘッダが含まれる');
-      } catch (err) {
-        if (err instanceof Error && err.message.includes('ENOENT')) {
-          return;
-        }
-        throw err;
+        const result = await buildTestGenPrompt(options);
+
+        assert.ok(result.prompt.length > 0, 'プロンプトが生成されている');
+        // 外部ファイルが存在する場合は、その内容が使用される
+        assert.ok(result.prompt.includes('テスト戦略ルール'), '外部ファイルの戦略ルールが含まれている');
+        assert.strictEqual(result.languages.answerLanguage, 'ja', '日本語の言語設定が返される');
+      } finally {
+        cleanupTempFile(testStrategyPath);
       }
     });
+
+    // Given: 引数 testStrategyPath がNULL (型定義上不可だが)
+    // When: buildTestGenPrompt を呼び出す
+    // Then: 空文字同様に振る舞うか、安全にデフォルトを返す
+    test('TC-PB-05: 引数 testStrategyPath がNULL', async () => {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          assert.fail('ワークスペースが開かれていません');
+          return;
+        }
+  
+        const options = {
+          workspaceRoot,
+          targetLabel: 'テスト対象',
+          targetPaths: ['src/test.ts'],
+          testStrategyPath: null as unknown as string, // Force null
+        };
+  
+        const result = await buildTestGenPrompt(options);
+  
+        assert.ok(result.prompt.includes('Test Strategy Rules'), '内蔵デフォルト戦略が含まれている');
+        assert.strictEqual(result.languages.answerLanguage, 'en', '英語の言語設定が返される');
+      });
   });
 });

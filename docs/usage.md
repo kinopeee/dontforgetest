@@ -6,7 +6,6 @@
 
 - **ワークスペースをフォルダとして開いている**（単一ファイルだけ開いている状態は不可）
 - **`cursor-agent` が実行できる**（PATHに入っている、または設定でパス指定）
-- **テスト戦略ファイルが存在する**（既定: `docs/test-strategy.md`）
 - コミット差分系を使う場合は **Gitリポジトリである** こと
 
 > **注意（重要）**: 本拡張は `cursor-agent` を **`--force` で実行**するため、生成結果は**実ファイルに書き込まれます**。  
@@ -35,11 +34,35 @@ VS Code / Cursor の設定（Settings）で `testgen-agent.*` を検索します
 
 - **`testgen-agent.cursorAgentPath`**: `cursor-agent` の実行パス（未指定なら PATH から解決）
 - **`testgen-agent.defaultModel`**: `cursor-agent --model` に渡すモデル（空なら自動）
-- **`testgen-agent.testStrategyPath`**: テスト戦略ファイルのパス（既定: `docs/test-strategy.md`）
+- **`testgen-agent.testStrategyPath`**: テスト戦略ファイルのパス（空なら内蔵デフォルトを使用）
 - **`testgen-agent.includeTestPerspectiveTable`**: テスト生成前にテスト観点表を生成して保存するか（既定: true）
 - **`testgen-agent.perspectiveReportDir`**: 観点表（自動生成）の保存先（既定: `docs/test-perspectives`）
 - **`testgen-agent.testCommand`**: 生成後に実行するテストコマンド（既定: `npm test`、空ならスキップ）
 - **`testgen-agent.testExecutionReportDir`**: テスト実行レポート（自動生成）の保存先（既定: `docs/test-execution-reports`）
+
+### テスト戦略ファイルについて
+
+テスト戦略ファイルは、テスト生成時のルール（観点表の形式、Given/When/Thenコメントの必須化など）を定義します。
+
+- **設定が空の場合**: 拡張機能に内蔵されたデフォルト戦略（英語版）が自動的に使用されます
+- **カスタマイズしたい場合**: 任意の `.md` ファイルを作成し、`testgen-agent.testStrategyPath` にパスを指定してください
+
+#### 内蔵デフォルト戦略の特徴
+
+- 言語: 英語（`answerLanguage`, `commentLanguage`, `perspectiveTableLanguage` すべて英語）
+- ソースコード: `src/core/defaultTestStrategy.ts` に定義
+
+#### カスタム戦略ファイルの例
+
+日本語で出力したい場合は、ファイル先頭に以下のような設定コメントを記述します：
+
+```markdown
+<!-- testgen-agent-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->
+
+## テスト戦略ルール
+
+（ここに独自のルールを記述）
+```
 
 ## 基本操作（QuickPick推奨）
 
@@ -93,10 +116,10 @@ VS Code / Cursor の設定（Settings）で `testgen-agent.*` を検索します
 - `cursor-agent` をインストール/セットアップする
 - `testgen-agent.cursorAgentPath` にフルパスを設定する
 
-### `テスト戦略ファイルが見つかりません`
+### テスト戦略ファイルが読み込めない
 
-- `testgen-agent.testStrategyPath` を正しいパスに設定する
-- 既定の `docs/test-strategy.md` がワークスペースに存在するか確認
+- 指定したファイルが存在しない場合、内蔵デフォルト戦略が自動的に使用されます
+- カスタム戦略を使いたい場合は、`testgen-agent.testStrategyPath` に正しいパスを設定してください
 
 ### `Git の HEAD が解決できません`
 
@@ -108,5 +131,5 @@ VS Code / Cursor の設定（Settings）で `testgen-agent.*` を検索します
 
 ## 参考
 
-- テスト戦略: `docs/test-strategy.md`
+- 内蔵デフォルト戦略: `src/core/defaultTestStrategy.ts`
 

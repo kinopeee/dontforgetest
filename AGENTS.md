@@ -67,7 +67,7 @@ npm run lint
 
 ## テスト作成ガイドライン
 
-テストコードを生成・作成・更新する際は、必ず [`docs/test-strategy.md`](docs/test-strategy.md) を参照すること。
+テストコードを生成・作成・更新する際は、内蔵デフォルト戦略（[`src/core/defaultTestStrategy.ts`](src/core/defaultTestStrategy.ts)）に従うこと。
 
 ### 主要なルール
 
@@ -77,7 +77,7 @@ npm run lint
 4. **境界値テスト**: 0 / 最小値 / 最大値 / ±1 / 空 / NULL を考慮
 5. **例外・エラー検証**: 例外の型とメッセージを明示的に検証
 
-詳細は `docs/test-strategy.md` を確認すること。
+詳細は `src/core/defaultTestStrategy.ts` を確認すること。
 
 ## 重要な注意点
 

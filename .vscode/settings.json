@@ -1,3 +1,4 @@
 {
-    "testgen-agent.defaultModel": ""
+    "testgen-agent.defaultModel": "",
+    "testgen-agent.testStrategyPath": ""
 }
