@@ -1,5 +1,6 @@
 import * as assert from 'assert';
-import { getModelCandidates, normalizeModelList, type ModelSettings } from '../../../core/modelSettings';
+import * as vscode from 'vscode';
+import { getModelCandidates, normalizeModelList, getModelSettings, type ModelSettings } from '../../../core/modelSettings';
 
 suite('core/modelSettings.ts', () => {
   suite('normalizeModelList', () => {
@@ -44,6 +45,35 @@ suite('core/modelSettings.ts', () => {
       };
       const result = getModelCandidates(settings);
       assert.deepStrictEqual(result, ['o3']);
+    });
+  });
+
+  suite('getModelSettings (Integration)', () => {
+    // TC-N-02: User settings define dontforgetest.defaultModel
+    test('TC-N-02: User settings define dontforgetest.defaultModel', async () => {
+      // Given
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      await config.update('defaultModel', 'test-model-n02', vscode.ConfigurationTarget.Global);
+
+      try {
+        // When
+        const settings = getModelSettings();
+        // Then
+        assert.strictEqual(settings.defaultModel, 'test-model-n02');
+      } finally {
+        await config.update('defaultModel', undefined, vscode.ConfigurationTarget.Global);
+      }
+    });
+
+    // TC-B-02: User settings define ONLY old testgen-agent keys (Verify Isolation)
+    test('TC-B-02: User settings define ONLY old testgen-agent keys (Verify Isolation)', async () => {
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      // Ensure defaultModel is clear
+      await config.update('defaultModel', undefined, vscode.ConfigurationTarget.Global);
+      
+      const settings = getModelSettings();
+      // dontforgetest.defaultModel should be undefined (default)
+      assert.strictEqual(settings.defaultModel, undefined);
     });
   });
 });

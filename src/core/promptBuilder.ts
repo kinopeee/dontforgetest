@@ -30,7 +30,7 @@ export interface BuildPerspectivePromptOptions extends BuildPromptOptions {
 /**
  * テスト生成用のプロンプトを構築する。
  * - docs/test-strategy.md を読み取り、ルールをプロンプトへ注入する
- * - 先頭の testgen-agent-config コメントから出力言語を解決する
+ * - 先頭の dontforgetest-config コメントから出力言語を解決する
  */
 export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{ prompt: string; languages: TestGenLanguageConfig }> {
   const { strategyText, languages } = await readStrategyAndLanguages(options.workspaceRoot, options.testStrategyPath);
@@ -40,7 +40,7 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     .join('\n');
 
   // 型チェック/Lintの設定（オプション引数 > 設定 > デフォルト）
-  const config = vscode.workspace.getConfiguration('testgen-agent');
+  const config = vscode.workspace.getConfiguration('dontforgetest');
   const enablePreTestCheck = options.enablePreTestCheck ?? config.get<boolean>('enablePreTestCheck', true);
   const preTestCheckCommand = options.preTestCheckCommand?.trim() ?? (config.get<string>('preTestCheckCommand', 'npm run compile') ?? 'npm run compile').trim();
 
@@ -261,11 +261,11 @@ async function readStrategyAndLanguages(
  * docs/test-strategy.md の先頭コメントから出力言語を抽出する。
  *
  * 例:
- * <!-- testgen-agent-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->
+ * <!-- dontforgetest-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->
  */
 export function parseLanguageConfig(strategyText: string): TestGenLanguageConfig | undefined {
   const firstLine = strategyText.split('\n')[0] ?? '';
-  const match = firstLine.match(/<!--\s*testgen-agent-config:\s*(\{[\s\S]*\})\s*-->/);
+  const match = firstLine.match(/<!--\s*dontforgetest-config:\s*(\{[\s\S]*\})\s*-->/);
   if (!match || !match[1]) {
     return undefined;
   }

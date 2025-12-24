@@ -7,12 +7,17 @@ suite('core/preflight.ts', () => {
     // Given: 正常な環境（ワークスペース開いている、ファイル存在、コマンド利用可能）
     // When: ensurePreflightを呼び出す
     // Then: PreflightOkが返される
-    test('TC-N-01: 正常な環境（ワークスペース開いている、ファイル存在、コマンド利用可能）', async () => {
+    test('TC-N-01: 正常な環境 (ensurePreflight / getConfig checks)', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) {
         // ワークスペースが開かれていない場合はスキップ
         return;
       }
+
+      // Check config reading specifically (TC-N-01 additional check)
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      const cursorAgentPath = config.get('cursorAgentPath');
+      assert.strictEqual(cursorAgentPath, '', 'Default path should be empty');
 
       // このテストは実際の環境に依存するため、条件付きで実行
       // cursor-agentがインストールされていない場合はスキップ
@@ -116,7 +121,7 @@ suite('core/preflight.ts', () => {
         return;
       }
 
-      const config = vscode.workspace.getConfiguration('testgen-agent');
+      const config = vscode.workspace.getConfiguration('dontforgetest');
       const originalPath = config.get<string>('testStrategyPath', '');
       try {
         await config.update('testStrategyPath', '', vscode.ConfigurationTarget.Workspace);
@@ -142,7 +147,7 @@ suite('core/preflight.ts', () => {
         return;
       }
 
-      const config = vscode.workspace.getConfiguration('testgen-agent');
+      const config = vscode.workspace.getConfiguration('dontforgetest');
       const originalPath = config.get<string>('testStrategyPath', '');
       // 確実に存在するファイルとして package.json を使用（テスト用）
       // ※実際には .md ファイルを想定しているが、存在確認ロジックのテストとしては任意のファイルで可
@@ -173,7 +178,7 @@ suite('core/preflight.ts', () => {
       }
 
       // 存在しないファイルパスを設定
-      const config = vscode.workspace.getConfiguration('testgen-agent');
+      const config = vscode.workspace.getConfiguration('dontforgetest');
       const originalPath = config.get<string>('testStrategyPath', '');
       try {
         await config.update('testStrategyPath', 'non-existent-strategy.md', vscode.ConfigurationTarget.Workspace);
@@ -204,7 +209,7 @@ suite('core/preflight.ts', () => {
         return;
       }
 
-      const config = vscode.workspace.getConfiguration('testgen-agent');
+      const config = vscode.workspace.getConfiguration('dontforgetest');
       const originalPath = config.get<string>('testStrategyPath', '');
       try {
         await config.update('testStrategyPath', '   ', vscode.ConfigurationTarget.Workspace);

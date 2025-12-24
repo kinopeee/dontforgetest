@@ -28,7 +28,7 @@ function cleanupTempFile(filePath: string): void {
 }
 
 /** 日本語テスト戦略ファイルの内容 */
-const JAPANESE_STRATEGY_CONTENT = `<!-- testgen-agent-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->
+const JAPANESE_STRATEGY_CONTENT = `<!-- dontforgetest-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->
 
 ## テスト戦略ルール
 
@@ -37,11 +37,11 @@ const JAPANESE_STRATEGY_CONTENT = `<!-- testgen-agent-config: {"answerLanguage":
 
 suite('core/promptBuilder.ts', () => {
   suite('parseLanguageConfig', () => {
-    // Given: 正常なtestgen-agent-configを含むテキスト
+    // Given: 正常なdontforgetest-configを含むテキスト
     // When: parseLanguageConfigを呼び出す
     // Then: 言語設定が正しく抽出される
-    test('TC-N-01: 正常な設定ファイル（testgen-agent-configあり）', () => {
-      const text = '<!-- testgen-agent-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->\n\n## テスト戦略ルール';
+    test('TC-N-01: 正常な設定ファイル（dontforgetest-configあり）', () => {
+      const text = '<!-- dontforgetest-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->\n\n## テスト戦略ルール';
       const result = parseLanguageConfig(text);
 
       assert.ok(result !== undefined, '結果が定義されている');
@@ -50,41 +50,48 @@ suite('core/promptBuilder.ts', () => {
       assert.strictEqual(result?.perspectiveTableLanguage, 'ja');
     });
 
-    // Given: testgen-agent-configを含まないテキスト
+    // Given: dontforgetest-configを含まないテキスト
     // When: parseLanguageConfigを呼び出す
     // Then: undefinedが返される
-    test('TC-N-02: 設定ファイルなし（testgen-agent-configなし）', () => {
+    test('TC-N-02: 設定ファイルなし（dontforgetest-configなし）', () => {
       const text = '## テスト戦略ルール\n\nルール1: ...';
       const result = parseLanguageConfig(text);
 
       assert.strictEqual(result, undefined);
     });
 
-    // Given: 不正なJSON形式のtestgen-agent-config
+    // Given: 不正なJSON形式のdontforgetest-config
     // When: parseLanguageConfigを呼び出す
     // Then: undefinedが返される
-    test('TC-A-02: 不正なJSON形式のtestgen-agent-config', () => {
-      const text = '<!-- testgen-agent-config: {invalid json} -->';
+    test('TC-A-02: 不正なJSON形式のdontforgetest-config', () => {
+      const text = '<!-- dontforgetest-config: {invalid json} -->';
       const result = parseLanguageConfig(text);
 
       assert.strictEqual(result, undefined);
     });
 
-    // Given: testgen-agent-configに必須フィールドが欠如
+    // Given: dontforgetest-configに必須フィールドが欠如
     // When: parseLanguageConfigを呼び出す
     // Then: undefinedが返される
-    test('TC-A-03: testgen-agent-configに必須フィールドが欠如', () => {
-      const text1 = '<!-- testgen-agent-config: {"answerLanguage":"ja"} -->';
+    test('TC-A-03: dontforgetest-configに必須フィールドが欠如', () => {
+      const text1 = '<!-- dontforgetest-config: {"answerLanguage":"ja"} -->';
       const result1 = parseLanguageConfig(text1);
       assert.strictEqual(result1, undefined, 'commentLanguageが欠如');
 
-      const text2 = '<!-- testgen-agent-config: {"answerLanguage":"ja","commentLanguage":"ja"} -->';
+      const text2 = '<!-- dontforgetest-config: {"answerLanguage":"ja","commentLanguage":"ja"} -->';
       const result2 = parseLanguageConfig(text2);
       assert.strictEqual(result2, undefined, 'perspectiveTableLanguageが欠如');
 
-      const text3 = '<!-- testgen-agent-config: {} -->';
+      const text3 = '<!-- dontforgetest-config: {} -->';
       const result3 = parseLanguageConfig(text3);
       assert.strictEqual(result3, undefined, 'すべてのフィールドが欠如');
+    });
+
+    // TC-B-03: Target file contains ONLY old `<!-- testgen-agent-config: ... -->`
+    test('TC-B-03: 旧形式の testgen-agent-config は無視される', () => {
+      const text = '<!-- testgen-agent-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->';
+      const result = parseLanguageConfig(text);
+      assert.strictEqual(result, undefined, '旧形式のタグは無視され、undefinedが返るべき');
     });
 
     // Given: 空の文字列
@@ -100,7 +107,7 @@ suite('core/promptBuilder.ts', () => {
     // Given: 正常なワークスペースと設定ファイル
     // When: buildTestGenPromptを呼び出す
     // Then: プロンプトが正しく構築される
-    test('TC-N-01: 正常な設定ファイル（testgen-agent-configあり）', async () => {
+    test('TC-N-01: 正常な設定ファイル（dontforgetest-configあり）', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) {
         assert.fail('ワークスペースが開かれていません');
@@ -235,7 +242,7 @@ suite('core/promptBuilder.ts', () => {
         if (!workspaceRoot) return;
 
         // Configをfalseに設定
-        const config = vscode.workspace.getConfiguration('testgen-agent');
+        const config = vscode.workspace.getConfiguration('dontforgetest');
         await config.update('enablePreTestCheck', false, vscode.ConfigurationTarget.Global);
 
         try {
@@ -262,7 +269,7 @@ suite('core/promptBuilder.ts', () => {
         if (!workspaceRoot) return;
 
         // Configをtrueに設定
-        const config = vscode.workspace.getConfiguration('testgen-agent');
+        const config = vscode.workspace.getConfiguration('dontforgetest');
         await config.update('enablePreTestCheck', true, vscode.ConfigurationTarget.Global);
 
         try {
@@ -325,7 +332,7 @@ suite('core/promptBuilder.ts', () => {
         if (!workspaceRoot) return;
 
         // Config setup
-        const config = vscode.workspace.getConfiguration('testgen-agent');
+        const config = vscode.workspace.getConfiguration('dontforgetest');
         await config.update('enablePreTestCheck', true, vscode.ConfigurationTarget.Global);
         await config.update('preTestCheckCommand', 'npm run config-cmd', vscode.ConfigurationTarget.Global);
 

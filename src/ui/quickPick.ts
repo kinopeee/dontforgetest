@@ -56,7 +56,7 @@ async function pickSource(): Promise<SourceKind | undefined> {
       { label: '最新コミット差分', description: 'HEAD の差分', source: 'latestCommit' },
       { label: 'コミット範囲差分', description: 'main..HEAD 等を指定', source: 'commitRange' },
     ],
-    { title: 'Chottotest: 実行ソースを選択', placeHolder: 'どの差分/対象からテストを生成しますか？' },
+    { title: 'Dontforgetest: 実行ソースを選択', placeHolder: 'どの差分/対象からテストを生成しますか？' },
   );
   return picked?.source;
 }
@@ -87,7 +87,7 @@ async function pickModelOverride(): Promise<string | undefined | null> {
     for (const model of customModels) {
       items.push({
         label: model,
-        description: '設定: testgen-agent.customModels',
+        description: '設定: dontforgetest.customModels',
         mode: 'useCandidate',
         modelValue: model,
       });
@@ -101,7 +101,7 @@ async function pickModelOverride(): Promise<string | undefined | null> {
   });
 
   const picked = await vscode.window.showQuickPick<ModelPickItem>(items, {
-    title: 'Chottotest: モデルを選択',
+    title: 'Dontforgetest: モデルを選択',
     placeHolder: '使用するモデルを選択してください',
   });
 

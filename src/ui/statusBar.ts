@@ -13,7 +13,7 @@ export function initializeTestGenStatusBar(context: vscode.ExtensionContext): vo
     return;
   }
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusBar.command = 'testgen-agent.showTestGeneratorOutput';
+  statusBar.command = 'dontforgetest.showTestGeneratorOutput';
   context.subscriptions.push(statusBar);
   update();
 }
@@ -45,14 +45,14 @@ function update(): void {
     return;
   }
 
-  statusBar.text = `$(beaker) Chottotest: ${count} 実行中`;
+  statusBar.text = `$(beaker) Dontforgetest: ${count} 実行中`;
   statusBar.tooltip = buildTooltip();
   statusBar.show();
 }
 
 function buildTooltip(): string {
   const lines: string[] = [];
-  lines.push('Chottotest');
+  lines.push('Dontforgetest');
   lines.push('');
   lines.push(`実行中: ${running.size}`);
   for (const [taskId, info] of running.entries()) {

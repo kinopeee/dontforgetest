@@ -1,4 +1,4 @@
-# 操作手順（Chottotest）
+# 操作手順（Dontforgetest）
 
 このドキュメントは、VS Code / Cursor 上で「テスト生成エージェント」拡張機能を使うための操作手順です。
 
@@ -30,22 +30,22 @@
 
 ## 設定
 
-VS Code / Cursor の設定（Settings）で `testgen-agent.*` を検索します。
+VS Code / Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 
-- **`testgen-agent.cursorAgentPath`**: `cursor-agent` の実行パス（未指定なら PATH から解決）
-- **`testgen-agent.defaultModel`**: `cursor-agent --model` に渡すモデル（空なら自動）
-- **`testgen-agent.testStrategyPath`**: テスト戦略ファイルのパス（空なら内蔵デフォルトを使用）
-- **`testgen-agent.includeTestPerspectiveTable`**: テスト生成前にテスト観点表を生成して保存するか（既定: true）
-- **`testgen-agent.perspectiveReportDir`**: 観点表（自動生成）の保存先（既定: `docs/test-perspectives`）
-- **`testgen-agent.testCommand`**: 生成後に実行するテストコマンド（既定: `npm test`、空ならスキップ）
-- **`testgen-agent.testExecutionReportDir`**: テスト実行レポート（自動生成）の保存先（既定: `docs/test-execution-reports`）
+- **`dontforgetest.cursorAgentPath`**: `cursor-agent` の実行パス（未指定なら PATH から解決）
+- **`dontforgetest.defaultModel`**: `cursor-agent --model` に渡すモデル（空なら自動）
+- **`dontforgetest.testStrategyPath`**: テスト戦略ファイルのパス（空なら内蔵デフォルトを使用）
+- **`dontforgetest.includeTestPerspectiveTable`**: テスト生成前にテスト観点表を生成して保存するか（既定: true）
+- **`dontforgetest.perspectiveReportDir`**: 観点表（自動生成）の保存先（既定: `docs/test-perspectives`）
+- **`dontforgetest.testCommand`**: 生成後に実行するテストコマンド（既定: `npm test`、空ならスキップ）
+- **`dontforgetest.testExecutionReportDir`**: テスト実行レポート（自動生成）の保存先（既定: `docs/test-execution-reports`）
 
 ### テスト戦略ファイルについて
 
 テスト戦略ファイルは、テスト生成時のルール（観点表の形式、Given/When/Thenコメントの必須化など）を定義します。
 
 - **設定が空の場合**: 拡張機能に内蔵されたデフォルト戦略（英語版）が自動的に使用されます
-- **カスタマイズしたい場合**: 任意の `.md` ファイルを作成し、`testgen-agent.testStrategyPath` にパスを指定してください
+- **カスタマイズしたい場合**: 任意の `.md` ファイルを作成し、`dontforgetest.testStrategyPath` にパスを指定してください
 
 #### 内蔵デフォルト戦略の特徴
 
@@ -57,7 +57,7 @@ VS Code / Cursor の設定（Settings）で `testgen-agent.*` を検索します
 日本語で出力したい場合は、ファイル先頭に以下のような設定コメントを記述します：
 
 ```markdown
-<!-- testgen-agent-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->
+<!-- dontforgetest-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->
 
 ## テスト戦略ルール
 
@@ -68,7 +68,7 @@ VS Code / Cursor の設定（Settings）で `testgen-agent.*` を検索します
 
 ### 1) 生成を開始
 
-1. コマンドパレット → **`Chottotest: テスト生成（QuickPick）`**
+1. コマンドパレット → **`Dontforgetest: テスト生成（QuickPick）`**
 2. **実行ソース**を選択
    - **現在のファイル**
    - **最新コミット差分**
@@ -83,13 +83,13 @@ VS Code / Cursor の設定（Settings）で `testgen-agent.*` を検索します
 
 ### 2) 結果確認（差分プレビュー）
 
-1. コマンドパレット → **`Chottotest: 直近実行の差分を表示`**
+1. コマンドパレット → **`Dontforgetest: 直近実行の差分を表示`**
 2. 対象ファイルを選ぶと **Diffエディタ**で差分が開きます  
    （左=開始時スナップショット、右=現在の内容）
 
 ### 3) 元に戻す（Undo）（必要な場合）
 
-1. コマンドパレット → **`Chottotest: 直近実行を元に戻す(Undo)`**
+1. コマンドパレット → **`Dontforgetest: 直近実行を元に戻す(Undo)`**
 2. 確認ダイアログで **「元に戻す」** を選択
 
 > **補足**: Undoは「開始時スナップショット」に基づいて復元します。  
@@ -97,16 +97,16 @@ VS Code / Cursor の設定（Settings）で `testgen-agent.*` を検索します
 
 ## 個別コマンドの使い分け
 
-- **`Chottotest: 現在のファイルからテスト生成`**
+- **`Dontforgetest: 現在のファイルからテスト生成`**
   - アクティブエディタのファイルを対象に生成
-- **`Chottotest: 最新コミット差分からテスト生成`**
+- **`Dontforgetest: 最新コミット差分からテスト生成`**
   - `HEAD` の差分を対象に生成
   - まだコミットが無い場合はエラー
-- **`Chottotest: コミット範囲差分からテスト生成`**
+- **`Dontforgetest: コミット範囲差分からテスト生成`**
   - 入力例: `main..HEAD`, `HEAD~3..HEAD`
-- **`Chottotest: 未コミット差分からテスト生成`**
+- **`Dontforgetest: 未コミット差分からテスト生成`**
   - `staged` / `unstaged` / `両方` を選択
-- **`Chottotest: 出力ログを表示`**
+- **`Dontforgetest: 出力ログを表示`**
   - Output Channel を開く
 
 ## トラブルシュート
@@ -114,12 +114,12 @@ VS Code / Cursor の設定（Settings）で `testgen-agent.*` を検索します
 ### `cursor-agent が見つかりません`
 
 - `cursor-agent` をインストール/セットアップする
-- `testgen-agent.cursorAgentPath` にフルパスを設定する
+- `dontforgetest.cursorAgentPath` にフルパスを設定する
 
 ### テスト戦略ファイルが読み込めない
 
 - 指定したファイルが存在しない場合、内蔵デフォルト戦略が自動的に使用されます
-- カスタム戦略を使いたい場合は、`testgen-agent.testStrategyPath` に正しいパスを設定してください
+- カスタム戦略を使いたい場合は、`dontforgetest.testStrategyPath` に正しいパスを設定してください
 
 ### `Git の HEAD が解決できません`
 

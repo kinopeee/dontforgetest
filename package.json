@@ -1,9 +1,9 @@
 {
-  "name": "chottotest",
+  "name": "dontforgetest",
   "publisher": "local",
-  "displayName": "Chottotest",
+  "displayName": "Dontforgetest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.36",
+  "version": "0.0.38",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -16,96 +16,96 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "testgen-agent",
-          "title": "Chottotest",
+          "id": "dontforgetest",
+          "title": "Dontforgetest",
           "icon": "media/testgen-view.svg"
         }
       ]
     },
     "views": {
-      "testgen-agent": [
+      "dontforgetest": [
         {
-          "id": "testgen-agent.controlPanel",
-          "name": "Chottotest",
+          "id": "dontforgetest.controlPanel",
+          "name": "Dontforgetest",
           "type": "webview"
         }
       ]
     },
     "commands": [
       {
-        "command": "testgen-agent.generateTest",
-        "title": "Chottotest: テスト生成（QuickPick）"
+        "command": "dontforgetest.generateTest",
+        "title": "Dontforgetest: テスト生成（QuickPick）"
       },
       {
-        "command": "testgen-agent.openPanel",
-        "title": "Chottotest: パネルを開く"
+        "command": "dontforgetest.openPanel",
+        "title": "Dontforgetest: パネルを開く"
       },
       {
-        "command": "testgen-agent.generateTestFromFile",
-        "title": "Chottotest: 現在のファイルからテスト生成"
+        "command": "dontforgetest.generateTestFromFile",
+        "title": "Dontforgetest: 現在のファイルからテスト生成"
       },
       {
-        "command": "testgen-agent.generateTestFromCommit",
-        "title": "Chottotest: 最新コミット差分からテスト生成"
+        "command": "dontforgetest.generateTestFromCommit",
+        "title": "Dontforgetest: 最新コミット差分からテスト生成"
       },
       {
-        "command": "testgen-agent.generateTestFromCommitRange",
-        "title": "Chottotest: コミット範囲差分からテスト生成"
+        "command": "dontforgetest.generateTestFromCommitRange",
+        "title": "Dontforgetest: コミット範囲差分からテスト生成"
       },
       {
-        "command": "testgen-agent.generateTestFromWorkingTree",
-        "title": "Chottotest: 未コミット差分からテスト生成"
+        "command": "dontforgetest.generateTestFromWorkingTree",
+        "title": "Dontforgetest: 未コミット差分からテスト生成"
       },
       {
-        "command": "testgen-agent.showTestGeneratorOutput",
-        "title": "Chottotest: 出力ログを表示"
+        "command": "dontforgetest.showTestGeneratorOutput",
+        "title": "Dontforgetest: 出力ログを表示"
       },
       {
-        "command": "testgen-agent.selectDefaultModel",
-        "title": "Chottotest: デフォルトモデルを選択"
+        "command": "dontforgetest.selectDefaultModel",
+        "title": "Dontforgetest: デフォルトモデルを選択"
       },
       {
-        "command": "testgen-agent.openSettings",
-        "title": "Chottotest: 設定を開く",
+        "command": "dontforgetest.openSettings",
+        "title": "Dontforgetest: 設定を開く",
         "icon": "$(gear)"
       },
       {
-        "command": "testgen-agent.openLatestPerspective",
-        "title": "Chottotest: 最新の観点表を開く"
+        "command": "dontforgetest.openLatestPerspective",
+        "title": "Dontforgetest: 最新の観点表を開く"
       },
       {
-        "command": "testgen-agent.openLatestExecutionReport",
-        "title": "Chottotest: 最新の実行レポートを開く"
+        "command": "dontforgetest.openLatestExecutionReport",
+        "title": "Dontforgetest: 最新の実行レポートを開く"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "testgen-agent.openSettings",
-          "when": "view == testgen-agent.controlPanel",
+          "command": "dontforgetest.openSettings",
+          "when": "view == dontforgetest.controlPanel",
           "group": "navigation"
         }
       ]
     },
     "configuration": {
-      "title": "Chottotest",
+      "title": "Dontforgetest",
       "properties": {
-        "testgen-agent.cursorAgentPath": {
+        "dontforgetest.cursorAgentPath": {
           "type": "string",
           "default": "",
           "description": "cursor-agent コマンドのパス（未指定の場合は PATH から解決）"
         },
-        "testgen-agent.maxParallelTasks": {
+        "dontforgetest.maxParallelTasks": {
           "type": "number",
           "default": 4,
           "description": "複数ファイル処理の同時実行数上限（スナップショット取得/復元など）"
         },
-        "testgen-agent.defaultModel": {
+        "dontforgetest.defaultModel": {
           "type": "string",
           "default": "",
           "description": "cursor-agent に渡すデフォルトモデル（空の場合は自動）"
         },
-        "testgen-agent.customModels": {
+        "dontforgetest.customModels": {
           "type": "array",
           "default": [],
           "items": {
@@ -113,32 +113,32 @@
           },
           "description": "モデル候補のフォールバックリスト（QuickPick等で使用）"
         },
-        "testgen-agent.testStrategyPath": {
+        "dontforgetest.testStrategyPath": {
           "type": "string",
           "default": "",
           "description": "テスト戦略ルールファイルのパス（空の場合は内蔵デフォルトを使用）"
         },
-        "testgen-agent.includeTestPerspectiveTable": {
+        "dontforgetest.includeTestPerspectiveTable": {
           "type": "boolean",
           "default": true,
           "description": "テスト生成前にテスト観点表（Markdown）を生成してファイル保存する"
         },
-        "testgen-agent.perspectiveReportDir": {
+        "dontforgetest.perspectiveReportDir": {
           "type": "string",
           "default": "docs/test-perspectives",
           "description": "テスト観点表（自動生成）の保存先ディレクトリ（ワークスペース相対または絶対）"
         },
-        "testgen-agent.testExecutionReportDir": {
+        "dontforgetest.testExecutionReportDir": {
           "type": "string",
           "default": "docs/test-execution-reports",
           "description": "テスト実行レポート（自動生成）の保存先ディレクトリ（ワークスペース相対または絶対）"
         },
-        "testgen-agent.testCommand": {
+        "dontforgetest.testCommand": {
           "type": "string",
           "default": "npm test",
           "description": "テスト実行コマンド（空の場合は実行しない。例: npm test, pnpm test, pytest）"
         },
-        "testgen-agent.testExecutionRunner": {
+        "dontforgetest.testExecutionRunner": {
           "type": "string",
           "enum": [
             "cursorAgent",
@@ -147,22 +147,22 @@
           "default": "cursorAgent",
           "description": "テスト実行の担当者（cursorAgent=cursor-agentに実行させて結果を抽出、extension=拡張機能が直接実行）"
         },
-        "testgen-agent.allowUnsafeTestCommand": {
+        "dontforgetest.allowUnsafeTestCommand": {
           "type": "boolean",
           "default": false,
           "description": "testExecutionRunner=extension の場合に、VS Code を別プロセスで起動しそうなテストコマンドでも実行する（重複起動で不安定になる可能性があります）"
         },
-        "testgen-agent.cursorAgentForceForTestExecution": {
+        "dontforgetest.cursorAgentForceForTestExecution": {
           "type": "boolean",
           "default": false,
           "description": "testExecutionRunner=cursorAgent のテスト実行で cursor-agent に --force を付与する（コマンド実行の拒否回避を試す。ファイル編集も可能になるため注意）"
         },
-        "testgen-agent.enablePreTestCheck": {
+        "dontforgetest.enablePreTestCheck": {
           "type": "boolean",
           "default": true,
           "description": "テストコード生成後に型チェック/Lintを実行し、エラーがあれば自動修正を試みる"
         },
-        "testgen-agent.preTestCheckCommand": {
+        "dontforgetest.preTestCheckCommand": {
           "type": "string",
           "default": "npm run compile",
           "description": "生成後に実行する型チェック/Lintコマンド（例: npm run compile, npm run lint, tsc --noEmit）"
@@ -177,7 +177,7 @@
     "pretest": "npm run compile",
     "lint": "eslint src/",
     "test": "node ./out/test/runTest.js",
-    "package:vsix": "npm run compile && VERSION=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce package --out \"chottotest-$VERSION.vsix\" --allow-missing-repository --no-rewrite-relative-links"
+    "package:vsix": "npm run compile && VERSION=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce package --out \"dontforgetest-$VERSION.vsix\" --allow-missing-repository --no-rewrite-relative-links"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

@@ -233,7 +233,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
     // 3) 生成後: テスト実行 + レポート保存
     if (settings.testCommand.trim().length === 0) {
-      const msg = 'testgen-agent.testCommand が空のため、テスト実行はスキップします。';
+      const msg = 'dontforgetest.testCommand が空のため、テスト実行はスキップします。';
       const ev = emitLogEvent(`${options.generationTaskId}-test`, 'warn', msg);
       handleTestGenEventForStatusBar({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
       captureEvent({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });

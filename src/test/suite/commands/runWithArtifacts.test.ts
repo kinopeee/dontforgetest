@@ -279,7 +279,7 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(text.includes('status: skipped'), 'レポートに skipped ステータスが含まれること');
     assert.ok(text.includes('testCommand が空のため'), '適切なスキップ理由が含まれること');
     assert.ok(text.includes('実行ログ（拡張機能）（クリックで展開）'), '実行ログセクションが含まれること');
-    assert.ok(text.includes('WARN testgen-agent.testCommand が空のため'), 'ログに警告が含まれること');
+    assert.ok(text.includes('WARN dontforgetest.testCommand が空のため'), 'ログに警告が含まれること');
   });
 
   // TC-CMD-04: テスト実行失敗

@@ -25,7 +25,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
     return undefined;
   }
 
-  const config = vscode.workspace.getConfiguration('testgen-agent');
+  const config = vscode.workspace.getConfiguration('dontforgetest');
   const { defaultModel } = getModelSettings();
   const testStrategyPath = (config.get<string>('testStrategyPath', '') ?? '').trim();
   const cursorAgentPath = (config.get<string>('cursorAgentPath') ?? '').trim();
@@ -55,7 +55,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
       'ドキュメントを開く',
     );
     if (picked === '設定を開く') {
-      await vscode.commands.executeCommand('workbench.action.openSettings', 'testgen-agent.cursorAgentPath');
+      await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.cursorAgentPath');
     }
     if (picked === 'ドキュメントを開く') {
       await vscode.env.openExternal(vscode.Uri.parse('https://cursor.com/ja/docs/cli/overview'));

@@ -14,7 +14,7 @@ export interface ModelSettings {
  * モデル設定を読み取り、正規化して返す。
  */
 export function getModelSettings(): ModelSettings {
-  const config = vscode.workspace.getConfiguration('testgen-agent');
+  const config = vscode.workspace.getConfiguration('dontforgetest');
 
   const defaultModelRaw = (config.get<string>('defaultModel') ?? '').trim();
   const defaultModel = defaultModelRaw.length > 0 ? defaultModelRaw : undefined;
@@ -61,7 +61,7 @@ export function normalizeModelList(value: unknown): string[] {
  * - undefined: 空文字でクリア（未設定扱い）
  */
 export async function setDefaultModel(model: string | undefined): Promise<void> {
-  const config = vscode.workspace.getConfiguration('testgen-agent');
+  const config = vscode.workspace.getConfiguration('dontforgetest');
   const target = pickUpdateTarget();
   await config.update('defaultModel', (model ?? '').trim(), target);
 }

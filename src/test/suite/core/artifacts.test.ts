@@ -44,7 +44,7 @@ suite('core/artifacts.ts', () => {
     // デフォルト値の整合性チェック
     // ワークスペース設定などで上書きされていなければ、以下のデフォルト値であるべき
     // 注意: 実行環境の User Settings に依存する可能性があるが、テスト実行環境ではデフォルトに戻っていることを期待
-    const config = vscode.workspace.getConfiguration('testgen-agent');
+    const config = vscode.workspace.getConfiguration('dontforgetest');
     
     // testExecutionRunner
     const runnerInfo = config.inspect('testExecutionRunner');
@@ -80,7 +80,7 @@ suite('core/artifacts.ts', () => {
   // TC-CONF-02: Config overwrite (enablePreTestCheck: false)
   test('TC-CONF-02: 設定で enablePreTestCheck=false にした場合、false が返される', async () => {
     // Given: 設定値を変更
-    const config = vscode.workspace.getConfiguration('testgen-agent');
+    const config = vscode.workspace.getConfiguration('dontforgetest');
     await config.update('enablePreTestCheck', false, vscode.ConfigurationTarget.Global);
 
     try {
@@ -98,7 +98,7 @@ suite('core/artifacts.ts', () => {
   // TC-CONF-03: Config overwrite (preTestCheckCommand: custom)
   test('TC-CONF-03: 設定で preTestCheckCommand を変更した場合、その値が返される', async () => {
     // Given: 設定値を変更
-    const config = vscode.workspace.getConfiguration('testgen-agent');
+    const config = vscode.workspace.getConfiguration('dontforgetest');
     const customCmd = 'npm run lint';
     await config.update('preTestCheckCommand', customCmd, vscode.ConfigurationTarget.Global);
 

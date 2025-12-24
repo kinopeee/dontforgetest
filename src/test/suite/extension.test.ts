@@ -8,7 +8,7 @@ suite('src/extension.ts', () => {
     // When: 拡張機能をID指定で取得する
     // Then: 拡張機能オブジェクトが存在する
     test('TC-EXT-01: 拡張機能の存在確認', () => {
-      const ext = vscode.extensions.getExtension('local.chottotest');
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
     });
 
@@ -16,7 +16,7 @@ suite('src/extension.ts', () => {
     // When: activate()を実行する
     // Then: 拡張機能がアクティブ状態になる
     test('TC-EXT-02: 拡張機能のアクティブ化', async () => {
-      const ext = vscode.extensions.getExtension('local.chottotest');
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext);
       
       if (!ext.isActive) {
@@ -32,14 +32,14 @@ suite('src/extension.ts', () => {
     // Then: 期待されるコマンドIDがすべて含まれている
     test('TC-EXT-03: コマンド登録の確認', async () => {
       const expectedCommands = [
-        'testgen-agent.generateTest',
-        'testgen-agent.openPanel',
-        'testgen-agent.generateTestFromFile',
-        'testgen-agent.generateTestFromCommit',
-        'testgen-agent.generateTestFromCommitRange',
-        'testgen-agent.generateTestFromWorkingTree',
-        'testgen-agent.selectDefaultModel',
-        'testgen-agent.showTestGeneratorOutput'
+        'dontforgetest.generateTest',
+        'dontforgetest.openPanel',
+        'dontforgetest.generateTestFromFile',
+        'dontforgetest.generateTestFromCommit',
+        'dontforgetest.generateTestFromCommitRange',
+        'dontforgetest.generateTestFromWorkingTree',
+        'dontforgetest.selectDefaultModel',
+        'dontforgetest.showTestGeneratorOutput'
       ];
 
       // 組み込みコマンドも含めて取得
@@ -58,8 +58,8 @@ suite('src/extension.ts', () => {
     // Given: 拡張機能の設定が読み込まれている
     // When: 各設定項目の値を取得する
     // Then: デフォルト値が期待通りであること
-    test('TC-EXT-04: デフォルト設定値の確認', () => {
-      const config = vscode.workspace.getConfiguration('testgen-agent');
+    test('TC-EXT-04: デフォルト設定値の確認 (TC-B-01: Clean Install State)', () => {
+      const config = vscode.workspace.getConfiguration('dontforgetest');
       
       assert.strictEqual(config.get('cursorAgentPath'), '', 'cursorAgentPathのデフォルト値が不正');
       assert.strictEqual(config.get('maxParallelTasks'), 4, 'maxParallelTasksのデフォルト値が不正');
@@ -74,6 +74,15 @@ suite('src/extension.ts', () => {
       assert.strictEqual(config.get('allowUnsafeTestCommand'), false, 'allowUnsafeTestCommandのデフォルト値が不正');
       assert.strictEqual(config.get('cursorAgentForceForTestExecution'), false, 'cursorAgentForceForTestExecutionのデフォルト値が不正');
     });
+
+    // TC-N-06: package.json validation
+    test('TC-N-06: パッケージメタデータの確認 (Name/DisplayName)', () => {
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, '拡張機能が見つかりません');
+      const pkg = ext.packageJSON;
+      assert.strictEqual(pkg.name, 'dontforgetest');
+      assert.strictEqual(pkg.displayName, 'Dontforgetest');
+    });
   });
 
   suite('Metadata & Resources', () => {
@@ -81,7 +90,7 @@ suite('src/extension.ts', () => {
     // When: package.json のメタデータを取得する
     // Then: ライセンスが AGPL-3.0 であること
     test('TC-META-01: ライセンス情報の確認', () => {
-      const ext = vscode.extensions.getExtension('local.chottotest');
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
       
       const packageJSON = ext.packageJSON;
@@ -92,7 +101,7 @@ suite('src/extension.ts', () => {
     // When: LICENSE ファイルの存在を確認する
     // Then: ファイルが存在すること
     test('TC-META-02: ライセンスファイルの存在確認', async () => {
-      const ext = vscode.extensions.getExtension('local.chottotest');
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
 
       const licenseUri = vscode.Uri.file(path.join(ext.extensionPath, 'LICENSE'));
@@ -108,7 +117,7 @@ suite('src/extension.ts', () => {
     // When: バージョンを確認する
     // Then: セマンティックバージョニング形式（x.y.z）であること
     test('TC-RES-01: パッケージバージョンの形式確認', () => {
-      const ext = vscode.extensions.getExtension('local.chottotest');
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
       
       const packageJSON = ext.packageJSON;
@@ -128,7 +137,7 @@ suite('src/extension.ts', () => {
     // When: ファイル内容を読み込む
     // Then: 有効なSVGであり、更新されたパス（試験管）を含んでいること
     test('TC-RES-02: testgen-view.svg の内容確認', async () => {
-      const ext = vscode.extensions.getExtension('local.chottotest');
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
 
       const svgUri = vscode.Uri.file(path.join(ext.extensionPath, 'media', 'testgen-view.svg'));

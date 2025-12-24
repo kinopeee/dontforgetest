@@ -9,7 +9,7 @@ const maxLogChars = 4_000;
  */
 export function getTestGenOutputChannel(): vscode.OutputChannel {
   if (!channel) {
-    channel = vscode.window.createOutputChannel('Chottotest');
+    channel = vscode.window.createOutputChannel('Dontforgetest');
   }
   return channel;
 }

@@ -37,7 +37,7 @@ tsconfig.json       # TypeScript設定
 ### VS Code拡張機能パターン
 - コマンドは `context.subscriptions.push()` で登録
 - リソースは `Disposable` パターンで管理
-- コマンドIDは `testgen-agent.commandName` 形式
+- コマンドIDは `dontforgetest.commandName` 形式
 
 ## 開発コマンド
 

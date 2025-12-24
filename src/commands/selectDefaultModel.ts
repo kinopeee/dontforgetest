@@ -28,7 +28,7 @@ export async function selectDefaultModel(): Promise<void> {
     for (const model of customModels) {
       items.push({
         label: model,
-        description: '設定: testgen-agent.customModels',
+        description: '設定: dontforgetest.customModels',
         mode: 'useCandidate',
         modelValue: model,
       });
@@ -42,7 +42,7 @@ export async function selectDefaultModel(): Promise<void> {
   });
 
   const picked = await vscode.window.showQuickPick<DefaultModelPickItem>(items, {
-    title: 'Chottotest: defaultModel を設定',
+    title: 'Dontforgetest: defaultModel を設定',
     placeHolder: defaultModel ? `現在: ${defaultModel}` : '現在: （未設定）',
   });
 

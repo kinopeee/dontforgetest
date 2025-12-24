@@ -1,4 +1,4 @@
-# テスト生成エージェント（Chottotest）
+# テスト生成エージェント（Dontforgetest）
 
 Cursor CLI（`cursor-agent`）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する VS Code / Cursor 拡張機能です。
 
@@ -48,7 +48,7 @@ npm test
 
 1. VS Code / Cursor でこのリポジトリを開く
 2. F5（Run Extension）
-3. Extension Development Host のコマンドパレットで `Chottotest:` を実行
+3. Extension Development Host のコマンドパレットで `Dontforgetest:` を実行
 
 ## ライセンス
 

@@ -8,14 +8,14 @@ type WebviewMessage =
   | { type: 'runCommand'; command: AllowedCommand };
 
 type AllowedCommand =
-  | 'testgen-agent.generateTest'
-  | 'testgen-agent.generateTestFromCommit'
-  | 'testgen-agent.generateTestFromCommitRange'
-  | 'testgen-agent.generateTestFromWorkingTree'
-  | 'testgen-agent.showTestGeneratorOutput'
-  | 'testgen-agent.selectDefaultModel'
-  | 'testgen-agent.openLatestPerspective'
-  | 'testgen-agent.openLatestExecutionReport';
+  | 'dontforgetest.generateTest'
+  | 'dontforgetest.generateTestFromCommit'
+  | 'dontforgetest.generateTestFromCommitRange'
+  | 'dontforgetest.generateTestFromWorkingTree'
+  | 'dontforgetest.showTestGeneratorOutput'
+  | 'dontforgetest.selectDefaultModel'
+  | 'dontforgetest.openLatestPerspective'
+  | 'dontforgetest.openLatestExecutionReport';
 
 interface ControlPanelDeps {
   executeCommand: (command: AllowedCommand) => Thenable<unknown>;
@@ -29,7 +29,7 @@ interface ControlPanelDeps {
  * - 設定はビュータイトルバーのギアアイコンから開く
  */
 export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewId = 'testgen-agent.controlPanel';
+  public static readonly viewId = 'dontforgetest.controlPanel';
 
   private view?: vscode.WebviewView;
   private readonly deps: ControlPanelDeps;
@@ -90,11 +90,11 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
   private sourceToCommand(source: PanelRunSource): AllowedCommand | undefined {
     switch (source) {
       case 'workingTree':
-        return 'testgen-agent.generateTestFromWorkingTree';
+        return 'dontforgetest.generateTestFromWorkingTree';
       case 'latestCommit':
-        return 'testgen-agent.generateTestFromCommit';
+        return 'dontforgetest.generateTestFromCommit';
       case 'commitRange':
-        return 'testgen-agent.generateTestFromCommitRange';
+        return 'dontforgetest.generateTestFromCommitRange';
       default: {
         const _exhaustive: never = source;
         return _exhaustive;
@@ -112,7 +112,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '  <meta charset="UTF-8" />',
       '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
       `  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';" />`,
-      '  <title>Chottotest</title>',
+      '  <title>Dontforgetest</title>',
       '  <style>',
       '    :root {',
       '      --gap: 10px;',
@@ -276,11 +276,11 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '    });',
       '',
       '    openPerspectiveBtn.addEventListener("click", () => {',
-      '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.openLatestPerspective" });',
+      '      vscode.postMessage({ type: "runCommand", command: "dontforgetest.openLatestPerspective" });',
       '    });',
       '',
       '    openReportBtn.addEventListener("click", () => {',
-      '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.openLatestExecutionReport" });',
+      '      vscode.postMessage({ type: "runCommand", command: "dontforgetest.openLatestExecutionReport" });',
       '    });',
       '  </script>',
       '</body>',

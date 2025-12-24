@@ -15,7 +15,7 @@ import { initializeTestGenStatusBar } from './ui/statusBar';
  * この関数は拡張機能が有効化されたときに呼ばれます
  */
 export function activate(context: vscode.ExtensionContext) {
-  console.log('拡張機能 "testgen-agent" が有効化されました');
+  console.log('拡張機能 "dontforgetest" が有効化されました');
 
   const provider = new CursorAgentProvider();
   const controlPanelProvider = new TestGenControlPanelViewProvider(context);
@@ -28,61 +28,61 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.generateTest', async () => {
+    vscode.commands.registerCommand('dontforgetest.generateTest', async () => {
       await generateTestWithQuickPick(provider);
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.openPanel', async () => {
-      await vscode.commands.executeCommand('workbench.view.extension.testgen-agent');
+    vscode.commands.registerCommand('dontforgetest.openPanel', async () => {
+      await vscode.commands.executeCommand('workbench.view.extension.dontforgetest');
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.generateTestFromFile', async () => {
+    vscode.commands.registerCommand('dontforgetest.generateTestFromFile', async () => {
       await generateTestFromActiveFile(provider);
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.generateTestFromCommit', async () => {
+    vscode.commands.registerCommand('dontforgetest.generateTestFromCommit', async () => {
       await generateTestFromLatestCommit(provider);
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.generateTestFromCommitRange', async () => {
+    vscode.commands.registerCommand('dontforgetest.generateTestFromCommitRange', async () => {
       await generateTestFromCommitRange(provider);
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.generateTestFromWorkingTree', async () => {
+    vscode.commands.registerCommand('dontforgetest.generateTestFromWorkingTree', async () => {
       await generateTestFromWorkingTree(provider);
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.showTestGeneratorOutput', () => {
+    vscode.commands.registerCommand('dontforgetest.showTestGeneratorOutput', () => {
       showTestGenOutput(true);
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.selectDefaultModel', async () => {
+    vscode.commands.registerCommand('dontforgetest.selectDefaultModel', async () => {
       await selectDefaultModel();
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.openSettings', async () => {
-      await vscode.commands.executeCommand('workbench.action.openSettings', 'testgen-agent');
+    vscode.commands.registerCommand('dontforgetest.openSettings', async () => {
+      await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest');
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.openLatestPerspective', async () => {
+    vscode.commands.registerCommand('dontforgetest.openLatestPerspective', async () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders || workspaceFolders.length === 0) {
         await vscode.window.showWarningMessage('ワークスペースが開かれていません');
@@ -104,7 +104,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('testgen-agent.openLatestExecutionReport', async () => {
+    vscode.commands.registerCommand('dontforgetest.openLatestExecutionReport', async () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders || workspaceFolders.length === 0) {
         await vscode.window.showWarningMessage('ワークスペースが開かれていません');
@@ -130,5 +130,5 @@ export function activate(context: vscode.ExtensionContext) {
  * この関数は拡張機能が無効化されたときに呼ばれます
  */
 export function deactivate() {
-  console.log('拡張機能 "testgen-agent" が無効化されました');
+  console.log('拡張機能 "dontforgetest" が無効化されました');
 }

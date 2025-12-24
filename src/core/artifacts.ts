@@ -73,7 +73,7 @@ export interface TestExecutionResult {
  * 成果物（観点表/実行レポート）保存に関する設定を取得する。
  */
 export function getArtifactSettings(): ArtifactSettings {
-  const config = vscode.workspace.getConfiguration('testgen-agent');
+  const config = vscode.workspace.getConfiguration('dontforgetest');
   const runnerRaw = (config.get<string>('testExecutionRunner', 'cursorAgent') ?? 'cursorAgent').trim();
   const runner: ArtifactSettings['testExecutionRunner'] = runnerRaw === 'extension' ? 'extension' : 'cursorAgent';
   return {

@@ -1,4 +1,5 @@
 {
     "testgen-agent.defaultModel": "",
-    "testgen-agent.testStrategyPath": ""
+    "testgen-agent.testStrategyPath": "",
+    "dontforgetest.testStrategyPath": ""
 }

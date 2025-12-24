@@ -187,7 +187,7 @@ suite('src/ui/controlPanel.ts', () => {
     await webviewView.webview._onMessage?.({ type: 'run', source: 'workingTree' });
 
     assert.strictEqual(executedCommands.length, 1);
-    assert.strictEqual(executedCommands[0], 'testgen-agent.generateTestFromWorkingTree');
+    assert.strictEqual(executedCommands[0], 'dontforgetest.generateTestFromWorkingTree');
   });
 
   // Given: 初期化済み
@@ -198,7 +198,7 @@ suite('src/ui/controlPanel.ts', () => {
     
     await webviewView.webview._onMessage?.({ type: 'run', source: 'latestCommit' });
 
-    assert.strictEqual(executedCommands[0], 'testgen-agent.generateTestFromCommit');
+    assert.strictEqual(executedCommands[0], 'dontforgetest.generateTestFromCommit');
   });
 
   // Given: 初期化済み
@@ -207,9 +207,9 @@ suite('src/ui/controlPanel.ts', () => {
   test('TC-CP-OLD-04: runCommandメッセージ', async () => {
     resolveView();
     
-    await webviewView.webview._onMessage?.({ type: 'runCommand', command: 'testgen-agent.generateTest' });
+    await webviewView.webview._onMessage?.({ type: 'runCommand', command: 'dontforgetest.generateTest' });
 
-    assert.strictEqual(executedCommands[0], 'testgen-agent.generateTest');
+    assert.strictEqual(executedCommands[0], 'dontforgetest.generateTest');
   });
 
   // Given: 初期化済み

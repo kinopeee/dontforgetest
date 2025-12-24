@@ -1,10 +1,10 @@
 /**
  * 拡張機能に内蔵されるデフォルトのテスト戦略ルール（英語版）
  *
- * ユーザーが testgen-agent.testStrategyPath でファイルを指定しない場合、
+ * ユーザーが dontforgetest.testStrategyPath でファイルを指定しない場合、
  * または指定されたファイルが存在しない場合に使用される。
  */
-export const DEFAULT_TEST_STRATEGY = `<!-- testgen-agent-config: {"answerLanguage":"en","commentLanguage":"en","perspectiveTableLanguage":"en"} -->
+export const DEFAULT_TEST_STRATEGY = `<!-- dontforgetest-config: {"answerLanguage":"en","commentLanguage":"en","perspectiveTableLanguage":"en"} -->
 
 # Test Strategy Rules
 
@@ -14,7 +14,7 @@ These rules define the mandatory testing process. A test task is NOT complete un
 
 ## 0. Output Language (Extension Metadata)
 
-The \`testgen-agent-config\` comment at the top of this file controls output languages:
+The \`dontforgetest-config\` comment at the top of this file controls output languages:
 
 - \`answerLanguage\`: Natural language for explanations (outside tables)
 - \`commentLanguage\`: Comments in test code (including Given / When / Then)
