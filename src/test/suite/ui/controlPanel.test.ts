@@ -1,6 +1,8 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { TestGenControlPanelViewProvider } from '../../../ui/controlPanel';
+import { taskManager } from '../../../core/taskManager';
+import { type RunningTask } from '../../../providers/provider';
 
 // Test type definitions
 interface MockWebviewView {
@@ -11,6 +13,7 @@ interface MockWebviewView {
     postMessage: (msg: unknown) => Promise<boolean>;
     cspSource: string;
     _onMessage?: (msg: unknown) => void;
+    _postedMessages?: unknown[];
   };
   visible: boolean;
   onDidDispose: () => void;
@@ -20,13 +23,18 @@ suite('src/ui/controlPanel.ts', () => {
   let context: vscode.ExtensionContext;
   let provider: TestGenControlPanelViewProvider;
   let webviewView: MockWebviewView;
-  
+
   // Spy variables
   let executedCommands: string[] = [];
+  let postedMessages: unknown[] = [];
 
   setup(() => {
     // Reset
     executedCommands = [];
+    postedMessages = [];
+
+    // タスクマネージャーをクリーンアップ
+    taskManager.cancelAll();
 
     // Mock Context
     context = {
@@ -47,14 +55,23 @@ suite('src/ui/controlPanel.ts', () => {
         onDidReceiveMessage: (cb: (msg: unknown) => void) => {
           webviewView.webview._onMessage = cb;
         },
-        postMessage: async () => true,
+        postMessage: async (msg: unknown) => {
+          postedMessages.push(msg);
+          return true;
+        },
         cspSource: 'vscode-webview-resource:',
+        _postedMessages: [],
       },
       visible: true,
       onDidDispose: () => {},
     };
 
     provider = new TestGenControlPanelViewProvider(context, deps);
+  });
+
+  teardown(() => {
+    // テスト後のクリーンアップ
+    taskManager.cancelAll();
   });
 
   // Helper function: call resolveWebviewView
@@ -606,5 +623,212 @@ suite('src/ui/controlPanel.ts', () => {
     await webviewView.webview._onMessage?.({ type: 'runCommand', command: 'dontforgetest.generateTest' });
     assert.strictEqual(executedCommands.length, 1, 'One command executed');
     assert.strictEqual(executedCommands[0], 'dontforgetest.generateTest', 'Correct command executed');
+  });
+
+  // --- 状態通知・キャンセル機能のテスト ---
+
+  // TC-N-26: Ready message sends initial state
+  // Given: Provider initialized and resolved, no tasks running
+  // When: Ready message is received
+  // Then: stateUpdate message sent with isRunning=false
+  test('TC-N-26: Ready message sends initial state (no tasks)', async () => {
+    // Given: No tasks running
+    resolveView();
+    postedMessages = []; // readyメッセージ前にリセット
+
+    // When: Ready message is sent
+    await webviewView.webview._onMessage?.({ type: 'ready' });
+
+    // Then: stateUpdate message sent
+    assert.strictEqual(postedMessages.length, 1, 'One message posted');
+    const msg = postedMessages[0] as { type: string; isRunning: boolean; taskCount: number };
+    assert.strictEqual(msg.type, 'stateUpdate', 'Message type is stateUpdate');
+    assert.strictEqual(msg.isRunning, false, 'isRunning is false');
+    assert.strictEqual(msg.taskCount, 0, 'taskCount is 0');
+  });
+
+  // TC-N-27: Ready message sends running state
+  // Given: Provider initialized and resolved, task running
+  // When: Ready message is received
+  // Then: stateUpdate message sent with isRunning=true
+  test('TC-N-27: Ready message sends running state (task running)', async () => {
+    // Given: Task running
+    const mockTask: RunningTask = { taskId: 'test-task', dispose: () => {} };
+    taskManager.register('test-task', 'テスト', mockTask);
+
+    resolveView();
+    postedMessages = []; // readyメッセージ前にリセット
+
+    // When: Ready message is sent
+    await webviewView.webview._onMessage?.({ type: 'ready' });
+
+    // Then: stateUpdate message sent with isRunning=true
+    assert.strictEqual(postedMessages.length, 1, 'One message posted');
+    const msg = postedMessages[0] as { type: string; isRunning: boolean; taskCount: number };
+    assert.strictEqual(msg.type, 'stateUpdate', 'Message type is stateUpdate');
+    assert.strictEqual(msg.isRunning, true, 'isRunning is true');
+    assert.strictEqual(msg.taskCount, 1, 'taskCount is 1');
+  });
+
+  // TC-N-28: Task registration notifies webview
+  // Given: Provider initialized and resolved
+  // When: Task is registered with taskManager
+  // Then: stateUpdate message sent to webview
+  test('TC-N-28: Task registration notifies webview', () => {
+    // Given: Provider resolved
+    resolveView();
+    postedMessages = [];
+
+    // When: Task is registered
+    const mockTask: RunningTask = { taskId: 'new-task', dispose: () => {} };
+    taskManager.register('new-task', 'テスト', mockTask);
+
+    // Then: stateUpdate message sent
+    assert.ok(postedMessages.length >= 1, 'At least one message posted');
+    const msg = postedMessages[postedMessages.length - 1] as { type: string; isRunning: boolean; taskCount: number };
+    assert.strictEqual(msg.type, 'stateUpdate', 'Message type is stateUpdate');
+    assert.strictEqual(msg.isRunning, true, 'isRunning is true');
+    assert.strictEqual(msg.taskCount, 1, 'taskCount is 1');
+  });
+
+  // TC-N-29: Task unregistration notifies webview
+  // Given: Provider initialized and resolved, task running
+  // When: Task is unregistered
+  // Then: stateUpdate message sent with isRunning=false
+  test('TC-N-29: Task unregistration notifies webview', () => {
+    // Given: Task running
+    const mockTask: RunningTask = { taskId: 'running-task', dispose: () => {} };
+    taskManager.register('running-task', 'テスト', mockTask);
+
+    resolveView();
+    postedMessages = [];
+
+    // When: Task is unregistered
+    taskManager.unregister('running-task');
+
+    // Then: stateUpdate message sent with isRunning=false
+    assert.ok(postedMessages.length >= 1, 'At least one message posted');
+    const msg = postedMessages[postedMessages.length - 1] as { type: string; isRunning: boolean; taskCount: number };
+    assert.strictEqual(msg.type, 'stateUpdate', 'Message type is stateUpdate');
+    assert.strictEqual(msg.isRunning, false, 'isRunning is false');
+    assert.strictEqual(msg.taskCount, 0, 'taskCount is 0');
+  });
+
+  // TC-N-30: Cancel message cancels all tasks
+  // Given: Provider initialized and resolved, tasks running
+  // When: Cancel message is received
+  // Then: All tasks are cancelled via taskManager.cancelAll()
+  test('TC-N-30: Cancel message cancels all tasks', async () => {
+    // Given: Tasks running
+    let disposed1 = false;
+    let disposed2 = false;
+    const mockTask1: RunningTask = { taskId: 'task-1', dispose: () => { disposed1 = true; } };
+    const mockTask2: RunningTask = { taskId: 'task-2', dispose: () => { disposed2 = true; } };
+    taskManager.register('task-1', 'タスク1', mockTask1);
+    taskManager.register('task-2', 'タスク2', mockTask2);
+
+    resolveView();
+
+    // When: Cancel message is sent
+    await webviewView.webview._onMessage?.({ type: 'cancel' });
+
+    // Then: All tasks cancelled
+    assert.strictEqual(disposed1, true, 'Task 1 disposed');
+    assert.strictEqual(disposed2, true, 'Task 2 disposed');
+    assert.strictEqual(taskManager.getRunningCount(), 0, 'No tasks running');
+  });
+
+  // TC-N-31: Cancel message with no tasks does nothing
+  // Given: Provider initialized and resolved, no tasks running
+  // When: Cancel message is received
+  // Then: No error, no commands executed
+  test('TC-N-31: Cancel message with no tasks does nothing', async () => {
+    // Given: No tasks running
+    resolveView();
+
+    // When: Cancel message is sent
+    await webviewView.webview._onMessage?.({ type: 'cancel' });
+
+    // Then: No error, no commands executed
+    assert.strictEqual(executedCommands.length, 0, 'No commands executed');
+    assert.strictEqual(taskManager.getRunningCount(), 0, 'No tasks running');
+  });
+
+  // TC-N-32: HTML contains state management JavaScript
+  // Given: Provider initialized
+  // When: HTML is generated
+  // Then: HTML contains isRunning state variable and updateButtonState function
+  test('TC-N-32: HTML contains state management JavaScript', () => {
+    resolveView();
+    const html = webviewView.webview.html;
+
+    // Then: HTML contains state management code
+    assert.ok(html.includes('let isRunning = false;'), 'isRunning state variable exists');
+    assert.ok(html.includes('function updateButtonState(running)'), 'updateButtonState function exists');
+    assert.ok(html.includes('テスト作成中 (中断)'), 'Running state button text exists');
+    assert.ok(html.includes('テスト生成'), 'Default button text exists');
+  });
+
+  // TC-N-33: HTML contains message handler for stateUpdate
+  // Given: Provider initialized
+  // When: HTML is generated
+  // Then: HTML contains message event listener that handles stateUpdate
+  test('TC-N-33: HTML contains message handler for stateUpdate', () => {
+    resolveView();
+    const html = webviewView.webview.html;
+
+    // Then: HTML contains message handler
+    assert.ok(html.includes('window.addEventListener("message"'), 'Message event listener exists');
+    assert.ok(html.includes('msg.type === "stateUpdate"'), 'stateUpdate type check exists');
+    assert.ok(html.includes('updateButtonState(msg.isRunning)'), 'updateButtonState call exists');
+  });
+
+  // TC-N-34: HTML button click sends cancel when running
+  // Given: Provider initialized
+  // When: HTML is generated
+  // Then: HTML contains conditional logic for cancel message
+  test('TC-N-34: HTML button click sends cancel when running', () => {
+    resolveView();
+    const html = webviewView.webview.html;
+
+    // Then: HTML contains conditional cancel logic
+    assert.ok(html.includes('if (isRunning)'), 'isRunning check exists in click handler');
+    assert.ok(html.includes('type: "cancel"'), 'Cancel message type exists');
+  });
+
+  // TC-N-35: HTML button style changes when running
+  // Given: Provider initialized
+  // When: HTML is generated
+  // Then: HTML contains style changes for running state
+  test('TC-N-35: HTML button style changes when running', () => {
+    resolveView();
+    const html = webviewView.webview.html;
+
+    // Then: HTML contains style changes for running state
+    assert.ok(html.includes('runBtn.style.backgroundColor'), 'Button background color change exists');
+    assert.ok(html.includes('--vscode-button-secondaryBackground'), 'Secondary background variable used');
+  });
+
+  // TC-N-36: Multiple tasks show correct count
+  // Given: Provider initialized and resolved
+  // When: Multiple tasks are registered
+  // Then: stateUpdate shows correct taskCount
+  test('TC-N-36: Multiple tasks show correct count', () => {
+    // Given: Provider resolved
+    resolveView();
+    postedMessages = [];
+
+    // When: Multiple tasks are registered
+    const mockTask1: RunningTask = { taskId: 'task-1', dispose: () => {} };
+    const mockTask2: RunningTask = { taskId: 'task-2', dispose: () => {} };
+    const mockTask3: RunningTask = { taskId: 'task-3', dispose: () => {} };
+    taskManager.register('task-1', 'タスク1', mockTask1);
+    taskManager.register('task-2', 'タスク2', mockTask2);
+    taskManager.register('task-3', 'タスク3', mockTask3);
+
+    // Then: Last message shows correct count
+    const lastMsg = postedMessages[postedMessages.length - 1] as { type: string; isRunning: boolean; taskCount: number };
+    assert.strictEqual(lastMsg.taskCount, 3, 'taskCount is 3');
+    assert.strictEqual(lastMsg.isRunning, true, 'isRunning is true');
   });
 });

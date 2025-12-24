@@ -1,11 +1,18 @@
 import * as vscode from 'vscode';
+import { taskManager } from '../core/taskManager';
 
 type PanelRunSource = 'workingTree' | 'latestCommit' | 'commitRange';
 
+/** Webviewから拡張機能へのメッセージ */
 type WebviewMessage =
   | { type: 'ready' }
   | { type: 'run'; source: PanelRunSource }
-  | { type: 'runCommand'; command: AllowedCommand };
+  | { type: 'runCommand'; command: AllowedCommand }
+  | { type: 'cancel' };
+
+/** 拡張機能からWebviewへのメッセージ */
+type ExtensionMessage =
+  | { type: 'stateUpdate'; isRunning: boolean; taskCount: number };
 
 type AllowedCommand =
   | 'dontforgetest.generateTest'
@@ -33,12 +40,30 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
 
   private view?: vscode.WebviewView;
   private readonly deps: ControlPanelDeps;
+  private readonly stateListener: (isRunning: boolean, taskCount: number) => void;
 
   public constructor(
     private readonly context: vscode.ExtensionContext,
     deps: Partial<ControlPanelDeps> = {},
   ) {
     this.deps = { ...createDefaultDeps(), ...deps };
+
+    // タスク状態変更を監視してWebviewに通知
+    this.stateListener = (isRunning, taskCount) => {
+      this.sendStateUpdate(isRunning, taskCount);
+    };
+    taskManager.addListener(this.stateListener);
+  }
+
+  /**
+   * Webviewに状態更新を送信する。
+   */
+  private sendStateUpdate(isRunning: boolean, taskCount: number): void {
+    if (!this.view) {
+      return;
+    }
+    const message: ExtensionMessage = { type: 'stateUpdate', isRunning, taskCount };
+    void this.view.webview.postMessage(message);
   }
 
   public resolveWebviewView(
@@ -67,7 +92,8 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
     }
 
     if (msg.type === 'ready') {
-      // 状態を送る必要がなくなったため何もしない
+      // 現在の状態を送信
+      this.sendStateUpdate(taskManager.isRunning(), taskManager.getRunningCount());
       return;
     }
 
@@ -83,6 +109,12 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
     if (msg.type === 'runCommand') {
       // セキュリティのため、許可したコマンドのみ実行する
       await this.deps.executeCommand(msg.command);
+      return;
+    }
+
+    if (msg.type === 'cancel') {
+      // 実行中のすべてのタスクをキャンセル
+      taskManager.cancelAll();
       return;
     }
   }
@@ -255,19 +287,53 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '    const optionDesc = document.getElementById("optionDesc");',
       '    const runBtn = document.getElementById("runBtn");',
       '',
+      '    // 状態管理',
+      '    let isRunning = false;',
+      '',
       '    const descriptions = {',
       '      workingTree: "Staged / Unstaged の変更を対象",',
       '      latestCommit: "HEAD の変更を対象",',
       '      commitRange: "指定した範囲のコミットを対象"',
       '    };',
       '',
+      '    // ボタンの表示を更新',
+      '    function updateButtonState(running) {',
+      '      isRunning = running;',
+      '      if (running) {',
+      '        runBtn.textContent = "テスト作成中 (中断)";',
+      '        runBtn.style.backgroundColor = "var(--vscode-button-secondaryBackground, #5a5a5a)";',
+      '        runBtn.style.color = "var(--vscode-button-secondaryForeground, #fff)";',
+      '      } else {',
+      '        runBtn.textContent = "テスト生成";',
+      '        runBtn.style.backgroundColor = "";',
+      '        runBtn.style.color = "";',
+      '      }',
+      '    }',
+      '',
       '    sourceSelect.addEventListener("change", () => {',
       '      optionDesc.textContent = descriptions[sourceSelect.value] || "";',
       '    });',
       '',
       '    runBtn.addEventListener("click", () => {',
-      '      vscode.postMessage({ type: "run", source: sourceSelect.value });',
+      '      if (isRunning) {',
+      '        // 実行中の場合はキャンセル',
+      '        vscode.postMessage({ type: "cancel" });',
+      '      } else {',
+      '        // 実行開始',
+      '        vscode.postMessage({ type: "run", source: sourceSelect.value });',
+      '      }',
       '    });',
+      '',
+      '    // 拡張機能からのメッセージを受信',
+      '    window.addEventListener("message", (event) => {',
+      '      const msg = event.data;',
+      '      if (msg && msg.type === "stateUpdate") {',
+      '        updateButtonState(msg.isRunning);',
+      '      }',
+      '    });',
+      '',
+      '    // 初期化時にready送信',
+      '    vscode.postMessage({ type: "ready" });',
       '  </script>',
       '</body>',
       '</html>',

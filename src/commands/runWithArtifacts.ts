@@ -12,9 +12,10 @@ import {
   type ArtifactSettings,
   type TestExecutionResult,
 } from '../core/artifacts';
+import { taskManager } from '../core/taskManager';
 import { buildTestPerspectivePrompt } from '../core/promptBuilder';
 import { runTestCommand } from '../core/testRunner';
-import { type AgentProvider } from '../providers/provider';
+import { type AgentProvider, type RunningTask } from '../providers/provider';
 import { appendEventToOutput } from '../ui/outputChannel';
 import { handleTestGenEventForStatusBar } from '../ui/statusBar';
 import { handleTestGenEventForProgressView, emitPhaseEvent } from '../ui/progressTreeView';
@@ -193,6 +194,22 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     };
     handleTestGenEventForProgressView(startedEvent);
 
+    // 初期のRunningTask（後で各フェーズで更新される）
+    const initialRunningTask: RunningTask = {
+      taskId: options.generationTaskId,
+      dispose: () => {
+        // 初期状態では何もしない（各フェーズでupdateRunningTaskにより更新される）
+      },
+    };
+    taskManager.register(options.generationTaskId, options.generationLabel, initialRunningTask);
+
+    // キャンセルチェック用のヘルパー関数
+    const checkCancelled = (): boolean => {
+      return taskManager.isCancelled(options.generationTaskId);
+    };
+
+    try {
+
     // 準備フェーズ
     handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'preparing', '準備中'));
 
@@ -215,6 +232,10 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         timeoutMs: settings.perspectiveGenerationTimeoutMs,
         timestamp,
         baseTaskId: options.generationTaskId,
+        onRunningTask: (runningTask) => {
+          // 観点表生成フェーズのRunningTaskを更新
+          taskManager.updateRunningTask(options.generationTaskId, runningTask);
+        },
       });
 
       // 観点表が正常に抽出できた場合のみ、テスト生成プロンプトに注入する
@@ -226,6 +247,13 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     // 2) 生成（本体）
     // テストコード生成フェーズ
     handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'generating', 'テストコード生成中'));
+
+    // キャンセルチェック（観点表生成後）
+    if (checkCancelled()) {
+      appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', 'タスクがキャンセルされました'));
+      handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
+      return;
+    }
 
     const genExit = await runProviderToCompletion({
       provider: options.provider,
@@ -241,6 +269,10 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       onEvent: (event) => {
         handleTestGenEventForStatusBar(event);
         appendEventToOutput(event);
+      },
+      onRunningTask: (runningTask) => {
+        // タスクマネージャーのRunningTaskを更新（キャンセル用）
+        taskManager.updateRunningTask(options.generationTaskId, runningTask);
       },
     });
 
@@ -277,6 +309,14 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     }
 
     // 3) 生成後: テスト実行 + レポート保存
+
+    // キャンセルチェック（生成後）
+    if (checkCancelled()) {
+      appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', 'タスクがキャンセルされました'));
+      handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
+      return;
+    }
+
     // テスト実行フェーズ
     handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'running-tests', 'テスト実行中'));
 
@@ -498,6 +538,10 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
     // 進捗TreeView完了イベント
     handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
+    } finally {
+      // タスク完了時に必ずタスクマネージャーから解除
+      taskManager.unregister(options.generationTaskId);
+    }
 }
 
 async function runTestCommandViaCursorAgent(params: {
@@ -642,6 +686,8 @@ async function runPerspectiveTableStep(params: {
   timeoutMs: number;
   timestamp: string;
   baseTaskId: string;
+  /** タスク開始時に呼ばれるコールバック。RunningTaskを受け取って登録等に使用可能。 */
+  onRunningTask?: (runningTask: RunningTask) => void;
 }): Promise<PerspectiveStepResult | undefined> {
   const taskId = `${params.baseTaskId}-perspectives`;
 
@@ -673,6 +719,7 @@ async function runPerspectiveTableStep(params: {
         logs.push(event.message);
       }
     },
+    onRunningTask: params.onRunningTask,
   });
 
   const raw = logs.join('\n');
@@ -717,6 +764,10 @@ async function runProviderToCompletion(params: {
    */
   timeoutMs?: number;
   onEvent: (event: TestGenEvent) => void;
+  /**
+   * タスク開始時に呼ばれるコールバック。RunningTaskを受け取って登録等に使用可能。
+   */
+  onRunningTask?: (runningTask: RunningTask) => void;
 }): Promise<number | null> {
   return await new Promise<number | null>((resolve) => {
     let resolved = false;
@@ -748,6 +799,11 @@ async function runProviderToCompletion(params: {
         }
       },
     });
+
+    // RunningTaskを通知（タスクマネージャー登録用）
+    if (params.onRunningTask) {
+      params.onRunningTask(running);
+    }
 
     const timeoutMs = params.timeoutMs;
     if (typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0) {
