@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "Dontforgetest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.50",
+  "version": "0.0.52",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -134,6 +134,12 @@
           "default": "docs/test-perspectives",
           "description": "テスト観点表（自動生成）の保存先ディレクトリ（ワークスペース相対または絶対）"
         },
+        "dontforgetest.perspectiveGenerationTimeoutMs": {
+          "type": "number",
+          "default": 300000,
+          "minimum": 0,
+          "description": "テスト観点表生成（cursor-agent）の最大実行時間（ミリ秒）。0以下の場合はタイムアウトしません。"
+        },
         "dontforgetest.testExecutionReportDir": {
           "type": "string",
           "default": "docs/test-execution-reports",
@@ -156,7 +162,7 @@
         "dontforgetest.allowUnsafeTestCommand": {
           "type": "boolean",
           "default": false,
-          "description": "testExecutionRunner=extension の場合に、VS Code を別プロセスで起動しそうなテストコマンドでも実行する（重複起動で不安定になる可能性があります）"
+          "description": "（互換性のため残置）以前は testExecutionRunner=extension の場合に、VS Code を別プロセスで起動しそうなテストコマンドをスキップしていました。現在は改善策により常に実行するため、本設定は基本的に無視されます。"
         },
         "dontforgetest.cursorAgentForceForTestExecution": {
           "type": "boolean",

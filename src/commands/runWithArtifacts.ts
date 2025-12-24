@@ -25,8 +25,11 @@ import { handleTestGenEventForProgressView, emitPhaseEvent } from '../ui/progres
  * 例:
  * - VS Code拡張機能の統合テスト（@vscode/test-electron）: `npm test` が VS Code を別プロセスで起動する
  *
- * Cursor/VS Code 上の拡張機能からさらに VS Code を起動すると不安定になり得るため、
- * そのようなケースは自動テスト実行をスキップし、ユーザーに手動実行を促す。
+ * 以前は Cursor/VS Code 上の拡張機能からさらに VS Code を起動すると不安定になり得るため、
+ * 自動テスト実行をスキップしていた。
+ *
+ * 現在は別プロセス起動の衝突回避策を講じたため、**スキップせず常に実行する**。
+ * 本関数は「警告ログを出すための推定」にのみ使用する。
  */
 async function looksLikeVsCodeLaunchingTestCommand(workspaceRoot: string, testCommand: string): Promise<boolean> {
   const cmd = testCommand.trim();
@@ -211,6 +214,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         referenceText: options.perspectiveReferenceText,
         model: options.model,
         reportDir: settings.perspectiveReportDir,
+        timeoutMs: settings.perspectiveGenerationTimeoutMs,
         timestamp,
         baseTaskId: options.generationTaskId,
       });
@@ -318,46 +322,16 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
     const testTaskId = `${options.generationTaskId}-test`;
 
-    // VS Code を起動しそうなテストコマンドは、拡張機能（extension runner）での自動実行を避ける。
-    // ただし runner=cursorAgent の場合は「cursor-agent に実行させて結果だけ回収」するため、ここではスキップしない。
     const willLaunchVsCode = await looksLikeVsCodeLaunchingTestCommand(options.workspaceRoot, settings.testCommand);
-    if (willLaunchVsCode && settings.testExecutionRunner === 'extension' && !settings.allowUnsafeTestCommand) {
-      const msg =
-        'このプロジェクトの testCommand は VS Code を別プロセスで起動する可能性があるため、拡張機能内の自動テスト実行をスキップします（必要ならターミナルで手動実行してください）。';
-      const ev = emitLogEvent(testTaskId, 'warn', msg);
-      handleTestGenEventForStatusBar({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped (would launch VS Code)', timestampMs: nowMs() });
-      captureEvent({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped (would launch VS Code)', timestampMs: nowMs() });
-      appendEventToOutput(ev);
-      captureEvent(ev);
-      handleTestGenEventForStatusBar({ type: 'completed', taskId: ev.taskId, exitCode: null, timestampMs: nowMs() });
-      const completedEv: TestGenEvent = { type: 'completed', taskId: ev.taskId, exitCode: null, timestampMs: nowMs() };
-      appendEventToOutput(completedEv);
-      captureEvent(completedEv);
-      const skippedResult: TestExecutionResult = {
-        command: settings.testCommand,
-        cwd: options.workspaceRoot,
-        exitCode: null,
-        signal: null,
-        durationMs: 0,
-        stdout: '',
-        stderr: '',
-        skipped: true,
-        skipReason: msg,
-        extensionLog: testExecutionLogLines.join('\n'),
-      };
-      const saved = await saveTestExecutionReport({
-        workspaceRoot: options.workspaceRoot,
-        generationLabel: options.generationLabel,
-        targetPaths: options.targetPaths,
-        model: options.model,
-        reportDir: settings.testExecutionReportDir,
-        timestamp,
-        result: skippedResult,
-      });
-      appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
-      // 進捗TreeView完了イベント
-      handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
-      return;
+    // VS Code 起動の可能性がある場合は警告ログを出す（スキップはしない）
+    if (willLaunchVsCode && settings.testExecutionRunner === 'extension') {
+      const warn = emitLogEvent(
+        testTaskId,
+        'warn',
+        'testCommand は VS Code（拡張機能テスト用の Extension Host）を別プロセスで起動する可能性があります。設定に従い、このままテストを実行します（重複起動で不安定になる場合があります）。',
+      );
+      appendEventToOutput(warn);
+      captureEvent(warn);
     }
 
     // runner に応じて実行
@@ -429,36 +403,13 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       const shouldTreatAsRejected = toolExecutionRejected || suspiciousEmptyResult || rejectedJpMessage;
 
       // cursor-agent 側でコマンド実行が拒否された場合、結果が空になってしまう。
-      // ユーザーが許可している場合のみ、拡張機能側（extension runner）でフォールバック実行して結果を保存する。
+      // 以前は VS Code 起動の可能性がある場合にフォールバックを抑止していたが、
+      // 現在は改善策により **常にテストを実行**する方針のため、拡張機能側でフォールバック実行する。
       if (shouldTreatAsRejected) {
-        const canFallback = !willLaunchVsCode || settings.allowUnsafeTestCommand;
-        const warnMessage = canFallback
-          ? 'cursor-agent によるコマンド実行が拒否されたため、拡張機能側でフォールバック実行します。'
-          : 'cursor-agent によるコマンド実行が拒否されました。VS Code 起動の可能性があるため、拡張機能側への自動フォールバックも行いません（allowUnsafeTestCommand を有効化するとフォールバックできます）。';
+        const warnMessage = 'cursor-agent によるコマンド実行が拒否されたため、拡張機能側でフォールバック実行します。';
         const warn = emitLogEvent(testTaskId, 'warn', warnMessage);
         appendEventToOutput(warn);
         captureEvent(warn);
-
-        if (!canFallback) {
-          const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: null, timestampMs: nowMs() };
-          handleTestGenEventForStatusBar(completed);
-          appendEventToOutput(completed);
-          captureEvent(completed);
-
-          const saved = await saveTestExecutionReport({
-            workspaceRoot: options.workspaceRoot,
-            generationLabel: options.generationLabel,
-            targetPaths: options.targetPaths,
-            model: options.model,
-            reportDir: settings.testExecutionReportDir,
-            timestamp,
-            result: { ...result, exitCode: null, skipped: true, skipReason: warnMessage, extensionLog: testExecutionLogLines.join('\n') },
-          });
-          appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
-          // 進捗TreeView完了イベント
-          handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
-          return;
-        }
 
         // フォールバック（extension runner）
         const fallbackResult = await runTestCommand({ command: settings.testCommand, cwd: options.workspaceRoot });
@@ -689,6 +640,8 @@ async function runPerspectiveTableStep(params: {
   referenceText?: string;
   model: string | undefined;
   reportDir: string;
+  /** 0以下の場合はタイムアウトしない */
+  timeoutMs: number;
   timestamp: string;
   baseTaskId: string;
 }): Promise<PerspectiveStepResult | undefined> {
@@ -714,6 +667,7 @@ async function runPerspectiveTableStep(params: {
       outputFormat: 'stream-json',
       allowWrite: false,
     },
+    timeoutMs: params.timeoutMs,
     onEvent: (event) => {
       handleTestGenEventForStatusBar(event);
       appendEventToOutput(event);
@@ -759,19 +713,29 @@ async function runProviderToCompletion(params: {
     outputFormat: 'stream-json';
     allowWrite: boolean;
   };
+  /**
+   * 最大実行時間（ミリ秒）。0以下/未指定の場合はタイムアウトしない。
+   * completed を待てない（ログだけが出続ける）ケースの保険。
+   */
+  timeoutMs?: number;
   onEvent: (event: TestGenEvent) => void;
 }): Promise<number | null> {
   return await new Promise<number | null>((resolve) => {
     let resolved = false;
+    let timeout: NodeJS.Timeout | undefined;
     const finish = (exitCode: number | null) => {
       if (resolved) {
         return;
       }
       resolved = true;
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = undefined;
+      }
       resolve(exitCode);
     };
 
-    params.provider.run({
+    const running = params.provider.run({
       taskId: params.run.taskId,
       workspaceRoot: params.run.workspaceRoot,
       agentCommand: params.run.agentCommand,
@@ -786,6 +750,26 @@ async function runProviderToCompletion(params: {
         }
       },
     });
+
+    const timeoutMs = params.timeoutMs;
+    if (typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+      timeout = setTimeout(() => {
+        // 念のため。provider が同期的に completed を返した場合でも、後から誤ってタイムアウト処理を走らせない。
+        if (resolved) {
+          return;
+        }
+        const msg =
+          `タイムアウト: cursor-agent の処理が ${timeoutMs}ms を超えたため停止します。` +
+          `（設定: dontforgetest.perspectiveGenerationTimeoutMs を調整できます）`;
+        params.onEvent({ type: 'log', taskId: params.run.taskId, level: 'error', message: msg, timestampMs: nowMs() });
+        try {
+          running.dispose();
+        } catch {
+          // noop
+        }
+        finish(null);
+      }, timeoutMs);
+    }
   });
 }
 

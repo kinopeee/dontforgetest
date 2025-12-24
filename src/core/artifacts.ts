@@ -10,6 +10,11 @@ export { parseMochaOutput };
 export interface ArtifactSettings {
   includeTestPerspectiveTable: boolean;
   perspectiveReportDir: string;
+  /**
+   * テスト観点表生成（cursor-agent）の最大実行時間（ミリ秒）。
+   * 0 以下の場合はタイムアウトしない。
+   */
+  perspectiveGenerationTimeoutMs: number;
   testExecutionReportDir: string;
   /** 空文字の場合は実行しない */
   testCommand: string;
@@ -21,7 +26,11 @@ export interface ArtifactSettings {
   testExecutionRunner: 'extension' | 'cursorAgent';
   /**
    * VS Code を別プロセスで起動しそうなテストコマンドを、あえて実行するか。
-   * 既定は安全のため false（重複起動で不安定になる可能性があるため）。
+   *
+   * 以前は拡張機能内のテスト実行で「VS Code 起動の可能性」を検出した場合にスキップしていたため、
+   * その挙動を上書きするためのフラグとして使用していた。
+   *
+   * 現在は改善策により **常にテストを実行する** 方針のため、本設定は互換性のために残している。
    */
   allowUnsafeTestCommand: boolean;
   /**
@@ -57,7 +66,7 @@ export interface TestExecutionResult {
   errorMessage?: string;
   /**
    * 実行が「意図的にスキップ」された場合に true。
-   * - 例: VS Code を起動しそうなテストコマンドを検出したため拡張機能内実行を回避
+   * - 例: testCommand が空のため実行しない
    */
   skipped?: boolean;
   /** スキップ理由（ユーザー表示用） */
@@ -76,9 +85,13 @@ export function getArtifactSettings(): ArtifactSettings {
   const config = vscode.workspace.getConfiguration('dontforgetest');
   const runnerRaw = (config.get<string>('testExecutionRunner', 'cursorAgent') ?? 'cursorAgent').trim();
   const runner: ArtifactSettings['testExecutionRunner'] = runnerRaw === 'extension' ? 'extension' : 'cursorAgent';
+  const perspectiveTimeoutRaw = config.get<number>('perspectiveGenerationTimeoutMs', 300_000);
+  const perspectiveGenerationTimeoutMs =
+    typeof perspectiveTimeoutRaw === 'number' && Number.isFinite(perspectiveTimeoutRaw) && perspectiveTimeoutRaw > 0 ? perspectiveTimeoutRaw : 0;
   return {
     includeTestPerspectiveTable: config.get<boolean>('includeTestPerspectiveTable', true),
     perspectiveReportDir: (config.get<string>('perspectiveReportDir', 'docs/test-perspectives') ?? 'docs/test-perspectives').trim(),
+    perspectiveGenerationTimeoutMs,
     testExecutionReportDir: (config.get<string>('testExecutionReportDir', 'docs/test-execution-reports') ?? 'docs/test-execution-reports').trim(),
     testCommand: (config.get<string>('testCommand', 'npm test') ?? 'npm test').trim(),
     testExecutionRunner: runner,
