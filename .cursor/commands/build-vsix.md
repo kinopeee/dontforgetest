@@ -21,7 +21,7 @@
 #### ワンライナー（コピペ用）
 
 ```bash
-npm version patch --no-git-tag-version && npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "chottotest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links && echo "✅ 生成完了: chottotest-$VERSION.vsix"
+npm version patch --no-git-tag-version && npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "dontforgetest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links && echo "✅ 生成完了: dontforgetest-$VERSION.vsix"
 ```
 
 > **注意**: `npm test` が VS Code を起動する場合（`@vscode/test-electron` 使用時）、テストは長時間かかるかスキップされる可能性があります。VSIX 生成自体には影響しません。
@@ -38,16 +38,16 @@ npm test
 
 # 3) VSIX を生成
 VERSION=$(node -p "require('./package.json').version")
-npx --yes @vscode/vsce package --out "chottotest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links
+npx --yes @vscode/vsce package --out "dontforgetest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links
 
 # 4) 生成確認
-echo "✅ 生成完了: chottotest-$VERSION.vsix"
+echo "✅ 生成完了: dontforgetest-$VERSION.vsix"
 ```
 
 ### B) バージョンを上げずに VSIX を生成（ローカル検証用）
 
 ```bash
-npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "chottotest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links && echo "✅ 生成完了: chottotest-$VERSION.vsix"
+npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "dontforgetest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links && echo "✅ 生成完了: dontforgetest-$VERSION.vsix"
 ```
 
 ### C) テストをスキップして VSIX を生成（高速化）
@@ -55,7 +55,7 @@ npm run compile && npm test && VERSION=$(node -p "require('./package.json').vers
 テストが VS Code 起動を必要とする場合や、ビルドのみ確認したい場合：
 
 ```bash
-npm version patch --no-git-tag-version && npm run compile && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "chottotest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links && echo "✅ 生成完了: chottotest-$VERSION.vsix"
+npm version patch --no-git-tag-version && npm run compile && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "dontforgetest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links && echo "✅ 生成完了: dontforgetest-$VERSION.vsix"
 ```
 
 ## バージョン更新のコミット
@@ -81,4 +81,4 @@ VS Code の拡張機能ビューで `...` → **Install from VSIX...** を選び
 - `npm test` が `@vscode/test-electron` を使用する場合、VS Code を別プロセスで起動するため、テスト実行は長時間かかるかスキップされる可能性があります。VSIX 生成自体には影響しません。
 - `LICENSE` が無い場合も `vsce` が警告します（パッケージ生成は可能）。配布を想定するなら `LICENSE` / `LICENSE.md` / `LICENSE.txt` を追加してください。
 - `*.vsix` がエクスプローラーに見えない場合は、VS Code の設定 `Explorer: Exclude Git Ignore` を確認してください。
-- 生成物はリポジトリのルートに出力されます（例: `chottotest-0.0.15.vsix`）。
+- 生成物はリポジトリのルートに出力されます（例: `dontforgetest-0.0.15.vsix`）。
