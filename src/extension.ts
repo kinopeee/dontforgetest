@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { previewLastRun, rollbackLastRun } from './apply/patchApplier';
+import { findLatestArtifact, getArtifactSettings } from './core/artifacts';
 import { generateTestFromLatestCommit } from './commands/generateFromCommit';
 import { generateTestFromCommitRange } from './commands/generateFromCommitRange';
 import { generateTestFromActiveFile } from './commands/generateFromFile';
@@ -90,6 +91,50 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('testgen-agent.openSettings', async () => {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'testgen-agent');
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('testgen-agent.openLatestPerspective', async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        await vscode.window.showWarningMessage('ワークスペースが開かれていません');
+        return;
+      }
+
+      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+      const settings = getArtifactSettings();
+      const latestPath = await findLatestArtifact(workspaceRoot, settings.perspectiveReportDir, 'test-perspectives_');
+
+      if (!latestPath) {
+        await vscode.window.showInformationMessage('テスト観点表が見つかりませんでした');
+        return;
+      }
+
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latestPath));
+      await vscode.window.showTextDocument(doc);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('testgen-agent.openLatestExecutionReport', async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        await vscode.window.showWarningMessage('ワークスペースが開かれていません');
+        return;
+      }
+
+      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+      const settings = getArtifactSettings();
+      const latestPath = await findLatestArtifact(workspaceRoot, settings.testExecutionReportDir, 'test-execution_');
+
+      if (!latestPath) {
+        await vscode.window.showInformationMessage('テスト実行レポートが見つかりませんでした');
+        return;
+      }
+
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latestPath));
+      await vscode.window.showTextDocument(doc);
     }),
   );
 }

@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "Chottotest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.32",
+  "version": "0.0.35",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -11,19 +11,7 @@
     "Other"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [
-    "onView:testgen-agent.controlPanel",
-    "onCommand:testgen-agent.openPanel",
-    "onCommand:testgen-agent.generateTest",
-    "onCommand:testgen-agent.generateTestFromFile",
-    "onCommand:testgen-agent.generateTestFromCommit",
-    "onCommand:testgen-agent.generateTestFromCommitRange",
-    "onCommand:testgen-agent.generateTestFromWorkingTree",
-    "onCommand:testgen-agent.previewLastRun",
-    "onCommand:testgen-agent.rollbackLastRun",
-    "onCommand:testgen-agent.showTestGeneratorOutput",
-    "onCommand:testgen-agent.selectDefaultModel"
-  ],
+  "activationEvents": [],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -88,6 +76,14 @@
         "command": "testgen-agent.openSettings",
         "title": "Chottotest: 設定を開く",
         "icon": "$(gear)"
+      },
+      {
+        "command": "testgen-agent.openLatestPerspective",
+        "title": "Chottotest: 最新の観点表を開く"
+      },
+      {
+        "command": "testgen-agent.openLatestExecutionReport",
+        "title": "Chottotest: 最新の実行レポートを開く"
       }
     ],
     "menus": {

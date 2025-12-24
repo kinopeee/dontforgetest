@@ -15,7 +15,9 @@ type AllowedCommand =
   | 'testgen-agent.previewLastRun'
   | 'testgen-agent.rollbackLastRun'
   | 'testgen-agent.showTestGeneratorOutput'
-  | 'testgen-agent.selectDefaultModel';
+  | 'testgen-agent.selectDefaultModel'
+  | 'testgen-agent.openLatestPerspective'
+  | 'testgen-agent.openLatestExecutionReport';
 
 interface ControlPanelDeps {
   executeCommand: (command: AllowedCommand) => Thenable<unknown>;
@@ -242,9 +244,6 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '    <div class="row">',
       '      <button class="primary" id="runBtn">テスト生成</button>',
       '    </div>',
-      '    <div class="row">',
-      '      <button class="secondary" id="quickPickBtn">QuickPick</button>',
-      '    </div>',
       '  </div>',
       '',
       '  <details class="section">',
@@ -256,9 +255,10 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '  </details>',
       '',
       '  <details class="section">',
-      '    <summary><span class="chevron">›</span> ログ</summary>',
+      '    <summary><span class="chevron">›</span> 成果物</summary>',
       '    <div class="content">',
-      '      <div class="row"><button class="secondary" id="openLogBtn">ログを表示</button></div>',
+      '      <div class="row"><button class="secondary" id="openPerspectiveBtn">最新の観点表</button></div>',
+      '      <div class="row"><button class="secondary" id="openReportBtn">最新の実行レポート</button></div>',
       '    </div>',
       '  </details>',
       '',
@@ -268,10 +268,10 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '    const sourceSelect = document.getElementById("sourceSelect");',
       '    const optionDesc = document.getElementById("optionDesc");',
       '    const runBtn = document.getElementById("runBtn");',
-      '    const quickPickBtn = document.getElementById("quickPickBtn");',
       '    const previewBtn = document.getElementById("previewBtn");',
       '    const rollbackBtn = document.getElementById("rollbackBtn");',
-      '    const openLogBtn = document.getElementById("openLogBtn");',
+      '    const openPerspectiveBtn = document.getElementById("openPerspectiveBtn");',
+      '    const openReportBtn = document.getElementById("openReportBtn");',
       '',
       '    const descriptions = {',
       '      workingTree: "git add していない変更を対象",',
@@ -287,10 +287,6 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '      vscode.postMessage({ type: "run", source: sourceSelect.value });',
       '    });',
       '',
-      '    quickPickBtn.addEventListener("click", () => {',
-      '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.generateTest" });',
-      '    });',
-      '',
       '    previewBtn.addEventListener("click", () => {',
       '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.previewLastRun" });',
       '    });',
@@ -299,8 +295,12 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.rollbackLastRun" });',
       '    });',
       '',
-      '    openLogBtn.addEventListener("click", () => {',
-      '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.showTestGeneratorOutput" });',
+      '    openPerspectiveBtn.addEventListener("click", () => {',
+      '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.openLatestPerspective" });',
+      '    });',
+      '',
+      '    openReportBtn.addEventListener("click", () => {',
+      '      vscode.postMessage({ type: "runCommand", command: "testgen-agent.openLatestExecutionReport" });',
       '    });',
       '  </script>',
       '</body>',

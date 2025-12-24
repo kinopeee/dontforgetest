@@ -110,6 +110,82 @@ export function resolveDirAbsolute(workspaceRoot: string, dir: string): string {
   return path.isAbsolute(trimmed) ? trimmed : path.join(workspaceRoot, trimmed);
 }
 
+/**
+ * 指定されたディレクトリ内で、プレフィックスに一致する最新の成果物ファイルを検索する。
+ * ファイル名のタイムスタンプ（YYYYMMDD_HHmmss）でソートし、最新のファイルパスを返す。
+ *
+ * @param workspaceRoot ワークスペースルートパス
+ * @param dir 検索対象ディレクトリ（ワークスペース相対または絶対）
+ * @param prefix ファイル名のプレフィックス（例: 'test-perspectives_' または 'test-execution_'）
+ * @returns 最新のファイルの絶対パス。見つからない場合は undefined
+ */
+export async function findLatestArtifact(
+  workspaceRoot: string,
+  dir: string,
+  prefix: string,
+): Promise<string | undefined> {
+  const absDir = resolveDirAbsolute(workspaceRoot, dir);
+
+  try {
+    // ディレクトリ内のファイル一覧を取得
+    const entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(absDir));
+
+    // プレフィックスに一致する .md ファイルをフィルタリング
+    const matchingFiles = entries
+      .filter(([name, type]) => type === vscode.FileType.File && name.startsWith(prefix) && name.endsWith('.md'))
+      .map(([name]) => ({
+        name,
+        path: path.join(absDir, name),
+        timestamp: extractTimestamp(name, prefix),
+      }))
+      .filter((file): file is typeof file & { timestamp: string } => file.timestamp !== null)
+      .sort((a, b) => {
+        // タイムスタンプで降順ソート（最新が先頭）
+        return b.timestamp.localeCompare(a.timestamp);
+      });
+
+    if (matchingFiles.length === 0) {
+      return undefined;
+    }
+
+    return matchingFiles[0].path;
+  } catch (error) {
+    // ディレクトリが存在しない場合などは undefined を返す
+    return undefined;
+  }
+}
+
+/**
+ * ファイル名からタイムスタンプ部分を抽出する。
+ * 形式: {prefix}YYYYMMDD_HHmmss.md
+ *
+ * @param filename ファイル名
+ * @param prefix プレフィックス
+ * @returns タイムスタンプ文字列（YYYYMMDD_HHmmss）。抽出できない場合は null
+ */
+function extractTimestamp(filename: string, prefix: string): string | null {
+  if (!filename.startsWith(prefix) || !filename.endsWith('.md')) {
+    return null;
+  }
+
+  // プレフィックスと拡張子を除去
+  const withoutPrefix = filename.slice(prefix.length);
+  const withoutExt = withoutPrefix.slice(0, -3); // '.md' を除去
+
+  // YYYYMMDD_HHmmss 形式かチェック（15文字）
+  if (withoutExt.length !== 15) {
+    return null;
+  }
+
+  // 形式チェック: YYYYMMDD_HHmmss
+  const timestampPattern = /^\d{8}_\d{6}$/;
+  if (!timestampPattern.test(withoutExt)) {
+    return null;
+  }
+
+  return withoutExt;
+}
+
 export async function saveTestPerspectiveTable(params: {
   workspaceRoot: string;
   targetLabel: string;
