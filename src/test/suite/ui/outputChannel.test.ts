@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import { appendEventToOutput, getTestGenOutputChannel, showTestGenOutput } from '../../../ui/outputChannel';
 import { nowMs, type TestGenEvent } from '../../../core/event';
+import { emitPhaseEvent } from '../../../ui/progressTreeView';
 
 suite('ui/outputChannel.ts', () => {
   suite('getTestGenOutputChannel', () => {
@@ -159,6 +160,48 @@ suite('ui/outputChannel.ts', () => {
       assert.doesNotThrow(() => {
         appendEventToOutput(event);
       });
+    });
+
+    // TC-N-11: OutputChannel receives phase event
+    // Given: Phase event
+    // When: appendEventToOutput is called with phase event
+    // Then: Phase event formatted correctly with timestamp and phase label, logged to output
+    test('TC-N-11: OutputChannel receives phase event', () => {
+      // Given: Phase event
+      const phaseEvent = emitPhaseEvent('test-task-1', 'preparing', '準備中');
+
+      // When: appendEventToOutput is called with phase event
+      // Then: OutputChannel receives phase event, formats correctly with timestamp and phase label
+      assert.doesNotThrow(() => {
+        appendEventToOutput(phaseEvent);
+      }, 'Phase event is processed without error');
+
+      // Verify event structure
+      assert.strictEqual(phaseEvent.type, 'phase', 'Event type is phase');
+      assert.strictEqual(phaseEvent.taskId, 'test-task-1', 'Event taskId is correct');
+      assert.strictEqual(phaseEvent.phase, 'preparing', 'Event phase is correct');
+      assert.strictEqual(phaseEvent.phaseLabel, '準備中', 'Event phaseLabel is correct');
+    });
+
+    // TC-N-06: Phase event logged to outputChannel
+    // Given: Phase event
+    // When: appendEventToOutput is called with phase event
+    // Then: OutputChannel receives phase event, formats correctly with timestamp and phase label
+    test('TC-N-06: Phase event logged to outputChannel', () => {
+      // Given: Phase event
+      const phaseEvent = emitPhaseEvent('test-task-1', 'preparing', '準備中');
+
+      // When: appendEventToOutput is called with phase event
+      // Then: OutputChannel receives phase event, formats correctly
+      assert.doesNotThrow(() => {
+        appendEventToOutput(phaseEvent);
+      }, 'Phase event is processed without error');
+
+      // Verify event structure
+      assert.strictEqual(phaseEvent.type, 'phase', 'Event type is phase');
+      assert.strictEqual(phaseEvent.taskId, 'test-task-1', 'Event taskId is correct');
+      assert.strictEqual(phaseEvent.phase, 'preparing', 'Event phase is correct');
+      assert.strictEqual(phaseEvent.phaseLabel, '準備中', 'Event phaseLabel is correct');
     });
   });
 

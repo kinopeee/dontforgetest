@@ -1,6 +1,8 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { initializeProgressTreeView } from '../../ui/progressTreeView';
+import { initializeOutputTreeView } from '../../ui/outputTreeView';
 
 suite('src/extension.ts', () => {
   suite('Extension Activation', () => {
@@ -386,6 +388,49 @@ suite('src/extension.ts', () => {
       // パスデータの断片
       assert.ok(svgContent.includes('d="M9 3h6M10 3v7l-4 8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l-4-8V3"'), '試験管のパスデータが含まれていること');
       assert.ok(svgContent.includes('d="M7 15h10"'), '液体の線が含まれていること');
+    });
+  });
+
+  suite('ProgressTreeView Initialization', () => {
+    // TC-N-01: Valid ExtensionContext provided
+    // Given: Valid ExtensionContext provided
+    // When: initializeProgressTreeView is called
+    // Then: ProgressTreeView initialized successfully, provider returned
+    test('TC-N-01: Valid ExtensionContext provided', () => {
+      // Given: Valid ExtensionContext provided
+      const context: vscode.ExtensionContext = {
+        subscriptions: [],
+        extensionUri: vscode.Uri.file('/'),
+      } as unknown as vscode.ExtensionContext;
+
+      // When: initializeProgressTreeView is called
+      const provider = initializeProgressTreeView(context);
+
+      // Then: ProgressTreeView initialized successfully, provider returned
+      assert.ok(provider, 'ProgressTreeView provider is created');
+      assert.ok(context.subscriptions.length > 0, 'Subscriptions are registered');
+    });
+  });
+
+  suite('OutputTreeView Initialization', () => {
+    // TC-N-02: Valid ExtensionContext provided
+    // Given: Valid ExtensionContext provided
+    // When: initializeOutputTreeView is called
+    // Then: OutputTreeView initialized successfully
+    test('TC-N-02: Valid ExtensionContext provided', () => {
+      // Given: Valid ExtensionContext provided
+      const context: vscode.ExtensionContext = {
+        subscriptions: [],
+        extensionUri: vscode.Uri.file('/'),
+      } as unknown as vscode.ExtensionContext;
+
+      const initialSubscriptionCount = context.subscriptions.length;
+
+      // When: initializeOutputTreeView is called
+      initializeOutputTreeView(context);
+
+      // Then: OutputTreeView initialized successfully
+      assert.ok(context.subscriptions.length > initialSubscriptionCount, 'Subscriptions are registered');
     });
   });
 });

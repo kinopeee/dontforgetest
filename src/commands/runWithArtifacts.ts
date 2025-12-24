@@ -17,6 +17,7 @@ import { runTestCommand } from '../core/testRunner';
 import { type AgentProvider } from '../providers/provider';
 import { appendEventToOutput, showTestGenOutput } from '../ui/outputChannel';
 import { handleTestGenEventForStatusBar } from '../ui/statusBar';
+import { handleTestGenEventForProgressView, emitPhaseEvent } from '../ui/progressTreeView';
 
 /**
  * `testCommand` が VS Code（Electron）を起動するタイプのテストである可能性が高い場合に true を返す。
@@ -168,6 +169,9 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       case 'completed':
         testExecutionLogLines.push(`[${tsIso}] [${event.taskId}] DONE exit=${event.exitCode ?? 'null'}`);
         break;
+      case 'phase':
+        testExecutionLogLines.push(`[${tsIso}] [${event.taskId}] PHASE ${event.phase}: ${event.phaseLabel}`);
+        break;
       default: {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const _exhaustive: never = event;
@@ -178,9 +182,25 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
   showTestGenOutput(true);
 
+    // タスク開始イベントを発火（進捗TreeView用）
+    const startedEvent: TestGenEvent = {
+      type: 'started',
+      taskId: options.generationTaskId,
+      label: options.generationLabel,
+      detail: options.targetPaths.join(', '),
+      timestampMs: nowMs(),
+    };
+    handleTestGenEventForProgressView(startedEvent);
+
+    // 準備フェーズ
+    handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'preparing', '準備中'));
+
     // 1) 生成前: 観点表を生成して保存し、テスト生成プロンプトに注入
     let finalPrompt = options.generationPrompt;
     if (settings.includeTestPerspectiveTable) {
+      // 観点表生成フェーズ
+      handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'perspectives', '観点表生成中'));
+
       const perspectiveResult = await runPerspectiveTableStep({
         provider: options.provider,
         workspaceRoot: options.workspaceRoot,
@@ -202,7 +222,8 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     }
 
     // 2) 生成（本体）
-    void vscode.window.showInformationMessage(`テスト生成を開始しました: ${options.generationLabel}`);
+    // テストコード生成フェーズ
+    handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'generating', 'テストコード生成中'));
 
     const genExit = await runProviderToCompletion({
       provider: options.provider,
@@ -254,6 +275,9 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     }
 
     // 3) 生成後: テスト実行 + レポート保存
+    // テスト実行フェーズ
+    handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'running-tests', 'テスト実行中'));
+
     if (settings.testCommand.trim().length === 0) {
       const msg = 'dontforgetest.testCommand が空のため、テスト実行はスキップします。';
       const ev = emitLogEvent(`${options.generationTaskId}-test`, 'warn', msg);
@@ -287,6 +311,8 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         result: skippedResult,
       });
       appendEventToOutput(emitLogEvent(ev.taskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+      // 進捗TreeView完了イベント
+      handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
       return;
     }
 
@@ -329,6 +355,8 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         result: skippedResult,
       });
       appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+      // 進捗TreeView完了イベント
+      handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
       return;
     }
 
@@ -427,6 +455,8 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
             result: { ...result, exitCode: null, skipped: true, skipReason: warnMessage, extensionLog: testExecutionLogLines.join('\n') },
           });
           appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+          // 進捗TreeView完了イベント
+          handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
           return;
         }
 
@@ -448,6 +478,8 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
           result: { ...fallbackResult, extensionLog: testExecutionLogLines.join('\n') },
         });
         appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+        // 進捗TreeView完了イベント
+        handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: fallbackResult.exitCode, timestampMs: nowMs() });
         return;
       }
 
@@ -466,6 +498,8 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         result: { ...result, extensionLog: testExecutionLogLines.join('\n') },
       });
       appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+      // 進捗TreeView完了イベント
+      handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
       return;
     }
 
@@ -513,6 +547,8 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     });
 
     appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+    // 進捗TreeView完了イベント
+    handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
 }
 
 async function runTestCommandViaCursorAgent(params: {

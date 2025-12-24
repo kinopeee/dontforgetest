@@ -5,6 +5,14 @@
  * - できるだけ「拡張機能が扱いやすい粒度」に正規化する
  */
 
+/** 進捗フェーズの種別 */
+export type TestGenPhase =
+  | 'preparing'        // 準備中
+  | 'perspectives'     // 観点表生成中
+  | 'generating'       // テストコード生成中
+  | 'running-tests'    // テスト実行中
+  | 'done';            // 完了
+
 export type TestGenEvent =
   | {
       type: 'started';
@@ -13,6 +21,15 @@ export type TestGenEvent =
       label: string;
       /** 追加情報（例: 対象ファイルパス） */
       detail?: string;
+      timestampMs: number;
+    }
+  | {
+      type: 'phase';
+      taskId: string;
+      /** 現在のフェーズ */
+      phase: TestGenPhase;
+      /** フェーズの表示ラベル */
+      phaseLabel: string;
       timestampMs: number;
     }
   | {

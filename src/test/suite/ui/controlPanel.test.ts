@@ -81,14 +81,32 @@ suite('src/ui/controlPanel.ts', () => {
   // TC-N-02: Body styles
   // Given: Provider initialized with valid context
   // When: HTML is generated
-  // Then: HTML contains body styles with `margin: 0`, `padding: 8px 14px 12px 14px`, `background: transparent`, `line-height: 1.4`
+  // Then: HTML contains body styles with updated padding values
   test('TC-N-02: Body styles', () => {
     resolveView();
     const html = webviewView.webview.html;
     assert.ok(html.includes('margin: 0;'), 'Body has margin: 0');
-    assert.ok(html.includes('padding: 8px 14px 12px 14px;'), 'Body has padding: 8px 14px 12px 14px');
+    assert.ok(html.includes('padding: 4px 14px 4px 14px;'), 'Body has updated padding: 4px 14px 4px 14px');
     assert.ok(html.includes('background: transparent;'), 'Body has background: transparent');
     assert.ok(html.includes('line-height: 1.4;'), 'Body has line-height: 1.4');
+  });
+
+  // TC-N-25: ControlPanel UI renders with updated styles
+  // Given: Provider initialized with valid context
+  // When: HTML is generated
+  // Then: HTML rendered with updated padding, margin values, output section removed
+  test('TC-N-25: ControlPanel UI renders with updated styles', () => {
+    resolveView();
+    const html = webviewView.webview.html;
+    // Verify updated padding values
+    assert.ok(html.includes('padding: 4px 14px 4px 14px;'), 'Body has updated padding');
+    assert.ok(html.includes('margin: 6px 0;'), 'Row has updated margin: 6px 0');
+    assert.ok(html.includes('margin: 2px 0 6px 0;'), 'Hint has updated margin: 2px 0 6px 0');
+    assert.ok(html.includes('margin-bottom: 0;'), 'Section has updated margin-bottom: 0');
+    // Verify output section is removed
+    assert.ok(!html.includes('id="openPerspectiveBtn"'), 'Output section buttons are removed');
+    assert.ok(!html.includes('id="openReportBtn"'), 'Output section buttons are removed');
+    assert.ok(!html.includes('<div class="section-header">出力</div>'), 'Output section header is removed');
   });
 
   // TC-N-03: Select wrapper div
@@ -296,14 +314,15 @@ suite('src/ui/controlPanel.ts', () => {
   // TC-N-20: JavaScript event listeners
   // Given: Provider initialized with valid context
   // When: HTML is generated
-  // Then: HTML contains JavaScript event listeners for sourceSelect change, runBtn click, openPerspectiveBtn click, openReportBtn click
+  // Then: HTML contains JavaScript event listeners for sourceSelect change and runBtn click
   test('TC-N-20: JavaScript event listeners', () => {
     resolveView();
     const html = webviewView.webview.html;
     assert.ok(html.includes('sourceSelect.addEventListener("change"'), 'sourceSelect change listener is present');
     assert.ok(html.includes('runBtn.addEventListener("click"'), 'runBtn click listener is present');
-    assert.ok(html.includes('openPerspectiveBtn.addEventListener("click"'), 'openPerspectiveBtn click listener is present');
-    assert.ok(html.includes('openReportBtn.addEventListener("click"'), 'openReportBtn click listener is present');
+    // Output section buttons are removed, so their listeners should not be present
+    assert.ok(!html.includes('openPerspectiveBtn.addEventListener("click"'), 'openPerspectiveBtn click listener is removed');
+    assert.ok(!html.includes('openReportBtn.addEventListener("click"'), 'openReportBtn click listener is removed');
   });
 
   // TC-B-01: getNonce() returns non-empty string
@@ -412,6 +431,32 @@ suite('src/ui/controlPanel.ts', () => {
     // When: Null message is sent
     await webviewView.webview._onMessage?.(null);
     // Then: No commands executed
+    assert.strictEqual(executedCommands.length, 0, 'No commands executed');
+  });
+
+  // TC-B-19: ControlPanel receives message with null value
+  // Given: ControlPanel receives message with null value
+  // When: Message is processed
+  // Then: Message ignored, no command executed
+  test('TC-B-19: ControlPanel receives message with null value', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+    // When: Message with null value is sent
+    await webviewView.webview._onMessage?.(null);
+    // Then: Message ignored, no command executed
+    assert.strictEqual(executedCommands.length, 0, 'No commands executed');
+  });
+
+  // TC-B-20: ControlPanel receives message with undefined value
+  // Given: ControlPanel receives message with undefined value
+  // When: Message is processed
+  // Then: Message ignored, no command executed
+  test('TC-B-20: ControlPanel receives message with undefined value', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+    // When: Message with undefined value is sent
+    await webviewView.webview._onMessage?.(undefined);
+    // Then: Message ignored, no command executed
     assert.strictEqual(executedCommands.length, 0, 'No commands executed');
   });
 

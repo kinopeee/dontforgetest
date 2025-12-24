@@ -9,6 +9,8 @@ import { TestGenControlPanelViewProvider } from './ui/controlPanel';
 import { showTestGenOutput } from './ui/outputChannel';
 import { generateTestWithQuickPick } from './ui/quickPick';
 import { initializeTestGenStatusBar } from './ui/statusBar';
+import { initializeProgressTreeView } from './ui/progressTreeView';
+import { initializeOutputTreeView } from './ui/outputTreeView';
 
 /**
  * この関数は拡張機能が有効化されたときに呼ばれます
@@ -19,6 +21,8 @@ export function activate(context: vscode.ExtensionContext) {
   const provider = new CursorAgentProvider();
   const controlPanelProvider = new TestGenControlPanelViewProvider(context);
   initializeTestGenStatusBar(context);
+  initializeProgressTreeView(context);
+  initializeOutputTreeView(context);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(TestGenControlPanelViewProvider.viewId, controlPanelProvider, {

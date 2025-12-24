@@ -45,7 +45,7 @@ function update(): void {
     return;
   }
 
-  statusBar.text = `$(beaker) Dontforgetest: ${count} 実行中`;
+  statusBar.text = `$(beaker) $(loading~spin) Dontforgetest: ${count} 実行中`;
   statusBar.tooltip = buildTooltip();
   statusBar.show();
 }
