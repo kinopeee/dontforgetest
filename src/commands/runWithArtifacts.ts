@@ -15,7 +15,7 @@ import {
 import { buildTestPerspectivePrompt } from '../core/promptBuilder';
 import { runTestCommand } from '../core/testRunner';
 import { type AgentProvider } from '../providers/provider';
-import { appendEventToOutput, showTestGenOutput } from '../ui/outputChannel';
+import { appendEventToOutput } from '../ui/outputChannel';
 import { handleTestGenEventForStatusBar } from '../ui/statusBar';
 import { handleTestGenEventForProgressView, emitPhaseEvent } from '../ui/progressTreeView';
 
@@ -182,8 +182,6 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       }
     }
   };
-
-  showTestGenOutput(true);
 
     // タスク開始イベントを発火（進捗TreeView用）
     const startedEvent: TestGenEvent = {
