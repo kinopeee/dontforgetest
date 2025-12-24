@@ -291,3 +291,12 @@ export function emitPhaseEvent(taskId: string, phase: TestGenPhase, phaseLabel: 
     timestampMs: nowMs(),
   };
 }
+
+/**
+ * テスト用：モジュール状態をリセットする
+ * @internal
+ */
+export function _resetForTesting(): void {
+  provider?.dispose();
+  provider = undefined;
+}

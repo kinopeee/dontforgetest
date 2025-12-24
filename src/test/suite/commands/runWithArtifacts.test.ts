@@ -4212,7 +4212,8 @@ suite('commands/runWithArtifacts.ts', () => {
       // Given: testCommand is a single character
       const provider = new MockProvider(0);
       const taskId = `task-b-02-${Date.now()}`;
-      const reportDir = path.join(baseTempDir, 'reports-b-02');
+      // 一意のディレクトリ名を使用
+      const reportDir = path.join(baseTempDir, `reports-b-02-${Date.now()}`);
 
       // When: runWithArtifacts is called with single character command
       // Note: Single character commands may not be valid, but we test the boundary
@@ -4830,7 +4831,9 @@ suite('commands/runWithArtifacts.ts', () => {
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
     assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
-    assert.ok(text.includes('BEGIN TEST PERSPECTIVES'), 'Perspective table should contain markers');
+    // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
+    // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
+    assert.ok(text.includes('| ID | Case |') || text.includes('| 1 | Test |'), 'Perspective table should contain extracted content');
   });
 
   // TC-N-02: perspectiveGenerationTimeoutMs = 300000, testCommand detects VS Code launch, testExecutionRunner = 'extension'
@@ -4952,17 +4955,26 @@ suite('commands/runWithArtifacts.ts', () => {
   test('TC-N-04: cursor-agent rejects test execution, willLaunchVsCode = false', async () => {
     // Given: cursor-agent rejects test execution, willLaunchVsCode = false
     const taskId = `task-n-04-${Date.now()}`;
-    class RejectingProvider extends MockProvider {
+    class RejectingProvider implements AgentProvider {
+      readonly id = 'rejecting';
+      readonly displayName = 'Rejecting';
       run(options: AgentRunOptions): RunningTask {
-        const result = super.run(options);
-        if (options.taskId.endsWith('-test')) {
-          // Simulate rejection by returning empty result
-          setTimeout(() => {
+        // テスト実行タスクの場合は拒否を模倣（taskIdは -test-agent で終わる）
+        setTimeout(() => {
+          options.onEvent({
+            type: 'started',
+            taskId: options.taskId,
+            label: 'test',
+            timestampMs: Date.now(),
+          });
+
+          if (options.taskId.includes('-test-agent')) {
+            // 拒否: exitCode=nullと日本語拒否メッセージ
             options.onEvent({
               type: 'log',
               taskId: options.taskId,
               level: 'error',
-              message: 'コマンド実行が拒否されました',
+              message: '実行が拒否されました',
               timestampMs: Date.now(),
             });
             options.onEvent({
@@ -4971,12 +4983,20 @@ suite('commands/runWithArtifacts.ts', () => {
               exitCode: null,
               timestampMs: Date.now(),
             });
-          }, 10);
-        }
-        return result;
+          } else {
+            // 他のタスク（観点表生成など）は正常完了
+            options.onEvent({
+              type: 'completed',
+              taskId: options.taskId,
+              exitCode: 0,
+              timestampMs: Date.now(),
+            });
+          }
+        }, 10);
+        return { taskId: options.taskId, dispose: () => {} };
       }
     }
-    const provider = new RejectingProvider(0);
+    const provider = new RejectingProvider();
 
     // When: runWithArtifacts is called
     await runWithArtifacts({
@@ -5027,17 +5047,25 @@ suite('commands/runWithArtifacts.ts', () => {
     await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, 'package.json')), Buffer.from(JSON.stringify(pkgJson), 'utf8'));
 
     const taskId = `task-n-05-${Date.now()}`;
-    class RejectingProvider extends MockProvider {
+    class RejectingProvider implements AgentProvider {
+      readonly id = 'rejecting';
+      readonly displayName = 'Rejecting';
       run(options: AgentRunOptions): RunningTask {
-        const result = super.run(options);
-        if (options.taskId.endsWith('-test')) {
-          // Simulate rejection
-          setTimeout(() => {
+        setTimeout(() => {
+          options.onEvent({
+            type: 'started',
+            taskId: options.taskId,
+            label: 'test',
+            timestampMs: Date.now(),
+          });
+
+          if (options.taskId.includes('-test-agent')) {
+            // 拒否: exitCode=nullと日本語拒否メッセージ
             options.onEvent({
               type: 'log',
               taskId: options.taskId,
               level: 'error',
-              message: 'コマンド実行が拒否されました',
+              message: '実行が拒否されました',
               timestampMs: Date.now(),
             });
             options.onEvent({
@@ -5046,12 +5074,20 @@ suite('commands/runWithArtifacts.ts', () => {
               exitCode: null,
               timestampMs: Date.now(),
             });
-          }, 10);
-        }
-        return result;
+          } else {
+            // 他のタスクは正常完了
+            options.onEvent({
+              type: 'completed',
+              taskId: options.taskId,
+              exitCode: 0,
+              timestampMs: Date.now(),
+            });
+          }
+        }, 10);
+        return { taskId: options.taskId, dispose: () => {} };
       }
     }
-    const provider = new RejectingProvider(0);
+    const provider = new RejectingProvider();
 
     // When: runWithArtifacts is called
     await runWithArtifacts({
@@ -5270,7 +5306,8 @@ suite('commands/runWithArtifacts.ts', () => {
     // Given: perspectiveGenerationTimeoutMs = Number.MAX_SAFE_INTEGER
     const taskId = `task-b-05-${Date.now()}`;
     const provider = new MockProvider(0);
-    const perspectiveDir = path.join(baseTempDir, 'perspectives-b-05');
+    // 一意のディレクトリ名を使用してテスト間干渉を防ぐ
+    const perspectiveDir = path.join(baseTempDir, `perspectives-b-05-${Date.now()}`);
 
     // When: runWithArtifacts is called with timeout = Number.MAX_SAFE_INTEGER
     await runWithArtifacts({
@@ -5515,19 +5552,36 @@ suite('commands/runWithArtifacts.ts', () => {
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
     assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
-    assert.ok(text.includes('BEGIN TEST PERSPECTIVES'), 'Perspective table should contain markers');
+    // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
+    // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
+    assert.ok(text.includes('| ID | Case |') || text.includes('| 1 | Test |'), 'Perspective table should contain extracted content');
   });
 
   // TC-E-03: perspectiveGenerationTimeoutMs = 50, provider.dispose() throws exception
   test('TC-E-03: perspectiveGenerationTimeoutMs = 50, provider.dispose() throws exception', async () => {
     // Given: Timeout = 50ms, provider.dispose() throws exception
     const taskId = `task-e-03-${Date.now()}`;
-    class ThrowingDisposeProvider extends MockProvider {
+    class ThrowingDisposeProvider implements AgentProvider {
+      readonly id = 'throwing-dispose';
+      readonly displayName = 'Throwing Dispose';
       run(options: AgentRunOptions): RunningTask {
-        const result = super.run(options);
-        if (options.taskId.endsWith('-perspectives')) {
-          // Never complete, causing timeout
-        }
+        setTimeout(() => {
+          options.onEvent({
+            type: 'started',
+            taskId: options.taskId,
+            label: 'test',
+            timestampMs: Date.now(),
+          });
+          // perspectivesタスクの場合は完了イベントを発火しない（タイムアウトを発生させる）
+          if (!options.taskId.endsWith('-perspectives')) {
+            options.onEvent({
+              type: 'completed',
+              taskId: options.taskId,
+              exitCode: 0,
+              timestampMs: Date.now(),
+            });
+          }
+        }, 10);
         return {
           taskId: options.taskId,
           dispose: () => {
@@ -5536,7 +5590,7 @@ suite('commands/runWithArtifacts.ts', () => {
         };
       }
     }
-    const provider = new ThrowingDisposeProvider(0);
+    const provider = new ThrowingDisposeProvider();
     const perspectiveDir = path.join(baseTempDir, 'perspectives-e-03');
 
     // When: runWithArtifacts is called with timeout = 50
@@ -5631,7 +5685,9 @@ suite('commands/runWithArtifacts.ts', () => {
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
     assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
-    assert.ok(text.includes('BEGIN TEST PERSPECTIVES'), 'Perspective table should contain markers');
+    // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
+    // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
+    assert.ok(text.includes('| ID | Case |') || text.includes('| 1 | Test |'), 'Perspective table should contain extracted content');
   });
 
   // TC-E-06: testCommand is empty string, willLaunchVsCode = true
@@ -5769,30 +5825,8 @@ suite('commands/runWithArtifacts.ts', () => {
   test('TC-E-09: perspectiveGenerationTimeoutMs = 300000, perspective generation succeeds but markers are missing', async () => {
     // Given: Timeout = 300000, perspective generation succeeds but markers are missing
     const taskId = `task-e-09-${Date.now()}`;
-    class NoMarkerProvider extends MockProvider {
-      run(options: AgentRunOptions): RunningTask {
-        const result = super.run(options);
-        if (options.taskId.endsWith('-perspectives')) {
-          setTimeout(() => {
-            options.onEvent({
-              type: 'log',
-              taskId: options.taskId,
-              level: 'info',
-              message: 'Some log without markers',
-              timestampMs: Date.now(),
-            });
-            options.onEvent({
-              type: 'completed',
-              taskId: options.taskId,
-              exitCode: 0,
-              timestampMs: Date.now(),
-            });
-          }, 10);
-        }
-        return result;
-      }
-    }
-    const provider = new NoMarkerProvider(0);
+    // perspectiveOutputを指定してマーカーなしの出力を強制
+    const provider = new MockProvider(0, undefined, 'Some log without markers');
     const perspectiveDir = path.join(baseTempDir, 'perspectives-e-09');
 
     // When: runWithArtifacts is called

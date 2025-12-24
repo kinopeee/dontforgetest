@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import {
   initializeTestGenStatusBar,
   handleTestGenEventForStatusBar,
+  _resetForTesting,
 } from '../../../ui/statusBar';
 import { type TestGenEvent } from '../../../core/event';
 import { nowMs } from '../../../core/event';
@@ -54,9 +55,8 @@ suite('src/ui/statusBar.ts', () => {
   let originalCreateStatusBarItem: typeof vscode.window.createStatusBarItem;
 
   setup(() => {
-    // Reset statusBar module state by clearing the module cache
-    // Note: This is a workaround since we can't directly reset module-level variables
-    // In a real scenario, we'd need to expose a reset function or use dependency injection
+    // モジュール状態をリセット
+    _resetForTesting();
 
     // Mock ExtensionContext
     context = {

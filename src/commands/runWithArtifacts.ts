@@ -808,7 +808,11 @@ async function runProviderToCompletion(params: {
     }
 
     const timeoutMs = params.timeoutMs;
-    if (typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    // Node.js の setTimeout は 2^31-1ms を超えると overflow し、
+    // 意図せず「ほぼ即時」にタイムアウトが発火する場合がある（TimeoutOverflowWarning 等）。
+    // そのため、極端に大きい値は「事実上タイムアウト無効」として扱う。
+    const maxSetTimeoutMs = 2 ** 31 - 1;
+    if (typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0 && timeoutMs <= maxSetTimeoutMs) {
       timeout = setTimeout(() => {
         // 念のため。provider が同期的に completed を返した場合でも、後から誤ってタイムアウト処理を走らせない。
         if (resolved) {

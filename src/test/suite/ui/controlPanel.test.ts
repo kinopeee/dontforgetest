@@ -207,41 +207,41 @@ suite('src/ui/controlPanel.ts', () => {
     assert.ok(html.includes('<div class="hint" id="optionDesc">'), 'Hint class is used in HTML');
   });
 
-  // TC-N-10: Divider element
+  // TC-N-10: Divider CSS class
   // Given: Provider initialized with valid context
   // When: HTML is generated
-  // Then: HTML contains `.divider` element with height: 1px
-  test('TC-N-10: Divider element', () => {
+  // Then: HTML contains `.divider` CSS class with height: 1px (出力セクション削除により要素は使われていないがCSSは残存)
+  test('TC-N-10: Divider CSS class', () => {
     resolveView();
     const html = webviewView.webview.html;
     assert.ok(html.includes('.divider {'), 'Divider class CSS is present');
     assert.ok(html.includes('height: 1px;'), 'Divider has height: 1px');
-    assert.ok(html.includes('<div class="divider"></div>'), 'Divider element is present in HTML');
+    // 出力セクションが削除されたため、divider要素は使われていない
   });
 
-  // TC-N-11: Section header class
+  // TC-N-11: Section header CSS class
   // Given: Provider initialized with valid context
   // When: HTML is generated
-  // Then: HTML contains `.section-header` class with uppercase styling
-  test('TC-N-11: Section header class', () => {
+  // Then: HTML contains `.section-header` CSS class with uppercase styling (出力セクション削除により要素は使われていないがCSSは残存)
+  test('TC-N-11: Section header CSS class', () => {
     resolveView();
     const html = webviewView.webview.html;
     assert.ok(html.includes('.section-header {'), 'Section header class CSS is present');
     assert.ok(html.includes('text-transform: uppercase;'), 'Section header has uppercase styling');
-    assert.ok(html.includes('<div class="section-header">出力</div>'), 'Section header element is present in HTML');
+    // 出力セクションが削除されたため、section-header要素は使われていない
   });
 
-  // TC-N-12: Link-style button
+  // TC-N-12: Link-style button CSS class
   // Given: Provider initialized with valid context
   // When: HTML is generated
-  // Then: HTML contains `button.link` class with link-style button styling
-  test('TC-N-12: Link-style button', () => {
+  // Then: HTML contains `button.link` CSS class with link-style button styling (出力セクション削除により要素は使われていないがCSSは残存)
+  test('TC-N-12: Link-style button CSS class', () => {
     resolveView();
     const html = webviewView.webview.html;
     assert.ok(html.includes('button.link {'), 'Link button class CSS is present');
     assert.ok(html.includes('background: transparent;'), 'Link button has transparent background');
     assert.ok(html.includes('color: var(--vscode-textLink-foreground);'), 'Link button uses textLink color');
-    assert.ok(html.includes('<button class="link" id="openPerspectiveBtn">'), 'Link button is present in HTML');
+    // 出力セクションが削除されたため、link button要素は使われていない
   });
 
   // TC-N-13: Section div structure

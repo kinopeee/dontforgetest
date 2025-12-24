@@ -5,10 +5,17 @@ const Mocha = require('mocha');
 import { glob } from 'glob';
 import * as vscode from 'vscode';
 
+interface FailedTestInfo {
+  title: string;
+  fullTitle: string;
+  error: string;
+}
+
 interface TestResultFile {
   timestamp: number;
   vscodeVersion: string;
   failures: number;
+  failedTests?: FailedTestInfo[];
 }
 
 function resolveTestResultFilePathFromArgv(): string | undefined {
@@ -66,23 +73,59 @@ export function run(): Promise<void> {
           return;
         }
 
-        console.log(`見つかったテストファイル: ${files.length}個`);
-        files.forEach((f: string) => {
+        // tsc は削除されたソースの out/ を自動で消さないため、
+        // 古い out/test/**/*.test.js が残ると「存在しないテスト」が実行されてしまう。
+        // 対応する src/test/**/*.test.ts が存在するものだけを実行対象にする。
+        const repoRoot = path.resolve(testsRoot, '../..');
+        const sourceTestsRoot = path.join(repoRoot, 'src', 'test');
+        const missingSources: Array<{ jsPath: string; expectedSourcePath: string }> = [];
+        const runnableFiles = files.filter((f) => {
+          const jsPath = path.resolve(testsRoot, f);
+          const expectedSourcePath = path.resolve(sourceTestsRoot, f).replace(/\.js$/, '.ts');
+          if (!fs.existsSync(expectedSourcePath)) {
+            missingSources.push({ jsPath, expectedSourcePath });
+            return false;
+          }
+          return true;
+        });
+
+        if (missingSources.length > 0) {
+          console.warn(`対応するソースが見つからないためスキップしたテスト: ${missingSources.length}個`);
+          for (const entry of missingSources.slice(0, 5)) {
+            console.warn(`  スキップ: ${entry.jsPath}`);
+            console.warn(`    期待するソース: ${entry.expectedSourcePath}`);
+          }
+          if (missingSources.length > 5) {
+            console.warn('  ... 省略 ...');
+          }
+        }
+
+        if (runnableFiles.length === 0) {
+          console.warn('実行可能なテストファイルが見つかりませんでした（すべてスキップ対象）');
+          c();
+          return;
+        }
+
+        console.log(`見つかったテストファイル: ${runnableFiles.length}個`);
+        runnableFiles.forEach((f: string) => {
           const filePath = path.resolve(testsRoot, f);
           console.log(`  追加: ${filePath}`);
           mocha.addFile(filePath);
         });
 
+        // 失敗したテスト情報を収集するための配列
+        const failedTests: FailedTestInfo[] = [];
+
         // テストスイートを実行
-        mocha.run((failures: number) => {
+        const runner = mocha.run((failures: number) => {
           console.log(`テスト実行完了。失敗: ${failures}個`);
 
           // テスト結果をファイルに保存（外部プロセス起動時の成否判定に使用）
           // - Cursor 実行中に VS Code 側が kill される場合があるため、終了直前に同期書き込みする
           try {
             fs.mkdirSync(path.dirname(resultFilePath), { recursive: true });
-            const result: TestResultFile = { timestamp: Date.now(), vscodeVersion: vscode.version, failures };
-            fs.writeFileSync(resultFilePath, JSON.stringify(result), 'utf8');
+            const result: TestResultFile = { timestamp: Date.now(), vscodeVersion: vscode.version, failures, failedTests };
+            fs.writeFileSync(resultFilePath, JSON.stringify(result, null, 2), 'utf8');
           } catch (writeErr) {
             console.warn('テスト結果ファイルの書き込みに失敗しました:', writeErr);
           }
@@ -92,6 +135,15 @@ export function run(): Promise<void> {
           } else {
             c();
           }
+        });
+
+        // 失敗時のイベントハンドラを追加
+        runner.on('fail', (test: { title: string; fullTitle: () => string }, err: Error) => {
+          failedTests.push({
+            title: test.title,
+            fullTitle: test.fullTitle(),
+            error: err.message || String(err),
+          });
         });
       })
       .catch((err) => {

@@ -5,6 +5,7 @@ import {
   handleTestGenEventForProgressView,
   emitPhaseEvent,
   ProgressTreeViewProvider,
+  _resetForTesting,
 } from '../../../ui/progressTreeView';
 import { type TestGenEvent, type TestGenPhase, nowMs } from '../../../core/event';
 
@@ -15,9 +16,12 @@ suite('src/ui/progressTreeView.ts', () => {
   let provider: ProgressTreeViewProvider | undefined;
 
   setup(() => {
-    // Reset provider singleton
+    // モジュール状態をリセット
+    _resetForTesting();
+
+    // Reset provider singleton (テスト内のローカル変数)
     provider = undefined;
-    
+
     // Mock ExtensionContext
     context = {
       subscriptions: [],

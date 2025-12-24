@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { initializeProgressTreeView } from '../../ui/progressTreeView';
+import { initializeProgressTreeView, _resetForTesting as resetProgressTreeView } from '../../ui/progressTreeView';
 import { initializeOutputTreeView } from '../../ui/outputTreeView';
 
 suite('src/extension.ts', () => {
@@ -392,6 +392,11 @@ suite('src/extension.ts', () => {
   });
 
   suite('ProgressTreeView Initialization', () => {
+    setup(() => {
+      // モジュール状態をリセット
+      resetProgressTreeView();
+    });
+
     // TC-N-01: Valid ExtensionContext provided
     // Given: Valid ExtensionContext provided
     // When: initializeProgressTreeView is called

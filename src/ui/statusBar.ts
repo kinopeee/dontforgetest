@@ -63,3 +63,12 @@ function buildTooltip(): string {
   return lines.join('\n');
 }
 
+/**
+ * テスト用：モジュール状態をリセットする
+ * @internal
+ */
+export function _resetForTesting(): void {
+  statusBar = undefined;
+  running.clear();
+}
+
