@@ -1,28 +1,28 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { sanitizeAgentLogMessage } from '../core/agentLogSanitizer';
 import { type TestGenEvent, nowMs } from '../core/event';
 import {
   emitLogEvent,
   formatTimestamp,
   getArtifactSettings,
-  parsePerspectiveJsonV1,
-  parseTestExecutionJsonV1,
-  renderPerspectiveMarkdownTable,
-  type PerspectiveCase,
   saveTestExecutionReport,
-  saveTestPerspectiveTable,
-  type SavedArtifact,
   type ArtifactSettings,
   type TestExecutionResult,
 } from '../core/artifacts';
 import { taskManager } from '../core/taskManager';
-import { buildTestPerspectivePrompt } from '../core/promptBuilder';
 import { runTestCommand } from '../core/testRunner';
+import { createTemporaryWorktree, removeTemporaryWorktree } from '../git/worktreeManager';
 import { type AgentProvider, type RunningTask } from '../providers/provider';
+import { runProviderToCompletion } from '../providers/runToCompletion';
 import { appendEventToOutput } from '../ui/outputChannel';
 import { handleTestGenEventForStatusBar } from '../ui/statusBar';
 import { handleTestGenEventForProgressView, emitPhaseEvent } from '../ui/progressTreeView';
+import { cleanupUnexpectedPerspectiveFiles } from './runWithArtifacts/cleanupStep';
+import { applyWorktreeTestChanges } from './runWithArtifacts/worktreeApplyStep';
+import { runTestCommandViaCursorAgent } from './runWithArtifacts/testExecutionStep';
+import { runPerspectiveTableStep } from './runWithArtifacts/perspectiveStep';
 
 /**
  * `testCommand` が VS Code（Electron）を起動するタイプのテストである可能性が高い場合に true を返す。
@@ -87,6 +87,14 @@ export interface RunWithArtifactsOptions {
   model: string | undefined;
   /** 生成タスクID（lastRun と紐づく） */
   generationTaskId: string;
+  /**
+   * 実行先。
+   * - local: 現在のワークスペースを直接編集
+   * - worktree: 一時worktreeで生成し、テスト差分だけをローカルへ適用（MVP）
+   */
+  runLocation?: 'local' | 'worktree';
+  /** worktree実行時に必要（globalStorage を使用する） */
+  extensionContext?: vscode.ExtensionContext;
   /** テスト用: 設定の上書き */
   settingsOverride?: Partial<ArtifactSettings>;
 }
@@ -98,6 +106,10 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
   const baseSettings = getArtifactSettings();
   const settings: ArtifactSettings = { ...baseSettings, ...options.settingsOverride };
   const timestamp = formatTimestamp(new Date());
+  const runLocation: 'local' | 'worktree' = options.runLocation === 'worktree' ? 'worktree' : 'local';
+  const localWorkspaceRoot = options.workspaceRoot;
+  let runWorkspaceRoot = localWorkspaceRoot;
+  let worktreeDir: string | undefined;
   // テスト実行レポートに載せるのは「テスト実行（またはスキップ）」に関するログだけに限定する。
   // 生成（cursor-agent）の長文ログまで混ぜると、テスト実行レポートとして読みにくくなるため。
   const testExecutionLogLines: string[] = [];
@@ -107,44 +119,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
    * レポートにはユーザー向けの内容だけ残すため、保存前に最低限の正規化を行う。
    */
   const sanitizeLogMessageForReport = (message: string): string => {
-    let text = message.replace(/\r\n/g, '\n');
-
-    // <system_reminder> ... </system_reminder> ブロックはユーザー向けでないため除去
-    text = text.replace(/<system_reminder>[\s\S]*?<\/system_reminder>/g, '');
-
-    // 行単位でノイズを除去
-    const rawLines = text.split('\n').map((l) => l.replace(/\s+$/g, '')); // 末尾空白を落とす
-    const filtered: string[] = [];
-    for (const line of rawLines) {
-      const trimmed = line.trim();
-      // 空行は後段で畳むため一旦残す
-      if (trimmed === 'event:tool_call') {
-        continue;
-      }
-      if (trimmed === 'system:init') {
-        continue;
-      }
-      filtered.push(line);
-    }
-
-    // 空行を最大1つに畳む
-    const collapsed: string[] = [];
-    let prevBlank = false;
-    for (const line of filtered) {
-      const isBlank = line.trim().length === 0;
-      if (isBlank) {
-        if (prevBlank) {
-          continue;
-        }
-        prevBlank = true;
-        collapsed.push('');
-        continue;
-      }
-      prevBlank = false;
-      collapsed.push(line);
-    }
-
-    return collapsed.join('\n').trim();
+    return sanitizeAgentLogMessage(message);
   };
 
   const captureEvent = (event: TestGenEvent): void => {
@@ -188,34 +163,74 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     }
   };
 
-    // タスク開始イベントを発火（進捗TreeView用）
-    const startedEvent: TestGenEvent = {
-      type: 'started',
-      taskId: options.generationTaskId,
-      label: options.generationLabel,
-      detail: options.targetPaths.join(', '),
-      timestampMs: nowMs(),
-    };
-    handleTestGenEventForProgressView(startedEvent);
+  // タスク開始イベントを発火（進捗TreeView用）
+  const startedEvent: TestGenEvent = {
+    type: 'started',
+    taskId: options.generationTaskId,
+    label: options.generationLabel,
+    detail: options.targetPaths.join(', '),
+    timestampMs: nowMs(),
+  };
+  handleTestGenEventForProgressView(startedEvent);
 
-    // 初期のRunningTask（後で各フェーズで更新される）
-    const initialRunningTask: RunningTask = {
-      taskId: options.generationTaskId,
-      dispose: () => {
-        // 初期状態では何もしない（各フェーズでupdateRunningTaskにより更新される）
-      },
-    };
-    taskManager.register(options.generationTaskId, options.generationLabel, initialRunningTask);
+  // 初期のRunningTask（後で各フェーズで更新される）
+  const initialRunningTask: RunningTask = {
+    taskId: options.generationTaskId,
+    dispose: () => {
+      // 初期状態では何もしない（各フェーズでupdateRunningTaskにより更新される）
+    },
+  };
+  taskManager.register(options.generationTaskId, options.generationLabel, initialRunningTask);
 
-    // キャンセルチェック用のヘルパー関数
-    const checkCancelled = (): boolean => {
-      return taskManager.isCancelled(options.generationTaskId);
-    };
+  // キャンセルチェック用のヘルパー関数
+  const checkCancelled = (): boolean => {
+    return taskManager.isCancelled(options.generationTaskId);
+  };
 
-    try {
+  try {
 
     // 準備フェーズ
     handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'preparing', '準備中'));
+
+    // worktree モードの場合、生成先を隔離するために一時worktreeを作成する
+    if (runLocation === 'worktree') {
+      if (!options.extensionContext) {
+        const msg = 'Worktree 実行には拡張機能コンテキストが必要です（内部エラー）。';
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'error', msg));
+        void vscode.window.showErrorMessage(msg);
+        handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
+        return;
+      }
+
+      // キャンセルチェック（worktree作成前）
+      if (checkCancelled()) {
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', 'タスクがキャンセルされました'));
+        handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
+        return;
+      }
+
+      try {
+        const baseDir = options.extensionContext.globalStorageUri.fsPath;
+        await fs.promises.mkdir(baseDir, { recursive: true });
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'info', '一時worktreeを作成します（生成を隔離します）'));
+        const created = await createTemporaryWorktree({
+          repoRoot: localWorkspaceRoot,
+          baseDir,
+          taskId: options.generationTaskId,
+          ref: 'HEAD',
+        });
+        worktreeDir = created.worktreeDir;
+        runWorkspaceRoot = worktreeDir;
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'info', `一時worktreeを作成しました: ${worktreeDir}`));
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        const msg = `一時worktreeの作成に失敗しました: ${message}`;
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'error', msg));
+        void vscode.window.showErrorMessage(msg);
+        handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
+        return;
+      }
+    }
 
     // 1) 生成前: 観点表を生成して保存し、テスト生成プロンプトに注入
     let finalPrompt = options.generationPrompt;
@@ -225,7 +240,8 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
       const perspectiveResult = await runPerspectiveTableStep({
         provider: options.provider,
-        workspaceRoot: options.workspaceRoot,
+        runWorkspaceRoot,
+        artifactWorkspaceRoot: localWorkspaceRoot,
         cursorAgentCommand: options.cursorAgentCommand,
         testStrategyPath: options.testStrategyPath,
         generationLabel: options.generationLabel,
@@ -263,7 +279,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       provider: options.provider,
       run: {
         taskId: options.generationTaskId,
-        workspaceRoot: options.workspaceRoot,
+        workspaceRoot: runWorkspaceRoot,
         agentCommand: options.cursorAgentCommand,
         prompt: finalPrompt,
         model: options.model,
@@ -283,7 +299,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     // 生成（allowWrite=true）の副産物として、所定フロー外のファイルが作られることがある。
     // 代表例: 生成済みの観点表をルート直下に `test_perspectives.md` や `test_perspectives_output.md` として保存してしまう。
     // これは拡張機能の所定フロー（docs 配下への成果物保存）と競合し、ユーザー体験を悪化させるため削除する。
-    const cleanupResults = await cleanupUnexpectedPerspectiveFiles(options.workspaceRoot);
+    const cleanupResults = await cleanupUnexpectedPerspectiveFiles(localWorkspaceRoot);
     for (const cleanup of cleanupResults) {
       if (cleanup.deleted) {
         appendEventToOutput(
@@ -323,11 +339,27 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       return;
     }
 
+    // worktree モードの場合、生成結果（テスト差分のみ）をローカルへ適用する
+    if (runLocation === 'worktree' && worktreeDir && options.extensionContext) {
+      await applyWorktreeTestChanges({
+        generationTaskId: options.generationTaskId,
+        genExit,
+        localWorkspaceRoot,
+        runWorkspaceRoot,
+        extensionContext: options.extensionContext,
+        preTestCheckCommand: settings.preTestCheckCommand,
+      });
+    }
+
     // テスト実行フェーズ
     handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'running-tests', 'テスト実行中'));
 
-    if (settings.testCommand.trim().length === 0) {
-      const msg = 'dontforgetest.testCommand が空のため、テスト実行はスキップします。';
+    const shouldSkipTestExecution = runLocation === 'worktree' || settings.testCommand.trim().length === 0;
+    if (shouldSkipTestExecution) {
+      const msg =
+        runLocation === 'worktree'
+          ? 'Worktreeモードのため、テスト実行はMVPではスキップします。'
+          : 'dontforgetest.testCommand が空のため、テスト実行はスキップします。';
       const ev = emitLogEvent(`${options.generationTaskId}-test`, 'warn', msg);
       handleTestGenEventForStatusBar({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
       captureEvent({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
@@ -339,7 +371,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       captureEvent(completedEv);
       const skippedResult: TestExecutionResult = {
         command: settings.testCommand,
-        cwd: options.workspaceRoot,
+        cwd: runWorkspaceRoot,
         exitCode: null,
         signal: null,
         durationMs: 0,
@@ -350,7 +382,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         extensionLog: testExecutionLogLines.join('\n'),
       };
       const saved = await saveTestExecutionReport({
-        workspaceRoot: options.workspaceRoot,
+        workspaceRoot: localWorkspaceRoot,
         generationLabel: options.generationLabel,
         targetPaths: options.targetPaths,
         model: options.model,
@@ -366,7 +398,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
     const testTaskId = `${options.generationTaskId}-test`;
 
-    const willLaunchVsCode = await looksLikeVsCodeLaunchingTestCommand(options.workspaceRoot, settings.testCommand);
+    const willLaunchVsCode = await looksLikeVsCodeLaunchingTestCommand(runWorkspaceRoot, settings.testCommand);
     // VS Code 起動の可能性がある場合は警告ログを出す（スキップはしない）
     if (willLaunchVsCode && settings.testExecutionRunner === 'extension') {
       const warn = emitLogEvent(
@@ -405,7 +437,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       const result = await runTestCommandViaCursorAgent({
         provider: options.provider,
         taskId: `${testTaskId}-agent`,
-        workspaceRoot: options.workspaceRoot,
+        workspaceRoot: runWorkspaceRoot,
         cursorAgentCommand: options.cursorAgentCommand,
         model: options.model,
         testCommand: settings.testCommand,
@@ -458,7 +490,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         captureEvent(warn);
 
         // フォールバック（extension runner）
-        const fallbackResult = await runTestCommand({ command: settings.testCommand, cwd: options.workspaceRoot });
+        const fallbackResult = await runTestCommand({ command: settings.testCommand, cwd: runWorkspaceRoot });
 
         const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: fallbackResult.exitCode, timestampMs: nowMs() };
         handleTestGenEventForStatusBar(completed);
@@ -466,7 +498,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         captureEvent(completed);
 
         const saved = await saveTestExecutionReport({
-          workspaceRoot: options.workspaceRoot,
+          workspaceRoot: localWorkspaceRoot,
           generationLabel: options.generationLabel,
           targetPaths: options.targetPaths,
           model: options.model,
@@ -486,7 +518,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       captureEvent(completed);
 
       const saved = await saveTestExecutionReport({
-        workspaceRoot: options.workspaceRoot,
+        workspaceRoot: localWorkspaceRoot,
         generationLabel: options.generationLabel,
         targetPaths: options.targetPaths,
         model: options.model,
@@ -511,7 +543,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     appendEventToOutput(started);
     captureEvent(started);
 
-    const result = await runTestCommand({ command: settings.testCommand, cwd: options.workspaceRoot });
+    const result = await runTestCommand({ command: settings.testCommand, cwd: runWorkspaceRoot });
 
     appendEventToOutput(
       emitLogEvent(
@@ -534,7 +566,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     captureEvent(completed);
 
     const saved = await saveTestExecutionReport({
-      workspaceRoot: options.workspaceRoot,
+      workspaceRoot: localWorkspaceRoot,
       generationLabel: options.generationLabel,
       targetPaths: options.targetPaths,
       model: options.model,
@@ -546,469 +578,23 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
     // 進捗TreeView完了イベント
     handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
-    } finally {
-      // タスク完了時に必ずタスクマネージャーから解除
-      taskManager.unregister(options.generationTaskId);
-    }
-}
-
-async function runTestCommandViaCursorAgent(params: {
-  provider: AgentProvider;
-  taskId: string;
-  workspaceRoot: string;
-  cursorAgentCommand: string;
-  model: string | undefined;
-  testCommand: string;
-  allowForce: boolean;
-  onEvent: (event: TestGenEvent) => void;
-}): Promise<TestExecutionResult> {
-  const startedAt = nowMs();
-
-  const jsonMarkerBegin = '<!-- BEGIN TEST EXECUTION JSON -->';
-  const jsonMarkerEnd = '<!-- END TEST EXECUTION JSON -->';
-  const markerBegin = '<!-- BEGIN TEST EXECUTION RESULT -->';
-  const markerEnd = '<!-- END TEST EXECUTION RESULT -->';
-  const stdoutBegin = '<!-- BEGIN STDOUT -->';
-  const stdoutEnd = '<!-- END STDOUT -->';
-  const stderrBegin = '<!-- BEGIN STDERR -->';
-  const stderrEnd = '<!-- END STDERR -->';
-
-  const prompt = [
-    'あなたはテスト実行担当です。',
-    '目的は「指定されたテストコマンドを実行し、その結果（stdout/stderr/exitCode）を機械的に抽出できる形式で返す」ことです。',
-    '',
-    '## 制約（必須）',
-    '- **ファイルの編集・作成は禁止**（読み取りのみ）',
-    '- **デバッグ開始・ウォッチ開始・対話的セッション開始は禁止**',
-    '- テストコマンドは **1回だけ** 実行する（同じコマンドを繰り返さない）',
-    '- 可能なら余計なコマンドを実行しない（cd など最低限は可）',
-    '- VS Code / Cursor を手動で起動するコマンドは禁止（ただし、テストコマンド自体が起動する場合はそのまま実行してよい）',
-    '',
-    '## 実行するコマンド（必須）',
-    '以下をそのまま実行し、終了コードを取得してください。',
-    '',
-    '```bash',
-    params.testCommand,
-    '```',
-    '',
-    '## 出力フォーマット（必須）',
-    `- 返答は **JSON（コードフェンスなし）だけ** にする`,
-    `- 出力は次のマーカーで囲むこと: ${jsonMarkerBegin} ... ${jsonMarkerEnd}`,
-    '- マーカー外には何も出力しない（説明文は禁止）',
-    '- JSONスキーマ v1:',
-    '- `{ "version": 1, "exitCode": number|null, "signal": string|null, "durationMs": number, "stdout": string, "stderr": string }`',
-    '- stdout/stderr は **文字列** とし、改行は `\\n` を含む形で表現する（生の改行は入れない）',
-    '',
-    jsonMarkerBegin,
-    '{',
-    '  "version": 1,',
-    '  "exitCode": 0,',
-    '  "signal": null,',
-    '  "durationMs": 1234,',
-    '  "stdout": "line1\\\\nline2",',
-    '  "stderr": ""',
-    '}',
-    jsonMarkerEnd,
-    '',
-  ].join('\n');
-
-  const logs: string[] = [];
-  const exit = await runProviderToCompletion({
-    provider: params.provider,
-    run: {
-      taskId: params.taskId,
-      workspaceRoot: params.workspaceRoot,
-      agentCommand: params.cursorAgentCommand,
-      prompt,
-      model: params.model,
-      outputFormat: 'stream-json',
-      allowWrite: params.allowForce,
-    },
-    onEvent: (event) => {
-      params.onEvent(event);
-      if (event.type === 'log') {
-        logs.push(event.message);
+  } finally {
+    // worktree モードの場合、最後に必ず一時worktreeを削除する（残留防止）
+    if (worktreeDir) {
+      try {
+        await removeTemporaryWorktree(localWorkspaceRoot, worktreeDir);
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'info', '一時worktreeを削除しました'));
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', `一時worktreeの削除に失敗しました: ${message}`));
       }
-    },
-  });
-
-  const raw = logs.join('\n');
-  const durationMs = Math.max(0, nowMs() - startedAt);
-
-  // 1) JSON（新形式）を優先
-  const extractedJson = extractBetweenMarkers(raw, jsonMarkerBegin, jsonMarkerEnd);
-  if (extractedJson) {
-    try {
-      const parsed = parseTestExecutionJsonV1(extractedJson);
-      if (parsed.ok) {
-        const d = parsed.value.durationMs;
-        const durationMsFinal = typeof d === 'number' && Number.isFinite(d) && d > 0 ? d : durationMs;
-        return {
-          command: params.testCommand,
-          cwd: params.workspaceRoot,
-          exitCode: parsed.value.exitCode,
-          signal: parsed.value.signal ? (parsed.value.signal as NodeJS.Signals) : null,
-          durationMs: durationMsFinal,
-          stdout: parsed.value.stdout,
-          stderr: parsed.value.stderr,
-        };
-      }
-      // JSON抽出はできたがパースできない場合は、旧形式へのフォールバックも試す
-    } catch (e) {
-      // ignore -> fallback
     }
+
+    // タスク完了時に必ずタスクマネージャーから解除
+    taskManager.unregister(options.generationTaskId);
   }
-
-  // 2) 旧形式（テキスト）へフォールバック
-  const extracted = extractBetweenMarkers(raw, markerBegin, markerEnd);
-  if (!extracted) {
-    const prefix = extractedJson ? 'cursor-agent のJSON出力をパースできませんでした。' : '';
-    return {
-      command: params.testCommand,
-      cwd: params.workspaceRoot,
-      exitCode: exit,
-      signal: null,
-      durationMs,
-      stdout: '',
-      stderr: raw,
-      errorMessage: `${prefix}cursor-agent の出力からテスト結果を抽出できませんでした（マーカーが見つかりません）。`.trim(),
-    };
-  }
-
-  const exitMatch = extracted.match(/^\s*exitCode:\s*(.+)\s*$/m);
-  const signalMatch = extracted.match(/^\s*signal:\s*(.+)\s*$/m);
-  const durMatch = extracted.match(/^\s*durationMs:\s*(\d+)\s*$/m);
-  const stdout = extractBetweenMarkers(extracted, stdoutBegin, stdoutEnd) ?? '';
-  const stderr = extractBetweenMarkers(extracted, stderrBegin, stderrEnd) ?? '';
-
-  const exitCodeRaw = exitMatch?.[1]?.trim();
-  const exitCode =
-    !exitCodeRaw || exitCodeRaw === 'null' ? null : Number.isFinite(Number(exitCodeRaw)) ? Number(exitCodeRaw) : exit ?? null;
-  const signalRaw = signalMatch?.[1]?.trim();
-  const signal = !signalRaw || signalRaw === 'null' ? null : (signalRaw as NodeJS.Signals);
-  const parsedDurationMs = durMatch?.[1] ? Number(durMatch[1]) : durationMs;
-
-  return {
-    command: params.testCommand,
-    cwd: params.workspaceRoot,
-    exitCode,
-    signal,
-    durationMs: Number.isFinite(parsedDurationMs) ? parsedDurationMs : durationMs,
-    stdout,
-    stderr,
-  };
 }
 
-/**
- * テスト観点表生成ステップの結果。
- * 保存した成果物情報と、テスト生成に注入できる観点表のマークダウンを含む。
- */
-interface PerspectiveStepResult {
-  saved: SavedArtifact;
-  /** 抽出された観点表のマークダウン（抽出成功時のみテスト生成に使用可能） */
-  markdown: string;
-  /** マーカーから正常に抽出できたかどうか */
-  extracted: boolean;
-}
-
-async function runPerspectiveTableStep(params: {
-  provider: AgentProvider;
-  workspaceRoot: string;
-  cursorAgentCommand: string;
-  testStrategyPath: string;
-  generationLabel: string;
-  targetPaths: string[];
-  referenceText?: string;
-  model: string | undefined;
-  reportDir: string;
-  /** 0以下の場合はタイムアウトしない */
-  timeoutMs: number;
-  timestamp: string;
-  baseTaskId: string;
-  /** タスク開始時に呼ばれるコールバック。RunningTaskを受け取って登録等に使用可能。 */
-  onRunningTask?: (runningTask: RunningTask) => void;
-}): Promise<PerspectiveStepResult | undefined> {
-  const taskId = `${params.baseTaskId}-perspectives`;
-
-  const { prompt } = await buildTestPerspectivePrompt({
-    workspaceRoot: params.workspaceRoot,
-    targetLabel: params.generationLabel,
-    targetPaths: params.targetPaths,
-    testStrategyPath: params.testStrategyPath,
-    referenceText: params.referenceText,
-  });
-
-  const logs: string[] = [];
-  const exitCode = await runProviderToCompletion({
-    provider: params.provider,
-    run: {
-      taskId,
-      workspaceRoot: params.workspaceRoot,
-      agentCommand: params.cursorAgentCommand,
-      prompt,
-      model: params.model,
-      outputFormat: 'stream-json',
-      allowWrite: false,
-    },
-    timeoutMs: params.timeoutMs,
-    onEvent: (event) => {
-      handleTestGenEventForStatusBar(event);
-      appendEventToOutput(event);
-      if (event.type === 'log') {
-        logs.push(event.message);
-      }
-    },
-    onRunningTask: params.onRunningTask,
-  });
-
-  const raw = logs.join('\n');
-  const extractedJson = extractBetweenMarkers(raw, '<!-- BEGIN TEST PERSPECTIVES JSON -->', '<!-- END TEST PERSPECTIVES JSON -->');
-  const extractedMd = extractBetweenMarkers(raw, '<!-- BEGIN TEST PERSPECTIVES -->', '<!-- END TEST PERSPECTIVES -->');
-
-  /**
-   * 抽出失敗時でも「表として機械パース可能」な形を維持するため、
-   * 失敗は1行のエラーケースとして表に埋め込み、詳細ログは折りたたみで添付する。
-   */
-  const buildFailureMarkdown = (reason: string): string => {
-    const errorCase: PerspectiveCase = {
-      caseId: 'TC-E-EXTRACT-01',
-      inputPrecondition: '',
-      perspective: '',
-      expectedResult: '',
-      notes: reason,
-    };
-    const table = renderPerspectiveMarkdownTable([errorCase]);
-    const logText = sanitizeLogMessageForPerspective(raw.trim().length > 0 ? raw.trim() : '(ログが空でした)');
-    const truncated = truncateText(logText, 200_000);
-    const details = [
-      '<details>',
-      '<summary>抽出ログ（クリックで展開）</summary>',
-      '',
-      '```text',
-      truncated,
-      '```',
-      '',
-      '</details>',
-      '',
-    ].join('\n');
-    return `${table}\n${details}`.trimEnd();
-  };
-
-  let wasExtracted = false;
-  let perspectiveMarkdown = '';
-
-  if (extractedJson && extractedJson.trim().length > 0) {
-    const parsed = parsePerspectiveJsonV1(extractedJson);
-    if (parsed.ok) {
-      if (parsed.value.cases.length > 0) {
-        perspectiveMarkdown = renderPerspectiveMarkdownTable(parsed.value.cases).trimEnd();
-        wasExtracted = true;
-      } else {
-        perspectiveMarkdown = buildFailureMarkdown('観点表JSONの cases が空でした');
-      }
-    } else {
-      perspectiveMarkdown = buildFailureMarkdown(`観点表JSONのパースに失敗しました: ${parsed.error}`);
-    }
-  } else if (extractedMd && extractedMd.trim().length > 0) {
-    const normalized = coerceLegacyPerspectiveMarkdownTable(extractedMd);
-    if (normalized) {
-      perspectiveMarkdown = normalized.trimEnd();
-      wasExtracted = true;
-    } else {
-      perspectiveMarkdown = buildFailureMarkdown('旧形式（Markdown）の観点表を抽出できませんでした');
-    }
-  } else {
-    perspectiveMarkdown = buildFailureMarkdown(`観点表の抽出に失敗しました: provider exit=${exitCode ?? 'null'}`);
-  }
-
-  const saved = await saveTestPerspectiveTable({
-    workspaceRoot: params.workspaceRoot,
-    targetLabel: params.generationLabel,
-    targetPaths: params.targetPaths,
-    perspectiveMarkdown,
-    reportDir: params.reportDir,
-    timestamp: params.timestamp,
-  });
-
-  appendEventToOutput(emitLogEvent(taskId, 'info', `テスト観点表を保存しました: ${saved.relativePath ?? saved.absolutePath}`));
-  return { saved, markdown: perspectiveMarkdown, extracted: wasExtracted };
-}
-
-async function runProviderToCompletion(params: {
-  provider: AgentProvider;
-  run: {
-    taskId: string;
-    workspaceRoot: string;
-    agentCommand: string;
-    prompt: string;
-    model: string | undefined;
-    outputFormat: 'stream-json';
-    allowWrite: boolean;
-  };
-  /**
-   * 最大実行時間（ミリ秒）。0以下/未指定の場合はタイムアウトしない。
-   * completed を待てない（ログだけが出続ける）ケースの保険。
-   */
-  timeoutMs?: number;
-  onEvent: (event: TestGenEvent) => void;
-  /**
-   * タスク開始時に呼ばれるコールバック。RunningTaskを受け取って登録等に使用可能。
-   */
-  onRunningTask?: (runningTask: RunningTask) => void;
-}): Promise<number | null> {
-  return await new Promise<number | null>((resolve) => {
-    let resolved = false;
-    let timeout: NodeJS.Timeout | undefined;
-    const finish = (exitCode: number | null) => {
-      if (resolved) {
-        return;
-      }
-      resolved = true;
-      if (timeout) {
-        clearTimeout(timeout);
-        timeout = undefined;
-      }
-      resolve(exitCode);
-    };
-
-    const running = params.provider.run({
-      taskId: params.run.taskId,
-      workspaceRoot: params.run.workspaceRoot,
-      agentCommand: params.run.agentCommand,
-      prompt: params.run.prompt,
-      model: params.run.model,
-      outputFormat: params.run.outputFormat,
-      allowWrite: params.run.allowWrite,
-      onEvent: (event) => {
-        params.onEvent(event);
-        if (event.type === 'completed') {
-          finish(event.exitCode);
-        }
-      },
-    });
-
-    // RunningTaskを通知（タスクマネージャー登録用）
-    if (params.onRunningTask) {
-      params.onRunningTask(running);
-    }
-
-    const timeoutMs = params.timeoutMs;
-    // Node.js の setTimeout は 2^31-1ms を超えると overflow し、
-    // 意図せず「ほぼ即時」にタイムアウトが発火する場合がある（TimeoutOverflowWarning 等）。
-    // そのため、極端に大きい値は「事実上タイムアウト無効」として扱う。
-    const maxSetTimeoutMs = 2 ** 31 - 1;
-    if (typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0 && timeoutMs <= maxSetTimeoutMs) {
-      timeout = setTimeout(() => {
-        // 念のため。provider が同期的に completed を返した場合でも、後から誤ってタイムアウト処理を走らせない。
-        if (resolved) {
-          return;
-        }
-        const msg =
-          `タイムアウト: cursor-agent の処理が ${timeoutMs}ms を超えたため停止します。` +
-          `（設定: dontforgetest.perspectiveGenerationTimeoutMs を調整できます）`;
-        params.onEvent({ type: 'log', taskId: params.run.taskId, level: 'error', message: msg, timestampMs: nowMs() });
-        try {
-          running.dispose();
-        } catch {
-          // noop
-        }
-        finish(null);
-      }, timeoutMs);
-    }
-  });
-}
-
-function extractBetweenMarkers(text: string, begin: string, end: string): string | undefined {
-  const start = text.indexOf(begin);
-  if (start === -1) {
-    return undefined;
-  }
-  const afterStart = start + begin.length;
-  const stop = text.indexOf(end, afterStart);
-  if (stop === -1) {
-    return undefined;
-  }
-  return text.slice(afterStart, stop).trim();
-}
-
-/**
- * 旧形式（Markdown）で抽出された観点表を、列固定のテーブルへ正規化する。
- * - 期待する列名/列順のヘッダが見つからない場合は undefined を返す（失敗扱い）
- * - 旧形式は移行期間の後方互換として残す
- */
-function coerceLegacyPerspectiveMarkdownTable(markdown: string): string | undefined {
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
-  const header = '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |';
-  const separator = '|--------|----------------------|---------------------------------------|-----------------|-------|';
-
-  const headerIndex = lines.findIndex((l) => l.trim() === header);
-  if (headerIndex === -1) {
-    return undefined;
-  }
-  // 区切り行が続かない場合は不正とみなす
-  const sepLine = lines[headerIndex + 1]?.trim() ?? '';
-  if (sepLine !== separator) {
-    return undefined;
-  }
-
-  const body: string[] = [];
-  for (let i = headerIndex + 2; i < lines.length; i += 1) {
-    const line = lines[i] ?? '';
-    if (!line.trim().startsWith('|')) {
-      break;
-    }
-    body.push(line.trimEnd());
-  }
-
-  // 本文が空でも、ヘッダだけの表として返す（パーサ互換を維持）
-  const all = [header, separator, ...body].join('\n');
-  return `${all}\n`;
-}
-
-function truncateText(text: string, maxChars: number): string {
-  if (text.length <= maxChars) {
-    return text;
-  }
-  return `${text.slice(0, maxChars)}\n\n... (truncated: ${text.length} chars -> ${maxChars} chars)`;
-}
-
-/**
- * 観点表保存用のログを最小限サニタイズする。
- * - system_reminder 等のユーザー向けでないブロックを除去
- * - 末尾空白の除去、空行の畳み込み
- */
-function sanitizeLogMessageForPerspective(message: string): string {
-  let text = message.replace(/\r\n/g, '\n');
-  text = text.replace(/<system_reminder>[\s\S]*?<\/system_reminder>/g, '');
-  const rawLines = text.split('\n').map((l) => l.replace(/\s+$/g, ''));
-  const filtered: string[] = [];
-  for (const line of rawLines) {
-    const trimmed = line.trim();
-    if (trimmed === 'event:tool_call') {
-      continue;
-    }
-    if (trimmed === 'system:init') {
-      continue;
-    }
-    filtered.push(line);
-  }
-  const collapsed: string[] = [];
-  let prevBlank = false;
-  for (const line of filtered) {
-    const isBlank = line.trim().length === 0;
-    if (isBlank) {
-      if (prevBlank) {
-        continue;
-      }
-      prevBlank = true;
-      collapsed.push('');
-      continue;
-    }
-    prevBlank = false;
-    collapsed.push(line);
-  }
-  return collapsed.join('\n').trim();
-}
 
 /**
  * テスト生成プロンプトに観点表を追加する。
@@ -1029,56 +615,4 @@ function appendPerspectiveToPrompt(basePrompt: string, perspectiveMarkdown: stri
     '',
     perspectiveMarkdown,
   ].join('\n');
-}
-
-interface CleanupResult {
-  deleted: boolean;
-  relativePath: string;
-  errorMessage?: string;
-}
-
-/**
- * ワークスペースルート直下に生成された所定フロー外の観点表ファイルを削除する。
- * `test_perspectives*.{md,json}` にマッチするファイルのうち、内部マーカーを含むものを削除対象とする。
- */
-async function cleanupUnexpectedPerspectiveFiles(
-  workspaceRoot: string,
-): Promise<CleanupResult[]> {
-  const results: CleanupResult[] = [];
-
-  // ワークスペースルート直下の test_perspectives*.{md,json} を検索
-  // - cursor-agent が所定フロー外で「抽出用のマーカー付きデータ」をファイル保存してしまうことがある
-  //   例: test_perspectives.md / test_perspectives_output.md / test_perspectives.json / test_perspectives_output.json
-  // - ユーザーの意図したファイルまで消さないよう、**内部マーカーを含むものだけ**削除対象とする
-  const patterns = ['test_perspectives*.md', 'test_perspectives*.json'] as const;
-  const files: vscode.Uri[] = [];
-  for (const p of patterns) {
-    const found = await vscode.workspace.findFiles(new vscode.RelativePattern(workspaceRoot, p));
-    files.push(...found);
-  }
-  // 重複排除（念のため）
-  const uniqueFiles = Array.from(new Map(files.map((u) => [u.fsPath, u])).values());
-
-  for (const uri of uniqueFiles) {
-    const relativePath = path.relative(workspaceRoot, uri.fsPath);
-
-    try {
-      const raw = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
-      // 内部マーカー付きの観点表は「抽出用フォーマット」であり、所定フロー外の副産物として扱う。
-      const hasLegacyMarkers =
-        raw.includes('<!-- BEGIN TEST PERSPECTIVES -->') && raw.includes('<!-- END TEST PERSPECTIVES -->');
-      const hasJsonMarkers =
-        raw.includes('<!-- BEGIN TEST PERSPECTIVES JSON -->') && raw.includes('<!-- END TEST PERSPECTIVES JSON -->');
-      if (!hasLegacyMarkers && !hasJsonMarkers) {
-        continue;
-      }
-      await vscode.workspace.fs.delete(uri, { useTrash: false });
-      results.push({ deleted: true, relativePath });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      results.push({ deleted: false, relativePath, errorMessage: msg });
-    }
-  }
-
-  return results;
 }

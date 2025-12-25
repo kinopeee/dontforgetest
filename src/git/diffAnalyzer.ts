@@ -1,7 +1,4 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-
-const execFileAsync = promisify(execFile);
+import { execGitStdout } from './gitExec';
 
 export type GitChangeType = 'added' | 'modified' | 'deleted' | 'renamed';
 
@@ -115,7 +112,7 @@ export function extractChangedPaths(analysis: GitDiffAnalysis): string[] {
  * コミット範囲の差分を取得する（例: `main..HEAD`, `HEAD~3..HEAD`）。
  */
 export async function getCommitRangeDiff(workspaceRoot: string, range: string): Promise<string> {
-  const stdout = await execGit(workspaceRoot, ['diff', '--no-color', range], 20 * 1024 * 1024);
+  const stdout = await execGitStdout(workspaceRoot, ['diff', '--no-color', range], 20 * 1024 * 1024);
   return stdout.trimEnd();
 }
 
@@ -127,25 +124,14 @@ export async function getCommitRangeDiff(workspaceRoot: string, range: string): 
  */
 export async function getWorkingTreeDiff(workspaceRoot: string, mode: WorkingTreeDiffMode): Promise<string> {
   if (mode === 'staged') {
-    return (await execGit(workspaceRoot, ['diff', '--cached', '--no-color'], 20 * 1024 * 1024)).trimEnd();
+    return (await execGitStdout(workspaceRoot, ['diff', '--cached', '--no-color'], 20 * 1024 * 1024)).trimEnd();
   }
   if (mode === 'unstaged') {
-    return (await execGit(workspaceRoot, ['diff', '--no-color'], 20 * 1024 * 1024)).trimEnd();
+    return (await execGitStdout(workspaceRoot, ['diff', '--no-color'], 20 * 1024 * 1024)).trimEnd();
   }
-  const staged = (await execGit(workspaceRoot, ['diff', '--cached', '--no-color'], 20 * 1024 * 1024)).trimEnd();
-  const unstaged = (await execGit(workspaceRoot, ['diff', '--no-color'], 20 * 1024 * 1024)).trimEnd();
+  const staged = (await execGitStdout(workspaceRoot, ['diff', '--cached', '--no-color'], 20 * 1024 * 1024)).trimEnd();
+  const unstaged = (await execGitStdout(workspaceRoot, ['diff', '--no-color'], 20 * 1024 * 1024)).trimEnd();
   return [staged, unstaged].filter((s) => s.length > 0).join('\n\n');
-}
-
-async function execGit(workspaceRoot: string, args: string[], maxBufferBytes: number): Promise<string> {
-  // core.quotepath=false で、非ASCIIパスが \343... のようにクォートされるのを抑止する
-  const fullArgs = ['-c', 'core.quotepath=false', ...args];
-  const { stdout } = await execFileAsync('git', fullArgs, {
-    cwd: workspaceRoot,
-    encoding: 'utf8',
-    maxBuffer: maxBufferBytes,
-  });
-  return stdout;
 }
 
 function parseDiffGitPaths(rest: string): { aPath: string; bPath: string } | undefined {

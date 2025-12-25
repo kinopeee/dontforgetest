@@ -18,7 +18,7 @@ suite('src/ui/outputTreeView.ts', () => {
     originalCreateTreeView = vscode.window.createTreeView;
     (vscode.window.createTreeView as unknown) = (
       viewId: string,
-      options: { treeDataProvider: unknown; showCollapseAll?: boolean },
+      _options: { treeDataProvider: unknown; showCollapseAll?: boolean },
     ) => {
       mockTreeView = {
         id: viewId,
@@ -211,7 +211,7 @@ suite('src/ui/outputTreeView.ts', () => {
     
     // Then: Element returned as-is, no error thrown
     assert.doesNotThrow(() => {
-      const result = provider.getTreeItem(invalidElement as any);
+      const result = provider.getTreeItem(invalidElement as unknown as Parameters<OutputTreeViewProvider['getTreeItem']>[0]);
       assert.ok(result, 'TreeItem is returned');
     }, 'getTreeItem with invalid element does not throw');
   });

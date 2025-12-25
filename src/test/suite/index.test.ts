@@ -1,8 +1,6 @@
 import * as assert from 'assert';
-import * as path from 'path';
-import * as fs from 'fs';
 import * as vscode from 'vscode';
-import { resolveSuiteFromFullTitle, TestCaseInfo, TestCaseState, TestResultFile } from '../suite/index';
+import { resolveSuiteFromFullTitle, TestCaseInfo, TestResultFile } from '../suite/index';
 
 suite('test/suite/index.ts', () => {
   suite('resolveSuiteFromFullTitle', () => {

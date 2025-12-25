@@ -617,6 +617,7 @@ suite('src/ui/statusBar.ts', () => {
     // Note: The module-level statusBar variable prevents recreation
     // We verify that the same instance (or behavior) is maintained
     assert.ok(mockStatusBar, 'Status bar still exists');
+    assert.strictEqual(mockStatusBar, firstStatusBar, 'Same statusBar instance should be preserved');
   });
 
   // TC-E-02: handleTestGenEventForStatusBar called with statusBar = undefined

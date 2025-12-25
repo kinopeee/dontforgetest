@@ -353,7 +353,7 @@ suite('src/ui/progressTreeView.ts', () => {
       // Wait for task removal (3 seconds)
       await new Promise<void>((resolve) => {
         setTimeout(() => {
-          const childrenAfterDelay = provider?.getChildren();
+          void provider?.getChildren();
           // Task may be removed or still exist depending on timing
           assert.ok(true, 'Task removal handled');
           resolve();

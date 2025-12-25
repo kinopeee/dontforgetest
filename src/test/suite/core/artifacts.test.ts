@@ -3611,8 +3611,6 @@ suite('core/artifacts.ts', () => {
     // TC-E-36: getStringOrEmpty called with Infinity or -Infinity
     test('TC-E-36: getStringOrEmpty returns empty string for Infinity', () => {
       // Given: getStringOrEmpty called with Infinity (tested indirectly)
-      const raw = '{"version":1,"cases":[{"caseId":' + Number.POSITIVE_INFINITY + ',"inputPrecondition":"cond","perspective":"p","expectedResult":"ok","notes":"-"}]}';
-
       // When: parsePerspectiveJsonV1 is called
       // Note: JSON.parse will convert Infinity to null, so we test with a different approach
       // Actually, JSON.parse('{"x":Infinity}') throws, so we test with a valid number that's not finite

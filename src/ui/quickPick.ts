@@ -10,11 +10,13 @@ type SourceKind = 'workingTree' | 'latestCommit' | 'commitRange';
 type SourcePickItem = vscode.QuickPickItem & { source: SourceKind };
 type ModelPickMode = 'useConfig' | 'useCandidate' | 'input' | 'separator';
 type ModelPickItem = vscode.QuickPickItem & { mode: ModelPickMode; modelValue?: string };
+type RunLocation = 'local' | 'worktree';
+type RunLocationPickItem = vscode.QuickPickItem & { runLocation: RunLocation };
 
 /**
  * QuickPickでソース/モデルを選択してテスト生成を実行する（MVP UI）。
  */
-export async function generateTestWithQuickPick(provider: AgentProvider): Promise<void> {
+export async function generateTestWithQuickPick(provider: AgentProvider, context: vscode.ExtensionContext): Promise<void> {
   // 先にプリフライトで「そもそも実行できるか」を確認する
   const preflight = await ensurePreflight();
   if (!preflight) {
@@ -23,6 +25,11 @@ export async function generateTestWithQuickPick(provider: AgentProvider): Promis
 
   const source = await pickSource();
   if (!source) {
+    return;
+  }
+
+  const runLocation = await pickRunLocation(source);
+  if (!runLocation) {
     return;
   }
 
@@ -37,10 +44,10 @@ export async function generateTestWithQuickPick(provider: AgentProvider): Promis
       await generateTestFromWorkingTree(provider, modelOverride);
       return;
     case 'latestCommit':
-      await generateTestFromLatestCommit(provider, modelOverride);
+      await generateTestFromLatestCommit(provider, modelOverride, { runLocation, extensionContext: context });
       return;
     case 'commitRange':
-      await generateTestFromCommitRange(provider, modelOverride);
+      await generateTestFromCommitRange(provider, modelOverride, { runLocation, extensionContext: context });
       return;
     default: {
       const _exhaustive: never = source;
@@ -59,6 +66,33 @@ async function pickSource(): Promise<SourceKind | undefined> {
     { title: 'Dontforgetest: 実行ソースを選択', placeHolder: 'どの差分/対象からテストを生成しますか？' },
   );
   return picked?.source;
+}
+
+async function pickRunLocation(source: SourceKind): Promise<RunLocation | undefined> {
+  // 未コミット差分は「その時点の作業ツリー再現」が重くなるため、MVPでは Local のみ。
+  if (source === 'workingTree') {
+    return 'local';
+  }
+
+  const picked = await vscode.window.showQuickPick<RunLocationPickItem>(
+    [
+      {
+        label: 'Local（現在のワークスペース）',
+        description: '生成結果を直接反映する',
+        runLocation: 'local',
+      },
+      {
+        label: 'Worktree（一時worktree）',
+        description: '隔離して生成し、テスト差分だけを安全に適用する',
+        runLocation: 'worktree',
+      },
+    ],
+    {
+      title: 'Dontforgetest: 実行先を選択',
+      placeHolder: 'どこでテスト生成を実行しますか？',
+    },
+  );
+  return picked?.runLocation;
 }
 
 /**

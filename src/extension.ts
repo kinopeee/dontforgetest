@@ -12,6 +12,12 @@ import { initializeTestGenStatusBar } from './ui/statusBar';
 import { initializeProgressTreeView } from './ui/progressTreeView';
 import { initializeOutputTreeView } from './ui/outputTreeView';
 
+type RunLocation = 'local' | 'worktree';
+
+function normalizeRunLocation(value: unknown): RunLocation {
+  return value === 'worktree' ? 'worktree' : 'local';
+}
+
 /**
  * この関数は拡張機能が有効化されたときに呼ばれます
  */
@@ -32,7 +38,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('dontforgetest.generateTest', async () => {
-      await generateTestWithQuickPick(provider);
+      await generateTestWithQuickPick(provider, context);
     }),
   );
 
@@ -43,15 +49,22 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('dontforgetest.generateTestFromCommit', async () => {
-      await generateTestFromLatestCommit(provider);
+    vscode.commands.registerCommand('dontforgetest.generateTestFromCommit', async (args?: { runLocation?: RunLocation; modelOverride?: string }) => {
+      const runLocation = normalizeRunLocation(args?.runLocation);
+      const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
+      await generateTestFromLatestCommit(provider, modelOverride, { runLocation, extensionContext: context });
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('dontforgetest.generateTestFromCommitRange', async () => {
-      await generateTestFromCommitRange(provider);
-    }),
+    vscode.commands.registerCommand(
+      'dontforgetest.generateTestFromCommitRange',
+      async (args?: { runLocation?: RunLocation; modelOverride?: string }) => {
+        const runLocation = normalizeRunLocation(args?.runLocation);
+        const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
+        await generateTestFromCommitRange(provider, modelOverride, { runLocation, extensionContext: context });
+      },
+    ),
   );
 
   context.subscriptions.push(

@@ -2,11 +2,12 @@ import * as vscode from 'vscode';
 import { taskManager } from '../core/taskManager';
 
 type PanelRunSource = 'workingTree' | 'latestCommit' | 'commitRange';
+type PanelRunLocation = 'local' | 'worktree';
 
 /** Webviewから拡張機能へのメッセージ */
 type WebviewMessage =
   | { type: 'ready' }
-  | { type: 'run'; source: PanelRunSource }
+  | { type: 'run'; source: PanelRunSource; runLocation: PanelRunLocation }
   | { type: 'runCommand'; command: AllowedCommand }
   | { type: 'cancel' };
 
@@ -25,7 +26,7 @@ type AllowedCommand =
   | 'dontforgetest.openLatestExecutionReport';
 
 interface ControlPanelDeps {
-  executeCommand: (command: AllowedCommand) => Thenable<unknown>;
+  executeCommand: (command: AllowedCommand, ...args: unknown[]) => Thenable<unknown>;
 }
 
 /**
@@ -102,7 +103,8 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       if (!cmd) {
         return;
       }
-      await this.deps.executeCommand(cmd);
+      // コマンド側で引数を解釈する（未コミット差分は local 固定の想定）
+      await this.deps.executeCommand(cmd, { runLocation: msg.runLocation });
       return;
     }
 
@@ -313,6 +315,17 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '      </div>',
       '    </div>',
       '    <div class="hint" id="optionDesc">Staged / Unstaged の変更を対象</div>',
+      '    <div id="runLocationSection">',
+      '      <div class="row">',
+      '        <div class="select-wrap">',
+      '          <select id="runLocationSelect" aria-label="runLocation">',
+      '            <option value="local">Local</option>',
+      '            <option value="worktree">Worktree</option>',
+      '          </select>',
+      '        </div>',
+      '      </div>',
+      '      <div class="hint" id="runLocationHint"></div>',
+      '    </div>',
       '    <div class="row">',
       '      <button class="primary" id="runBtn">テスト生成</button>',
       '    </div>',
@@ -323,6 +336,9 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '',
       '    const sourceSelect = document.getElementById("sourceSelect");',
       '    const optionDesc = document.getElementById("optionDesc");',
+      '    const runLocationSection = document.getElementById("runLocationSection");',
+      '    const runLocationSelect = document.getElementById("runLocationSelect");',
+      '    const runLocationHint = document.getElementById("runLocationHint");',
       '    const runBtn = document.getElementById("runBtn");',
       '',
       '    // 状態管理',
@@ -333,6 +349,31 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '      latestCommit: "HEAD の変更を対象",',
       '      commitRange: "指定した範囲のコミットを対象"',
       '    };',
+      '',
+      '    const runLocationDescriptions = {',
+      '      local: "直接編集",',
+      '      worktree: "隔離→差分適用"',
+      '    };',
+      '',
+      '    function updateRunLocationHint() {',
+      '      const value = runLocationSelect.value;',
+      '      runLocationHint.textContent = runLocationDescriptions[value] || "";',
+      '    }',
+      '',
+      '    function updateRunLocationAvailability() {',
+      '      const source = sourceSelect.value;',
+      '      const worktreeAvailable = source !== "workingTree";',
+      '      if (!worktreeAvailable) {',
+      '        runLocationSection.style.display = "none";',
+      '        runLocationSelect.value = "local";',
+      '        runLocationHint.textContent = "";',
+      '      } else {',
+      '        runLocationSection.style.display = "block";',
+      '        updateRunLocationHint();',
+      '      }',
+      '      // source の説明も最小限だけ更新',
+      '      optionDesc.textContent = descriptions[source] || "";',
+      '    }',
       '',
       '    // ボタンの表示を更新',
       '    function updateButtonState(running) {',
@@ -347,7 +388,11 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '    }',
       '',
       '    sourceSelect.addEventListener("change", () => {',
-      '      optionDesc.textContent = descriptions[sourceSelect.value] || "";',
+      '      updateRunLocationAvailability();',
+      '    });',
+      '',
+      '    runLocationSelect.addEventListener("change", () => {',
+      '      updateRunLocationHint();',
       '    });',
       '',
       '    runBtn.addEventListener("click", () => {',
@@ -356,7 +401,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '        vscode.postMessage({ type: "cancel" });',
       '      } else {',
       '        // 実行開始',
-      '        vscode.postMessage({ type: "run", source: sourceSelect.value });',
+      '        vscode.postMessage({ type: "run", source: sourceSelect.value, runLocation: runLocationSelect.value });',
       '      }',
       '    });',
       '',
@@ -370,6 +415,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '',
       '    // 初期化時にready送信',
       '    vscode.postMessage({ type: "ready" });',
+      '    updateRunLocationAvailability();',
       '  </script>',
       '</body>',
       '</html>',
@@ -388,7 +434,7 @@ function getNonce(): string {
 
 function createDefaultDeps(): ControlPanelDeps {
   return {
-    executeCommand: async (command) => await vscode.commands.executeCommand(command),
+    executeCommand: async (command, ...args) => await vscode.commands.executeCommand(command, ...args),
   };
 }
 

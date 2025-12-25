@@ -5,6 +5,11 @@ import { analyzeGitUnifiedDiff, extractChangedPaths, getCommitRangeDiff } from '
 import { type AgentProvider } from '../providers/provider';
 import { runWithArtifacts } from './runWithArtifacts';
 
+export interface GenerateTestCommandOptions {
+  runLocation?: 'local' | 'worktree';
+  extensionContext?: vscode.ExtensionContext;
+}
+
 /**
  * 指定したコミット範囲の差分に対してテスト生成を実行する。
  *
@@ -12,7 +17,11 @@ import { runWithArtifacts } from './runWithArtifacts';
  * - main..HEAD
  * - HEAD~3..HEAD
  */
-export async function generateTestFromCommitRange(provider: AgentProvider, modelOverride?: string): Promise<void> {
+export async function generateTestFromCommitRange(
+  provider: AgentProvider,
+  modelOverride?: string,
+  options: GenerateTestCommandOptions = {},
+): Promise<void> {
   const preflight = await ensurePreflight();
   if (!preflight) {
     return;
@@ -71,6 +80,13 @@ export async function generateTestFromCommitRange(provider: AgentProvider, model
 
   const taskId = `fromCommitRange-${Date.now()}`;
   const generationLabel = `コミット範囲 (${trimmedRange})`;
+
+  const runLocation = options.runLocation === 'worktree' ? 'worktree' : 'local';
+  if (runLocation === 'worktree' && !options.extensionContext) {
+    vscode.window.showErrorMessage('Worktree 実行には拡張機能コンテキストが必要です（内部エラー）。');
+    return;
+  }
+
   await runWithArtifacts({
     provider,
     workspaceRoot,
@@ -82,6 +98,8 @@ export async function generateTestFromCommitRange(provider: AgentProvider, model
     perspectiveReferenceText: diffForPrompt,
     model: modelOverride ?? defaultModel,
     generationTaskId: taskId,
+    runLocation,
+    extensionContext: options.extensionContext,
   });
 }
 

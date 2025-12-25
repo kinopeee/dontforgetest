@@ -6,7 +6,6 @@ import {
   resolveSuiteFromFullTitle,
   printMochaLikeResultsFromTestResultFile as rawPrintMochaLikeResultsFromTestResultFile,
   stageExtensionToTemp,
-  TestCaseInfo,
   TestResultFile,
 } from '../runTest';
 

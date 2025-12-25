@@ -588,7 +588,7 @@ suite('src/ui/controlPanel.ts', () => {
     const html = webviewView.webview.html;
     // When: JavaScript code is generated
     // Then: Fallback logic is present for undefined values
-    assert.ok(html.includes('descriptions[sourceSelect.value] || ""'), 'JavaScript has fallback for undefined value');
+    assert.ok(html.includes('optionDesc.textContent = descriptions[source] || ""'), 'JavaScript has fallback for undefined value');
   });
 
   // TC-E-10: HTML JavaScript receives invalid message type

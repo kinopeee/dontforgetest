@@ -1,17 +1,23 @@
-import { execFile } from 'child_process';
 import * as vscode from 'vscode';
-import { promisify } from 'util';
 import { ensurePreflight } from '../core/preflight';
 import { buildTestGenPrompt } from '../core/promptBuilder';
+import { execGitStdout } from '../git/gitExec';
 import { runWithArtifacts } from './runWithArtifacts';
 import { type AgentProvider } from '../providers/provider';
-
-const execFileAsync = promisify(execFile);
 
 /**
  * 最新コミット（HEAD）の差分に対してテスト生成を実行する。
  */
-export async function generateTestFromLatestCommit(provider: AgentProvider, modelOverride?: string): Promise<void> {
+export interface GenerateTestCommandOptions {
+  runLocation?: 'local' | 'worktree';
+  extensionContext?: vscode.ExtensionContext;
+}
+
+export async function generateTestFromLatestCommit(
+  provider: AgentProvider,
+  modelOverride?: string,
+  options: GenerateTestCommandOptions = {},
+): Promise<void> {
   const preflight = await ensurePreflight();
   if (!preflight) {
     return;
@@ -51,6 +57,13 @@ export async function generateTestFromLatestCommit(provider: AgentProvider, mode
 
   const taskId = `fromCommit-${Date.now()}`;
   const generationLabel = `最新コミット (${commit.slice(0, 7)})`;
+
+  const runLocation = options.runLocation === 'worktree' ? 'worktree' : 'local';
+  if (runLocation === 'worktree' && !options.extensionContext) {
+    vscode.window.showErrorMessage('Worktree 実行には拡張機能コンテキストが必要です（内部エラー）。');
+    return;
+  }
+
   await runWithArtifacts({
     provider,
     workspaceRoot,
@@ -62,16 +75,14 @@ export async function generateTestFromLatestCommit(provider: AgentProvider, mode
     perspectiveReferenceText: diffForPrompt,
     model: modelOverride ?? defaultModel,
     generationTaskId: taskId,
+    runLocation,
+    extensionContext: options.extensionContext,
   });
 }
 
 async function getHeadCommitHash(cwd: string): Promise<string | undefined> {
   try {
-    const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
-      cwd,
-      encoding: 'utf8',
-      maxBuffer: 1024 * 1024,
-    });
+    const stdout = await execGitStdout(cwd, ['rev-parse', 'HEAD'], 1024 * 1024);
     const trimmed = stdout.trim();
     return trimmed.length > 0 ? trimmed : undefined;
   } catch {
@@ -81,11 +92,7 @@ async function getHeadCommitHash(cwd: string): Promise<string | undefined> {
 
 async function getChangedFilesInHead(cwd: string): Promise<string[]> {
   try {
-    const { stdout } = await execFileAsync('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], {
-      cwd,
-      encoding: 'utf8',
-      maxBuffer: 1024 * 1024,
-    });
+    const stdout = await execGitStdout(cwd, ['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], 1024 * 1024);
     return stdout
       .split('\n')
       .map((line) => line.trim())
@@ -97,12 +104,7 @@ async function getChangedFilesInHead(cwd: string): Promise<string[]> {
 
 async function getHeadDiffText(cwd: string): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', ['show', '--no-color', '--pretty=format:COMMIT %H%nSUBJECT %s%n', 'HEAD'], {
-      cwd,
-      encoding: 'utf8',
-      // 差分が大きい場合に備えて余裕を持たせる
-      maxBuffer: 20 * 1024 * 1024,
-    });
+    const stdout = await execGitStdout(cwd, ['show', '--no-color', '--pretty=format:COMMIT %H%nSUBJECT %s%n', 'HEAD'], 20 * 1024 * 1024);
     return stdout.trim();
   } catch {
     return '(差分の取得に失敗しました)';

@@ -544,12 +544,12 @@ suite('src/extension.ts', () => {
       assert.ok(packageJson.version, 'package.json version should be defined');
       const semverPattern = /^\d+\.\d+\.\d+$/;
       assert.ok(semverPattern.test(packageJson.version), `Version "${packageJson.version}" should be semantic version format (x.y.z)`);
-      assert.strictEqual(packageJson.version, '0.0.72', 'package.json version should be 0.0.72');
+    const expectedVersion = packageJson.version;
       assert.ok(packageLockJson.version, 'package-lock.json version should be defined');
       assert.ok(semverPattern.test(packageLockJson.version), `Lock file version "${packageLockJson.version}" should be semantic version format (x.y.z)`);
-      assert.strictEqual(packageLockJson.version, packageJson.version, 'Version numbers should be synchronized');
+    assert.strictEqual(packageLockJson.version, expectedVersion, 'Version numbers should be synchronized');
       if (packageLockJson.packages && packageLockJson.packages['']) {
-        assert.strictEqual(packageLockJson.packages[''].version, packageJson.version, 'Version number should be synchronized in lock file packages[""]');
+      assert.strictEqual(packageLockJson.packages[''].version, expectedVersion, 'Version number should be synchronized in lock file packages[""]');
       }
     });
 
@@ -573,7 +573,6 @@ suite('src/extension.ts', () => {
       assert.ok(packageJson.version, 'Version field should be defined');
       const semverPattern = /^\d+\.\d+\.\d+$/;
       assert.ok(semverPattern.test(packageJson.version), `Version "${packageJson.version}" should be semantic version format (x.y.z)`);
-      assert.strictEqual(packageJson.version, '0.0.72', 'package.json version should be 0.0.72');
     });
 
     // TC-N-03: package-lock.json root version and packages[""] version exist
@@ -599,7 +598,6 @@ suite('src/extension.ts', () => {
       assert.ok(packageLockJson.version, 'package-lock.json root version should be defined');
       const semverPattern = /^\d+\.\d+\.\d+$/;
       assert.ok(semverPattern.test(packageLockJson.version), `Root version "${packageLockJson.version}" should be semantic version format (x.y.z)`);
-      assert.strictEqual(packageLockJson.version, '0.0.72', 'package-lock.json root version should be 0.0.72');
       if (packageLockJson.packages && packageLockJson.packages['']) {
         assert.ok(packageLockJson.packages[''].version, 'packages[""] version should be defined');
         assert.ok(semverPattern.test(packageLockJson.packages[''].version!), `packages[""] version "${packageLockJson.packages[''].version}" should be semantic version format (x.y.z)`);
@@ -890,8 +888,6 @@ suite('src/extension.ts', () => {
       const packageJson = JSON.parse(jsonWithLeadingZeros) as { version?: string };
 
       // When: Validating version format
-      const semverPattern = /^\d+\.\d+\.\d+$/;
-
       // Then: Error is thrown or version is normalized to valid format
       assert.ok(packageJson.version, 'Version field should be defined');
       // Note: Leading zeros technically match the pattern but are not standard semver
@@ -1128,7 +1124,7 @@ suite('src/extension.ts', () => {
 
       // Then: All trailing whitespace is removed, code formatting is consistent
       let trailingWhitespaceCount = 0;
-      lines.forEach((line, index) => {
+      lines.forEach((line) => {
         if (line.trim().length > 0 && line !== line.trimEnd()) {
           trailingWhitespaceCount++;
         }
