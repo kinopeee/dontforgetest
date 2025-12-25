@@ -11,6 +11,7 @@ import {
   buildTestExecutionArtifactMarkdown,
   parseMochaOutput,
   parsePerspectiveJsonV1,
+  parseTestExecutionJsonV1,
   renderPerspectiveMarkdownTable,
   PERSPECTIVE_TABLE_HEADER,
   PERSPECTIVE_TABLE_SEPARATOR,
@@ -322,6 +323,204 @@ suite('core/artifacts.ts', () => {
     // 基本情報は含まれること
     assert.ok(md.includes('## テスト結果サマリー'), 'サマリーセクションは含まれること');
     assert.ok(md.includes('## 詳細ログ'), '詳細ログセクションヘッダーは含まれること');
+  });
+
+  // TC-ART-20: 実行レポートMarkdown生成（stdoutパース失敗でも固定フォーマット）
+  test('TC-ART-20: Mocha出力のパースに失敗してもサマリー表とテスト詳細表が必ず生成される', () => {
+    // Given: stdout が Mocha 形式でない結果
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['x.ts'],
+      result: {
+        command: 'cmd',
+        cwd: '/tmp',
+        exitCode: 1,
+        signal: null,
+        durationMs: 10,
+        stdout: 'not mocha output',
+        stderr: '',
+      },
+    });
+
+    // Then: 章立てと表の列が固定で含まれること
+    assert.ok(md.includes('## テスト結果サマリー'), 'サマリー見出しが必ず含まれること');
+    assert.ok(md.includes('| 項目 | 結果 |'), 'サマリー表が必ず含まれること');
+    assert.ok(md.includes('## テスト詳細'), 'テスト詳細見出しが必ず含まれること');
+    assert.ok(md.includes('| スイート | テスト名 | 結果 |'), 'テスト詳細表が必ず含まれること');
+    assert.ok(md.includes('## 実行情報'), '実行情報見出しが必ず含まれること');
+    assert.ok(md.includes('## 詳細ログ'), '詳細ログ見出しが必ず含まれること');
+  });
+
+  // TC-REPORT-N-01: TestExecutionResult with parsed Mocha output
+  test('TC-REPORT-N-01: buildTestExecutionArtifactMarkdown generates report with summary and details tables for parsed Mocha output', () => {
+    // Given: TestExecutionResult with parsed Mocha output
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '  ✔ test case 1\n  ✔ test case 2',
+        stderr: '',
+      },
+    });
+
+    // Then: Summary table and details table are generated with parsed test counts
+    assert.ok(md.includes('| 項目 | 結果 |'), 'Summary table header is present');
+    assert.ok(md.includes('| 成功 | 2 |'), 'Passed count is shown');
+    assert.ok(md.includes('| 失敗 | 0 |'), 'Failed count is shown');
+    assert.ok(md.includes('| 合計 | 2 |'), 'Total count is shown');
+    assert.ok(md.includes('| スイート | テスト名 | 結果 |'), 'Details table header is present');
+    assert.ok(md.includes('test case 1'), 'Test case 1 is in details');
+    assert.ok(md.includes('test case 2'), 'Test case 2 is in details');
+  });
+
+  // TC-REPORT-N-03: TestExecutionResult with empty test cases array
+  test('TC-REPORT-N-03: buildTestExecutionArtifactMarkdown generates report with empty details table when test cases array is empty', () => {
+    // Given: TestExecutionResult with empty test cases (parsed but no cases)
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '  ✔', // Valid pattern but no test name
+        stderr: '',
+      },
+    });
+
+    // Then: Details table header is present but no test rows
+    assert.ok(md.includes('| スイート | テスト名 | 結果 |'), 'Details table header is present');
+    // The table should have header and separator, but no test rows
+    const detailsSection = md.split('## テスト詳細')[1]?.split('##')[0] || '';
+    const testRows = detailsSection.match(/\|.*\|.*\|.*\|/g) || [];
+    // Only header and separator rows should exist (2 rows)
+    assert.ok(testRows.length <= 2, 'No test case rows in details table');
+  });
+
+  // TC-REPORT-N-04: TestExecutionResult with parsed=false
+  test('TC-REPORT-N-04: buildTestExecutionArtifactMarkdown generates report with summary table showing "-" for all counts when parsed=false', () => {
+    // Given: TestExecutionResult with unparseable stdout (parsed=false)
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: 'not mocha output',
+        stderr: '',
+      },
+    });
+
+    // Then: Summary table always shows "-" when testResult.parsed is false
+    assert.ok(md.includes('| 項目 | 結果 |'), 'Summary table header is present');
+    assert.ok(md.includes('| 成功 | - |'), 'Passed shows "-"');
+    assert.ok(md.includes('| 失敗 | - |'), 'Failed shows "-"');
+    assert.ok(md.includes('| 合計 | - |'), 'Total shows "-"');
+  });
+
+  // TC-REPORT-B-01: TestExecutionResult with durationMs=0
+  test('TC-REPORT-B-01: buildTestExecutionArtifactMarkdown generates report with durationSec="0.0" for zero duration', () => {
+    // Given: TestExecutionResult with durationMs=0
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: Zero duration is formatted correctly
+    assert.ok(md.includes('| 実行時間 | 0.0秒 |'), 'Duration shows 0.0 seconds');
+  });
+
+  // TC-REPORT-B-02: TestExecutionResult with very large durationMs
+  test('TC-REPORT-B-02: buildTestExecutionArtifactMarkdown generates report with large durationSec value for very large durationMs', () => {
+    // Given: TestExecutionResult with very large durationMs
+    const largeDurationMs = 3600000; // 1 hour
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: largeDurationMs,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: Large duration values are formatted correctly
+    assert.ok(md.includes('| 実行時間 | 3600.0秒 |'), 'Large duration is formatted correctly');
+  });
+
+  // TC-REPORT-B-03: TestExecutionResult with exitCode=null
+  test('TC-REPORT-B-03: buildTestExecutionArtifactMarkdown generates report showing "null" for exitCode when exitCode is null', () => {
+    // Given: TestExecutionResult with exitCode=null
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: null,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: null exitCode is displayed as "null" in status line
+    assert.ok(md.includes('exitCode: null'), 'exitCode shows "null"');
+  });
+
+  // TC-REPORT-B-04: TestExecutionResult with passed=0, failed=0
+  test('TC-REPORT-B-04: buildTestExecutionArtifactMarkdown generates report with total=0 when passed=0 and failed=0', () => {
+    // Given: TestExecutionResult with passed=0, failed=0 (parsed but no tests)
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: 'No tests found',
+        stderr: '',
+      },
+    });
+
+    // Then: Zero test counts are displayed correctly
+    // When parsed=false, it shows "-", but if somehow parsed=true with 0 tests, it should show 0
+    // Since stdout doesn't match Mocha pattern, parsed should be false
+    assert.ok(md.includes('| 合計 | - |') || md.includes('| 合計 | 0 |'), 'Total shows "-" or "0"');
   });
 
   // TC-ART-13: 実行レポートMarkdown生成（スキップ）
@@ -2738,6 +2937,392 @@ suite('core/artifacts.ts', () => {
       // Note: stripCodeFence checks for closing fence, so if there's no closing fence, it returns original text
       // Then extractJsonObject should still be able to extract the JSON object
       assert.ok(result.ok, 'Returns ok=true (JSON can still be extracted)');
+    });
+  });
+
+  suite('Test Execution JSON -> TestExecutionResult', () => {
+    // TC-EXECJSON-N-01: Valid JSON test execution result
+    test('TC-EXECJSON-N-01: parseTestExecutionJsonV1 parses valid JSON', () => {
+      // Given: Valid JSON test execution result
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":12,"stdout":"out","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and fields are parsed
+      assert.ok(result.ok, 'parseTestExecutionJsonV1 returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.version, 1);
+      assert.strictEqual(result.value.exitCode, 0);
+      assert.strictEqual(result.value.signal, null);
+      assert.strictEqual(result.value.durationMs, 12);
+      assert.strictEqual(result.value.stdout, 'out');
+      assert.strictEqual(result.value.stderr, '');
+    });
+
+    // TC-EXECJSON-N-02: JSON with code fences and extra text
+    test('TC-EXECJSON-N-02: parseTestExecutionJsonV1 strips code fences and tolerates surrounding text', () => {
+      // Given: JSON wrapped in code fences with surrounding text
+      const raw = [
+        'prefix text',
+        '```json',
+        '{"version":1,"exitCode":"1","signal":"","durationMs":"10","stdout":"a","stderr":"b"}',
+        '```',
+        'suffix text',
+      ].join('\n');
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and types are coerced
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.exitCode, 1);
+      assert.strictEqual(result.value.signal, null, '空文字は null 扱いになること');
+      assert.strictEqual(result.value.durationMs, 10);
+      assert.strictEqual(result.value.stdout, 'a');
+      assert.strictEqual(result.value.stderr, 'b');
+    });
+
+    // TC-EXECJSON-E-01: Invalid JSON syntax
+    test('TC-EXECJSON-E-01: parseTestExecutionJsonV1 returns ok=false for invalid JSON', () => {
+      // Given: Invalid JSON
+      const raw = '{"version":1,"exitCode":}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=false
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.ok(result.error.startsWith('invalid-json:'), 'invalid-json で始まること');
+    });
+
+    // TC-EXECJSON-E-02: Unsupported version
+    test('TC-EXECJSON-E-02: parseTestExecutionJsonV1 returns ok=false for unsupported version', () => {
+      // Given: Unsupported version
+      const raw = '{"version":2,"exitCode":0,"signal":null,"durationMs":1,"stdout":"","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=false
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'unsupported-version');
+    });
+
+    // TC-PARSE-N-03: JSON with string-typed numeric fields (exitCode, durationMs)
+    test('TC-PARSE-N-03: parseTestExecutionJsonV1 coerces string-typed numeric fields to numbers', () => {
+      // Given: JSON with string-typed exitCode and durationMs
+      const raw = '{"version":1,"exitCode":"1","signal":null,"durationMs":"10","stdout":"out","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and numeric strings are coerced
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.exitCode, 1);
+      assert.strictEqual(result.value.durationMs, 10);
+    });
+
+    // TC-PARSE-N-05: JSON with exitCode=null
+    test('TC-PARSE-N-05: parseTestExecutionJsonV1 preserves null exitCode', () => {
+      // Given: JSON with exitCode=null
+      const raw = '{"version":1,"exitCode":null,"signal":null,"durationMs":12,"stdout":"out","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and exitCode remains null
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.exitCode, null);
+    });
+
+    // TC-PARSE-N-06: JSON with durationMs=0
+    test('TC-PARSE-N-06: parseTestExecutionJsonV1 handles zero durationMs', () => {
+      // Given: JSON with durationMs=0
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":0,"stdout":"out","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and durationMs=0 is preserved
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.durationMs, 0);
+    });
+
+    // TC-PARSE-N-07: JSON with very large durationMs value
+    test('TC-PARSE-N-07: parseTestExecutionJsonV1 handles very large durationMs value', () => {
+      // Given: JSON with very large durationMs
+      const raw = `{"version":1,"exitCode":0,"signal":null,"durationMs":${Number.MAX_SAFE_INTEGER},"stdout":"out","stderr":""}`;
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and large durationMs is preserved
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.durationMs, Number.MAX_SAFE_INTEGER);
+    });
+
+    // TC-PARSE-N-08: JSON with stdout containing escaped newlines
+    test('TC-PARSE-N-08: parseTestExecutionJsonV1 preserves escaped newlines in stdout', () => {
+      // Given: JSON with stdout containing escaped newlines
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":12,"stdout":"line1\\nline2","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and escaped newlines are preserved
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.stdout, 'line1\nline2');
+    });
+
+    // TC-PARSE-E-01: Empty string input
+    test('TC-PARSE-E-01: parseTestExecutionJsonV1 returns ok=false for empty string', () => {
+      // Given: Empty string input
+      const raw = '';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=false with error='empty'
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'empty');
+    });
+
+    // TC-PARSE-E-02: Input with only whitespace
+    test('TC-PARSE-E-02: parseTestExecutionJsonV1 returns ok=false for whitespace-only input', () => {
+      // Given: Input with only whitespace
+      const raw = '   \n\t  ';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=false with error='empty'
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'empty');
+    });
+
+    // TC-PARSE-E-03: Input without JSON object
+    test('TC-PARSE-E-03: parseTestExecutionJsonV1 returns ok=false when no JSON object found', () => {
+      // Given: Input without JSON object (no { or })
+      const raw = 'not a json object';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=false with error='no-json-object'
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'no-json-object');
+    });
+
+    // TC-PARSE-E-05: JSON is not an object (array)
+    test('TC-PARSE-E-05: parseTestExecutionJsonV1 returns ok=false when JSON is an array', () => {
+      // Given: JSON is an array, not an object
+      const raw = '[{"version":1}]';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=false with error='json-not-object'
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-PARSE-E-06: JSON is not an object (primitive)
+    test('TC-PARSE-E-06: parseTestExecutionJsonV1 returns ok=false when JSON is a primitive', () => {
+      // Given: JSON is a primitive (string)
+      const raw = '"not an object"';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=false with error='json-not-object'
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-PARSE-E-08: JSON with version=0
+    test('TC-PARSE-E-08: parseTestExecutionJsonV1 returns ok=false for version=0', () => {
+      // Given: JSON with version=0
+      const raw = '{"version":0,"exitCode":0,"signal":null,"durationMs":1,"stdout":"","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=false with error='unsupported-version'
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'unsupported-version');
+    });
+
+    // TC-PARSE-B-01: JSON with durationMs=-1
+    test('TC-PARSE-B-01: parseTestExecutionJsonV1 defaults negative durationMs to 0', () => {
+      // Given: JSON with durationMs=-1
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":-1,"stdout":"out","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and durationMs defaults to 0
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.durationMs, 0);
+    });
+
+    // TC-PARSE-B-02: JSON with durationMs=NaN
+    test('TC-PARSE-B-02: parseTestExecutionJsonV1 defaults NaN durationMs to 0', () => {
+      // Given: JSON with durationMs=NaN (as string)
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":"NaN","stdout":"out","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and durationMs defaults to 0
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.durationMs, 0);
+    });
+
+    // TC-PARSE-B-03: JSON with durationMs=Infinity
+    test('TC-PARSE-B-03: parseTestExecutionJsonV1 defaults Infinity durationMs to 0', () => {
+      // Given: JSON with durationMs=Infinity (as string)
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":"Infinity","stdout":"out","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and durationMs defaults to 0
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.durationMs, 0);
+    });
+
+    // TC-PARSE-B-04: JSON with exitCode as non-numeric string
+    test('TC-PARSE-B-04: parseTestExecutionJsonV1 converts non-numeric exitCode string to null', () => {
+      // Given: JSON with exitCode as non-numeric string
+      const raw = '{"version":1,"exitCode":"invalid","signal":null,"durationMs":12,"stdout":"out","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and exitCode is null
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.exitCode, null);
+    });
+
+    // TC-PARSE-B-05: JSON with exitCode=undefined
+    test('TC-PARSE-B-05: parseTestExecutionJsonV1 converts undefined exitCode to null', () => {
+      // Given: JSON with exitCode=undefined (omitted field)
+      const raw = '{"version":1,"signal":null,"durationMs":12,"stdout":"out","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and exitCode is null
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.exitCode, null);
+    });
+
+    // TC-PARSE-B-06: JSON with signal=undefined
+    test('TC-PARSE-B-06: parseTestExecutionJsonV1 converts undefined signal to null', () => {
+      // Given: JSON with signal=undefined (omitted field)
+      const raw = '{"version":1,"exitCode":0,"durationMs":12,"stdout":"out","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and signal is null
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.signal, null);
+    });
+
+    // TC-PARSE-B-07: JSON with stdout=null
+    test('TC-PARSE-B-07: parseTestExecutionJsonV1 converts null stdout to empty string', () => {
+      // Given: JSON with stdout=null
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":12,"stdout":null,"stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and stdout is empty string
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.stdout, '');
+    });
+
+    // TC-PARSE-B-08: JSON with stderr=undefined
+    test('TC-PARSE-B-08: parseTestExecutionJsonV1 converts undefined stderr to empty string', () => {
+      // Given: JSON with stderr=undefined (omitted field)
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":12,"stdout":"out"}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: ok=true and stderr is empty string
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.stderr, '');
     });
   });
 });

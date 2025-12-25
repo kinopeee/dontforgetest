@@ -26,6 +26,21 @@ export interface PerspectiveJsonV1 {
   cases: PerspectiveCase[];
 }
 
+/**
+ * cursor-agent のテスト実行結果を、固定レポート生成に使える形へ変換するためのJSON定義。
+ *
+ * 観点表と同様に、cursor-agent 側には「JSON（マーカー付き）」で返させ、
+ * 拡張機能側で必ず同じ章立て・同じ表フォーマットのMarkdownへ整形する。
+ */
+export interface TestExecutionJsonV1 {
+  version: 1;
+  exitCode: number | null;
+  signal: string | null;
+  durationMs: number;
+  stdout: string;
+  stderr: string;
+}
+
 export const PERSPECTIVE_TABLE_HEADER =
   '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |';
 export const PERSPECTIVE_TABLE_SEPARATOR =
@@ -33,6 +48,10 @@ export const PERSPECTIVE_TABLE_SEPARATOR =
 
 export type ParsePerspectiveJsonResult =
   | { ok: true; value: PerspectiveJsonV1 }
+  | { ok: false; error: string };
+
+export type ParseTestExecutionJsonResult =
+  | { ok: true; value: TestExecutionJsonV1 }
   | { ok: false; error: string };
 
 /**
@@ -91,6 +110,59 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
   }
 
   return { ok: true, value: { version: 1, cases } };
+}
+
+/**
+ * cursor-agent の出力から抽出した JSON テキストを、テスト実行結果JSONとしてパースする（多少の揺れに寛容）。
+ * - コードフェンスが混入しても除去する
+ * - JSON前後に余計なテキストが混入しても `{...}` 部分を推定して切り出す
+ */
+export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonResult {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, error: 'empty' };
+  }
+
+  const unfenced = stripCodeFence(trimmed);
+  const jsonText = extractJsonObject(unfenced);
+  if (!jsonText) {
+    return { ok: false, error: 'no-json-object' };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: `invalid-json: ${msg}` };
+  }
+
+  const rec = asRecord(parsed);
+  if (!rec) {
+    return { ok: false, error: 'json-not-object' };
+  }
+
+  if (rec.version !== 1) {
+    return { ok: false, error: 'unsupported-version' };
+  }
+
+  const exitCode = getNumberOrNull(rec.exitCode);
+  const signal = getStringOrNull(rec.signal);
+  const durationMs = getNonNegativeNumberOrDefault(rec.durationMs, 0);
+  const stdout = getStringOrEmpty(rec.stdout);
+  const stderr = getStringOrEmpty(rec.stderr);
+
+  return {
+    ok: true,
+    value: {
+      version: 1,
+      exitCode,
+      signal,
+      durationMs,
+      stdout,
+      stderr,
+    },
+  };
 }
 
 /**
@@ -539,19 +611,18 @@ function buildTestSummarySection(exitCode: number | null, durationMs: number, te
     '',
   ];
 
-  if (testResult.parsed) {
-    lines.push(
-      '| 項目 | 結果 |',
-      '|------|------|',
-      `| 成功 | ${testResult.passed} |`,
-      `| 失敗 | ${testResult.failed} |`,
-      `| 合計 | ${testResult.passed + testResult.failed} |`,
-      `| 実行時間 | ${durationSec}秒 |`,
-      '',
-    );
-  } else {
-    lines.push(`- 実行時間: ${durationSec}秒`, '');
-  }
+  const passed = testResult.parsed ? String(testResult.passed) : '-';
+  const failed = testResult.parsed ? String(testResult.failed) : '-';
+  const total = testResult.parsed ? String(testResult.passed + testResult.failed) : '-';
+  lines.push(
+    '| 項目 | 結果 |',
+    '|------|------|',
+    `| 成功 | ${passed} |`,
+    `| 失敗 | ${failed} |`,
+    `| 合計 | ${total} |`,
+    `| 実行時間 | ${durationSec}秒 |`,
+    '',
+  );
 
   return lines.join('\n');
 }
@@ -560,10 +631,6 @@ function buildTestSummarySection(exitCode: number | null, durationMs: number, te
  * テスト詳細表のMarkdownを生成する。
  */
 function buildTestDetailsSection(testResult: ParsedTestResult): string {
-  if (!testResult.parsed || testResult.cases.length === 0) {
-    return '';
-  }
-
   const lines: string[] = [
     '## テスト詳細',
     '',
@@ -571,12 +638,16 @@ function buildTestDetailsSection(testResult: ParsedTestResult): string {
     '|---------|---------|------|',
   ];
 
+  if (!testResult.parsed || testResult.cases.length === 0) {
+    lines.push('');
+    return lines.join('\n');
+  }
+
   for (const c of testResult.cases) {
     const resultEmoji = c.passed ? '✅' : '❌';
     const suite = c.suite || '(root)';
-    // テーブルセル内のパイプ文字をエスケープ
-    const safeName = c.name.replace(/\|/g, '\\|');
-    const safeSuite = suite.replace(/\|/g, '\\|');
+    const safeName = normalizeTableCell(c.name);
+    const safeSuite = normalizeTableCell(suite);
     lines.push(`| ${safeSuite} | ${safeName} | ${resultEmoji} |`);
   }
 
@@ -623,6 +694,43 @@ function getStringOrEmpty(value: unknown): string {
     return value ? 'true' : 'false';
   }
   return '';
+}
+
+function getStringOrNull(value: unknown): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const s = getStringOrEmpty(value);
+  return s.length > 0 ? s : null;
+}
+
+function getNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const n = Number(value.trim());
+    if (Number.isFinite(n)) {
+      return n;
+    }
+  }
+  return null;
+}
+
+function getNonNegativeNumberOrDefault(value: unknown, defaultValue: number): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const n = Number(value.trim());
+    if (Number.isFinite(n) && n >= 0) {
+      return n;
+    }
+  }
+  return defaultValue;
 }
 
 function normalizeTableCell(value: string): string {

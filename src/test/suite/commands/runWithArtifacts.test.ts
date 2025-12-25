@@ -550,7 +550,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
   // TC-CMD-08: cursor-agent 経由でテスト実行し、結果がレポートに含まれる
   test('TC-CMD-08: testExecutionRunner=cursorAgent の場合、cursor-agent の出力から結果を抽出してレポートに保存する', async () => {
-    // Given: cursor-agent の出力（マーカー付き）を返す Provider
+    // Given: cursor-agent の出力（JSONマーカー付き）を返す Provider
     const taskId = `task-08-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-08');
 
@@ -561,17 +561,9 @@ suite('commands/runWithArtifacts.ts', () => {
           taskId: options.taskId,
           level: 'info',
           message: [
-            '<!-- BEGIN TEST EXECUTION RESULT -->',
-            'exitCode: 0',
-            'signal: null',
-            'durationMs: 12',
-            '<!-- BEGIN STDOUT -->',
-            'agent-stdout',
-            '<!-- END STDOUT -->',
-            '<!-- BEGIN STDERR -->',
-            '',
-            '<!-- END STDERR -->',
-            '<!-- END TEST EXECUTION RESULT -->',
+            '<!-- BEGIN TEST EXECUTION JSON -->',
+            '{"version":1,"exitCode":0,"signal":null,"durationMs":12,"stdout":"agent-stdout","stderr":""}',
+            '<!-- END TEST EXECUTION JSON -->',
           ].join('\n'),
           timestampMs: Date.now(),
         });
@@ -1622,8 +1614,405 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(prompt.includes('あなたはテスト実行担当です'), '役割定義が含まれること');
     assert.ok(prompt.includes('ファイルの編集・作成は禁止'), '編集禁止制約が含まれること');
     assert.ok(prompt.includes('デバッグ開始・ウォッチ開始・対話的セッション開始は禁止'), '対話禁止制約が含まれること');
-    assert.ok(prompt.includes('<!-- BEGIN TEST EXECUTION RESULT -->'), '開始マーカー指示が含まれること');
+    assert.ok(prompt.includes('<!-- BEGIN TEST EXECUTION JSON -->'), '開始マーカー指示が含まれること');
     assert.ok(prompt.includes('npm test'), '実行すべきコマンドが含まれること');
+  });
+
+  // TC-RUN-N-02: cursor-agent output contains only old format markers
+  test('TC-RUN-N-02: cursor-agent output contains only old format markers, falls back to old format parsing', async () => {
+    // Given: cursor-agent output with only old format markers (no JSON markers)
+    const taskId = `task-run-n02-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-run-n02');
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: 0',
+            'signal: null',
+            'durationMs: 100',
+            '<!-- BEGIN STDOUT -->',
+            'old-format-stdout',
+            '<!-- END STDOUT -->',
+            '<!-- BEGIN STDERR -->',
+            'old-format-stderr',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Old Format Test',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo "test"',
+        testExecutionRunner: 'cursorAgent',
+      }
+    });
+
+    // Then: Report contains old format values
+    const reportUri = vscode.Uri.file(path.join(workspaceRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report is generated');
+
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('old-format-stdout'), 'Old format stdout is in report');
+    assert.ok(text.includes('old-format-stderr'), 'Old format stderr is in report');
+  });
+
+  // TC-RUN-N-03: cursor-agent output contains JSON markers but parsing fails
+  test('TC-RUN-N-03: cursor-agent output contains JSON markers but parsing fails, falls back to old format', async () => {
+    // Given: cursor-agent output with JSON markers but invalid JSON content
+    const taskId = `task-run-n03-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-run-n03');
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION JSON -->',
+            '{"version":1,"exitCode":}', // Invalid JSON
+            '<!-- END TEST EXECUTION JSON -->',
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: 0',
+            'signal: null',
+            'durationMs: 200',
+            '<!-- BEGIN STDOUT -->',
+            'fallback-stdout',
+            '<!-- END STDOUT -->',
+            '<!-- BEGIN STDERR -->',
+            '',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'JSON Parse Fail Test',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo "test"',
+        testExecutionRunner: 'cursorAgent',
+      }
+    });
+
+    // Then: Falls back to old format and report contains fallback values
+    const reportUri = vscode.Uri.file(path.join(workspaceRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report is generated');
+
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('fallback-stdout'), 'Fallback stdout is in report');
+  });
+
+  // TC-RUN-N-04: cursor-agent output contains JSON markers but JSON.parse throws
+  test('TC-RUN-N-04: cursor-agent output contains JSON markers but JSON.parse throws, falls back to old format', async () => {
+    // Given: cursor-agent output with JSON markers but malformed JSON that causes parse error
+    const taskId = `task-run-n04-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-run-n04');
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION JSON -->',
+            '{invalid json}', // Malformed JSON
+            '<!-- END TEST EXECUTION JSON -->',
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: 1',
+            'signal: null',
+            'durationMs: 300',
+            '<!-- BEGIN STDOUT -->',
+            'exception-fallback-stdout',
+            '<!-- END STDOUT -->',
+            '<!-- BEGIN STDERR -->',
+            '',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'JSON Exception Test',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo "test"',
+        testExecutionRunner: 'cursorAgent',
+      }
+    });
+
+    // Then: Falls back to old format after exception
+    const reportUri = vscode.Uri.file(path.join(workspaceRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report is generated');
+
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('exception-fallback-stdout'), 'Exception fallback stdout is in report');
+  });
+
+  // TC-RUN-N-05: JSON durationMs is 0 or negative
+  test('TC-RUN-N-05: JSON durationMs is 0 or negative, uses measured durationMs instead', async () => {
+    // Given: cursor-agent output with JSON durationMs=0
+    const taskId = `task-run-n05-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-run-n05');
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION JSON -->',
+            '{"version":1,"exitCode":0,"signal":null,"durationMs":0,"stdout":"zero-duration","stderr":""}',
+            '<!-- END TEST EXECUTION JSON -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Zero Duration Test',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo "test"',
+        testExecutionRunner: 'cursorAgent',
+      }
+    });
+
+    // Then: Report uses measured duration (not 0)
+    const reportUri = vscode.Uri.file(path.join(workspaceRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report is generated');
+
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('zero-duration'), 'JSON stdout is in report');
+    // Duration should be measured (not 0.0), but exact value depends on execution time
+    assert.ok(text.includes('実行時間'), 'Duration section is present');
+  });
+
+  // TC-RUN-E-01: cursor-agent output contains no markers
+  test('TC-RUN-E-01: cursor-agent output contains no markers, returns error result', async () => {
+    // Given: cursor-agent output with no markers
+    const taskId = `task-run-e01-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-run-e01');
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: 'No markers in this output',
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'No Markers Test',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo "test"',
+        testExecutionRunner: 'cursorAgent',
+      }
+    });
+
+    // Then: Report contains error message
+    const reportUri = vscode.Uri.file(path.join(workspaceRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report is generated');
+
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('マーカーが見つかりません'), 'Error message about missing markers is in report');
+  });
+
+  // TC-RUN-E-02: cursor-agent output contains JSON markers but extraction fails
+  test('TC-RUN-E-02: cursor-agent output contains JSON markers but extraction fails, falls back to old format and returns error if old format also missing', async () => {
+    // Given: cursor-agent output with incomplete JSON markers (no end marker)
+    const taskId = `task-run-e02-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-run-e02');
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION JSON -->',
+            '{"version":1,"exitCode":0}', // No end marker
+            // No old format markers either
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Incomplete JSON Test',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo "test"',
+        testExecutionRunner: 'cursorAgent',
+      }
+    });
+
+    // Then: Report contains error message
+    const reportUri = vscode.Uri.file(path.join(workspaceRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report is generated');
+
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('マーカーが見つかりません'), 'Error message about missing markers is in report');
+  });
+
+  // TC-RUN-E-03: cursor-agent output contains invalid JSON markers
+  test('TC-RUN-E-03: cursor-agent output contains invalid JSON markers, falls back to old format parsing', async () => {
+    // Given: cursor-agent output with JSON markers but invalid JSON (wrong version)
+    const taskId = `task-run-e03-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-run-e03');
+
+    const provider = new MockProvider(0, (options) => {
+      if (options.taskId.endsWith('-test-agent')) {
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION JSON -->',
+            '{"version":2,"exitCode":0,"signal":null,"durationMs":100,"stdout":"invalid-version","stderr":""}',
+            '<!-- END TEST EXECUTION JSON -->',
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: 0',
+            'signal: null',
+            'durationMs: 400',
+            '<!-- BEGIN STDOUT -->',
+            'old-format-valid',
+            '<!-- END STDOUT -->',
+            '<!-- BEGIN STDERR -->',
+            '',
+            '<!-- END STDERR -->',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
+        });
+      }
+    });
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Invalid JSON Version Test',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo "test"',
+        testExecutionRunner: 'cursorAgent',
+      }
+    });
+
+    // Then: Falls back to old format
+    const reportUri = vscode.Uri.file(path.join(workspaceRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.ok(reports.length > 0, 'Report is generated');
+
+    const doc = await vscode.workspace.openTextDocument(reports[0]);
+    const text = doc.getText();
+    assert.ok(text.includes('old-format-valid'), 'Old format stdout is in report');
   });
 
   // TC-N-01: 観点表抽出成功 -> プロンプト注入成功

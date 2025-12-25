@@ -7,6 +7,7 @@ import {
   formatTimestamp,
   getArtifactSettings,
   parsePerspectiveJsonV1,
+  parseTestExecutionJsonV1,
   renderPerspectiveMarkdownTable,
   type PerspectiveCase,
   saveTestExecutionReport,
@@ -563,6 +564,8 @@ async function runTestCommandViaCursorAgent(params: {
 }): Promise<TestExecutionResult> {
   const startedAt = nowMs();
 
+  const jsonMarkerBegin = '<!-- BEGIN TEST EXECUTION JSON -->';
+  const jsonMarkerEnd = '<!-- END TEST EXECUTION JSON -->';
   const markerBegin = '<!-- BEGIN TEST EXECUTION RESULT -->';
   const markerEnd = '<!-- END TEST EXECUTION RESULT -->';
   const stdoutBegin = '<!-- BEGIN STDOUT -->';
@@ -589,20 +592,23 @@ async function runTestCommandViaCursorAgent(params: {
     '```',
     '',
     '## 出力フォーマット（必須）',
-    `- 出力は次のマーカーで囲むこと: ${markerBegin} ... ${markerEnd}`,
+    `- 返答は **JSON（コードフェンスなし）だけ** にする`,
+    `- 出力は次のマーカーで囲むこと: ${jsonMarkerBegin} ... ${jsonMarkerEnd}`,
     '- マーカー外には何も出力しない（説明文は禁止）',
+    '- JSONスキーマ v1:',
+    '- `{ "version": 1, "exitCode": number|null, "signal": string|null, "durationMs": number, "stdout": string, "stderr": string }`',
+    '- stdout/stderr は **文字列** とし、改行は `\\n` を含む形で表現する（生の改行は入れない）',
     '',
-    markerBegin,
-    'exitCode: <number|null>',
-    'signal: <string|null>',
-    'durationMs: <number>',
-    stdoutBegin,
-    '(stdout をそのまま貼り付け)',
-    stdoutEnd,
-    stderrBegin,
-    '(stderr をそのまま貼り付け)',
-    stderrEnd,
-    markerEnd,
+    jsonMarkerBegin,
+    '{',
+    '  "version": 1,',
+    '  "exitCode": 0,',
+    '  "signal": null,',
+    '  "durationMs": 1234,',
+    '  "stdout": "line1\\\\nline2",',
+    '  "stderr": ""',
+    '}',
+    jsonMarkerEnd,
     '',
   ].join('\n');
 
@@ -627,10 +633,36 @@ async function runTestCommandViaCursorAgent(params: {
   });
 
   const raw = logs.join('\n');
-  const extracted = extractBetweenMarkers(raw, markerBegin, markerEnd);
   const durationMs = Math.max(0, nowMs() - startedAt);
 
+  // 1) JSON（新形式）を優先
+  const extractedJson = extractBetweenMarkers(raw, jsonMarkerBegin, jsonMarkerEnd);
+  if (extractedJson) {
+    try {
+      const parsed = parseTestExecutionJsonV1(extractedJson);
+      if (parsed.ok) {
+        const d = parsed.value.durationMs;
+        const durationMsFinal = typeof d === 'number' && Number.isFinite(d) && d > 0 ? d : durationMs;
+        return {
+          command: params.testCommand,
+          cwd: params.workspaceRoot,
+          exitCode: parsed.value.exitCode,
+          signal: parsed.value.signal ? (parsed.value.signal as NodeJS.Signals) : null,
+          durationMs: durationMsFinal,
+          stdout: parsed.value.stdout,
+          stderr: parsed.value.stderr,
+        };
+      }
+      // JSON抽出はできたがパースできない場合は、旧形式へのフォールバックも試す
+    } catch (e) {
+      // ignore -> fallback
+    }
+  }
+
+  // 2) 旧形式（テキスト）へフォールバック
+  const extracted = extractBetweenMarkers(raw, markerBegin, markerEnd);
   if (!extracted) {
+    const prefix = extractedJson ? 'cursor-agent のJSON出力をパースできませんでした。' : '';
     return {
       command: params.testCommand,
       cwd: params.workspaceRoot,
@@ -639,7 +671,7 @@ async function runTestCommandViaCursorAgent(params: {
       durationMs,
       stdout: '',
       stderr: raw,
-      errorMessage: 'cursor-agent の出力からテスト結果を抽出できませんでした（マーカーが見つかりません）。',
+      errorMessage: `${prefix}cursor-agent の出力からテスト結果を抽出できませんでした（マーカーが見つかりません）。`.trim(),
     };
   }
 
