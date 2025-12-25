@@ -176,11 +176,11 @@ suite('src/ui/controlPanel.ts', () => {
   // TC-N-07: Button element styles
   // Given: Provider initialized with valid context
   // When: HTML is generated
-  // Then: HTML contains button element with VS Code native-like styles (height: 26px, padding: 4px 14px, border-radius: 2px)
+  // Then: HTML contains button element with VS Code native-like styles (height: 30px, padding: 4px 14px, border-radius: 2px)
   test('TC-N-07: Button element styles', () => {
     resolveView();
     const html = webviewView.webview.html;
-    assert.ok(html.includes('height: 26px;'), 'Button has height: 26px');
+    assert.ok(html.includes('height: 30px;'), 'Button has height: 30px');
     assert.ok(html.includes('padding: 4px 14px;'), 'Button has padding: 4px 14px');
     assert.ok(html.includes('border-radius: 2px;'), 'Button has border-radius: 2px');
   });
