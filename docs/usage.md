@@ -39,6 +39,10 @@ VS Code / Cursor の設定（Settings）で `dontforgetest.*` を検索します
 - **`dontforgetest.perspectiveReportDir`**: 観点表（自動生成）の保存先（既定: `docs/test-perspectives`）
 - **`dontforgetest.testCommand`**: 生成後に実行するテストコマンド（既定: `npm test`、空ならスキップ）
 - **`dontforgetest.testExecutionReportDir`**: テスト実行レポート（自動生成）の保存先（既定: `docs/test-execution-reports`）
+- **`dontforgetest.testExecutionRunner`**: テスト実行の担当者（既定: `extension`）
+  - `extension`: 拡張機能がローカルで `testCommand` を実行し、stdout/stderr/exitCode を収集してレポート化
+  - `cursorAgent`: `cursor-agent` に実行させ、マーカー付きの結果から stdout/stderr/exitCode を抽出してレポート化
+  - `cursorAgent` が実行拒否/空結果になる場合は、拡張機能側で **自動フォールバック**して実行します（警告ログが出ます）
 
 ### テスト戦略ファイルについて
 

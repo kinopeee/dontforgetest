@@ -55,7 +55,7 @@ suite('core/artifacts.ts', () => {
     // testExecutionRunner
     const runnerInfo = config.inspect('testExecutionRunner');
     if (!runnerInfo?.workspaceValue && !runnerInfo?.globalValue) {
-      assert.strictEqual(settings.testExecutionRunner, 'cursorAgent', 'デフォルトは cursorAgent であるべき');
+      assert.strictEqual(settings.testExecutionRunner, 'extension', 'デフォルトは extension であるべき');
     }
 
     // allowUnsafeTestCommand
@@ -117,6 +117,168 @@ suite('core/artifacts.ts', () => {
     } finally {
       // Cleanup: 設定を元に戻す
       await config.update('preTestCheckCommand', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // TC-RUNNER-N-01: testExecutionRunner default value (not configured)
+  test('TC-RUNNER-N-01: testExecutionRunner setting is not configured (default)', async () => {
+    // Given: testExecutionRunner setting is not configured (default)
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings is called
+      const settings = getArtifactSettings();
+
+      // Then: Returns testExecutionRunner='extension' (default changed from cursorAgent to extension)
+      assert.strictEqual(settings.testExecutionRunner, 'extension', 'Default value should be extension');
+    } finally {
+      // Cleanup: Reset setting
+      await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // TC-RUNNER-N-02: testExecutionRunner explicitly set to 'extension'
+  test('TC-RUNNER-N-02: testExecutionRunner is explicitly set to extension', async () => {
+    // Given: testExecutionRunner is explicitly set to 'extension'
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('testExecutionRunner', 'extension', vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings is called
+      const settings = getArtifactSettings();
+
+      // Then: Returns testExecutionRunner='extension'
+      assert.strictEqual(settings.testExecutionRunner, 'extension', 'Should return extension');
+    } finally {
+      // Cleanup: Reset setting
+      await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // TC-RUNNER-N-03: testExecutionRunner explicitly set to 'cursorAgent'
+  test('TC-RUNNER-N-03: testExecutionRunner is explicitly set to cursorAgent', async () => {
+    // Given: testExecutionRunner is explicitly set to 'cursorAgent'
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('testExecutionRunner', 'cursorAgent', vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings is called
+      const settings = getArtifactSettings();
+
+      // Then: Returns testExecutionRunner='cursorAgent'
+      assert.strictEqual(settings.testExecutionRunner, 'cursorAgent', 'Should return cursorAgent');
+    } finally {
+      // Cleanup: Reset setting
+      await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // TC-RUNNER-B-01: testExecutionRunner setting value is empty string
+  test('TC-RUNNER-B-01: testExecutionRunner setting value is empty string', async () => {
+    // Given: testExecutionRunner setting value is empty string
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('testExecutionRunner', '', vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings is called
+      const settings = getArtifactSettings();
+
+      // Then: Returns testExecutionRunner='extension' (fallback to default after trim)
+      assert.strictEqual(settings.testExecutionRunner, 'extension', 'Empty string should fallback to extension after trim');
+    } finally {
+      // Cleanup: Reset setting
+      await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // TC-RUNNER-B-02: testExecutionRunner setting value is whitespace only
+  test('TC-RUNNER-B-02: testExecutionRunner setting value is whitespace only', async () => {
+    // Given: testExecutionRunner setting value is whitespace only
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('testExecutionRunner', '   ', vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings is called
+      const settings = getArtifactSettings();
+
+      // Then: Returns testExecutionRunner='extension' (fallback to default after trim)
+      assert.strictEqual(settings.testExecutionRunner, 'extension', 'Whitespace-only should fallback to extension after trim');
+    } finally {
+      // Cleanup: Reset setting
+      await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // TC-RUNNER-B-03: testExecutionRunner setting value is null
+  test('TC-RUNNER-B-03: testExecutionRunner setting value is null', async () => {
+    // Given: testExecutionRunner setting value is null
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('testExecutionRunner', null, vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings is called
+      const settings = getArtifactSettings();
+
+      // Then: Returns testExecutionRunner='extension' (fallback to default)
+      assert.strictEqual(settings.testExecutionRunner, 'extension', 'null should fallback to extension');
+    } finally {
+      // Cleanup: Reset setting
+      await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // TC-RUNNER-B-04: testExecutionRunner setting value is undefined
+  test('TC-RUNNER-B-04: testExecutionRunner setting value is undefined', async () => {
+    // Given: testExecutionRunner setting value is undefined (not set)
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings is called
+      const settings = getArtifactSettings();
+
+      // Then: Returns testExecutionRunner='extension' (fallback to default)
+      assert.strictEqual(settings.testExecutionRunner, 'extension', 'undefined should fallback to extension');
+    } finally {
+      // Cleanup: Reset setting
+      await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // TC-RUNNER-E-01: testExecutionRunner setting value is invalid enum value
+  test('TC-RUNNER-E-01: testExecutionRunner setting value is invalid enum value', async () => {
+    // Given: testExecutionRunner setting value is invalid enum value (not 'extension' or 'cursorAgent')
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('testExecutionRunner', 'invalidValue', vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings is called
+      const settings = getArtifactSettings();
+
+      // Then: Returns testExecutionRunner='cursorAgent' (any non-extension value maps to cursorAgent)
+      assert.strictEqual(settings.testExecutionRunner, 'cursorAgent', 'Invalid value should map to cursorAgent');
+    } finally {
+      // Cleanup: Reset setting
+      await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  // TC-RUNNER-E-02: testExecutionRunner setting value is 'Extension' (case-sensitive mismatch)
+  test('TC-RUNNER-E-02: testExecutionRunner setting value is Extension (case-sensitive mismatch)', async () => {
+    // Given: testExecutionRunner setting value is 'Extension' (case-sensitive mismatch)
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('testExecutionRunner', 'Extension', vscode.ConfigurationTarget.Global);
+
+    try {
+      // When: getArtifactSettings is called
+      const settings = getArtifactSettings();
+
+      // Then: Returns testExecutionRunner='cursorAgent' (case-sensitive comparison fails)
+      assert.strictEqual(settings.testExecutionRunner, 'cursorAgent', 'Case-sensitive mismatch should map to cursorAgent');
+    } finally {
+      // Cleanup: Reset setting
+      await config.update('testExecutionRunner', undefined, vscode.ConfigurationTarget.Global);
     }
   });
 

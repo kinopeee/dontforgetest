@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "Dontforgetest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.67",
+  "version": "0.0.68",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -156,7 +156,7 @@
             "cursorAgent",
             "extension"
           ],
-          "default": "cursorAgent",
+          "default": "extension",
           "description": "テスト実行の担当者（cursorAgent=cursor-agentに実行させて結果を抽出、extension=拡張機能が直接実行）"
         },
         "dontforgetest.allowUnsafeTestCommand": {

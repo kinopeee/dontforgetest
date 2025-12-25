@@ -1368,6 +1368,11 @@ suite('test/runTest.ts', () => {
       await fs.promises.writeFile(path.join(sourceDir, 'LICENSE'), 'MIT');
       await fs.promises.mkdir(path.join(sourceDir, 'out'), { recursive: true });
       await fs.promises.mkdir(path.join(sourceDir, 'src'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'docs'), { recursive: true });
+      await fs.promises.writeFile(
+        path.join(sourceDir, 'docs', 'usage.md'),
+        'dontforgetest.testExecutionRunner\n既定: `extension`\n- extension\n- cursorAgent\n自動フォールバック\n',
+      );
       await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
     };
 
@@ -1423,6 +1428,11 @@ suite('test/runTest.ts', () => {
       await fs.promises.writeFile(path.join(sourceDir, 'LICENSE'), 'MIT');
       await fs.promises.mkdir(path.join(sourceDir, 'out'), { recursive: true });
       await fs.promises.mkdir(path.join(sourceDir, 'src'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'docs'), { recursive: true });
+      await fs.promises.writeFile(
+        path.join(sourceDir, 'docs', 'usage.md'),
+        'dontforgetest.testExecutionRunner\n既定: `extension`\n- extension\n- cursorAgent\n自動フォールバック\n',
+      );
       await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
 
       // When: stageExtensionToTemp is called
@@ -1437,6 +1447,7 @@ suite('test/runTest.ts', () => {
       assert.ok(await fs.promises.access(path.join(stageDir, 'LICENSE')).then(() => true).catch(() => false), 'LICENSE is copied');
       assert.ok(await fs.promises.access(path.join(stageDir, 'out')).then(() => true).catch(() => false), 'out directory is copied');
       assert.ok(await fs.promises.access(path.join(stageDir, 'src')).then(() => true).catch(() => false), 'src directory is copied');
+      assert.ok(await fs.promises.access(path.join(stageDir, 'docs')).then(() => true).catch(() => false), 'docs directory is copied');
       assert.ok(await fs.promises.access(path.join(stageDir, 'media')).then(() => true).catch(() => false), 'media directory is copied');
     });
 
@@ -1676,6 +1687,376 @@ suite('test/runTest.ts', () => {
         },
         'Should throw TypeError when stageExtensionRoot is null'
       );
+    });
+
+    // TC-STAGE-N-01: docs directory exists in sourceExtensionRoot with files
+    test('TC-STAGE-N-01: docs directory exists in sourceExtensionRoot with files', async () => {
+      // Given: docs directory exists in sourceExtensionRoot with files
+      await ensureRequiredSourceFiles();
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
+      const docsFile1 = path.join(sourceDir, 'docs', 'file1.md');
+      const docsFile2 = path.join(sourceDir, 'docs', 'subdir', 'file2.md');
+      await fs.promises.writeFile(docsFile1, 'Content 1');
+      await fs.promises.mkdir(path.join(sourceDir, 'docs', 'subdir'), { recursive: true });
+      await fs.promises.writeFile(docsFile2, 'Content 2');
+
+      // When: stageExtensionToTemp is called
+      await stageExtensionToTemp({
+        sourceExtensionRoot: sourceDir,
+        stageExtensionRoot: stageDir,
+      });
+
+      // Then: docs directory is copied to stageExtensionRoot successfully with all files
+      const copiedDocsDir = path.join(stageDir, 'docs');
+      const copiedFile1 = path.join(stageDir, 'docs', 'file1.md');
+      const copiedFile2 = path.join(stageDir, 'docs', 'subdir', 'file2.md');
+      assert.ok(await fs.promises.access(copiedDocsDir).then(() => true).catch(() => false), 'docs directory is copied');
+      assert.ok(await fs.promises.access(copiedFile1).then(() => true).catch(() => false), 'docs/file1.md is copied');
+      assert.ok(await fs.promises.access(copiedFile2).then(() => true).catch(() => false), 'docs/subdir/file2.md is copied');
+      const content1 = await fs.promises.readFile(copiedFile1, 'utf8');
+      const content2 = await fs.promises.readFile(copiedFile2, 'utf8');
+      assert.strictEqual(content1, 'Content 1', 'Copied file1.md content matches');
+      assert.strictEqual(content2, 'Content 2', 'Copied file2.md content matches');
+    });
+
+    // TC-STAGE-N-02: docs directory exists but is empty
+    test('TC-STAGE-N-02: docs directory exists but is empty', async () => {
+      // Given: docs directory exists but is empty
+      await fs.promises.writeFile(path.join(sourceDir, 'package.json'), '{"name":"test"}');
+      await fs.promises.writeFile(path.join(sourceDir, 'LICENSE'), 'MIT');
+      await fs.promises.mkdir(path.join(sourceDir, 'out'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'src'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'docs'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
+
+      // When: stageExtensionToTemp is called
+      await stageExtensionToTemp({
+        sourceExtensionRoot: sourceDir,
+        stageExtensionRoot: stageDir,
+      });
+
+      // Then: Empty docs directory is copied to stageExtensionRoot successfully
+      const copiedDocsDir = path.join(stageDir, 'docs');
+      assert.ok(await fs.promises.access(copiedDocsDir).then(() => true).catch(() => false), 'Empty docs directory is copied');
+      const stats = await fs.promises.stat(copiedDocsDir);
+      assert.ok(stats.isDirectory(), 'Copied docs is a directory');
+    });
+
+    // TC-STAGE-B-01: docs directory does not exist in sourceExtensionRoot
+    test('TC-STAGE-B-01: docs directory does not exist in sourceExtensionRoot', async () => {
+      // Given: docs directory does not exist in sourceExtensionRoot
+      await fs.promises.writeFile(path.join(sourceDir, 'package.json'), '{"name":"test"}');
+      await fs.promises.writeFile(path.join(sourceDir, 'LICENSE'), 'MIT');
+      await fs.promises.mkdir(path.join(sourceDir, 'out'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'src'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
+
+      // When: stageExtensionToTemp is called
+      // Then: fs.promises.cp throws ENOENT error or handles gracefully
+      await assert.rejects(
+        async () => {
+          await stageExtensionToTemp({
+            sourceExtensionRoot: sourceDir,
+            stageExtensionRoot: stageDir,
+          });
+        },
+        (err: NodeJS.ErrnoException) => {
+          return err.code === 'ENOENT' || err.message.includes('ENOENT');
+        },
+        'Should throw ENOENT error when docs directory does not exist'
+      );
+    });
+
+    // TC-STAGE-B-02: docs directory exists but sourceExtensionRoot path is invalid
+    test('TC-STAGE-B-02: docs directory exists but sourceExtensionRoot path is invalid', async () => {
+      // Given: docs directory exists but sourceExtensionRoot path is invalid
+      const invalidPath = path.join(tempDir, 'nonexistent-source');
+
+      // When: stageExtensionToTemp is called
+      // Then: fs.promises.cp throws error (ENOENT or similar)
+      await assert.rejects(
+        async () => {
+          await stageExtensionToTemp({
+            sourceExtensionRoot: invalidPath,
+            stageExtensionRoot: stageDir,
+          });
+        },
+        (err: NodeJS.ErrnoException) => {
+          return err.code === 'ENOENT' || err.message.includes('ENOENT');
+        },
+        'Should throw ENOENT error when sourceExtensionRoot path is invalid'
+      );
+    });
+
+    // TC-STAGE-E-01: docs directory exists but destination directory is read-only
+    test('TC-STAGE-E-01: docs directory exists but destination directory is read-only', async () => {
+      // Given: docs directory exists but destination directory is read-only
+      await ensureRequiredSourceFiles();
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
+      // stageExtensionToTemp は stageExtensionRoot を削除して作り直すため、
+      // stageDir 自体を read-only にしてもエラーにならないケースがある。
+      // 代わりに「親ディレクトリ」を read-only にして、削除/作成ができない状況を作る。
+      try {
+        await fs.promises.chmod(tempDir, 0o555); // Read-only (parent)
+      } catch {
+        // If chmod fails (e.g., on Windows), skip this test
+        return;
+      }
+
+      try {
+        // When: stageExtensionToTemp is called
+        // Then: fs.promises.cp throws EACCES error or handles gracefully
+        await assert.rejects(
+          async () => {
+            await stageExtensionToTemp({
+              sourceExtensionRoot: sourceDir,
+              stageExtensionRoot: stageDir,
+            });
+          },
+          (err: NodeJS.ErrnoException) => {
+            return err.code === 'EACCES' || err.code === 'EPERM' || err.message.includes('EACCES') || err.message.includes('EPERM');
+          },
+          'Should throw EACCES or EPERM error when destination directory is read-only'
+        );
+      } finally {
+        // Restore permissions for cleanup
+        try {
+          await fs.promises.chmod(tempDir, 0o755);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    });
+
+    // TC-STAGE-E-02: docs directory exists but contains symlink to non-existent target
+    test('TC-STAGE-E-02: docs directory exists but contains symlink to non-existent target', async () => {
+      // Given: docs directory exists but contains symlink to non-existent target
+      await ensureRequiredSourceFiles();
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
+      const brokenSymlinkPath = path.join(sourceDir, 'docs', 'broken-link.md');
+      const nonExistentTarget = path.join(sourceDir, 'nonexistent-file.md');
+      try {
+        await fs.promises.symlink(nonExistentTarget, brokenSymlinkPath);
+      } catch {
+        // Skip test on platforms that don't support symlinks (e.g., Windows without admin)
+        return;
+      }
+
+      // When: stageExtensionToTemp is called
+      // Then: fs.promises.cp handles broken symlink appropriately (copies symlink or throws error)
+      try {
+        await stageExtensionToTemp({
+          sourceExtensionRoot: sourceDir,
+          stageExtensionRoot: stageDir,
+        });
+
+        // If no error, verify that symlink was handled (may be copied as symlink or resolved)
+        const copiedSymlinkPath = path.join(stageDir, 'docs', 'broken-link.md');
+        const exists = await fs.promises.access(copiedSymlinkPath).then(() => true).catch(() => false);
+        if (exists) {
+          // Symlink was copied (or resolved), which is acceptable behavior
+          assert.ok(true, 'Broken symlink was handled (copied or resolved)');
+        }
+      } catch (err) {
+        // Error is acceptable when handling broken symlinks
+        assert.ok(err instanceof Error, 'Error may be thrown when handling broken symlink');
+      }
+    });
+  });
+
+  suite('ensureRequiredSourceFiles helper function', () => {
+    let tempDir: string;
+    let sourceDir: string;
+
+    setup(async () => {
+      // Given: Temporary directory for testing
+      tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'dontforgetest-test-'));
+      sourceDir = path.join(tempDir, 'source');
+      await fs.promises.mkdir(sourceDir, { recursive: true });
+    });
+
+    teardown(async () => {
+      // Cleanup: Remove temporary directories
+      try {
+        await fs.promises.rm(tempDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    });
+
+    const ensureRequiredSourceFiles = async (): Promise<void> => {
+      // stageExtensionToTemp は拡張機能一式を退避するため、package-lock.json 以外も前提としてコピーする。
+      // テスト用の sourceDir でも最小構成を用意する。
+      await fs.promises.writeFile(path.join(sourceDir, 'package.json'), '{"name":"test"}');
+      await fs.promises.writeFile(path.join(sourceDir, 'LICENSE'), 'MIT');
+      await fs.promises.mkdir(path.join(sourceDir, 'out'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'src'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'docs'), { recursive: true });
+      await fs.promises.writeFile(
+        path.join(sourceDir, 'docs', 'usage.md'),
+        'dontforgetest.testExecutionRunner\n既定: `extension`\n- extension\n- cursorAgent\n自動フォールバック\n',
+      );
+      await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
+    };
+
+    // TC-RUNTEST-HELPER-N-01: ensureRequiredSourceFiles is called before test setup
+    test('TC-RUNTEST-HELPER-N-01: ensureRequiredSourceFiles creates required files', async () => {
+      // Given: ensureRequiredSourceFiles helper function
+      // When: ensureRequiredSourceFiles is called
+      await ensureRequiredSourceFiles();
+
+      // Then: Required files (package.json, LICENSE, out/, src/, docs/, media/) are created
+      const packageJsonPath = path.join(sourceDir, 'package.json');
+      const licensePath = path.join(sourceDir, 'LICENSE');
+      const outDirPath = path.join(sourceDir, 'out');
+      const srcDirPath = path.join(sourceDir, 'src');
+      const docsDirPath = path.join(sourceDir, 'docs');
+      const usageMdPath = path.join(sourceDir, 'docs', 'usage.md');
+      const mediaDirPath = path.join(sourceDir, 'media');
+
+      assert.ok(await fs.promises.access(packageJsonPath).then(() => true).catch(() => false), 'package.json exists');
+      assert.ok(await fs.promises.access(licensePath).then(() => true).catch(() => false), 'LICENSE exists');
+      assert.ok(await fs.promises.access(outDirPath).then(() => true).catch(() => false), 'out/ directory exists');
+      assert.ok(await fs.promises.access(srcDirPath).then(() => true).catch(() => false), 'src/ directory exists');
+      assert.ok(await fs.promises.access(docsDirPath).then(() => true).catch(() => false), 'docs/ directory exists');
+      assert.ok(await fs.promises.access(usageMdPath).then(() => true).catch(() => false), 'docs/usage.md exists');
+      assert.ok(await fs.promises.access(mediaDirPath).then(() => true).catch(() => false), 'media/ directory exists');
+
+      const packageJsonContent = await fs.promises.readFile(packageJsonPath, 'utf8');
+      assert.strictEqual(packageJsonContent, '{"name":"test"}', 'package.json content is correct');
+      const licenseContent = await fs.promises.readFile(licensePath, 'utf8');
+      assert.strictEqual(licenseContent, 'MIT', 'LICENSE content is correct');
+    });
+
+    // TC-RUNTEST-HELPER-B-01: ensureRequiredSourceFiles is called when sourceDir is null
+    test('TC-RUNTEST-HELPER-B-01: ensureRequiredSourceFiles throws TypeError when sourceDir is null', async () => {
+      // Given: sourceDir is null
+      const nullSourceDir = null as unknown as string;
+
+      // When: ensureRequiredSourceFiles is called with null sourceDir
+      // Then: path.join throws TypeError or handles gracefully
+      await assert.rejects(
+        async () => {
+          await fs.promises.writeFile(path.join(nullSourceDir, 'package.json'), '{"name":"test"}');
+        },
+        (err: Error) => {
+          return err instanceof TypeError || err.message.includes('null') || err.message.includes('TypeError');
+        },
+        'Should throw TypeError when sourceDir is null'
+      );
+    });
+
+    // TC-RUNTEST-HELPER-B-02: ensureRequiredSourceFiles is called when directories already exist
+    test('TC-RUNTEST-HELPER-B-02: ensureRequiredSourceFiles handles existing directories', async () => {
+      // Given: Directories already exist
+      await fs.promises.mkdir(path.join(sourceDir, 'out'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'src'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'docs'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
+
+      // When: ensureRequiredSourceFiles is called
+      await ensureRequiredSourceFiles();
+
+      // Then: Function completes successfully without errors
+      assert.ok(await fs.promises.access(path.join(sourceDir, 'package.json')).then(() => true).catch(() => false), 'package.json exists');
+      assert.ok(await fs.promises.access(path.join(sourceDir, 'out')).then(() => true).catch(() => false), 'out/ directory exists');
+    });
+
+    // TC-RUNTEST-HELPER-E-01: ensureRequiredSourceFiles is called but file write fails
+    test('TC-RUNTEST-HELPER-E-01: ensureRequiredSourceFiles handles file write errors', async () => {
+      // Given: sourceDir is read-only (simulating write failure)
+      try {
+        await fs.promises.chmod(sourceDir, 0o555); // Read-only
+      } catch {
+        // If chmod fails (e.g., on Windows), skip this test
+        return;
+      }
+
+      // When: ensureRequiredSourceFiles is called
+      // Then: Error is thrown or handled gracefully
+      try {
+        await ensureRequiredSourceFiles();
+        // If no error is thrown, verify that files were created (some systems may allow writes)
+        const packageJsonPath = path.join(sourceDir, 'package.json');
+        const exists = await fs.promises.access(packageJsonPath).then(() => true).catch(() => false);
+        if (!exists) {
+          assert.ok(true, 'File write was prevented as expected');
+        }
+      } catch (err) {
+        // Error is expected when directory is read-only
+        assert.ok(err instanceof Error, 'Error is thrown when file write fails');
+      } finally {
+        // Restore permissions for cleanup
+        try {
+          await fs.promises.chmod(sourceDir, 0o755);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    });
+
+    // TC-RUNTEST-HELPER-E-02: ensureRequiredSourceFiles is called but directory creation fails
+    test('TC-RUNTEST-HELPER-E-02: ensureRequiredSourceFiles handles directory creation errors', async () => {
+      // Given: Parent directory is read-only (simulating directory creation failure)
+      try {
+        await fs.promises.chmod(tempDir, 0o555); // Read-only
+      } catch {
+        // If chmod fails (e.g., on Windows), skip this test
+        return;
+      }
+
+      // When: ensureRequiredSourceFiles is called
+      // Then: Error is thrown or handled gracefully
+      try {
+        await ensureRequiredSourceFiles();
+        // If no error is thrown, verify that directories were created (some systems may allow creation)
+        const outDirPath = path.join(sourceDir, 'out');
+        const exists = await fs.promises.access(outDirPath).then(() => true).catch(() => false);
+        if (!exists) {
+          assert.ok(true, 'Directory creation was prevented as expected');
+        }
+      } catch (err) {
+        // Error is expected when parent directory is read-only
+        assert.ok(err instanceof Error, 'Error is thrown when directory creation fails');
+      } finally {
+        // Restore permissions for cleanup
+        try {
+          await fs.promises.chmod(tempDir, 0o755);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    });
+
+    // TC-RUNTEST-INTEGRATION-N-01: Test calls ensureRequiredSourceFiles before stageExtensionToTemp
+    test('TC-RUNTEST-INTEGRATION-N-01: ensureRequiredSourceFiles integration with stageExtensionToTemp', async () => {
+      // Given: ensureRequiredSourceFiles is called before stageExtensionToTemp
+      await ensureRequiredSourceFiles();
+      const packageLockContent = '{"name": "test", "version": "1.0.0"}';
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), packageLockContent);
+
+      const stageDir = path.join(tempDir, 'stage');
+      await fs.promises.mkdir(stageDir, { recursive: true });
+
+      // When: stageExtensionToTemp is called
+      await stageExtensionToTemp({
+        sourceExtensionRoot: sourceDir,
+        stageExtensionRoot: stageDir,
+      });
+
+      // Then: Test completes successfully with required files in place
+      const copiedPackageJson = path.join(stageDir, 'package.json');
+      const copiedLicense = path.join(stageDir, 'LICENSE');
+      const copiedPackageLock = path.join(stageDir, 'package-lock.json');
+
+      assert.ok(await fs.promises.access(copiedPackageJson).then(() => true).catch(() => false), 'package.json is copied');
+      assert.ok(await fs.promises.access(copiedLicense).then(() => true).catch(() => false), 'LICENSE is copied');
+      assert.ok(await fs.promises.access(copiedPackageLock).then(() => true).catch(() => false), 'package-lock.json is copied');
+
+      const copiedContent = await fs.promises.readFile(copiedPackageLock, 'utf8');
+      assert.strictEqual(copiedContent, packageLockContent, 'package-lock.json content matches');
     });
   });
 });

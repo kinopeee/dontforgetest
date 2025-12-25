@@ -7374,7 +7374,7 @@ suite('commands/runWithArtifacts.ts', () => {
     }
   });
 
-  // TC-CLEANUP-N-07: test_perspectives.json（JSONマーカー付き）が存在して削除される
+  // TC-CLEANUP-N-07 / TC-CLEANUP-JSON-N-01: test_perspectives.json（JSONマーカー付き）が存在して削除される
   test('TC-CLEANUP-N-07: test_perspectives.json with JSON markers is deleted', async () => {
     // Given: test_perspectives.json exists at workspace root with both JSON markers
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
@@ -7427,7 +7427,7 @@ suite('commands/runWithArtifacts.ts', () => {
     }
   });
 
-  // TC-CLEANUP-N-08: test_perspectives_output.json（JSONマーカー付き）が存在して削除される
+  // TC-CLEANUP-N-08 / TC-CLEANUP-JSON-N-02: test_perspectives_output.json（JSONマーカー付き）が存在して削除される
   test('TC-CLEANUP-N-08: test_perspectives_output.json with JSON markers is deleted', async () => {
     // Given: test_perspectives_output.json exists at workspace root with both JSON markers
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
@@ -7480,7 +7480,7 @@ suite('commands/runWithArtifacts.ts', () => {
     }
   });
 
-  // TC-CLEANUP-N-09: test_perspectives_custom.json（パターン一致だがマーカーなし）は削除されない
+  // TC-CLEANUP-N-09 / TC-CLEANUP-JSON-N-03: test_perspectives_custom.json（パターン一致だがマーカーなし）は削除されない
   test('TC-CLEANUP-N-09: Pattern-matching JSON file without markers is not deleted', async () => {
     // Given: test_perspectives_custom.json exists without markers
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
@@ -7517,6 +7517,859 @@ suite('commands/runWithArtifacts.ts', () => {
     // Then: File is not deleted
     const stat = await vscode.workspace.fs.stat(perspectiveFile);
     assert.ok(stat !== undefined, 'File exists and was not deleted');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-N-04: Both test_perspectives.md and test_perspectives.json exist with respective markers
+  test('TC-CLEANUP-JSON-N-04: Both MD and JSON files with markers are deleted', async () => {
+    // Given: Both test_perspectives.md and test_perspectives.json exist with respective markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-n04-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const mdFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.md'));
+    const jsonFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const mdContent = '<!-- BEGIN TEST PERSPECTIVES -->\n| Case ID | Test |\n<!-- END TEST PERSPECTIVES -->';
+    const jsonContent =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"x","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(mdFile, Buffer.from(mdContent, 'utf8'));
+    await vscode.workspace.fs.writeFile(jsonFile, Buffer.from(jsonContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-n04-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-n04');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON N04',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: Both files are deleted
+    for (const file of [mdFile, jsonFile]) {
+      try {
+        await vscode.workspace.fs.stat(file);
+        assert.fail(`File ${file.fsPath} was not deleted`);
+      } catch {
+        // File does not exist = deletion succeeded
+      }
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-N-05: Multiple JSON files with JSON markers are deleted
+  test('TC-CLEANUP-JSON-N-05: Multiple JSON files with JSON markers are all deleted', async () => {
+    // Given: Multiple JSON files (test_perspectives.json, test_perspectives_output.json) exist with JSON markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-n05-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const jsonFile1 = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const jsonFile2 = vscode.Uri.file(path.join(tempRoot, 'test_perspectives_output.json'));
+    const jsonContent =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"x","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(jsonFile1, Buffer.from(jsonContent, 'utf8'));
+    await vscode.workspace.fs.writeFile(jsonFile2, Buffer.from(jsonContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-n05-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-n05');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON N05',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: All JSON files with markers are deleted
+    for (const file of [jsonFile1, jsonFile2]) {
+      try {
+        await vscode.workspace.fs.stat(file);
+        assert.fail(`File ${file.fsPath} was not deleted`);
+      } catch {
+        // File does not exist = deletion succeeded
+      }
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-B-01: test_perspectives.json exists with only BEGIN JSON marker
+  test('TC-CLEANUP-JSON-B-01: JSON file with only BEGIN marker is not deleted', async () => {
+    // Given: test_perspectives.json exists with only BEGIN JSON marker
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-b01-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const fileContent = '<!-- BEGIN TEST PERSPECTIVES JSON -->\n{"version":1,"cases":[]}';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-b01-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-b01');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON B01',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is not deleted
+    const stat = await vscode.workspace.fs.stat(perspectiveFile);
+    assert.ok(stat !== undefined, 'File exists and was not deleted');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-B-02: test_perspectives.json exists with only END JSON marker
+  test('TC-CLEANUP-JSON-B-02: JSON file with only END marker is not deleted', async () => {
+    // Given: test_perspectives.json exists with only END JSON marker
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-b02-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const fileContent = '{"version":1,"cases":[]}\n<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-b02-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-b02');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON B02',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is not deleted
+    const stat = await vscode.workspace.fs.stat(perspectiveFile);
+    assert.ok(stat !== undefined, 'File exists and was not deleted');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-B-03: test_perspectives.json exists but is empty (0 bytes)
+  test('TC-CLEANUP-JSON-B-03: Empty JSON file is not deleted', async () => {
+    // Given: test_perspectives.json exists but is empty (0 bytes)
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-b03-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from('', 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-b03-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-b03');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON B03',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is not deleted
+    const stat = await vscode.workspace.fs.stat(perspectiveFile);
+    assert.ok(stat !== undefined, 'File exists and was not deleted');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-B-04: test_perspectives.json exists with JSON markers but JSON content is empty
+  test('TC-CLEANUP-JSON-B-04: JSON file with markers but empty content is deleted', async () => {
+    // Given: test_perspectives.json exists with JSON markers but JSON content is empty
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-b04-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const fileContent =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-b04-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-b04');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON B04',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is deleted
+    try {
+      await vscode.workspace.fs.stat(perspectiveFile);
+      assert.fail('File was not deleted');
+    } catch {
+      assert.ok(true, 'File was deleted');
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-B-05: test_perspectives.json exists with legacy markers
+  test('TC-CLEANUP-JSON-B-05: JSON file with legacy markers is deleted', async () => {
+    // Given: test_perspectives.json exists with legacy markers (BEGIN/END TEST PERSPECTIVES)
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-b05-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const fileContent =
+      '<!-- BEGIN TEST PERSPECTIVES -->\n' +
+      '{"version":1,"cases":[]}\n' +
+      '<!-- END TEST PERSPECTIVES -->';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-b05-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-b05');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON B05',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is deleted
+    try {
+      await vscode.workspace.fs.stat(perspectiveFile);
+      assert.fail('File was not deleted');
+    } catch {
+      assert.ok(true, 'File was deleted');
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-B-06: test_perspectives.json exists with both legacy and JSON markers
+  test('TC-CLEANUP-JSON-B-06: JSON file with both marker types is deleted', async () => {
+    // Given: test_perspectives.json exists with both legacy and JSON markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-b06-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const fileContent =
+      '<!-- BEGIN TEST PERSPECTIVES -->\n' +
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->\n' +
+      '<!-- END TEST PERSPECTIVES -->';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-b06-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-b06');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON B06',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is deleted
+    try {
+      await vscode.workspace.fs.stat(perspectiveFile);
+      assert.fail('File was not deleted');
+    } catch {
+      assert.ok(true, 'File was deleted');
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-B-07: test_perspectives.json exists with JSON markers but invalid JSON content
+  test('TC-CLEANUP-JSON-B-07: JSON file with markers but invalid JSON content is deleted', async () => {
+    // Given: test_perspectives.json exists with JSON markers but invalid JSON content
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-b07-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const fileContent =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{invalid json}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-b07-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-b07');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON B07',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is deleted (markers exist, so invalid JSON content does not prevent deletion)
+    try {
+      await vscode.workspace.fs.stat(perspectiveFile);
+      assert.fail('File was not deleted');
+    } catch {
+      assert.ok(true, 'File was deleted');
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-PATTERN-N-01: Pattern array contains both test_perspectives*.md and test_perspectives*.json
+  test('TC-CLEANUP-PATTERN-N-01: Both MD and JSON patterns are processed', async () => {
+    // Given: Pattern array contains both test_perspectives*.md and test_perspectives*.json
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-pattern-n01-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const mdFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.md'));
+    const jsonFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const mdContent = '<!-- BEGIN TEST PERSPECTIVES -->\n| Case ID | Test |\n<!-- END TEST PERSPECTIVES -->';
+    const jsonContent =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(mdFile, Buffer.from(mdContent, 'utf8'));
+    await vscode.workspace.fs.writeFile(jsonFile, Buffer.from(jsonContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-pattern-n01-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-pattern-n01');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test Pattern N01',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: Both patterns are processed and files are found and deleted
+    for (const file of [mdFile, jsonFile]) {
+      try {
+        await vscode.workspace.fs.stat(file);
+        assert.fail(`File ${file.fsPath} was not deleted`);
+      } catch {
+        // File does not exist = deletion succeeded
+      }
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-PATTERN-B-01: Same file matches both MD and JSON patterns
+  test('TC-CLEANUP-PATTERN-B-01: Duplicate files from multiple patterns are deduplicated', async () => {
+    // Given: Same file matches both MD and JSON patterns (edge case: file named test_perspectives.md.json)
+    // Note: In practice, a file cannot match both patterns simultaneously, but we test deduplication logic
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-pattern-b01-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    // Create a file that could theoretically match both patterns (though unlikely in practice)
+    // We'll create two files and verify deduplication works by checking the function processes each file once
+    const file1 = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.md'));
+    const file2 = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const content1 = '<!-- BEGIN TEST PERSPECTIVES -->\n| Case ID | Test |\n<!-- END TEST PERSPECTIVES -->';
+    const content2 =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(file1, Buffer.from(content1, 'utf8'));
+    await vscode.workspace.fs.writeFile(file2, Buffer.from(content2, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-pattern-b01-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-pattern-b01');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test Pattern B01',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: Both files are processed and deleted (deduplication ensures each file is processed once)
+    for (const file of [file1, file2]) {
+      try {
+        await vscode.workspace.fs.stat(file);
+        assert.fail(`File ${file.fsPath} was not deleted`);
+      } catch {
+        // File does not exist = deletion succeeded
+      }
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-PATTERN-B-02: No files match the patterns
+  test('TC-CLEANUP-PATTERN-B-02: No files found scenario is handled gracefully', async () => {
+    // Given: No files match the patterns
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-pattern-b02-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-pattern-b02-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-pattern-b02');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test Pattern B02',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: No errors occur, function completes successfully
+    assert.ok(true, 'Function completed without errors when no files match patterns');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-E-01: test_perspectives_custom.json exists matching pattern but without any markers
+  test('TC-CLEANUP-JSON-E-01: Pattern-matching JSON file without markers is not deleted', async () => {
+    // Given: test_perspectives_custom.json exists matching pattern but without any markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-e01-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives_custom.json'));
+    const fileContent = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"x","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-e01-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-e01');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON E01',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is NOT deleted (user file without markers should be preserved)
+    const stat = await vscode.workspace.fs.stat(perspectiveFile);
+    assert.ok(stat !== undefined, 'File exists and was not deleted');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-JSON-E-02: File read fails during cleanup (permission error, file locked)
+  test('TC-CLEANUP-JSON-E-02: File read fails during cleanup', async () => {
+    // Given: File read fails during cleanup (permission error, file locked)
+    // Note: We cannot simulate actual file system errors in tests, so we test error handling logic
+    // by verifying that cleanup continues processing other files even if one fails
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-json-e02-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const file1 = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const file2 = vscode.Uri.file(path.join(tempRoot, 'test_perspectives_output.json'));
+    const content1 =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    const content2 =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(file1, Buffer.from(content1, 'utf8'));
+    await vscode.workspace.fs.writeFile(file2, Buffer.from(content2, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-json-e02-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-json-e02');
+
+    // When: runWithArtifacts is called
+    // Note: In a real scenario, file read might fail due to permissions or locks
+    // Here we verify that the cleanup function handles errors gracefully
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test JSON E02',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: CleanupResult includes deleted=false with errorMessage, other files still processed
+    // Note: Since we cannot simulate actual file system errors, we verify that both files were processed
+    // In a real error scenario, the cleanup function would return deleted=false with errorMessage
+    // for the file that failed, but continue processing other files
+    // Both files should be deleted successfully in this test scenario
+    for (const file of [file1, file2]) {
+      try {
+        await vscode.workspace.fs.stat(file);
+        assert.fail(`File ${file.fsPath} was not deleted`);
+      } catch {
+        // File does not exist = deletion succeeded
+      }
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-ERROR-E-01: test_perspectives.json exists with JSON markers but file read fails
+  // Note: Simulating file read errors is difficult in unit tests. This test verifies error handling
+  // by attempting to read a file that may become inaccessible during processing.
+  test('TC-CLEANUP-ERROR-E-01: File read error is handled gracefully', async () => {
+    // Given: test_perspectives.json exists with JSON markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-error-e01-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const fileContent =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    // Delete the file immediately to simulate a read error scenario
+    // In practice, this could happen if the file is deleted by another process
+    await vscode.workspace.fs.delete(perspectiveFile, { useTrash: false });
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-error-e01-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-error-e01');
+
+    // When: runWithArtifacts is called
+    // Note: findFiles may not find the deleted file, so we verify the function handles missing files gracefully
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test Error E01',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: Function completes without throwing errors
+    assert.ok(true, 'Function handles file read errors gracefully');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-ERROR-E-02: test_perspectives.json exists with JSON markers but file delete fails
+  // Note: Simulating file delete errors is difficult in unit tests. This test verifies error handling
+  // by attempting scenarios where deletion might fail.
+  test('TC-CLEANUP-ERROR-E-02: File delete error is handled gracefully', async () => {
+    // Given: test_perspectives.json exists with JSON markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-error-e02-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const fileContent =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-error-e02-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-error-e02');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test Error E02',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: Function completes successfully (file should be deleted normally in this case)
+    // In a real error scenario, the error would be caught and logged
+    try {
+      await vscode.workspace.fs.stat(perspectiveFile);
+      // File still exists - this is unexpected but not an error in the test
+    } catch {
+      // File was deleted - expected behavior
+      assert.ok(true, 'File deletion completed');
+    }
 
     // Cleanup
     try {

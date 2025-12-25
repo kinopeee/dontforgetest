@@ -371,8 +371,11 @@ export interface TestExecutionResult {
  */
 export function getArtifactSettings(): ArtifactSettings {
   const config = vscode.workspace.getConfiguration('dontforgetest');
-  const runnerRaw = (config.get<string>('testExecutionRunner', 'cursorAgent') ?? 'cursorAgent').trim();
-  const runner: ArtifactSettings['testExecutionRunner'] = runnerRaw === 'extension' ? 'extension' : 'cursorAgent';
+  const runnerRaw = config.get<string>('testExecutionRunner', 'extension');
+  const runnerTrimmed = (runnerRaw ?? 'extension').trim();
+  // 設定値が空文字/空白のみの場合は「未指定」とみなし、既定値（extension）へフォールバックする。
+  const runner: ArtifactSettings['testExecutionRunner'] =
+    runnerTrimmed.length === 0 ? 'extension' : runnerTrimmed === 'extension' ? 'extension' : 'cursorAgent';
   const perspectiveTimeoutRaw = config.get<number>('perspectiveGenerationTimeoutMs', 300_000);
   const perspectiveGenerationTimeoutMs =
     typeof perspectiveTimeoutRaw === 'number' && Number.isFinite(perspectiveTimeoutRaw) && perspectiveTimeoutRaw > 0 ? perspectiveTimeoutRaw : 0;

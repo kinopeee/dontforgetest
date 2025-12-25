@@ -122,6 +122,7 @@ export async function stageExtensionToTemp(params: {
     { src: path.join(params.sourceExtensionRoot, 'LICENSE'), dest: path.join(params.stageExtensionRoot, 'LICENSE') },
     { src: path.join(params.sourceExtensionRoot, 'out'), dest: path.join(params.stageExtensionRoot, 'out') },
     { src: path.join(params.sourceExtensionRoot, 'src'), dest: path.join(params.stageExtensionRoot, 'src') },
+    { src: path.join(params.sourceExtensionRoot, 'docs'), dest: path.join(params.stageExtensionRoot, 'docs') },
     { src: path.join(params.sourceExtensionRoot, 'media'), dest: path.join(params.stageExtensionRoot, 'media') },
   ];
 

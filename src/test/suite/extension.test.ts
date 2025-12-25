@@ -258,7 +258,7 @@ suite('src/extension.ts', () => {
       assert.strictEqual(config.get('perspectiveReportDir'), 'docs/test-perspectives', 'perspectiveReportDir default value is incorrect');
       assert.strictEqual(config.get('testExecutionReportDir'), 'docs/test-execution-reports', 'testExecutionReportDir default value is incorrect');
       assert.strictEqual(config.get('testCommand'), 'npm test', 'testCommand default value is incorrect');
-      assert.strictEqual(config.get('testExecutionRunner'), 'cursorAgent', 'testExecutionRunner default value is incorrect');
+      assert.strictEqual(config.get('testExecutionRunner'), 'extension', 'testExecutionRunner default value is incorrect');
       assert.strictEqual(config.get('allowUnsafeTestCommand'), false, 'allowUnsafeTestCommand default value is incorrect');
       assert.strictEqual(config.get('cursorAgentForceForTestExecution'), false, 'cursorAgentForceForTestExecution default value is incorrect');
     });
@@ -368,11 +368,11 @@ suite('src/extension.ts', () => {
       assert.ok(semverPattern.test(version), `バージョン "${version}" はセマンティックバージョニング形式（x.y.z）ではありません`);
     });
 
-    // TC-PKG-01: package.json version field is 0.0.67
+    // TC-PKG-01: package.json version field is valid semantic version
     // Given: package.json file exists
     // When: Reading package.json
-    // Then: Version field is 0.0.67
-    test('TC-PKG-01: package.json version field is 0.0.67', () => {
+    // Then: Version field is valid semantic version format
+    test('TC-PKG-01: package.json version field is valid semantic version', () => {
       // Given: package.json file exists
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
@@ -384,33 +384,40 @@ suite('src/extension.ts', () => {
       const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
       const packageJson = JSON.parse(packageJsonContent) as { version?: string };
       
-      // Then: Version field is 0.0.67
-      assert.strictEqual(packageJson.version, '0.0.67', 'Version number is updated correctly');
+      // Then: Version field is valid semantic version format
+      assert.ok(packageJson.version, 'Version field should be defined');
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+      assert.ok(semverPattern.test(packageJson.version), `Version "${packageJson.version}" should be semantic version format (x.y.z)`);
     });
 
-    // TC-PKG-02: package-lock.json version field is 0.0.67
-    // Given: package-lock.json file exists
-    // When: Reading package-lock.json
-    // Then: Version field in root and packages[''] is 0.0.67
-    test('TC-PKG-02: package-lock.json version field is 0.0.67', () => {
-      // Given: package-lock.json file exists
+    // TC-PKG-02: package-lock.json version field matches package.json version
+    // Given: package.json and package-lock.json files exist
+    // When: Reading both files
+    // Then: Version fields are synchronized
+    test('TC-PKG-02: package-lock.json version field matches package.json version', () => {
+      // Given: package.json and package-lock.json files exist
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
       
+      const packageJsonPath = path.join(ext.extensionPath, 'package.json');
       const packageLockJsonPath = path.join(ext.extensionPath, 'package-lock.json');
+      assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
       assert.ok(fs.existsSync(packageLockJsonPath), 'package-lock.json file exists');
       
-      // When: Reading package-lock.json
+      // When: Reading both files
+      const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
       const packageLockJsonContent = fs.readFileSync(packageLockJsonPath, 'utf8');
       const packageLockJson = JSON.parse(packageLockJsonContent) as {
         version?: string;
         packages?: Record<string, { version?: string }>;
       };
       
-      // Then: Version field in root and packages[''] is 0.0.67
-      assert.strictEqual(packageLockJson.version, '0.0.67', 'Version number is synchronized in lock file root');
+      // Then: Version fields are synchronized
+      assert.ok(packageJson.version, 'package.json version should be defined');
+      assert.strictEqual(packageLockJson.version, packageJson.version, 'Version number should be synchronized in lock file root');
       if (packageLockJson.packages && packageLockJson.packages['']) {
-        assert.strictEqual(packageLockJson.packages[''].version, '0.0.67', 'Version number is synchronized in lock file packages[""]');
+        assert.strictEqual(packageLockJson.packages[''].version, packageJson.version, 'Version number should be synchronized in lock file packages[""]');
       }
     });
 
@@ -508,6 +515,80 @@ suite('src/extension.ts', () => {
       // When: Reading packages[''] field
       // Then: packages[''] is undefined
       assert.strictEqual(packageLockJson.packages?.[''], undefined, 'packages[""] should be undefined when missing');
+    });
+
+    // TC-VERSION-N-01: package.json version is updated from 0.0.67 to 0.0.68
+    // Given: package.json file exists
+    // When: Reading package.json version field
+    // Then: Version is 0.0.68
+    test('TC-VERSION-N-01: package.json version is updated from 0.0.67 to 0.0.68', () => {
+      // Given: package.json file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      const packageJsonPath = path.join(ext.extensionPath, 'package.json');
+      assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
+      
+      // When: Reading package.json version field
+      const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
+      
+      // Then: Version is 0.0.68
+      assert.strictEqual(packageJson.version, '0.0.68', 'Version should be 0.0.68');
+    });
+
+    // TC-VERSION-N-02: package-lock.json version matches package.json version
+    // Given: package.json and package-lock.json files exist
+    // When: Reading both files
+    // Then: Both versions are 0.0.68 and synchronized
+    test('TC-VERSION-N-02: package-lock.json version matches package.json version', () => {
+      // Given: package.json and package-lock.json files exist
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      const packageJsonPath = path.join(ext.extensionPath, 'package.json');
+      const packageLockJsonPath = path.join(ext.extensionPath, 'package-lock.json');
+      assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
+      assert.ok(fs.existsSync(packageLockJsonPath), 'package-lock.json file exists');
+      
+      // When: Reading both files
+      const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
+      const packageLockJsonContent = fs.readFileSync(packageLockJsonPath, 'utf8');
+      const packageLockJson = JSON.parse(packageLockJsonContent) as {
+        version?: string;
+        packages?: Record<string, { version?: string }>;
+      };
+      
+      // Then: Both versions are 0.0.68 and synchronized
+      assert.strictEqual(packageJson.version, '0.0.68', 'package.json version should be 0.0.68');
+      assert.strictEqual(packageLockJson.version, '0.0.68', 'package-lock.json root version should be 0.0.68');
+      if (packageLockJson.packages && packageLockJson.packages['']) {
+        assert.strictEqual(packageLockJson.packages[''].version, '0.0.68', 'package-lock.json packages[""] version should be 0.0.68');
+      }
+    });
+
+    // TC-DOC-N-01: docs/usage.md contains testExecutionRunner setting documentation
+    // Given: docs/usage.md file exists
+    // When: Reading docs/usage.md content
+    // Then: Documentation correctly describes testExecutionRunner setting with default value 'extension'
+    test('TC-DOC-N-01: docs/usage.md contains testExecutionRunner setting documentation', () => {
+      // Given: docs/usage.md file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      const usageMdPath = path.join(ext.extensionPath, 'docs', 'usage.md');
+      assert.ok(fs.existsSync(usageMdPath), 'docs/usage.md file exists');
+      
+      // When: Reading docs/usage.md content
+      const usageMdContent = fs.readFileSync(usageMdPath, 'utf8');
+      
+      // Then: Documentation correctly describes testExecutionRunner setting with default value 'extension'
+      assert.ok(usageMdContent.includes('dontforgetest.testExecutionRunner'), 'testExecutionRunner setting should be documented');
+      assert.ok(usageMdContent.includes('既定: `extension`'), 'Default value should be documented as extension');
+      assert.ok(usageMdContent.includes('extension'), 'extension option should be documented');
+      assert.ok(usageMdContent.includes('cursorAgent'), 'cursorAgent option should be documented');
+      assert.ok(usageMdContent.includes('自動フォールバック'), 'Fallback behavior should be documented');
     });
 
     // TC-RES-02: testgen-view.svg のレンダリング
