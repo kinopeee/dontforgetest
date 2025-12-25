@@ -270,6 +270,7 @@ suite('src/extension.ts', () => {
       assert.ok(ext, 'Extension not found');
       const pkg = ext.packageJSON;
       assert.strictEqual(pkg.name, 'dontforgetest');
+      // package.nls により VS Code 側で解決された displayName が取得できること
       assert.strictEqual(pkg.displayName, 'Dontforgetest');
     });
   });

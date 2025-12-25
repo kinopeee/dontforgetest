@@ -66,9 +66,9 @@ suite('src/ui/outputTreeView.ts', () => {
 
     // Then: Three items displayed: "観点表" / "実行レポート" / "手動マージ" with correct icons
     assert.strictEqual(items.length, 3, 'Three items are displayed');
-    const perspectiveItem = items.find(item => item.label === '観点表');
-    const reportItem = items.find(item => item.label === '実行レポート');
-    const mergeItem = items.find(item => item.label === '手動マージ');
+    const perspectiveItem = items.find((item) => item.command?.command === 'dontforgetest.openLatestPerspective');
+    const reportItem = items.find((item) => item.command?.command === 'dontforgetest.openLatestExecutionReport');
+    const mergeItem = items.find((item) => item.command?.command === 'dontforgetest.openLatestMergeInstruction');
     assert.ok(perspectiveItem, 'Perspective item exists');
     assert.ok(reportItem, 'Report item exists');
     assert.ok(mergeItem, 'Merge item exists');
@@ -90,8 +90,8 @@ suite('src/ui/outputTreeView.ts', () => {
     const items = provider.getChildren();
 
     // Then: Items have correct command IDs
-    const perspectiveItem = items.find(item => item.label === '観点表');
-    const reportItem = items.find(item => item.label === '実行レポート');
+    const perspectiveItem = items.find((item) => item.command?.command === 'dontforgetest.openLatestPerspective');
+    const reportItem = items.find((item) => item.command?.command === 'dontforgetest.openLatestExecutionReport');
     assert.ok(perspectiveItem, 'Perspective item exists');
     assert.ok(reportItem, 'Report item exists');
     
@@ -119,7 +119,7 @@ suite('src/ui/outputTreeView.ts', () => {
     const items = provider.getChildren();
 
     // Then: Report item has correct command
-    const reportItem = items.find(item => item.label === '実行レポート');
+    const reportItem = items.find((item) => item.command?.command === 'dontforgetest.openLatestExecutionReport');
     assert.ok(reportItem, 'Report item exists');
     
     if (reportItem.command) {
@@ -146,7 +146,7 @@ suite('src/ui/outputTreeView.ts', () => {
     const items = provider.getChildren();
 
     // Then: Merge item has correct command
-    const mergeItem = items.find(item => item.label === '手動マージ');
+    const mergeItem = items.find((item) => item.command?.command === 'dontforgetest.openLatestMergeInstruction');
     assert.ok(mergeItem, 'Merge item exists');
 
     if (mergeItem.command) {

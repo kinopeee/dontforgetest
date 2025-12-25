@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { sanitizeAgentLogMessage } from '../core/agentLogSanitizer';
 import { type TestGenEvent, nowMs } from '../core/event';
+import { t } from '../core/l10n';
 import {
   emitLogEvent,
   formatTimestamp,
@@ -190,12 +191,14 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
   try {
 
     // 準備フェーズ
-    handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'preparing', '準備中'));
+    handleTestGenEventForProgressView(
+      emitPhaseEvent(options.generationTaskId, 'preparing', t('progressTreeView.phase.preparing')),
+    );
 
     // worktree モードの場合、生成先を隔離するために一時worktreeを作成する
     if (runLocation === 'worktree') {
       if (!options.extensionContext) {
-        const msg = 'Worktree 実行には拡張機能コンテキストが必要です（内部エラー）。';
+        const msg = t('worktree.extensionContextRequired');
         appendEventToOutput(emitLogEvent(options.generationTaskId, 'error', msg));
         void vscode.window.showErrorMessage(msg);
         handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
@@ -204,7 +207,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
       // キャンセルチェック（worktree作成前）
       if (checkCancelled()) {
-        appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', 'タスクがキャンセルされました'));
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', t('task.cancelled')));
         handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
         return;
       }
@@ -212,7 +215,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       try {
         const baseDir = options.extensionContext.globalStorageUri.fsPath;
         await fs.promises.mkdir(baseDir, { recursive: true });
-        appendEventToOutput(emitLogEvent(options.generationTaskId, 'info', '一時worktreeを作成します（生成を隔離します）'));
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'info', t('worktree.creating')));
         const created = await createTemporaryWorktree({
           repoRoot: localWorkspaceRoot,
           baseDir,
@@ -221,10 +224,10 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         });
         worktreeDir = created.worktreeDir;
         runWorkspaceRoot = worktreeDir;
-        appendEventToOutput(emitLogEvent(options.generationTaskId, 'info', `一時worktreeを作成しました: ${worktreeDir}`));
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'info', t('worktree.created', worktreeDir)));
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        const msg = `一時worktreeの作成に失敗しました: ${message}`;
+        const msg = t('worktree.createFailed', message);
         appendEventToOutput(emitLogEvent(options.generationTaskId, 'error', msg));
         void vscode.window.showErrorMessage(msg);
         handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
@@ -236,7 +239,9 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     let finalPrompt = options.generationPrompt;
     if (settings.includeTestPerspectiveTable) {
       // 観点表生成フェーズ
-      handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'perspectives', '観点表生成中'));
+      handleTestGenEventForProgressView(
+        emitPhaseEvent(options.generationTaskId, 'perspectives', t('progressTreeView.phase.perspectives')),
+      );
 
       const perspectiveResult = await runPerspectiveTableStep({
         provider: options.provider,
@@ -266,11 +271,13 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
     // 2) 生成（本体）
     // テストコード生成フェーズ
-    handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'generating', 'テストコード生成中'));
+    handleTestGenEventForProgressView(
+      emitPhaseEvent(options.generationTaskId, 'generating', t('progressTreeView.phase.generating')),
+    );
 
     // キャンセルチェック（観点表生成後）
     if (checkCancelled()) {
-      appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', 'タスクがキャンセルされました'));
+      appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', t('Task was cancelled.')));
       handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
       return;
     }
@@ -338,7 +345,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
     // キャンセルチェック（生成後）
     if (checkCancelled()) {
-      appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', 'タスクがキャンセルされました'));
+      appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', t('Task was cancelled.')));
       handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
       return;
     }
@@ -356,14 +363,16 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     }
 
     // テスト実行フェーズ
-    handleTestGenEventForProgressView(emitPhaseEvent(options.generationTaskId, 'running-tests', 'テスト実行中'));
+    handleTestGenEventForProgressView(
+      emitPhaseEvent(options.generationTaskId, 'running-tests', t('progressTreeView.phase.runningTests')),
+    );
 
     const shouldSkipTestExecution = runLocation === 'worktree' || settings.testCommand.trim().length === 0;
     if (shouldSkipTestExecution) {
       const msg =
         runLocation === 'worktree'
-          ? 'Worktreeモードのため、テスト実行はMVPではスキップします。'
-          : 'dontforgetest.testCommand が空のため、テスト実行はスキップします。';
+          ? t('testExecution.skip.worktreeMvp')
+          : t('testExecution.skip.emptyCommand');
       const ev = emitLogEvent(`${options.generationTaskId}-test`, 'warn', msg);
       handleTestGenEventForStatusBar({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
       captureEvent({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
@@ -394,7 +403,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         timestamp,
         result: skippedResult,
       });
-      appendEventToOutput(emitLogEvent(ev.taskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+      appendEventToOutput(emitLogEvent(ev.taskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)));
       // 進捗TreeView完了イベント
       handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
       return;
@@ -408,7 +417,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       const warn = emitLogEvent(
         testTaskId,
         'warn',
-        'testCommand は VS Code（拡張機能テスト用の Extension Host）を別プロセスで起動する可能性があります。設定に従い、このままテストを実行します（重複起動で不安定になる場合があります）。',
+        t('testExecution.warn.mayLaunchVsCode.extensionRunner'),
       );
       appendEventToOutput(warn);
       captureEvent(warn);
@@ -421,7 +430,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         const warn = emitLogEvent(
           testTaskId,
           'warn',
-          'testCommand は VS Code（拡張機能テスト用の Extension Host）を別プロセスで起動する可能性があります。runner=cursorAgent のため結果取得を優先して実行します（重複起動で不安定になる場合があります）。',
+          t('testExecution.warn.mayLaunchVsCode.cursorAgentRunner'),
         );
         appendEventToOutput(warn);
         captureEvent(warn);
@@ -488,7 +497,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       // 以前は VS Code 起動の可能性がある場合にフォールバックを抑止していたが、
       // 現在は改善策により **常にテストを実行**する方針のため、拡張機能側でフォールバック実行する。
       if (shouldTreatAsRejected) {
-        const warnMessage = 'cursor-agent によるコマンド実行が拒否されたため、拡張機能側でフォールバック実行します。';
+        const warnMessage = t('testExecution.warn.cursorAgentRejectedFallback');
         const warn = emitLogEvent(testTaskId, 'warn', warnMessage);
         appendEventToOutput(warn);
         captureEvent(warn);
@@ -510,7 +519,9 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
           timestamp,
           result: { ...fallbackResult, extensionLog: testExecutionLogLines.join('\n') },
         });
-        appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+        appendEventToOutput(
+          emitLogEvent(testTaskId, 'info', t('Saved test execution report: {0}', saved.relativePath ?? saved.absolutePath)),
+        );
         // 進捗TreeView完了イベント
         handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: fallbackResult.exitCode, timestampMs: nowMs() });
         return;
@@ -530,7 +541,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         timestamp,
         result: { ...result, extensionLog: testExecutionLogLines.join('\n') },
       });
-      appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+      appendEventToOutput(emitLogEvent(testTaskId, 'info', t('Saved test execution report: {0}', saved.relativePath ?? saved.absolutePath)));
       // 進捗TreeView完了イベント
       handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
       return;
@@ -579,7 +590,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       result: { ...result, extensionLog: testExecutionLogLines.join('\n') },
     });
 
-    appendEventToOutput(emitLogEvent(testTaskId, 'info', `テスト実行レポートを保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+    appendEventToOutput(emitLogEvent(testTaskId, 'info', t('Saved test execution report: {0}', saved.relativePath ?? saved.absolutePath)));
     // 進捗TreeView完了イベント
     handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
   } finally {
@@ -587,10 +598,10 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
     if (worktreeDir) {
       try {
         await removeTemporaryWorktree(localWorkspaceRoot, worktreeDir);
-        appendEventToOutput(emitLogEvent(options.generationTaskId, 'info', '一時worktreeを削除しました'));
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'info', t('worktree.deleted')));
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', `一時worktreeの削除に失敗しました: ${message}`));
+        appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', t('worktree.deleteFailed', message)));
       }
     }
 

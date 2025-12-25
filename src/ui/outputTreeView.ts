@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { t } from '../core/l10n';
 
 /**
  * 出力ビューのアイテム
@@ -29,17 +30,17 @@ export class OutputTreeViewProvider implements vscode.TreeDataProvider<OutputTre
   getChildren(): OutputTreeItem[] {
     return [
       (() => {
-        const item = new OutputTreeItem('観点表', 'dontforgetest.openLatestPerspective');
+        const item = new OutputTreeItem(t('outputTreeView.perspective'), 'dontforgetest.openLatestPerspective');
         item.iconPath = new vscode.ThemeIcon('file-text');
         return item;
       })(),
       (() => {
-        const item = new OutputTreeItem('実行レポート', 'dontforgetest.openLatestExecutionReport');
+        const item = new OutputTreeItem(t('outputTreeView.executionReport'), 'dontforgetest.openLatestExecutionReport');
         item.iconPath = new vscode.ThemeIcon('report');
         return item;
       })(),
       (() => {
-        const item = new OutputTreeItem('手動マージ', 'dontforgetest.openLatestMergeInstruction');
+        const item = new OutputTreeItem(t('outputTreeView.mergeInstruction'), 'dontforgetest.openLatestMergeInstruction');
         item.iconPath = new vscode.ThemeIcon('git-merge');
         return item;
       })(),

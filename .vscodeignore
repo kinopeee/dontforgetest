@@ -14,3 +14,7 @@ out/test/**
 docs/test-*.md
 docs/test-execution-reports/**
 docs/test-perspectives/**
+l10n/**
+!l10n/**
+package.nls*.json
+!package.nls*.json

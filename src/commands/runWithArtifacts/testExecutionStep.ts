@@ -1,5 +1,6 @@
 import { nowMs, type TestGenEvent } from '../../core/event';
 import { parseTestExecutionJsonV1, type TestExecutionResult } from '../../core/artifacts';
+import { t } from '../../core/l10n';
 import { type AgentProvider } from '../../providers/provider';
 import { runProviderToCompletion } from '../../providers/runToCompletion';
 import { extractBetweenMarkers } from './utils';
@@ -114,7 +115,7 @@ export async function runTestCommandViaCursorAgent(params: {
   // 2) 旧形式（テキスト）へフォールバック
   const extracted = extractBetweenMarkers(raw, markerBegin, markerEnd);
   if (!extracted) {
-    const prefix = extractedJson ? 'cursor-agent のJSON出力をパースできませんでした。' : '';
+    const prefix = extractedJson ? t('testExecution.extractFailed.jsonParsePrefix') : '';
     return {
       command: params.testCommand,
       cwd: params.workspaceRoot,
@@ -123,7 +124,7 @@ export async function runTestCommandViaCursorAgent(params: {
       durationMs,
       stdout: '',
       stderr: raw,
-      errorMessage: `${prefix}cursor-agent の出力からテスト結果を抽出できませんでした（マーカーが見つかりません）。`.trim(),
+      errorMessage: `${prefix}${t('testExecution.extractFailed.noMarkers')}`.trim(),
     };
   }
 

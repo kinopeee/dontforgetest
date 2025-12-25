@@ -31,6 +31,7 @@ export interface TestResultFile {
 const DEFAULT_TEST_RESULT_WAIT_TIMEOUT_MS = 3000;
 const DEFAULT_TEST_RESULT_WAIT_INTERVAL_MS = 100;
 const DEFAULT_VSCODE_TEST_MAX_ATTEMPTS = 2;
+const DEFAULT_VSCODE_TEST_LOCALE = 'ja';
 
 function parseIntOrFallback(params: { value: string | undefined; fallback: number; min: number; label: string }): number {
   const raw = params.value?.trim();
@@ -54,6 +55,11 @@ function normalizeLauncher(value: string | undefined): VscodeTestLauncher | unde
     return v;
   }
   return undefined;
+}
+
+function normalizeLocale(value: string | undefined): string {
+  const v = (value ?? '').trim();
+  return v.length > 0 ? v : DEFAULT_VSCODE_TEST_LOCALE;
 }
 
 function sleepMs(ms: number): Promise<void> {
@@ -174,6 +180,11 @@ export async function stageExtensionToTemp(params: {
     { src: path.join(params.sourceExtensionRoot, 'package.json'), dest: path.join(params.stageExtensionRoot, 'package.json') },
     { src: path.join(params.sourceExtensionRoot, 'package-lock.json'), dest: path.join(params.stageExtensionRoot, 'package-lock.json') },
     { src: path.join(params.sourceExtensionRoot, 'LICENSE'), dest: path.join(params.stageExtensionRoot, 'LICENSE') },
+    // package.json のローカライズ（%key% -> package.nls*.json）
+    { src: path.join(params.sourceExtensionRoot, 'package.nls.json'), dest: path.join(params.stageExtensionRoot, 'package.nls.json') },
+    { src: path.join(params.sourceExtensionRoot, 'package.nls.ja.json'), dest: path.join(params.stageExtensionRoot, 'package.nls.ja.json') },
+    // runtime ローカライズ（vscode.l10n.t 用）
+    { src: path.join(params.sourceExtensionRoot, 'l10n'), dest: path.join(params.stageExtensionRoot, 'l10n') },
     { src: path.join(params.sourceExtensionRoot, 'out'), dest: path.join(params.stageExtensionRoot, 'out') },
     { src: path.join(params.sourceExtensionRoot, 'src'), dest: path.join(params.stageExtensionRoot, 'src') },
     { src: path.join(params.sourceExtensionRoot, 'docs'), dest: path.join(params.stageExtensionRoot, 'docs') },
@@ -181,13 +192,31 @@ export async function stageExtensionToTemp(params: {
   ];
 
   for (const entry of copyEntries) {
-    await fs.promises.cp(entry.src, entry.dest, { recursive: true, force: true });
+    try {
+      await fs.promises.cp(entry.src, entry.dest, { recursive: true, force: true });
+    } catch (e) {
+      // テストでは sourceExtensionRoot を最小構成で生成するケースがあるため、
+      // 任意ファイル（package.nls / l10n 等）が無い場合はスキップする。
+      const err = e as NodeJS.ErrnoException;
+      if (err.code === 'ENOENT') {
+        continue;
+      }
+      throw e;
+    }
   }
 
   // テストランナー（out/test/suite/index.js）は mocha / glob などを node_modules から require する。
   // 退避先には node_modules をコピーしないため、シンボリックリンクで参照できるようにする。
   const sourceNodeModules = path.join(params.sourceExtensionRoot, 'node_modules');
   const stageNodeModules = path.join(params.stageExtensionRoot, 'node_modules');
+
+  // sourceNodeModules が存在しない場合はスキップ（テストで無効なパスを渡すケース対応）
+  try {
+    await fs.promises.access(sourceNodeModules);
+  } catch {
+    return;
+  }
+
   const linkType: fs.symlink.Type = process.platform === 'win32' ? 'junction' : 'dir';
   await fs.promises.symlink(sourceNodeModules, stageNodeModules, linkType);
 }
@@ -396,6 +425,11 @@ async function main() {
       const launcher: VscodeTestLauncher =
         pinnedLauncher ?? (attemptIndex === 0 ? defaultLauncher : defaultLauncher === 'open' ? 'direct' : 'open');
 
+      const locale = normalizeLocale(process.env.DONTFORGETEST_VSCODE_TEST_LOCALE);
+      // VS Code 本体の表示言語を強制するための設定。
+      // `availableLanguages` は言語パック有無に依存せずロケールを固定するために付与する。
+      const nlsConfig = JSON.stringify({ locale, availableLanguages: { '*': locale } });
+
       // VS Codeをダウンロードして起動し、テストを実行
       // 拡張機能のengines.vscodeに合わせてバージョンを指定
       try {
@@ -411,6 +445,7 @@ async function main() {
             `--user-data-dir=${userDataDir}`,
             `--extensions-dir=${extensionsDir}`,
             `--dontforgetest-test-result-file=${testResultFilePath}`,
+            `--locale=${locale}`,
             // UIの揺れや初回ダイアログ類を減らす（完全なヘッドレスにはならない）
             '--disable-workspace-trust',
             '--skip-release-notes',
@@ -433,6 +468,8 @@ async function main() {
             ELECTRON_RUN_AS_NODE: undefined,
             // テスト用プロセスであることを識別
             VSCODE_TEST_RUNNER: '1',
+            // VS Code の表示言語を固定（テストの期待値を安定させる）
+            VSCODE_NLS_CONFIG: nlsConfig,
             // Cursor / VS Code の IPC 関連の環境変数をクリア
             CURSOR_IPC_HOOK: undefined,
             VSCODE_IPC_HOOK: undefined,

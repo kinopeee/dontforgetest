@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { type TestGenEvent } from '../core/event';
+import { t } from '../core/l10n';
 
 let statusBar: vscode.StatusBarItem | undefined;
 const running = new Map<string, { label: string; detail?: string }>();
@@ -45,21 +46,23 @@ function update(): void {
     return;
   }
 
-  statusBar.text = `$(beaker) $(loading~spin) Dontforgetest: ${count} 実行中`;
+  statusBar.text = `$(beaker) $(loading~spin) ${t('statusBar.running', count)}`;
   statusBar.tooltip = buildTooltip();
   statusBar.show();
 }
 
 function buildTooltip(): string {
   const lines: string[] = [];
-  lines.push('Dontforgetest');
-  lines.push('');
-  lines.push(`実行中: ${running.size}`);
+  // t('statusBar.tooltip') には改行が含まれるが、各タスクの詳細を追加するため分解する
+  const baseTooltip = t('statusBar.tooltip', running.size);
+  const parts = baseTooltip.split('\n');
+  // 先頭3行（タイトル、空行、実行中: N）を追加
+  lines.push(...parts.slice(0, 3));
   for (const [taskId, info] of running.entries()) {
     lines.push(`- ${taskId}: ${info.label}${info.detail ? ` (${info.detail})` : ''}`);
   }
-  lines.push('');
-  lines.push('クリックで出力ログを表示');
+  // 残りの行（空行、クリックで...）を追加
+  lines.push(...parts.slice(3));
   return lines.join('\n');
 }
 

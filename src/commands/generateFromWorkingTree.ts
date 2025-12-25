@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ensurePreflight } from '../core/preflight';
+import { t } from '../core/l10n';
 import { buildTestGenPrompt } from '../core/promptBuilder';
 import { analyzeGitUnifiedDiff, extractChangedPaths, getWorkingTreeDiff, type WorkingTreeDiffMode } from '../git/diffAnalyzer';
 import { type AgentProvider } from '../providers/provider';
@@ -21,13 +22,13 @@ export async function generateTestFromWorkingTree(provider: AgentProvider, model
     mode: WorkingTreeDiffMode;
   }>(
     [
-      { label: 'Staged（git add 済み）', description: 'git diff --cached', mode: 'staged' },
-      { label: 'Unstaged（未ステージ）', description: 'git diff', mode: 'unstaged' },
-      { label: 'Staged + Unstaged', description: '両方をまとめて対象にする', mode: 'both' },
+      { label: t('quickPick.staged'), description: 'git diff --cached', mode: 'staged' },
+      { label: t('quickPick.unstaged'), description: 'git diff', mode: 'unstaged' },
+      { label: t('quickPick.both'), description: t('quickPick.bothDescription'), mode: 'both' },
     ],
     {
-      title: '未コミット差分からテスト生成',
-      placeHolder: '対象にする差分を選択してください',
+      title: t('quickPick.workingTreeTitle'),
+      placeHolder: t('quickPick.workingTreePlaceholder'),
     },
   );
   if (!selected) {
@@ -39,12 +40,12 @@ export async function generateTestFromWorkingTree(provider: AgentProvider, model
     diffText = await getWorkingTreeDiff(workspaceRoot, selected.mode);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    vscode.window.showErrorMessage(`git diff の取得に失敗しました: ${message}`);
+    vscode.window.showErrorMessage(t('git.diff.fetchFailed', message));
     return;
   }
 
   if (diffText.trim().length === 0) {
-    vscode.window.showInformationMessage(`未コミット差分（${selected.label}）に差分がありませんでした。`);
+    vscode.window.showInformationMessage(t('git.workingTree.noChanges', selected.label));
     return;
   }
 
@@ -53,7 +54,7 @@ export async function generateTestFromWorkingTree(provider: AgentProvider, model
 
   const { prompt } = await buildTestGenPrompt({
     workspaceRoot,
-    targetLabel: `未コミット差分 (${selected.label})`,
+    targetLabel: t('prompt.uncommittedLabel', selected.label),
     targetPaths: changedFiles,
     testStrategyPath,
   });
@@ -62,14 +63,14 @@ export async function generateTestFromWorkingTree(provider: AgentProvider, model
   const finalPrompt = [
     prompt,
     '',
-    '## 未コミット差分（参考）',
-    `以下は ${selected.label} の差分です。必要に応じて参照してください。`,
+    t('prompt.uncommittedSection'),
+    t('prompt.uncommittedHint', selected.label),
     '',
     diffForPrompt,
   ].join('\n');
 
   const taskId = `fromWorkingTree-${Date.now()}`;
-  const generationLabel = `未コミット差分 (${selected.label})`;
+  const generationLabel = t('prompt.generationLabel.uncommitted', selected.label);
   await runWithArtifacts({
     provider,
     workspaceRoot,

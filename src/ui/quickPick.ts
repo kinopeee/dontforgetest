@@ -3,6 +3,7 @@ import { generateTestFromLatestCommit } from '../commands/generateFromCommit';
 import { generateTestFromCommitRange } from '../commands/generateFromCommitRange';
 import { generateTestFromWorkingTree } from '../commands/generateFromWorkingTree';
 import { getModelSettings } from '../core/modelSettings';
+import { t } from '../core/l10n';
 import { ensurePreflight } from '../core/preflight';
 import { type AgentProvider } from '../providers/provider';
 
@@ -59,11 +60,11 @@ export async function generateTestWithQuickPick(provider: AgentProvider, context
 async function pickSource(): Promise<SourceKind | undefined> {
   const picked = await vscode.window.showQuickPick<SourcePickItem>(
     [
-      { label: '未コミット差分', description: 'staged / unstaged を選択', source: 'workingTree' },
-      { label: '最新コミット差分', description: 'HEAD の差分', source: 'latestCommit' },
-      { label: 'コミット範囲差分', description: 'main..HEAD 等を指定', source: 'commitRange' },
+      { label: t('quickPick.uncommittedDiff'), description: t('quickPick.uncommittedDiffDesc'), source: 'workingTree' },
+      { label: t('quickPick.latestCommit'), description: t('quickPick.latestCommitDesc'), source: 'latestCommit' },
+      { label: t('quickPick.commitRange'), description: t('quickPick.commitRangeDesc'), source: 'commitRange' },
     ],
-    { title: 'Dontforgetest: 実行ソースを選択', placeHolder: 'どの差分/対象からテストを生成しますか？' },
+    { title: `Dontforgetest: ${t('quickPick.selectSource')}`, placeHolder: t('quickPick.selectSourcePlaceholder') },
   );
   return picked?.source;
 }
@@ -77,19 +78,19 @@ async function pickRunLocation(source: SourceKind): Promise<RunLocation | undefi
   const picked = await vscode.window.showQuickPick<RunLocationPickItem>(
     [
       {
-        label: 'Local（現在のワークスペース）',
-        description: '生成結果を直接反映する',
+        label: t('quickPick.local'),
+        description: t('quickPick.localDescription'),
         runLocation: 'local',
       },
       {
-        label: 'Worktree（一時worktree）',
-        description: '隔離して生成し、テスト差分だけを安全に適用する',
+        label: t('quickPick.worktree'),
+        description: t('quickPick.worktreeDescription'),
         runLocation: 'worktree',
       },
     ],
     {
-      title: 'Dontforgetest: 実行先を選択',
-      placeHolder: 'どこでテスト生成を実行しますか？',
+      title: `Dontforgetest: ${t('quickPick.selectRunLocation')}`,
+      placeHolder: t('quickPick.selectRunLocationPlaceholder'),
     },
   );
   return picked?.runLocation;
@@ -106,8 +107,8 @@ async function pickModelOverride(): Promise<string | undefined | null> {
 
   const items: ModelPickItem[] = [
     {
-      label: '設定の defaultModel を使用',
-      description: defaultModel ? defaultModel : '（未設定: 自動選択）',
+      label: t('quickPick.useConfigModel'),
+      description: defaultModel ? defaultModel : t('quickPick.defaultModelNotSet'),
       mode: 'useConfig',
     },
   ];
@@ -121,7 +122,7 @@ async function pickModelOverride(): Promise<string | undefined | null> {
     for (const model of customModels) {
       items.push({
         label: model,
-        description: '設定: dontforgetest.customModels',
+        description: t('quickPick.customModelsDesc'),
         mode: 'useCandidate',
         modelValue: model,
       });
@@ -129,14 +130,14 @@ async function pickModelOverride(): Promise<string | undefined | null> {
   }
 
   items.push({
-    label: 'モデルを入力して上書き',
-    description: '例: claude-3.5-sonnet',
+    label: t('quickPick.inputModel'),
+    description: t('quickPick.inputModelDesc'),
     mode: 'input',
   });
 
   const picked = await vscode.window.showQuickPick<ModelPickItem>(items, {
-    title: 'Dontforgetest: モデルを選択',
-    placeHolder: '使用するモデルを選択してください',
+    title: `Dontforgetest: ${t('quickPick.selectModel')}`,
+    placeHolder: t('quickPick.selectModelPlaceholder'),
   });
 
   if (!picked) {
@@ -153,12 +154,12 @@ async function pickModelOverride(): Promise<string | undefined | null> {
 
   if (picked.mode === 'input') {
     const input = await vscode.window.showInputBox({
-      title: 'モデルを入力',
-      prompt: 'cursor-agent に渡すモデル名を入力してください（空の場合はキャンセル）',
+      title: t('quickPick.inputModelTitle'),
+      prompt: t('quickPick.inputModelPrompt'),
       value: defaultModel ?? '',
       validateInput: (value) => {
         if (value.trim().length === 0) {
-          return 'モデル名を入力してください。';
+          return t('quickPick.inputModelValidation');
         }
         return undefined;
       },
