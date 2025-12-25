@@ -7217,6 +7217,9 @@ suite('commands/runWithArtifacts.ts', () => {
   // | TC-CLEANUP-N-04 | test_perspectives_output.md with markers | Equivalence – normal | File deleted | パターンマッチ対応 |
   // | TC-CLEANUP-N-05 | Multiple files (test_perspectives.md, test_perspectives_output.md) | Equivalence – normal | Both files deleted | 複数ファイル対応 |
   // | TC-CLEANUP-N-06 | test_perspectives_other.md without markers | Equivalence – normal | File not deleted | マーカーなしは削除しない |
+  // | TC-CLEANUP-N-07 | test_perspectives.json with JSON markers | Equivalence – normal | File deleted | JSONの副産物も削除対象 |
+  // | TC-CLEANUP-N-08 | test_perspectives_output.json with JSON markers | Equivalence – normal | File deleted | JSONの副産物も削除対象 |
+  // | TC-CLEANUP-N-09 | test_perspectives_custom.json without markers | Equivalence – normal | File not deleted | マーカーなしは削除しない（JSON） |
 
   // TC-CLEANUP-N-04: test_perspectives_output.md が存在して削除される
   test('TC-CLEANUP-N-04: test_perspectives_output.md with markers is deleted', async () => {
@@ -7347,6 +7350,158 @@ suite('commands/runWithArtifacts.ts', () => {
       cursorAgentCommand: 'mock-agent',
       testStrategyPath: 'docs/test-strategy.md',
       generationLabel: 'Cleanup Test N06',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is not deleted
+    const stat = await vscode.workspace.fs.stat(perspectiveFile);
+    assert.ok(stat !== undefined, 'File exists and was not deleted');
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-N-07: test_perspectives.json（JSONマーカー付き）が存在して削除される
+  test('TC-CLEANUP-N-07: test_perspectives.json with JSON markers is deleted', async () => {
+    // Given: test_perspectives.json exists at workspace root with both JSON markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-n07-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives.json'));
+    const fileContent =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"x","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-n07-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-n07');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test N07',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is deleted
+    try {
+      await vscode.workspace.fs.stat(perspectiveFile);
+      assert.fail('File was not deleted');
+    } catch {
+      assert.ok(true, 'File was deleted');
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-N-08: test_perspectives_output.json（JSONマーカー付き）が存在して削除される
+  test('TC-CLEANUP-N-08: test_perspectives_output.json with JSON markers is deleted', async () => {
+    // Given: test_perspectives_output.json exists at workspace root with both JSON markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-n08-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives_output.json'));
+    const fileContent =
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->\n' +
+      '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"x","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}\n' +
+      '<!-- END TEST PERSPECTIVES JSON -->';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-n08-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-n08');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test N08',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      settingsOverride: {
+        includeTestPerspectiveTable: false,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo hello',
+        testExecutionRunner: 'extension',
+      }
+    });
+
+    // Then: File is deleted
+    try {
+      await vscode.workspace.fs.stat(perspectiveFile);
+      assert.fail('File was not deleted');
+    } catch {
+      assert.ok(true, 'File was deleted');
+    }
+
+    // Cleanup
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  // TC-CLEANUP-N-09: test_perspectives_custom.json（パターン一致だがマーカーなし）は削除されない
+  test('TC-CLEANUP-N-09: Pattern-matching JSON file without markers is not deleted', async () => {
+    // Given: test_perspectives_custom.json exists without markers
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-cleanup-n09-${Date.now()}`);
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+    const perspectiveFile = vscode.Uri.file(path.join(tempRoot, 'test_perspectives_custom.json'));
+    const fileContent = '{"note":"user file without markers"}';
+    await vscode.workspace.fs.writeFile(perspectiveFile, Buffer.from(fileContent, 'utf8'));
+
+    const provider = new MockProvider(0);
+    const taskId = `task-cleanup-n09-${Date.now()}`;
+    const reportDir = path.join(baseTempDir, 'reports-cleanup-n09');
+
+    // When: runWithArtifacts is called
+    await runWithArtifacts({
+      provider,
+      workspaceRoot: tempRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Cleanup Test N09',
       targetPaths: ['test.ts'],
       generationPrompt: 'prompt',
       model: 'model',

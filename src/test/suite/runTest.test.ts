@@ -1361,6 +1361,16 @@ suite('test/runTest.ts', () => {
     let sourceDir: string;
     let stageDir: string;
 
+    const ensureRequiredSourceFiles = async (): Promise<void> => {
+      // stageExtensionToTemp は拡張機能一式を退避するため、package-lock.json 以外も前提としてコピーする。
+      // テスト用の sourceDir でも最小構成を用意する。
+      await fs.promises.writeFile(path.join(sourceDir, 'package.json'), '{"name":"test"}');
+      await fs.promises.writeFile(path.join(sourceDir, 'LICENSE'), 'MIT');
+      await fs.promises.mkdir(path.join(sourceDir, 'out'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'src'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
+    };
+
     setup(async () => {
       // Given: Temporary directories for testing
       tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'dontforgetest-test-'));
@@ -1385,6 +1395,7 @@ suite('test/runTest.ts', () => {
     // Then: package-lock.json is copied to stageExtensionRoot successfully
     test('TC-N-01: package-lock.json exists in sourceExtensionRoot', async () => {
       // Given: package-lock.json exists in sourceExtensionRoot
+      await ensureRequiredSourceFiles();
       const packageLockContent = '{"name": "test", "version": "1.0.0"}';
       await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), packageLockContent);
 
@@ -1483,11 +1494,13 @@ suite('test/runTest.ts', () => {
     // Then: fs.promises.cp throws EACCES error or handles gracefully
     test('TC-E-03: package-lock.json exists but destination directory is read-only', async () => {
       // Given: package-lock.json exists but destination directory is read-only
+      await ensureRequiredSourceFiles();
       await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
-      // Note: On Unix systems, we can make directory read-only, but on Windows this may not work
-      // This test may not work on all platforms, but we attempt it
+      // stageExtensionToTemp は stageExtensionRoot を削除して作り直すため、
+      // stageDir 自体を read-only にしてもエラーにならないケースがある。
+      // 代わりに「親ディレクトリ」を read-only にして、削除/作成ができない状況を作る。
       try {
-        await fs.promises.chmod(stageDir, 0o444); // Read-only
+        await fs.promises.chmod(tempDir, 0o555); // Read-only (parent)
       } catch {
         // If chmod fails (e.g., on Windows), skip this test
         return;
@@ -1511,7 +1524,7 @@ suite('test/runTest.ts', () => {
       } finally {
         // Restore permissions for cleanup
         try {
-          await fs.promises.chmod(stageDir, 0o755);
+          await fs.promises.chmod(tempDir, 0o755);
         } catch {
           // Ignore cleanup errors
         }
@@ -1527,6 +1540,7 @@ suite('test/runTest.ts', () => {
       // Given: package-lock.json exists but disk is full
       // Note: Cannot reliably simulate disk full condition in unit tests
       // This test is skipped as it requires system-level manipulation
+      await ensureRequiredSourceFiles();
       await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
 
       // When: stageExtensionToTemp is called
@@ -1547,6 +1561,7 @@ suite('test/runTest.ts', () => {
     // Then: Empty package-lock.json is copied successfully
     test('TC-B-01: package-lock.json exists but is empty (0 bytes)', async () => {
       // Given: package-lock.json exists but is empty (0 bytes)
+      await ensureRequiredSourceFiles();
       await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '');
 
       // When: stageExtensionToTemp is called
@@ -1568,6 +1583,7 @@ suite('test/runTest.ts', () => {
     // Then: Large package-lock.json is copied successfully or throws error if too large
     test('TC-B-02: package-lock.json exists and is very large', async () => {
       // Given: package-lock.json exists and is very large (using smaller size for test: 1MB)
+      await ensureRequiredSourceFiles();
       const largeContent = 'A'.repeat(1024 * 1024); // 1MB
       await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), largeContent);
 
@@ -1590,6 +1606,7 @@ suite('test/runTest.ts', () => {
     // Then: Symbolic link is copied (as link or resolved file) based on cp options
     test('TC-B-03: package-lock.json is a symbolic link', async () => {
       // Given: package-lock.json is a symbolic link
+      await ensureRequiredSourceFiles();
       const targetFile = path.join(sourceDir, 'package-lock-target.json');
       await fs.promises.writeFile(targetFile, '{"name": "test"}');
       const symlinkPath = path.join(sourceDir, 'package-lock.json');
