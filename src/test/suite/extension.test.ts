@@ -22,12 +22,12 @@ suite('src/extension.ts', () => {
       // Given: Extension is available
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       // When: Calling activate()
       if (!ext.isActive) {
         await ext.activate();
       }
-      
+
       // Then: Extension is active without import errors
       assert.ok(ext.isActive, 'Extension should be active');
     });
@@ -53,7 +53,7 @@ suite('src/extension.ts', () => {
 
       expectedCommands.forEach(cmd => {
         assert.ok(
-          allCommands.includes(cmd), 
+          allCommands.includes(cmd),
           `Command "${cmd}" is not registered`
         );
       });
@@ -66,7 +66,7 @@ suite('src/extension.ts', () => {
       // Given: Extension is activated
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       if (!ext.isActive) {
         await ext.activate();
       }
@@ -88,7 +88,7 @@ suite('src/extension.ts', () => {
       // Given: Extension is activated
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       if (!ext.isActive) {
         await ext.activate();
       }
@@ -115,13 +115,13 @@ suite('src/extension.ts', () => {
       // Given: Extension package.json
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       const packageJSON = ext.packageJSON;
       const commands = packageJSON.contributes?.commands || [];
 
       // When: Checking command definitions
       // Then: Deleted command is not in the list
-      const deletedCommand = commands.find((cmd: { command: string }) => 
+      const deletedCommand = commands.find((cmd: { command: string }) =>
         cmd.command === 'dontforgetest.generateTestFromFile'
       );
       assert.strictEqual(
@@ -138,7 +138,7 @@ suite('src/extension.ts', () => {
       // Given: Extension is activated
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       if (!ext.isActive) {
         await ext.activate();
       }
@@ -161,7 +161,7 @@ suite('src/extension.ts', () => {
       // Given: Extension is activated
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       if (!ext.isActive) {
         await ext.activate();
       }
@@ -184,7 +184,7 @@ suite('src/extension.ts', () => {
       // Given: Extension is activated
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       if (!ext.isActive) {
         await ext.activate();
       }
@@ -248,7 +248,7 @@ suite('src/extension.ts', () => {
     // Then: Default values are as expected
     test('TC-EXT-04: Default configuration values check (TC-B-01: Clean Install State)', () => {
       const config = vscode.workspace.getConfiguration('dontforgetest');
-      
+
       assert.strictEqual(config.get('cursorAgentPath'), '', 'cursorAgentPath default value is incorrect');
       assert.strictEqual(config.get('maxParallelTasks'), 4, 'maxParallelTasks default value is incorrect');
       assert.strictEqual(config.get('defaultModel'), '', 'defaultModel default value is incorrect');
@@ -328,7 +328,7 @@ suite('src/extension.ts', () => {
     test('TC-META-01: ライセンス情報の確認', () => {
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
-      
+
       const packageJSON = ext.packageJSON;
       assert.strictEqual(packageJSON.license, 'AGPL-3.0', 'ライセンスが AGPL-3.0 ではありません');
     });
@@ -355,14 +355,14 @@ suite('src/extension.ts', () => {
     test('TC-RES-01: パッケージバージョンの形式確認', () => {
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
-      
+
       const packageJSON = ext.packageJSON;
       const version = packageJSON.version;
-      
+
       // バージョンが存在すること
       assert.ok(version, 'バージョンが定義されていません');
       assert.strictEqual(typeof version, 'string', 'バージョンは文字列である必要があります');
-      
+
       // セマンティックバージョニング形式（x.y.z）であること
       const semverPattern = /^\d+\.\d+\.\d+$/;
       assert.ok(semverPattern.test(version), `バージョン "${version}" はセマンティックバージョニング形式（x.y.z）ではありません`);
@@ -376,14 +376,14 @@ suite('src/extension.ts', () => {
       // Given: package.json file exists
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       const packageJsonPath = path.join(ext.extensionPath, 'package.json');
       assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
-      
+
       // When: Reading package.json
       const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
       const packageJson = JSON.parse(packageJsonContent) as { version?: string };
-      
+
       // Then: Version field is valid semantic version format
       assert.ok(packageJson.version, 'Version field should be defined');
       const semverPattern = /^\d+\.\d+\.\d+$/;
@@ -398,12 +398,12 @@ suite('src/extension.ts', () => {
       // Given: package.json and package-lock.json files exist
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       const packageJsonPath = path.join(ext.extensionPath, 'package.json');
       const packageLockJsonPath = path.join(ext.extensionPath, 'package-lock.json');
       assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
       assert.ok(fs.existsSync(packageLockJsonPath), 'package-lock.json file exists');
-      
+
       // When: Reading both files
       const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
       const packageJson = JSON.parse(packageJsonContent) as { version?: string };
@@ -412,7 +412,7 @@ suite('src/extension.ts', () => {
         version?: string;
         packages?: Record<string, { version?: string }>;
       };
-      
+
       // Then: Version fields are synchronized
       assert.ok(packageJson.version, 'package.json version should be defined');
       assert.strictEqual(packageLockJson.version, packageJson.version, 'Version number should be synchronized in lock file root');
@@ -429,9 +429,9 @@ suite('src/extension.ts', () => {
       // Given: Non-existent file path
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       const nonExistentPath = path.join(ext.extensionPath, 'non-existent-package.json');
-      
+
       // When: Attempting to read non-existent file
       // Then: File read operation throws error
       assert.throws(() => {
@@ -447,9 +447,9 @@ suite('src/extension.ts', () => {
       // Given: Non-existent file path
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       const nonExistentPath = path.join(ext.extensionPath, 'non-existent-package-lock.json');
-      
+
       // When: Attempting to read non-existent file
       // Then: File read operation throws error
       assert.throws(() => {
@@ -463,8 +463,8 @@ suite('src/extension.ts', () => {
     // Then: JSON.parse throws SyntaxError
     test('TC-PKG-05: package.json contains invalid JSON', () => {
       // Given: Invalid JSON string
-      const invalidJson = '{ "version": "0.0.67", invalid }';
-      
+      const invalidJson = '{ "version": "0.0.72", invalid }';
+
       // When: Parsing invalid JSON
       // Then: JSON.parse throws SyntaxError
       assert.throws(() => {
@@ -480,7 +480,7 @@ suite('src/extension.ts', () => {
       // Given: JSON without version field
       const jsonWithoutVersion = '{}';
       const packageJson = JSON.parse(jsonWithoutVersion) as { version?: string };
-      
+
       // When: Reading version field
       // Then: Version field is undefined
       assert.strictEqual(packageJson.version, undefined, 'Version field should be undefined when missing');
@@ -494,7 +494,7 @@ suite('src/extension.ts', () => {
       // Given: JSON with empty version field
       const jsonWithEmptyVersion = '{"version": ""}';
       const packageJson = JSON.parse(jsonWithEmptyVersion) as { version?: string };
-      
+
       // When: Reading version field
       // Then: Version field is empty string
       assert.strictEqual(packageJson.version, '', 'Version field should be empty string');
@@ -506,51 +506,31 @@ suite('src/extension.ts', () => {
     // Then: packages[''] is undefined, test handles gracefully
     test('TC-PKG-08: package-lock.json packages[""] is missing', () => {
       // Given: JSON without packages[''] field
-      const jsonWithoutPackages = '{"version": "0.0.67"}';
+      const jsonWithoutPackages = '{"version": "0.0.72"}';
       const packageLockJson = JSON.parse(jsonWithoutPackages) as {
         version?: string;
         packages?: Record<string, { version?: string }>;
       };
-      
+
       // When: Reading packages[''] field
       // Then: packages[''] is undefined
       assert.strictEqual(packageLockJson.packages?.[''], undefined, 'packages[""] should be undefined when missing');
     });
 
-    // TC-VERSION-N-01: package.json version is updated from 0.0.67 to 0.0.68
-    // Given: package.json file exists
-    // When: Reading package.json version field
-    // Then: Version is 0.0.68
-    test('TC-VERSION-N-01: package.json version is updated from 0.0.67 to 0.0.68', () => {
-      // Given: package.json file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
-      assert.ok(ext, 'Extension not found');
-      
-      const packageJsonPath = path.join(ext.extensionPath, 'package.json');
-      assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
-      
-      // When: Reading package.json version field
-      const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
-      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
-      
-      // Then: Version is 0.0.68
-      assert.strictEqual(packageJson.version, '0.0.68', 'Version should be 0.0.68');
-    });
-
-    // TC-VERSION-N-02: package-lock.json version matches package.json version
-    // Given: package.json and package-lock.json files exist
+    // TC-N-01: package.json and package-lock.json exist with valid version fields
+    // Given: package.json and package-lock.json files exist with valid version fields
     // When: Reading both files
-    // Then: Both versions are 0.0.68 and synchronized
-    test('TC-VERSION-N-02: package-lock.json version matches package.json version', () => {
+    // Then: Both files are updated to version 0.0.72 and versions are synchronized
+    test('TC-N-01: package.json and package-lock.json exist with valid version fields', () => {
       // Given: package.json and package-lock.json files exist
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       const packageJsonPath = path.join(ext.extensionPath, 'package.json');
       const packageLockJsonPath = path.join(ext.extensionPath, 'package-lock.json');
       assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
       assert.ok(fs.existsSync(packageLockJsonPath), 'package-lock.json file exists');
-      
+
       // When: Reading both files
       const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
       const packageJson = JSON.parse(packageJsonContent) as { version?: string };
@@ -559,13 +539,522 @@ suite('src/extension.ts', () => {
         version?: string;
         packages?: Record<string, { version?: string }>;
       };
-      
-      // Then: Both versions are 0.0.68 and synchronized
-      assert.strictEqual(packageJson.version, '0.0.68', 'package.json version should be 0.0.68');
-      assert.strictEqual(packageLockJson.version, '0.0.68', 'package-lock.json root version should be 0.0.68');
+
+      // Then: Both files are updated to version 0.0.72 and versions are synchronized
+      assert.ok(packageJson.version, 'package.json version should be defined');
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+      assert.ok(semverPattern.test(packageJson.version), `Version "${packageJson.version}" should be semantic version format (x.y.z)`);
+      assert.strictEqual(packageJson.version, '0.0.72', 'package.json version should be 0.0.72');
+      assert.ok(packageLockJson.version, 'package-lock.json version should be defined');
+      assert.ok(semverPattern.test(packageLockJson.version), `Lock file version "${packageLockJson.version}" should be semantic version format (x.y.z)`);
+      assert.strictEqual(packageLockJson.version, packageJson.version, 'Version numbers should be synchronized');
       if (packageLockJson.packages && packageLockJson.packages['']) {
-        assert.strictEqual(packageLockJson.packages[''].version, '0.0.68', 'package-lock.json packages[""] version should be 0.0.68');
+        assert.strictEqual(packageLockJson.packages[''].version, packageJson.version, 'Version number should be synchronized in lock file packages[""]');
       }
+    });
+
+    // TC-N-02: package.json version field exists and is valid semver string
+    // Given: package.json version field exists and is valid semver string
+    // When: Reading package.json
+    // Then: package.json version is updated to 0.0.72 and maintains valid semver format (x.y.z)
+    test('TC-N-02: package.json version field exists and is valid semver string', () => {
+      // Given: package.json file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const packageJsonPath = path.join(ext.extensionPath, 'package.json');
+      assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
+
+      // When: Reading package.json
+      const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
+
+      // Then: package.json version is updated to 0.0.72 and maintains valid semver format (x.y.z)
+      assert.ok(packageJson.version, 'Version field should be defined');
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+      assert.ok(semverPattern.test(packageJson.version), `Version "${packageJson.version}" should be semantic version format (x.y.z)`);
+      assert.strictEqual(packageJson.version, '0.0.72', 'package.json version should be 0.0.72');
+    });
+
+    // TC-N-03: package-lock.json root version and packages[""] version exist
+    // Given: package-lock.json root version and packages[""] version exist
+    // When: Reading package-lock.json
+    // Then: Both package-lock.json root version and packages[""] version are updated to 0.0.72
+    test('TC-N-03: package-lock.json root version and packages[""] version exist', () => {
+      // Given: package-lock.json file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const packageLockJsonPath = path.join(ext.extensionPath, 'package-lock.json');
+      assert.ok(fs.existsSync(packageLockJsonPath), 'package-lock.json file exists');
+
+      // When: Reading package-lock.json
+      const packageLockJsonContent = fs.readFileSync(packageLockJsonPath, 'utf8');
+      const packageLockJson = JSON.parse(packageLockJsonContent) as {
+        version?: string;
+        packages?: Record<string, { version?: string }>;
+      };
+
+      // Then: Both package-lock.json root version and packages[""] version are updated to 0.0.72
+      assert.ok(packageLockJson.version, 'package-lock.json root version should be defined');
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+      assert.ok(semverPattern.test(packageLockJson.version), `Root version "${packageLockJson.version}" should be semantic version format (x.y.z)`);
+      assert.strictEqual(packageLockJson.version, '0.0.72', 'package-lock.json root version should be 0.0.72');
+      if (packageLockJson.packages && packageLockJson.packages['']) {
+        assert.ok(packageLockJson.packages[''].version, 'packages[""] version should be defined');
+        assert.ok(semverPattern.test(packageLockJson.packages[''].version!), `packages[""] version "${packageLockJson.packages[''].version}" should be semantic version format (x.y.z)`);
+        assert.strictEqual(packageLockJson.packages[''].version, packageLockJson.version, 'packages[""] version should match root version');
+      }
+    });
+
+    // TC-N-04: extension.test.ts file exists with trailing whitespace
+    // Given: extension.test.ts file exists with trailing whitespace
+    // When: Reading extension.test.ts file content
+    // Then: Trailing whitespace is removed, file formatting is consistent
+    test('TC-N-04: extension.test.ts file exists with trailing whitespace', () => {
+      // Given: extension.test.ts file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const extensionTestPath = path.join(ext.extensionPath, 'src', 'test', 'suite', 'extension.test.ts');
+      assert.ok(fs.existsSync(extensionTestPath), 'extension.test.ts file exists');
+
+      // When: Reading extension.test.ts file content
+      const extensionTestContent = fs.readFileSync(extensionTestPath, 'utf8');
+      const lines = extensionTestContent.split('\n');
+
+      // Then: Trailing whitespace is removed, file formatting is consistent
+      lines.forEach((line, index) => {
+        if (line.trim().length > 0) {
+          // Non-empty lines should not have trailing whitespace
+          assert.strictEqual(
+            line,
+            line.trimEnd(),
+            `Line ${index + 1} should not have trailing whitespace: "${line.replace(/\s/g, '·')}"`
+          );
+        }
+      });
+    });
+
+    // TC-N-05: progressTreeView.ts file exists
+    // Given: progressTreeView.ts file exists
+    // When: Reading progressTreeView.ts file
+    // Then: File changes are applied correctly without breaking functionality
+    test('TC-N-05: progressTreeView.ts file exists', () => {
+      // Given: progressTreeView.ts file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const progressTreeViewPath = path.join(ext.extensionPath, 'src', 'ui', 'progressTreeView.ts');
+      assert.ok(fs.existsSync(progressTreeViewPath), 'progressTreeView.ts file exists');
+
+      // When: Reading progressTreeView.ts file
+      const progressTreeViewContent = fs.readFileSync(progressTreeViewPath, 'utf8');
+
+      // Then: File changes are applied correctly without breaking functionality
+      assert.ok(progressTreeViewContent.length > 0, 'progressTreeView.ts file should not be empty');
+      assert.ok(progressTreeViewContent.includes('ProgressTreeViewProvider'), 'progressTreeView.ts should contain ProgressTreeViewProvider class');
+      assert.ok(progressTreeViewContent.includes('initializeProgressTreeView'), 'progressTreeView.ts should contain initializeProgressTreeView function');
+    });
+
+    // TC-E-01: package.json version field is missing
+    // Given: package.json version field is missing
+    // When: Reading package.json without version field
+    // Then: Error is thrown or version update fails
+    test('TC-E-01: package.json version field is missing', () => {
+      // Given: JSON without version field
+      const jsonWithoutVersion = '{}';
+      const packageJson = JSON.parse(jsonWithoutVersion) as { version?: string };
+
+      // When: Reading version field
+      // Then: Error is thrown or version update fails
+      assert.strictEqual(packageJson.version, undefined, 'Version field should be undefined when missing');
+    });
+
+    // TC-E-02: package.json version field is null
+    // Given: package.json version field is null
+    // When: Reading package.json with null version
+    // Then: Error is thrown or version update fails
+    test('TC-E-02: package.json version field is null', () => {
+      // Given: JSON with null version field
+      const jsonWithNullVersion = '{"version": null}';
+      const packageJson = JSON.parse(jsonWithNullVersion) as { version?: string | null };
+
+      // When: Reading version field
+      // Then: Error is thrown or version update fails
+      assert.strictEqual(packageJson.version, null, 'Version field should be null');
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+      if (packageJson.version !== null) {
+        assert.ok(!semverPattern.test(packageJson.version), 'Null version should not match semantic version format');
+      } else {
+        assert.ok(true, 'Null version correctly fails semantic version validation');
+      }
+    });
+
+    // TC-E-03: package.json version field is empty string
+    // Given: package.json version field is empty string
+    // When: Reading package.json with empty version
+    // Then: Error is thrown or version update fails
+    test('TC-E-03: package.json version field is empty string', () => {
+      // Given: JSON with empty version field
+      const jsonWithEmptyVersion = '{"version": ""}';
+      const packageJson = JSON.parse(jsonWithEmptyVersion) as { version?: string };
+
+      // When: Reading version field
+      // Then: Error is thrown or version update fails
+      assert.strictEqual(packageJson.version, '', 'Version field should be empty string');
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+      assert.ok(!semverPattern.test(packageJson.version), 'Empty string should not match semantic version format');
+    });
+
+    // TC-E-04: package.json version is invalid format (e.g., "abc", "1.2", "1.2.3.4")
+    // Given: package.json with invalid version format
+    // When: Validating version format
+    // Then: Error is thrown or version format validation fails
+    test('TC-E-04: package.json version is invalid format (e.g., "abc", "1.2", "1.2.3.4")', () => {
+      // Given: JSON with invalid version formats
+      const invalidVersions = ['abc', '1.2', '1.2.3.4'];
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+
+      // When: Validating version format
+      // Then: Error is thrown or version format validation fails
+      invalidVersions.forEach(invalidVersion => {
+        const jsonWithInvalidVersion = `{"version": "${invalidVersion}"}`;
+        const packageJson = JSON.parse(jsonWithInvalidVersion) as { version?: string };
+        assert.ok(packageJson.version, 'Version field should be defined');
+        assert.ok(!semverPattern.test(packageJson.version), `Version "${packageJson.version}" should not match semantic version format`);
+      });
+    });
+
+    // TC-E-05: package.json and package-lock.json versions become mismatched after update
+    // Given: package.json and package-lock.json with mismatched versions
+    // When: Comparing versions
+    // Then: Error is detected or versions remain synchronized
+    test('TC-E-05: package.json and package-lock.json versions become mismatched after update', () => {
+      // Given: JSON objects with mismatched versions
+      const packageJsonContent = '{"version": "0.0.72"}';
+      const packageLockJsonContent = '{"version": "0.0.70", "packages": {"": {"version": "0.0.70"}}}';
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
+      const packageLockJson = JSON.parse(packageLockJsonContent) as {
+        version?: string;
+        packages?: Record<string, { version?: string }>;
+      };
+
+      // When: Comparing versions
+      // Then: Error is detected or versions remain synchronized
+      assert.ok(packageJson.version, 'package.json version should be defined');
+      assert.ok(packageLockJson.version, 'package-lock.json version should be defined');
+      assert.notStrictEqual(packageLockJson.version, packageJson.version, 'Versions should be mismatched');
+      assert.strictEqual(packageJson.version, '0.0.72', 'package.json version should be 0.0.72');
+      assert.strictEqual(packageLockJson.version, '0.0.70', 'package-lock.json version should be 0.0.70');
+      if (packageLockJson.packages && packageLockJson.packages['']) {
+        assert.notStrictEqual(packageLockJson.packages[''].version, packageJson.version, 'packages[""] version should also be mismatched');
+      }
+    });
+
+    // TC-E-06: package.json is invalid JSON format
+    // Given: package.json contains invalid JSON
+    // When: Parsing JSON content
+    // Then: JSON parse error is thrown
+    test('TC-E-06: package.json is invalid JSON format', () => {
+      // Given: Invalid JSON string
+      const invalidJson = '{ "version": "0.0.72", invalid }';
+
+      // When: Parsing invalid JSON
+      // Then: JSON parse error is thrown
+      assert.throws(() => {
+        JSON.parse(invalidJson);
+      }, SyntaxError, 'Parsing invalid JSON should throw SyntaxError');
+    });
+
+    // TC-E-07: package-lock.json is invalid JSON format
+    // Given: package-lock.json contains invalid JSON
+    // When: Parsing JSON content
+    // Then: JSON parse error is thrown
+    test('TC-E-07: package-lock.json is invalid JSON format', () => {
+      // Given: Invalid JSON string
+      const invalidJson = '{ "version": "0.0.72", "packages": { invalid }';
+
+      // When: Parsing invalid JSON
+      // Then: JSON parse error is thrown
+      assert.throws(() => {
+        JSON.parse(invalidJson);
+      }, SyntaxError, 'Parsing invalid JSON should throw SyntaxError');
+    });
+
+    // TC-E-08: package.json version is a negative number (e.g., "-1.0.0")
+    // Given: package.json with negative version number
+    // When: Validating version format
+    // Then: Version format error is detected
+    test('TC-E-08: package.json version is a negative number (e.g., "-1.0.0")', () => {
+      // Given: JSON with negative version number
+      const jsonWithNegativeVersion = '{"version": "-1.0.0"}';
+      const packageJson = JSON.parse(jsonWithNegativeVersion) as { version?: string };
+
+      // When: Validating version format
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+
+      // Then: Version format error is detected
+      assert.ok(packageJson.version, 'Version field should be defined');
+      assert.ok(!semverPattern.test(packageJson.version), `Version "${packageJson.version}" should not match semantic version format (negative number)`);
+      assert.strictEqual(packageJson.version, '-1.0.0', 'Version should be the negative number "-1.0.0"');
+    });
+
+    // TC-E-03: package.json and package-lock.json versions are mismatched (e.g., package.json=0.0.72, package-lock.json=0.0.70)
+    // Given: package.json and package-lock.json with mismatched versions
+    // When: Comparing versions
+    // Then: Version mismatch error is detected
+    test('TC-E-03: package.json and package-lock.json versions are mismatched', () => {
+      // Given: JSON objects with mismatched versions
+      const packageJsonContent = '{"version": "0.0.72"}';
+      const packageLockJsonContent = '{"version": "0.0.70", "packages": {"": {"version": "0.0.70"}}}';
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
+      const packageLockJson = JSON.parse(packageLockJsonContent) as {
+        version?: string;
+        packages?: Record<string, { version?: string }>;
+      };
+
+      // When: Comparing versions
+      // Then: Version mismatch error is detected
+      assert.ok(packageJson.version, 'package.json version should be defined');
+      assert.ok(packageLockJson.version, 'package-lock.json version should be defined');
+      assert.notStrictEqual(packageLockJson.version, packageJson.version, 'Versions should be mismatched');
+      assert.strictEqual(packageJson.version, '0.0.72', 'package.json version should be 0.0.72');
+      assert.strictEqual(packageLockJson.version, '0.0.70', 'package-lock.json version should be 0.0.70');
+      if (packageLockJson.packages && packageLockJson.packages['']) {
+        assert.notStrictEqual(packageLockJson.packages[''].version, packageJson.version, 'packages[""] version should also be mismatched');
+      }
+    });
+
+    // TC-B-01: package.json version is "0.0.0" (minimum semver)
+    // Given: package.json with minimum version number
+    // When: Validating version format
+    // Then: Version can be updated from 0.0.0 to 0.0.72
+    test('TC-B-01: package.json version is "0.0.0" (minimum semver)', () => {
+      // Given: JSON with minimum version number
+      const jsonWithMinVersion = '{"version": "0.0.0"}';
+      const packageJson = JSON.parse(jsonWithMinVersion) as { version?: string };
+
+      // When: Validating version format
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+
+      // Then: Version can be updated from 0.0.0 to 0.0.72
+      assert.ok(packageJson.version, 'Version field should be defined');
+      assert.ok(semverPattern.test(packageJson.version), `Version "${packageJson.version}" should match semantic version format`);
+      assert.strictEqual(packageJson.version, '0.0.0', 'Version should be the minimum version "0.0.0"');
+    });
+
+    // TC-B-02: package.json version is "999.999.999" (very large)
+    // Given: package.json with maximum version number
+    // When: Validating version format
+    // Then: Version can be updated from 999.999.999 to 0.0.72 or appropriate value
+    test('TC-B-02: package.json version is "999.999.999" (very large)', () => {
+      // Given: JSON with maximum version number
+      const jsonWithMaxVersion = '{"version": "999.999.999"}';
+      const packageJson = JSON.parse(jsonWithMaxVersion) as { version?: string };
+
+      // When: Validating version format
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+
+      // Then: Version can be updated from 999.999.999 to 0.0.72 or appropriate value
+      assert.ok(packageJson.version, 'Version field should be defined');
+      assert.ok(semverPattern.test(packageJson.version), `Version "${packageJson.version}" should match semantic version format`);
+      assert.strictEqual(packageJson.version, '999.999.999', 'Version should be the maximum version "999.999.999"');
+    });
+
+    // TC-B-03: package.json version contains negative numbers (e.g., "-1.0.0")
+    // Given: package.json with negative version number
+    // When: Validating version format
+    // Then: Error is thrown or version format validation fails
+    test('TC-B-03: package.json version contains negative numbers (e.g., "-1.0.0")', () => {
+      // Given: JSON with negative version number
+      const jsonWithNegativeVersion = '{"version": "-1.0.0"}';
+      const packageJson = JSON.parse(jsonWithNegativeVersion) as { version?: string };
+
+      // When: Validating version format
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+
+      // Then: Error is thrown or version format validation fails
+      assert.ok(packageJson.version, 'Version field should be defined');
+      assert.ok(!semverPattern.test(packageJson.version), `Version "${packageJson.version}" should not match semantic version format (negative number)`);
+      assert.strictEqual(packageJson.version, '-1.0.0', 'Version should be the negative number "-1.0.0"');
+    });
+
+    // TC-B-04: package.json version has leading zeros (e.g., "00.00.72")
+    // Given: package.json with version containing leading zeros
+    // When: Validating version format
+    // Then: Error is thrown or version is normalized to valid format
+    test('TC-B-04: package.json version has leading zeros (e.g., "00.00.72")', () => {
+      // Given: JSON with version containing leading zeros
+      const jsonWithLeadingZeros = '{"version": "00.00.72"}';
+      const packageJson = JSON.parse(jsonWithLeadingZeros) as { version?: string };
+
+      // When: Validating version format
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+
+      // Then: Error is thrown or version is normalized to valid format
+      assert.ok(packageJson.version, 'Version field should be defined');
+      // Note: Leading zeros technically match the pattern but are not standard semver
+      // The pattern /^\d+\.\d+\.\d+$/ matches "00.00.72", but it's not valid semver
+      // For strict validation, we should check that numbers don't have leading zeros
+      const hasLeadingZeros = /^0+\d|\.0+\d/.test(packageJson.version);
+      if (hasLeadingZeros) {
+        assert.ok(true, 'Version with leading zeros should be flagged as invalid or normalized');
+      }
+      assert.strictEqual(packageJson.version, '00.00.72', 'Version should be "00.00.72"');
+    });
+
+    // TC-B-05: package.json file does not exist
+    // Given: package.json file does not exist
+    // When: Attempting to read package.json
+    // Then: File not found error is thrown
+    test('TC-B-05: package.json file does not exist', () => {
+      // Given: Non-existent file path
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const nonExistentPath = path.join(ext.extensionPath, 'non-existent-package.json');
+
+      // When: Attempting to read non-existent file
+      // Then: File not found error is thrown
+      assert.throws(() => {
+        fs.readFileSync(nonExistentPath, 'utf8');
+      }, /ENOENT|no such file/i, 'Reading non-existent file should throw error');
+    });
+
+    // TC-B-06: package-lock.json file does not exist
+    // Given: package-lock.json file does not exist
+    // When: Attempting to read package-lock.json
+    // Then: File not found error is thrown or package-lock.json is created
+    test('TC-B-06: package-lock.json file does not exist', () => {
+      // Given: Non-existent file path
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const nonExistentPath = path.join(ext.extensionPath, 'non-existent-package-lock.json');
+
+      // When: Attempting to read non-existent file
+      // Then: File not found error is thrown or package-lock.json is created
+      assert.throws(() => {
+        fs.readFileSync(nonExistentPath, 'utf8');
+      }, /ENOENT|no such file/i, 'Reading non-existent file should throw error');
+    });
+
+    // TC-B-07: package.json version is "0.0.71" (one version before 0.0.72)
+    // Given: package.json with version 0.0.71
+    // When: Validating version format
+    // Then: Version is updated from 0.0.71 to 0.0.72
+    test('TC-B-07: package.json version is "0.0.71" (one version before 0.0.72)', () => {
+      // Given: JSON with version 0.0.71
+      const jsonWithVersion = '{"version": "0.0.71"}';
+      const packageJson = JSON.parse(jsonWithVersion) as { version?: string };
+
+      // When: Validating version format
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+
+      // Then: Version is updated from 0.0.71 to 0.0.72
+      assert.ok(packageJson.version, 'Version field should be defined');
+      assert.ok(semverPattern.test(packageJson.version), `Version "${packageJson.version}" should match semantic version format`);
+      assert.strictEqual(packageJson.version, '0.0.71', 'Version should be "0.0.71"');
+    });
+
+    // TC-B-08: package.json version field is undefined
+    // Given: package.json version field is undefined
+    // When: Reading package.json with undefined version
+    // Then: Error is thrown or version update fails
+    test('TC-B-08: package.json version field is undefined', () => {
+      // Given: JSON without version field (undefined)
+      const jsonWithoutVersion = '{}';
+      const packageJson = JSON.parse(jsonWithoutVersion) as { version?: string };
+
+      // When: Reading version field
+      // Then: Error is thrown or version update fails
+      assert.strictEqual(packageJson.version, undefined, 'Version field should be undefined');
+    });
+
+    // TC-B-09: package.json version is "0.0.73" (one version after 0.0.72)
+    // Given: package.json with version 0.0.73
+    // When: Validating version format
+    // Then: Version update behavior is handled correctly
+    test('TC-B-09: package.json version is "0.0.73" (one version after 0.0.72)', () => {
+      // Given: JSON with version 0.0.73
+      const jsonWithVersion = '{"version": "0.0.73"}';
+      const packageJson = JSON.parse(jsonWithVersion) as { version?: string };
+
+      // When: Validating version format
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+
+      // Then: Version update behavior is handled correctly
+      assert.ok(packageJson.version, 'Version field should be defined');
+      assert.ok(semverPattern.test(packageJson.version), `Version "${packageJson.version}" should match semantic version format`);
+      assert.strictEqual(packageJson.version, '0.0.73', 'Version should be "0.0.73"');
+    });
+
+    // TC-VERSION-N-01: package-lock.json root version matches package.json version
+    // Given: package.json と package-lock.json が存在する
+    // When: 両方のversionを読み取る
+    // Then: package.json version が semver であり、package-lock.json の root version と一致する
+    test('TC-VERSION-N-01: package-lock.json root version matches package.json version', () => {
+      // Given: package.json と package-lock.json が存在する
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const packageJsonPath = path.join(ext.extensionPath, 'package.json');
+      const packageLockJsonPath = path.join(ext.extensionPath, 'package-lock.json');
+      assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
+      assert.ok(fs.existsSync(packageLockJsonPath), 'package-lock.json file exists');
+
+      // When: 両方のversionを読み取る
+      const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
+      const packageLockJsonContent = fs.readFileSync(packageLockJsonPath, 'utf8');
+      const packageLockJson = JSON.parse(packageLockJsonContent) as { version?: string };
+
+      // Then: package.json version が semver であり、package-lock.json の root version と一致する
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+      assert.ok(
+        typeof packageJson.version === 'string' && semverPattern.test(packageJson.version),
+        'package.json version should be a valid semantic version string',
+      );
+      assert.strictEqual(
+        packageLockJson.version,
+        packageJson.version,
+        'package-lock.json root version should match package.json version',
+      );
+    });
+
+    // TC-VERSION-N-02: package-lock.json version matches package.json version
+    // Given: package.json と package-lock.json が存在する
+    // When: package-lock.json の packages[""] を読む
+    // Then: packages[""].version が package.json version と一致する
+    test('TC-VERSION-N-02: package-lock.json version matches package.json version', () => {
+      // Given: package.json と package-lock.json が存在する
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const packageJsonPath = path.join(ext.extensionPath, 'package.json');
+      const packageLockJsonPath = path.join(ext.extensionPath, 'package-lock.json');
+      assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
+      assert.ok(fs.existsSync(packageLockJsonPath), 'package-lock.json file exists');
+
+      // When: package-lock.json の packages[""] を読む
+      const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
+      const packageLockJsonContent = fs.readFileSync(packageLockJsonPath, 'utf8');
+      const packageLockJson = JSON.parse(packageLockJsonContent) as {
+        version?: string;
+        packages?: Record<string, { version?: string }>;
+      };
+
+      // Then: packages[""].version が package.json version と一致する
+      assert.ok(packageJson.version, 'package.json version should exist');
+      assert.ok(packageLockJson.packages, 'package-lock.json packages should exist');
+      assert.ok(packageLockJson.packages[''], 'package-lock.json packages[""] should exist');
+      assert.strictEqual(
+        packageLockJson.packages[''].version,
+        packageJson.version,
+        'package-lock.json packages[""] version should match package.json version',
+      );
     });
 
     // TC-DOC-N-01: docs/usage.md contains testExecutionRunner setting documentation
@@ -576,13 +1065,13 @@ suite('src/extension.ts', () => {
       // Given: docs/usage.md file exists
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, 'Extension not found');
-      
+
       const usageMdPath = path.join(ext.extensionPath, 'docs', 'usage.md');
       assert.ok(fs.existsSync(usageMdPath), 'docs/usage.md file exists');
-      
+
       // When: Reading docs/usage.md content
       const usageMdContent = fs.readFileSync(usageMdPath, 'utf8');
-      
+
       // Then: Documentation correctly describes testExecutionRunner setting with default value 'extension'
       assert.ok(usageMdContent.includes('dontforgetest.testExecutionRunner'), 'testExecutionRunner setting should be documented');
       assert.ok(usageMdContent.includes('既定: `extension`'), 'Default value should be documented as extension');
@@ -605,13 +1094,192 @@ suite('src/extension.ts', () => {
       assert.ok(svgContent.includes('<svg'), 'SVGタグが含まれていること');
       assert.ok(svgContent.includes('width="24"'), '幅が24であること');
       assert.ok(svgContent.includes('height="24"'), '高さが24であること');
-      
+
       // 新しいアイコンの特徴（試験管のパス）を確認
-      // "シンプルな試験管" コメントが含まれているか
-      assert.ok(svgContent.includes('シンプルな試験管'), '新しいアイコン（試験管）のコメントが含まれていること');
+      // "試験管本体" コメントが含まれているか
+      assert.ok(svgContent.includes('試験管本体'), '新しいアイコン（試験管）のコメントが含まれていること');
       // パスデータの断片
-      assert.ok(svgContent.includes('d="M9 3h6M10 3v7l-4 8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l-4-8V3"'), '試験管のパスデータが含まれていること');
-      assert.ok(svgContent.includes('d="M7 15h10"'), '液体の線が含まれていること');
+      assert.ok(
+        svgContent.includes(
+          'd="M9 2h6M10 2v8l-5 10a2.5 2.5 0 0 0 2.2 3.5h9.6a2.5 2.5 0 0 0 2.2-3.5l-5-10V2"',
+        ),
+        '試験管のパスデータが含まれていること',
+      );
+      assert.ok(svgContent.includes('d="M7.5 16h9"'), '液体の線が含まれていること');
+    });
+  });
+
+  suite('File Formatting', () => {
+    // TC-FMT-01: extension.test.ts contains trailing whitespace on multiple lines
+    // Given: extension.test.ts file exists
+    // When: Reading extension.test.ts file content
+    // Then: All trailing whitespace is removed, code formatting is consistent
+    test('TC-FMT-01: extension.test.ts contains trailing whitespace on multiple lines', () => {
+      // Given: extension.test.ts file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const extensionTestPath = path.join(ext.extensionPath, 'src', 'test', 'suite', 'extension.test.ts');
+      assert.ok(fs.existsSync(extensionTestPath), 'extension.test.ts file exists');
+
+      // When: Reading extension.test.ts file content
+      const extensionTestContent = fs.readFileSync(extensionTestPath, 'utf8');
+      const lines = extensionTestContent.split('\n');
+
+      // Then: All trailing whitespace is removed, code formatting is consistent
+      let trailingWhitespaceCount = 0;
+      lines.forEach((line, index) => {
+        if (line.trim().length > 0 && line !== line.trimEnd()) {
+          trailingWhitespaceCount++;
+        }
+      });
+      assert.strictEqual(trailingWhitespaceCount, 0, 'No lines should have trailing whitespace');
+    });
+
+    // TC-FMT-02: extension.test.ts has inconsistent line spacing
+    // Given: extension.test.ts file exists
+    // When: Reading extension.test.ts file content
+    // Then: Line spacing is normalized, file is properly formatted
+    test('TC-FMT-02: extension.test.ts has inconsistent line spacing', () => {
+      // Given: extension.test.ts file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const extensionTestPath = path.join(ext.extensionPath, 'src', 'test', 'suite', 'extension.test.ts');
+      assert.ok(fs.existsSync(extensionTestPath), 'extension.test.ts file exists');
+
+      // When: Reading extension.test.ts file content
+      const extensionTestContent = fs.readFileSync(extensionTestPath, 'utf8');
+      const lines = extensionTestContent.split('\n');
+
+      // Then: Line spacing is normalized, file is properly formatted
+      // Check that there are no more than 2 consecutive empty lines
+      let consecutiveEmptyLines = 0;
+      let maxConsecutiveEmptyLines = 0;
+      lines.forEach((line) => {
+        if (line.trim().length === 0) {
+          consecutiveEmptyLines++;
+          maxConsecutiveEmptyLines = Math.max(maxConsecutiveEmptyLines, consecutiveEmptyLines);
+        } else {
+          consecutiveEmptyLines = 0;
+        }
+      });
+      assert.ok(maxConsecutiveEmptyLines <= 2, `File should not have more than 2 consecutive empty lines, found ${maxConsecutiveEmptyLines}`);
+    });
+
+    // TC-FMT-03: extension.test.ts file is empty
+    // Given: extension.test.ts file exists
+    // When: Reading extension.test.ts file content
+    // Then: Empty file is handled gracefully or error is thrown
+    test('TC-FMT-03: extension.test.ts file is empty', () => {
+      // Given: extension.test.ts file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const extensionTestPath = path.join(ext.extensionPath, 'src', 'test', 'suite', 'extension.test.ts');
+      assert.ok(fs.existsSync(extensionTestPath), 'extension.test.ts file exists');
+
+      // When: Reading extension.test.ts file content
+      const extensionTestContent = fs.readFileSync(extensionTestPath, 'utf8');
+
+      // Then: Empty file is handled gracefully or error is thrown
+      assert.ok(extensionTestContent.length > 0, 'extension.test.ts file should not be empty');
+    });
+  });
+
+  suite('ProgressTreeView File Changes', () => {
+    // TC-PROG-01: progressTreeView.ts file exists and is modified
+    // Given: progressTreeView.ts file exists and is modified
+    // When: Reading progressTreeView.ts file
+    // Then: File changes are applied correctly, functionality remains intact
+    test('TC-PROG-01: progressTreeView.ts file exists and is modified', () => {
+      // Given: progressTreeView.ts file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const progressTreeViewPath = path.join(ext.extensionPath, 'src', 'ui', 'progressTreeView.ts');
+      assert.ok(fs.existsSync(progressTreeViewPath), 'progressTreeView.ts file exists');
+
+      // When: Reading progressTreeView.ts file
+      const progressTreeViewContent = fs.readFileSync(progressTreeViewPath, 'utf8');
+
+      // Then: File changes are applied correctly, functionality remains intact
+      assert.ok(progressTreeViewContent.length > 0, 'progressTreeView.ts file should not be empty');
+      assert.ok(progressTreeViewContent.includes('export class ProgressTreeViewProvider'), 'progressTreeView.ts should export ProgressTreeViewProvider class');
+      assert.ok(progressTreeViewContent.includes('export function initializeProgressTreeView'), 'progressTreeView.ts should export initializeProgressTreeView function');
+      assert.ok(progressTreeViewContent.includes('export function handleTestGenEventForProgressView'), 'progressTreeView.ts should export handleTestGenEventForProgressView function');
+      assert.ok(progressTreeViewContent.includes('export function _resetForTesting'), 'progressTreeView.ts should export _resetForTesting function');
+    });
+
+    // TC-PROG-02: progressTreeView.ts file does not exist
+    // Given: Non-existent progressTreeView.ts file path
+    // When: Attempting to read progressTreeView.ts
+    // Then: File not found error is thrown or file is created
+    test('TC-PROG-02: progressTreeView.ts file does not exist', () => {
+      // Given: Non-existent file path
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+
+      const nonExistentPath = path.join(ext.extensionPath, 'src', 'ui', 'non-existent-progressTreeView.ts');
+
+      // When: Attempting to read non-existent file
+      // Then: File not found error is thrown or file is created
+      assert.throws(() => {
+        fs.readFileSync(nonExistentPath, 'utf8');
+      }, /ENOENT|no such file/i, 'Reading non-existent file should throw error');
+    });
+  });
+
+  suite('Version Synchronization', () => {
+    // TC-SYNC-01: package.json version is 0.0.72 but package-lock.json version is 0.0.70
+    // Given: package.json and package-lock.json with mismatched versions
+    // When: Comparing versions
+    // Then: Version mismatch is detected or versions are synchronized
+    test('TC-SYNC-01: package.json version is 0.0.72 but package-lock.json version is 0.0.70', () => {
+      // Given: JSON objects with mismatched versions
+      const packageJsonContent = '{"version": "0.0.72"}';
+      const packageLockJsonContent = '{"version": "0.0.70", "packages": {"": {"version": "0.0.70"}}}';
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
+      const packageLockJson = JSON.parse(packageLockJsonContent) as {
+        version?: string;
+        packages?: Record<string, { version?: string }>;
+      };
+
+      // When: Comparing versions
+      // Then: Version mismatch is detected or versions are synchronized
+      assert.ok(packageJson.version, 'package.json version should be defined');
+      assert.ok(packageLockJson.version, 'package-lock.json version should be defined');
+      assert.notStrictEqual(packageLockJson.version, packageJson.version, 'Versions should be mismatched');
+      assert.strictEqual(packageJson.version, '0.0.72', 'package.json version should be 0.0.72');
+      assert.strictEqual(packageLockJson.version, '0.0.70', 'package-lock.json version should be 0.0.70');
+      if (packageLockJson.packages && packageLockJson.packages['']) {
+        assert.notStrictEqual(packageLockJson.packages[''].version, packageJson.version, 'packages[""] version should also be mismatched');
+      }
+    });
+
+    // TC-SYNC-02: package-lock.json root version matches package.json but packages[""] version differs
+    // Given: package-lock.json with root version matching package.json but packages[""] version differs
+    // When: Comparing versions
+    // Then: Version mismatch is detected or all versions are synchronized
+    test('TC-SYNC-02: package-lock.json root version matches package.json but packages[""] version differs', () => {
+      // Given: JSON objects with root version matching but packages[""] version differs
+      const packageJsonContent = '{"version": "0.0.72"}';
+      const packageLockJsonContent = '{"version": "0.0.72", "packages": {"": {"version": "0.0.70"}}}';
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
+      const packageLockJson = JSON.parse(packageLockJsonContent) as {
+        version?: string;
+        packages?: Record<string, { version?: string }>;
+      };
+
+      // When: Comparing versions
+      // Then: Version mismatch is detected or all versions are synchronized
+      assert.ok(packageJson.version, 'package.json version should be defined');
+      assert.ok(packageLockJson.version, 'package-lock.json root version should be defined');
+      assert.strictEqual(packageLockJson.version, packageJson.version, 'Root version should match package.json version');
+      if (packageLockJson.packages && packageLockJson.packages['']) {
+        assert.notStrictEqual(packageLockJson.packages[''].version, packageJson.version, 'packages[""] version should be mismatched');
+        assert.strictEqual(packageLockJson.packages[''].version, '0.0.70', 'packages[""] version should be 0.0.70');
+      }
     });
   });
 

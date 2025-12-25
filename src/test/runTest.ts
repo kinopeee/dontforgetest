@@ -7,6 +7,8 @@ import { getProfileArguments } from '@vscode/test-electron/out/util';
 
 export type TestCaseState = 'passed' | 'failed' | 'pending';
 
+type VscodeTestLauncher = 'open' | 'direct';
+
 export interface TestCaseInfo {
   suite?: string;
   title?: string;
@@ -24,6 +26,58 @@ export interface TestResultFile {
   total?: number;
   durationMs?: number;
   tests?: TestCaseInfo[];
+}
+
+const DEFAULT_TEST_RESULT_WAIT_TIMEOUT_MS = 3000;
+const DEFAULT_TEST_RESULT_WAIT_INTERVAL_MS = 100;
+const DEFAULT_VSCODE_TEST_MAX_ATTEMPTS = 2;
+
+function parseIntOrFallback(params: { value: string | undefined; fallback: number; min: number; label: string }): number {
+  const raw = params.value?.trim();
+  if (!raw) {
+    return params.fallback;
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return params.fallback;
+  }
+  const i = Math.floor(n);
+  if (i < params.min) {
+    return params.fallback;
+  }
+  return i;
+}
+
+function normalizeLauncher(value: string | undefined): VscodeTestLauncher | undefined {
+  const v = (value ?? '').trim();
+  if (v === 'open' || v === 'direct') {
+    return v;
+  }
+  return undefined;
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForFile(params: { filePath: string; timeoutMs: number; intervalMs: number }): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start <= params.timeoutMs) {
+    if (await fileExists(params.filePath)) {
+      return true;
+    }
+    await sleepMs(params.intervalMs);
+  }
+  return await fileExists(params.filePath);
 }
 
 export function resolveSuiteFromFullTitle(fullTitle: string, title: string): string {
@@ -159,6 +213,7 @@ async function runDetachedVscodeExtensionTests(options: {
   version: 'stable' | 'insiders' | string;
   testResultFilePath: string;
   cachePath: string;
+  launcher?: VscodeTestLauncher;
 }): Promise<void> {
   const vscodeExecutablePath = await downloadAndUnzipVSCode({
     version: options.version,
@@ -186,9 +241,12 @@ async function runDetachedVscodeExtensionTests(options: {
   // 起動方法：
   // - darwin(macOS) は Cursor 実行中に direct spawn が kill されやすいため、デフォルトで open 起動に寄せる
   // - 明示的に切り替えたい場合は DONTFORGETEST_VSCODE_TEST_LAUNCHER=direct|open を指定
-  const launcherFromEnv = (process.env.DONTFORGETEST_VSCODE_TEST_LAUNCHER ?? '').trim();
+  const launcherFromEnv = normalizeLauncher(process.env.DONTFORGETEST_VSCODE_TEST_LAUNCHER);
   const launcher = (() => {
-    if (launcherFromEnv === 'open' || launcherFromEnv === 'direct') {
+    if (options.launcher) {
+      return options.launcher;
+    }
+    if (launcherFromEnv) {
       return launcherFromEnv;
     }
     if (process.platform === 'darwin') {
@@ -273,114 +331,195 @@ async function main() {
     // 
     // それでも問題が発生する場合は、テスト前に Cursor を終了するか、
     // CI 環境（GitHub Actions 等）でテストを実行することを推奨。
-    const runId = `run-${Date.now()}-${process.pid}`;
     // Cursor 側のプロセス検知（VS Code起動）に巻き込まれにくくするため、
     // VS Code本体/ユーザーデータ/ワークスペース等は tmp 配下へ隔離して起動する。
     const vscodeTestRoot = path.join(os.tmpdir(), 'dontforgetest-vscode-test');
     const vscodeCachePath = path.join(vscodeTestRoot, 'vscode');
     const runtimeRoot = path.join(vscodeTestRoot, 'runtime');
-    const userDataDir = path.join(runtimeRoot, 'user-data', runId);
-    const extensionsDir = path.join(runtimeRoot, 'extensions', runId);
-    const testWorkspace = path.join(runtimeRoot, 'workspace', runId);
-    // open 起動でも確実に参照できるよう、ワークスペース直下に結果ファイルを置く
-    // （suite 側は workspaceRoot を優先して .vscode-test/test-result.json に書く）
-    const testResultFilePath = path.join(testWorkspace, '.vscode-test', 'test-result.json');
 
-    const stageRoot = path.join(runtimeRoot, 'stage', runId);
+    // stage は重いので 1 回だけ作る（runId ごとに分ける必要はない）
+    const stageRoot = path.join(runtimeRoot, 'stage');
     const stageExtensionRoot = path.join(stageRoot, 'extension');
     const stagedExtensionTestsPath = path.join(stageExtensionRoot, 'out', 'test', 'suite', 'index');
 
-    await fs.promises.mkdir(userDataDir, { recursive: true });
-    await fs.promises.mkdir(extensionsDir, { recursive: true });
-    await fs.promises.mkdir(testWorkspace, { recursive: true });
-    await fs.promises.mkdir(path.dirname(testResultFilePath), { recursive: true });
-    await fs.promises.rm(testResultFilePath, { force: true });
-
     await stageExtensionToTemp({ sourceExtensionRoot, stageExtensionRoot });
 
-    // VS Codeをダウンロードして起動し、テストを実行
-    // 拡張機能のengines.vscodeに合わせてバージョンを指定
-    await runDetachedVscodeExtensionTests({
-      extensionDevelopmentPath: stageExtensionRoot,
-      extensionTestsPath: stagedExtensionTestsPath,
-      version: 'stable',
-      testResultFilePath,
-      cachePath: vscodeCachePath,
-      launchArgs: [
-        testWorkspace,
-        `--user-data-dir=${userDataDir}`,
-        `--extensions-dir=${extensionsDir}`,
-        `--dontforgetest-test-result-file=${testResultFilePath}`,
-        // UIの揺れや初回ダイアログ類を減らす（完全なヘッドレスにはならない）
-        '--disable-workspace-trust',
-        '--skip-release-notes',
-        // GPU関連の問題を回避（一部環境での安定性向上）
-        '--disable-gpu',
-        // Extension Host の衝突を減らす
-        '--disable-extensions',
-        // サンドボックスを無効化（一部環境でのプロセス終了問題を回避）
-        '--no-sandbox',
-        // Chromium の crash handler を無効化（テスト中の不要なダイアログを防止）
-        '--disable-crash-reporter',
-        // テレメトリを無効化
-        '--disable-telemetry',
-        // 新しいウィンドウとして起動（既存インスタンスとの衝突を避ける）
-        '--new-window',
-        // IPC ハンドルを分離（Cursor との競合を避ける）
-        `--logsPath=${path.join(userDataDir, 'logs')}`,
-      ],
-      extensionTestsEnv: {
-        ELECTRON_RUN_AS_NODE: undefined,
-        // テスト用プロセスであることを識別
-        VSCODE_TEST_RUNNER: '1',
-        // Cursor / VS Code の IPC 関連の環境変数をクリア
-        CURSOR_IPC_HOOK: undefined,
-        VSCODE_IPC_HOOK: undefined,
-        VSCODE_IPC_HOOK_CLI: undefined,
-      },
+    // 結果ファイルの生成が遅延するケース（FSの遅延/flush等）を吸収するため、短い待機を入れる
+    const resultWaitTimeoutMs = parseIntOrFallback({
+      value: process.env.DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS,
+      fallback: DEFAULT_TEST_RESULT_WAIT_TIMEOUT_MS,
+      min: 0,
+      label: 'DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS',
+    });
+    const resultWaitIntervalMs = parseIntOrFallback({
+      value: process.env.DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS,
+      fallback: DEFAULT_TEST_RESULT_WAIT_INTERVAL_MS,
+      min: 1,
+      label: 'DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS',
+    });
+    const maxAttempts = parseIntOrFallback({
+      value: process.env.DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS,
+      fallback: DEFAULT_VSCODE_TEST_MAX_ATTEMPTS,
+      min: 1,
+      label: 'DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS',
     });
 
-    // open 起動の場合はプロセスのexit codeが取れない可能性があるため、結果ファイルを参照して最終判定する
-    try {
-      const raw = await fs.promises.readFile(testResultFilePath, 'utf8');
-      const parsed = JSON.parse(raw) as TestResultFile;
-      const failures = typeof parsed.failures === 'number' ? parsed.failures : undefined;
-      if (failures === undefined) {
-        throw new Error('testResultFileの形式が不正です');
-      }
-      // stdout に Mocha 風の結果を出す（open 起動だと Extension Host の stdout が拾えないため）
-      printMochaLikeResultsFromTestResultFile(parsed);
-      if (failures > 0) {
-        throw new Error(`テスト失敗: ${failures}個`);
-      }
-    } catch (resultErr) {
-      // 失敗時は VS Code 側の main.log を解析して、kill(code=15) かどうかを切り分ける
-      const mainLogPath = path.join(userDataDir, 'logs', 'main.log');
-      let killedCode15: boolean | null = null;
-      let mainLogTail: string | null = null;
+    // 起動方式は環境変数で固定できる。未指定なら 1 回だけ別方式で再試行する。
+    const pinnedLauncher = normalizeLauncher(process.env.DONTFORGETEST_VSCODE_TEST_LAUNCHER);
+    const defaultLauncher: VscodeTestLauncher = process.platform === 'darwin' ? 'open' : 'direct';
+
+    let lastUserDataDir: string | null = null;
+    let lastTestResultFilePath: string | null = null;
+    let lastRunError: unknown | null = null;
+    let lastResultError: unknown | null = null;
+
+    for (let attemptIndex = 0; attemptIndex < maxAttempts; attemptIndex += 1) {
+      const runId = `run-${Date.now()}-${process.pid}-${attemptIndex + 1}`;
+      const userDataDir = path.join(runtimeRoot, 'user-data', runId);
+      const extensionsDir = path.join(runtimeRoot, 'extensions', runId);
+      const testWorkspace = path.join(runtimeRoot, 'workspace', runId);
+      // open 起動でも確実に参照できるよう、ワークスペース直下に結果ファイルを置く
+      // （suite 側は workspaceRoot を優先して .vscode-test/test-result.json に書く）
+      const testResultFilePath = path.join(testWorkspace, '.vscode-test', 'test-result.json');
+
+      lastUserDataDir = userDataDir;
+      lastTestResultFilePath = testResultFilePath;
+      lastRunError = null;
+      lastResultError = null;
+
+      await fs.promises.mkdir(userDataDir, { recursive: true });
+      await fs.promises.mkdir(extensionsDir, { recursive: true });
+      await fs.promises.mkdir(testWorkspace, { recursive: true });
+      await fs.promises.mkdir(path.dirname(testResultFilePath), { recursive: true });
+      await fs.promises.rm(testResultFilePath, { force: true });
+
+      const launcher: VscodeTestLauncher =
+        pinnedLauncher ?? (attemptIndex === 0 ? defaultLauncher : defaultLauncher === 'open' ? 'direct' : 'open');
+
+      // VS Codeをダウンロードして起動し、テストを実行
+      // 拡張機能のengines.vscodeに合わせてバージョンを指定
       try {
-        const content = await fs.promises.readFile(mainLogPath, 'utf8');
-        killedCode15 = content.includes('code 15') && content.includes('killed');
-        const lines = content.split('\n').filter((l) => l.trim() !== '');
-        mainLogTail = lines.slice(-12).join('\n');
-      } catch {
-        killedCode15 = null;
-        mainLogTail = null;
+        await runDetachedVscodeExtensionTests({
+          extensionDevelopmentPath: stageExtensionRoot,
+          extensionTestsPath: stagedExtensionTestsPath,
+          version: 'stable',
+          testResultFilePath,
+          cachePath: vscodeCachePath,
+          launcher,
+          launchArgs: [
+            testWorkspace,
+            `--user-data-dir=${userDataDir}`,
+            `--extensions-dir=${extensionsDir}`,
+            `--dontforgetest-test-result-file=${testResultFilePath}`,
+            // UIの揺れや初回ダイアログ類を減らす（完全なヘッドレスにはならない）
+            '--disable-workspace-trust',
+            '--skip-release-notes',
+            // GPU関連の問題を回避（一部環境での安定性向上）
+            '--disable-gpu',
+            // Extension Host の衝突を減らす
+            '--disable-extensions',
+            // サンドボックスを無効化（一部環境でのプロセス終了問題を回避）
+            '--no-sandbox',
+            // Chromium の crash handler を無効化（テスト中の不要なダイアログを防止）
+            '--disable-crash-reporter',
+            // テレメトリを無効化
+            '--disable-telemetry',
+            // 新しいウィンドウとして起動（既存インスタンスとの衝突を避ける）
+            '--new-window',
+            // IPC ハンドルを分離（Cursor との競合を避ける）
+            `--logsPath=${path.join(userDataDir, 'logs')}`,
+          ],
+          extensionTestsEnv: {
+            ELECTRON_RUN_AS_NODE: undefined,
+            // テスト用プロセスであることを識別
+            VSCODE_TEST_RUNNER: '1',
+            // Cursor / VS Code の IPC 関連の環境変数をクリア
+            CURSOR_IPC_HOOK: undefined,
+            VSCODE_IPC_HOOK: undefined,
+            VSCODE_IPC_HOOK_CLI: undefined,
+          },
+        });
+      } catch (runErr) {
+        // launcher の exit code が取得できない/信頼できないケースがあるため、
+        // 可能なら test-result.json を見て最終判定する。
+        lastRunError = runErr;
       }
 
-      console.error('テスト結果ファイルの検証に失敗しました');
-      console.error(`testResultFilePath: ${testResultFilePath}`);
-      console.error(`mainLogPath: ${mainLogPath}`);
-      if (killedCode15 === true) {
-        console.error('補足: VS Code 側が code=15 (killed) で終了した可能性があります');
+      // open 起動の場合はプロセスのexit codeが取れない可能性があるため、結果ファイルを参照して最終判定する
+      try {
+        if (resultWaitTimeoutMs > 0) {
+          await waitForFile({ filePath: testResultFilePath, timeoutMs: resultWaitTimeoutMs, intervalMs: resultWaitIntervalMs });
+        }
+        const raw = await fs.promises.readFile(testResultFilePath, 'utf8');
+        const parsed = JSON.parse(raw) as TestResultFile;
+        const failures = typeof parsed.failures === 'number' ? parsed.failures : undefined;
+        if (failures === undefined) {
+          throw new Error('testResultFileの形式が不正です');
+        }
+        // stdout に Mocha 風の結果を出す（open 起動だと Extension Host の stdout が拾えないため）
+        printMochaLikeResultsFromTestResultFile(parsed);
+        if (failures > 0) {
+          throw new Error(`テスト失敗: ${failures}個`);
+        }
+        // success: runError があっても、結果ファイルが成功なら通す（念のためログだけ出す）
+        if (lastRunError) {
+          console.warn('[dontforgetest] 補足: VS Code 起動のエラーがありましたが、結果ファイルは成功を示しています');
+        }
+        return;
+      } catch (resultErr) {
+        lastResultError = resultErr;
+        const isExplicitTestFailure = resultErr instanceof Error && resultErr.message.startsWith('テスト失敗:');
+        if (isExplicitTestFailure) {
+          throw resultErr;
+        }
+        if (attemptIndex + 1 < maxAttempts && !pinnedLauncher) {
+          console.warn(
+            `[dontforgetest] テスト実行が不安定なため再試行します (attempt=${attemptIndex + 1}/${maxAttempts}, launcher=${launcher})`,
+          );
+          continue;
+        }
+        break;
       }
-      if (mainLogTail) {
-        console.error('main.log（末尾）:');
-        console.error(mainLogTail);
-      }
-      console.error(resultErr);
-      process.exit(1);
     }
+
+    // 最終的に成功しなかった場合は、最後の試行の情報を出力して失敗にする
+    const userDataDir = lastUserDataDir;
+    const testResultFilePath = lastTestResultFilePath;
+    if (!userDataDir || !testResultFilePath) {
+      throw new Error('テスト実行の状態が不正です（userDataDir/testResultFilePath が未設定）');
+    }
+
+    // 失敗時は VS Code 側の main.log を解析して、kill(code=15) かどうかを切り分ける
+    const mainLogPath = path.join(userDataDir, 'logs', 'main.log');
+    let killedCode15: boolean | null = null;
+    let mainLogTail: string | null = null;
+    try {
+      const content = await fs.promises.readFile(mainLogPath, 'utf8');
+      killedCode15 = content.includes('code 15') && content.includes('killed');
+      const lines = content.split('\n').filter((l) => l.trim() !== '');
+      mainLogTail = lines.slice(-12).join('\n');
+    } catch {
+      killedCode15 = null;
+      mainLogTail = null;
+    }
+
+    console.error('テスト結果ファイルの検証に失敗しました');
+    console.error(`testResultFilePath: ${testResultFilePath}`);
+    console.error(`mainLogPath: ${mainLogPath}`);
+    if (killedCode15 === true) {
+      console.error('補足: VS Code 側が code=15 (killed) で終了した可能性があります');
+    }
+    if (mainLogTail) {
+      console.error('main.log（末尾）:');
+      console.error(mainLogTail);
+    }
+    if (lastRunError) {
+      console.error(lastRunError);
+    }
+    if (lastResultError) {
+      console.error(lastResultError);
+    }
+    process.exit(1);
   } catch (err) {
     console.error('テストの実行に失敗しました');
     console.error(err);

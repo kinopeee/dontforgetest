@@ -186,7 +186,6 @@ export class ProgressTreeViewProvider implements vscode.TreeDataProvider<Progres
         vscode.TreeItemCollapsibleState.None,
         'task',
       );
-      emptyItem.description = 'テスト生成を実行してください';
       emptyItem.iconPath = new vscode.ThemeIcon('info');
       items.push(emptyItem);
     }
