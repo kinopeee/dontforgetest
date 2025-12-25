@@ -1,7 +1,7 @@
 import * as assert from 'assert';
-import * as vscode from 'vscode';
 import { generateTestFromLatestCommit } from '../../../commands/generateFromCommit';
 import { type AgentProvider } from '../../../providers/provider';
+import { createMockExtensionContext } from '../testUtils/vscodeMocks';
 
 // Mock Provider that does nothing
 class MockGenerateProvider implements AgentProvider {
@@ -41,23 +41,7 @@ suite('commands/generateFromCommit.ts', () => {
   test('TC-N-04: generateTestFromLatestCommit triggers test generation in worktree mode', async function () {
     // Given: runLocation='worktree' and extensionContext
     const provider = new MockGenerateProvider();
-    const mockContext: vscode.ExtensionContext = {
-      subscriptions: [],
-      workspaceState: {} as vscode.Memento,
-      globalState: {} as vscode.Memento,
-      extensionPath: '',
-      globalStorageUri: vscode.Uri.file(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()),
-      globalStoragePath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd(),
-      extensionUri: vscode.Uri.file(''),
-      environmentVariableCollection: {} as vscode.EnvironmentVariableCollection,
-      extensionMode: vscode.ExtensionMode.Production,
-      secrets: {} as vscode.SecretStorage,
-      extension: {} as vscode.Extension<any>,
-      storageUri: undefined,
-      storagePath: undefined,
-      logUri: undefined,
-      logPath: undefined,
-    };
+    const mockContext = createMockExtensionContext();
 
     // When: generateTestFromLatestCommit is called
     try {

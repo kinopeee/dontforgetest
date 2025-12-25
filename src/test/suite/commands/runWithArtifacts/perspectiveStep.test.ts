@@ -1,9 +1,8 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { runPerspectiveTableStep } from '../../../commands/runWithArtifacts/perspectiveStep';
-import { type AgentProvider, type AgentRunOptions, type RunningTask } from '../../../providers/provider';
-import { type TestGenEvent } from '../../../core/event';
+import { runPerspectiveTableStep } from '../../../../commands/runWithArtifacts/perspectiveStep';
+import { type AgentProvider, type AgentRunOptions, type RunningTask } from '../../../../providers/provider';
 
 // Mock Provider
 class MockPerspectiveProvider implements AgentProvider {

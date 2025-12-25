@@ -1,21 +1,8 @@
-// Mochaの型定義（@types/mochaがインストールされていない場合のフォールバック）
-declare const suite: (title: string, fn: (this: Mocha.Suite) => void) => void;
-declare const test: (title: string, fn: (this: Mocha.Context) => void | Promise<void>) => void;
-declare const describe: (title: string, fn: (this: Mocha.Suite) => void) => void;
-declare const it: (title: string, fn: (this: Mocha.Context) => void | Promise<void>) => void;
-declare const before: (fn: (this: Mocha.Context, done: Mocha.Done) => void | Promise<void>) => void;
-declare const after: (fn: (this: Mocha.Context, done: Mocha.Done) => void | Promise<void>) => void;
-declare const beforeEach: (fn: (this: Mocha.Context, done: Mocha.Done) => void | Promise<void>) => void;
-declare const afterEach: (fn: (this: Mocha.Context, done: Mocha.Done) => void | Promise<void>) => void;
-
-declare namespace Mocha {
-  interface Suite {
-    timeout(ms: number): this;
-    retries(n: number): this;
-  }
-  interface Context {
-    timeout(ms: number): void;
-    skip(): void;
-  }
-  type Done = (err?: Error) => void;
-}
+/**
+ * テストコードで Mocha のグローバル（suite/test/describe/it など）を使用するための型参照。
+ *
+ * 以前は @types/mocha 未導入時のフォールバック定義を置いていたが、
+ * 現在は @types/mocha を devDependencies に含めているため、
+ * フォールバック定義が本来の Mocha 型と衝突して戻り値型が崩れる問題（例: test() が void 扱い）を防ぐ。
+ */
+/// <reference types="mocha" />

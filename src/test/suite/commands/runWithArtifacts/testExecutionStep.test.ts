@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { runTestCommandViaCursorAgent } from '../../../commands/runWithArtifacts/testExecutionStep';
-import { type AgentProvider, type AgentRunOptions, type RunningTask } from '../../../providers/provider';
-import { type TestGenEvent } from '../../../core/event';
+import { runTestCommandViaCursorAgent } from '../../../../commands/runWithArtifacts/testExecutionStep';
+import { type AgentProvider, type AgentRunOptions, type RunningTask } from '../../../../providers/provider';
+import { type TestGenEvent } from '../../../../core/event';
 
 // Mock Provider
 class MockTestExecutionProvider implements AgentProvider {

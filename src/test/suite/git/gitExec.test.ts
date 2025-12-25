@@ -1,6 +1,5 @@
 import * as assert from 'assert';
-import * as path from 'path';
-import { execGitStdout, execGitResult, type ExecGitResult } from '../../../git/gitExec';
+import { execGitStdout, execGitResult } from '../../../git/gitExec';
 
 suite('git/gitExec.ts', () => {
   const workspaceRoot = process.cwd();
@@ -82,7 +81,7 @@ suite('git/gitExec.ts', () => {
     try {
       const result = await execGitStdout(cwd, args, 0);
       assert.ok(typeof result === 'string', 'Should still return a string for small output');
-    } catch (e) {
+    } catch {
       // Zero buffer may cause failures on large output, which is acceptable
       assert.ok(true, 'Zero buffer may cause failures, which is acceptable');
     }

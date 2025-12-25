@@ -1,8 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
-import { cleanupUnexpectedPerspectiveFiles } from '../../../commands/runWithArtifacts/cleanupStep';
+import { cleanupUnexpectedPerspectiveFiles } from '../../../../commands/runWithArtifacts/cleanupStep';
 
 suite('commands/runWithArtifacts/cleanupStep.ts', () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
@@ -37,7 +36,7 @@ suite('commands/runWithArtifacts/cleanupStep.ts', () => {
     const deleted = results.find((r) => r.relativePath.includes('test_perspectives.md'));
     assert.ok(deleted !== undefined, 'File with markers should be found');
     assert.ok(deleted.deleted === true, 'File with markers should be deleted');
-    
+
     // Verify file is actually deleted
     try {
       await vscode.workspace.fs.stat(vscode.Uri.file(testFile));
@@ -87,10 +86,9 @@ suite('commands/runWithArtifacts/cleanupStep.ts', () => {
     await vscode.workspace.fs.writeFile(vscode.Uri.file(testFile), Buffer.from(content, 'utf8'));
 
     // When: cleanupUnexpectedPerspectiveFiles is called
-    const results = await cleanupUnexpectedPerspectiveFiles(testDir);
+    await cleanupUnexpectedPerspectiveFiles(testDir);
 
     // Then: File not deleted, not included in results
-    const deleted = results.find((r) => r.relativePath.includes('test_perspectives.md'));
     // File without markers should not be deleted
     try {
       await vscode.workspace.fs.stat(vscode.Uri.file(testFile));

@@ -1,7 +1,6 @@
 import * as assert from 'assert';
 import { runProviderToCompletion } from '../../../providers/runToCompletion';
 import { type AgentProvider, type AgentRunOptions, type RunningTask } from '../../../providers/provider';
-import { type TestGenEvent } from '../../../core/event';
 
 // Mock Provider
 class MockProvider implements AgentProvider {

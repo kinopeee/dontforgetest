@@ -4,6 +4,7 @@ import * as path from 'path';
 import { runWithArtifacts } from '../../../commands/runWithArtifacts';
 import { AgentProvider, AgentRunOptions, RunningTask } from '../../../providers/provider';
 import { initializeProgressTreeView } from '../../../ui/progressTreeView';
+import { createMockExtensionContext } from '../testUtils/vscodeMocks';
 
 // Mock Provider
 class MockProvider implements AgentProvider {
@@ -9065,23 +9066,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const provider = new MockProvider(0);
     const taskId = `task-worktree-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-worktree');
-    const mockContext: vscode.ExtensionContext = {
-      subscriptions: [],
-      workspaceState: {} as vscode.Memento,
-      globalState: {} as vscode.Memento,
-      extensionPath: '',
-      globalStorageUri: vscode.Uri.file(path.join(workspaceRoot, 'out', 'test-global-storage')),
-      globalStoragePath: path.join(workspaceRoot, 'out', 'test-global-storage'),
-      extensionUri: vscode.Uri.file(''),
-      environmentVariableCollection: {} as vscode.EnvironmentVariableCollection,
-      extensionMode: vscode.ExtensionMode.Production,
-      secrets: {} as vscode.SecretStorage,
-      extension: {} as vscode.Extension<any>,
-      storageUri: undefined,
-      storagePath: undefined,
-      logUri: undefined,
-      logPath: undefined,
-    };
+    const mockContext = createMockExtensionContext({ workspaceRoot });
 
     // When: runWithArtifacts is called with runLocation='worktree'
     // Then: Error message shown if worktree creation fails, or worktree created successfully
@@ -9248,23 +9233,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const provider = new MockProvider(0);
     const taskId = `task-worktree-skip-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-worktree-skip');
-    const mockContext: vscode.ExtensionContext = {
-      subscriptions: [],
-      workspaceState: {} as vscode.Memento,
-      globalState: {} as vscode.Memento,
-      extensionPath: '',
-      globalStorageUri: vscode.Uri.file(path.join(workspaceRoot, 'out', 'test-global-storage')),
-      globalStoragePath: path.join(workspaceRoot, 'out', 'test-global-storage'),
-      extensionUri: vscode.Uri.file(''),
-      environmentVariableCollection: {} as vscode.EnvironmentVariableCollection,
-      extensionMode: vscode.ExtensionMode.Production,
-      secrets: {} as vscode.SecretStorage,
-      extension: {} as vscode.Extension<any>,
-      storageUri: undefined,
-      storagePath: undefined,
-      logUri: undefined,
-      logPath: undefined,
-    };
+    const mockContext = createMockExtensionContext({ workspaceRoot });
 
     // When: runWithArtifacts is called
     await runWithArtifacts({
@@ -9298,26 +9267,10 @@ suite('commands/runWithArtifacts.ts', () => {
     const provider = new MockProvider(0);
     const taskId = `task-cancel-before-worktree-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-cancel-before-worktree');
-    const mockContext: vscode.ExtensionContext = {
-      subscriptions: [],
-      workspaceState: {} as vscode.Memento,
-      globalState: {} as vscode.Memento,
-      extensionPath: '',
-      globalStorageUri: vscode.Uri.file(path.join(workspaceRoot, 'out', 'test-global-storage')),
-      globalStoragePath: path.join(workspaceRoot, 'out', 'test-global-storage'),
-      extensionUri: vscode.Uri.file(''),
-      environmentVariableCollection: {} as vscode.EnvironmentVariableCollection,
-      extensionMode: vscode.ExtensionMode.Production,
-      secrets: {} as vscode.SecretStorage,
-      extension: {} as vscode.Extension<any>,
-      storageUri: undefined,
-      storagePath: undefined,
-      logUri: undefined,
-      logPath: undefined,
-    };
+    const mockContext = createMockExtensionContext({ workspaceRoot });
 
     // Cancel the task immediately
-    const { taskManager } = await import('../../../core/taskManager');
+    const { taskManager } = await import('../../../core/taskManager.js');
     taskManager.cancel(taskId);
 
     // When: runWithArtifacts is called
@@ -9352,7 +9305,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const provider = new MockProvider(0);
     const taskId = `task-cancel-after-perspective-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-cancel-after-perspective');
-    const { taskManager } = await import('../../../core/taskManager');
+    const { taskManager } = await import('../../../core/taskManager.js');
 
     // Cancel after a delay (simulating cancellation during perspective generation)
     setTimeout(() => {
@@ -9390,7 +9343,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const provider = new MockProvider(0);
     const taskId = `task-cancel-after-gen-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-cancel-after-gen');
-    const { taskManager } = await import('../../../core/taskManager');
+    const { taskManager } = await import('../../../core/taskManager.js');
 
     // Cancel after a longer delay (simulating cancellation during test generation)
     setTimeout(() => {
@@ -9427,23 +9380,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const provider = new MockProvider(0);
     const taskId = `task-cleanup-fail-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-cleanup-fail');
-    const mockContext: vscode.ExtensionContext = {
-      subscriptions: [],
-      workspaceState: {} as vscode.Memento,
-      globalState: {} as vscode.Memento,
-      extensionPath: '',
-      globalStorageUri: vscode.Uri.file(path.join(workspaceRoot, 'out', 'test-global-storage')),
-      globalStoragePath: path.join(workspaceRoot, 'out', 'test-global-storage'),
-      extensionUri: vscode.Uri.file(''),
-      environmentVariableCollection: {} as vscode.EnvironmentVariableCollection,
-      extensionMode: vscode.ExtensionMode.Production,
-      secrets: {} as vscode.SecretStorage,
-      extension: {} as vscode.Extension<any>,
-      storageUri: undefined,
-      storagePath: undefined,
-      logUri: undefined,
-      logPath: undefined,
-    };
+    const mockContext = createMockExtensionContext({ workspaceRoot });
 
     // When: runWithArtifacts is called
     await runWithArtifacts({

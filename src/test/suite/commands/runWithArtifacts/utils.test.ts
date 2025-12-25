@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { extractBetweenMarkers, coerceLegacyPerspectiveMarkdownTable, truncateText } from '../../../commands/runWithArtifacts/utils';
+import { extractBetweenMarkers, coerceLegacyPerspectiveMarkdownTable, truncateText } from '../../../../commands/runWithArtifacts/utils';
 
 suite('commands/runWithArtifacts/utils.ts', () => {
   // TC-B-26: extractBetweenMarkers called with text containing begin marker but no end marker

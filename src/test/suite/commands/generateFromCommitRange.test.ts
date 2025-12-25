@@ -2,29 +2,37 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { generateTestFromCommitRange } from '../../../commands/generateFromCommitRange';
 import { type AgentProvider } from '../../../providers/provider';
+import { createMockExtensionContext } from '../testUtils/vscodeMocks';
 
 // Mock Provider that does nothing
 class MockGenerateProvider implements AgentProvider {
   readonly id = 'mock-generate';
   readonly displayName = 'Mock Generate';
   run() {
-    return { taskId: 'mock', dispose: () => {} };
+    return { taskId: 'mock', dispose: () => { } };
   }
 }
 
 suite('commands/generateFromCommitRange.ts', () => {
+  function setShowInputBoxMock(mock: typeof vscode.window.showInputBox): () => void {
+    const original = vscode.window.showInputBox;
+    (vscode.window as unknown as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = mock;
+    return () => {
+      (vscode.window as unknown as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = original;
+    };
+  }
+
   // TC-N-05: generateTestFromCommitRange called with valid range and runLocation='local'
   test('TC-N-05: generateTestFromCommitRange triggers test generation in local mode', async function () {
     // Given: Valid range and runLocation='local'
     const provider = new MockGenerateProvider();
 
     // Mock the input box to return a valid range
-    const originalShowInputBox = vscode.window.showInputBox;
     let inputBoxCalled = false;
-    (vscode.window as any).showInputBox = async () => {
+    const restore = setShowInputBoxMock(async () => {
       inputBoxCalled = true;
       return 'HEAD~1..HEAD';
-    };
+    });
 
     try {
       // When: generateTestFromCommitRange is called
@@ -41,8 +49,7 @@ suite('commands/generateFromCommitRange.ts', () => {
         throw e;
       }
     } finally {
-      // Restore original function
-      (vscode.window as any).showInputBox = originalShowInputBox;
+      restore();
     }
   }).timeout(10000);
 
@@ -50,31 +57,14 @@ suite('commands/generateFromCommitRange.ts', () => {
   test('TC-N-06: generateTestFromCommitRange triggers test generation in worktree mode', async function () {
     // Given: Valid range and runLocation='worktree'
     const provider = new MockGenerateProvider();
-    const mockContext: vscode.ExtensionContext = {
-      subscriptions: [],
-      workspaceState: {} as vscode.Memento,
-      globalState: {} as vscode.Memento,
-      extensionPath: '',
-      globalStorageUri: vscode.Uri.file(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()),
-      globalStoragePath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd(),
-      extensionUri: vscode.Uri.file(''),
-      environmentVariableCollection: {} as vscode.EnvironmentVariableCollection,
-      extensionMode: vscode.ExtensionMode.Production,
-      secrets: {} as vscode.SecretStorage,
-      extension: {} as vscode.Extension<any>,
-      storageUri: undefined,
-      storagePath: undefined,
-      logUri: undefined,
-      logPath: undefined,
-    };
+    const mockContext = createMockExtensionContext();
 
     // Mock the input box to return a valid range
-    const originalShowInputBox = vscode.window.showInputBox;
     let inputBoxCalled = false;
-    (vscode.window as any).showInputBox = async () => {
+    const restore = setShowInputBoxMock(async () => {
       inputBoxCalled = true;
       return 'HEAD~1..HEAD';
-    };
+    });
 
     try {
       // When: generateTestFromCommitRange is called
@@ -94,8 +84,7 @@ suite('commands/generateFromCommitRange.ts', () => {
         throw e;
       }
     } finally {
-      // Restore original function
-      (vscode.window as any).showInputBox = originalShowInputBox;
+      restore();
     }
   }).timeout(10000);
 
@@ -105,10 +94,9 @@ suite('commands/generateFromCommitRange.ts', () => {
     const provider = new MockGenerateProvider();
 
     // Mock the input box to return a valid range
-    const originalShowInputBox = vscode.window.showInputBox;
-    (vscode.window as any).showInputBox = async () => {
+    const restore = setShowInputBoxMock(async () => {
       return 'HEAD~1..HEAD';
-    };
+    });
 
     try {
       // When: generateTestFromCommitRange is called
@@ -128,8 +116,7 @@ suite('commands/generateFromCommitRange.ts', () => {
         throw e;
       }
     } finally {
-      // Restore original function
-      (vscode.window as any).showInputBox = originalShowInputBox;
+      restore();
     }
   });
 });
