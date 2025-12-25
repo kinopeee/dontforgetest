@@ -7,6 +7,107 @@ import { parseMochaOutput, stripAnsi, type ParsedTestResult, type TestCaseResult
 export type { ParsedTestResult, TestCaseResult };
 export { parseMochaOutput };
 
+/**
+ * テスト観点表（固定列のMarkdown表）へ変換するためのJSONケース定義。
+ *
+ * cursor-agent からは揺れを避けるため「JSON（マーカー付き）」で返させ、
+ * 拡張機能側で必ず同一列・同一順のMarkdown表に整形して保存する。
+ */
+export interface PerspectiveCase {
+  caseId: string;
+  inputPrecondition: string;
+  perspective: string;
+  expectedResult: string;
+  notes: string;
+}
+
+export interface PerspectiveJsonV1 {
+  version: 1;
+  cases: PerspectiveCase[];
+}
+
+export const PERSPECTIVE_TABLE_HEADER =
+  '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |';
+export const PERSPECTIVE_TABLE_SEPARATOR =
+  '|--------|----------------------|---------------------------------------|-----------------|-------|';
+
+export type ParsePerspectiveJsonResult =
+  | { ok: true; value: PerspectiveJsonV1 }
+  | { ok: false; error: string };
+
+/**
+ * cursor-agent の出力から抽出した JSON テキストを、観点表JSONとしてパースする（多少の揺れに寛容）。
+ * - コードフェンスが混入しても除去する
+ * - JSON前後に余計なテキストが混入しても `{...}` 部分を推定して切り出す
+ */
+export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, error: 'empty' };
+  }
+
+  const unfenced = stripCodeFence(trimmed);
+  const jsonText = extractJsonObject(unfenced);
+  if (!jsonText) {
+    return { ok: false, error: 'no-json-object' };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: `invalid-json: ${msg}` };
+  }
+
+  const rec = asRecord(parsed);
+  if (!rec) {
+    return { ok: false, error: 'json-not-object' };
+  }
+
+  const versionRaw = rec.version;
+  if (versionRaw !== 1) {
+    return { ok: false, error: 'unsupported-version' };
+  }
+
+  const casesRaw = rec.cases;
+  if (!Array.isArray(casesRaw)) {
+    return { ok: false, error: 'cases-not-array' };
+  }
+
+  const cases: PerspectiveCase[] = [];
+  for (const item of casesRaw) {
+    const itemRec = asRecord(item);
+    if (!itemRec) {
+      continue;
+    }
+    cases.push({
+      caseId: getStringOrEmpty(itemRec.caseId),
+      inputPrecondition: getStringOrEmpty(itemRec.inputPrecondition),
+      perspective: getStringOrEmpty(itemRec.perspective),
+      expectedResult: getStringOrEmpty(itemRec.expectedResult),
+      notes: getStringOrEmpty(itemRec.notes),
+    });
+  }
+
+  return { ok: true, value: { version: 1, cases } };
+}
+
+/**
+ * 観点表ケース配列を、列固定のMarkdown表へレンダリングする。
+ * - セル内改行は表パーサ互換性のためスペースへ潰す
+ * - パイプ（|）は `\\|` にエスケープする
+ */
+export function renderPerspectiveMarkdownTable(cases: PerspectiveCase[]): string {
+  const rows: string[] = [PERSPECTIVE_TABLE_HEADER, PERSPECTIVE_TABLE_SEPARATOR];
+  for (const c of cases) {
+    rows.push(
+      `| ${normalizeTableCell(c.caseId)} | ${normalizeTableCell(c.inputPrecondition)} | ${normalizeTableCell(c.perspective)} | ${normalizeTableCell(c.expectedResult)} | ${normalizeTableCell(c.notes)} |`,
+    );
+  }
+  return `${rows.join('\n')}\n`;
+}
+
 export interface ArtifactSettings {
   includeTestPerspectiveTable: boolean;
   perspectiveReportDir: string;
@@ -502,4 +603,63 @@ function buildCollapsibleSection(title: string, content: string): string {
     '</details>',
     '',
   ].join('\n');
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+function getStringOrEmpty(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+  return '';
+}
+
+function normalizeTableCell(value: string): string {
+  // Markdown表セルを壊しやすい文字（改行、パイプ）を正規化する
+  const withoutCrlf = value.replace(/\r\n/g, '\n');
+  const withoutLf = withoutCrlf.replace(/\n+/g, ' ');
+  const collapsedSpaces = withoutLf.replace(/\s+/g, ' ').trim();
+  return collapsedSpaces.replace(/\|/g, '\\|');
+}
+
+function stripCodeFence(text: string): string {
+  const t = text.trim();
+  if (!t.startsWith('```')) {
+    return t;
+  }
+  const firstNewline = t.indexOf('\n');
+  if (firstNewline === -1) {
+    return t;
+  }
+  const lastFence = t.lastIndexOf('```');
+  if (lastFence <= 0 || lastFence === 0) {
+    return t;
+  }
+  if (lastFence <= firstNewline) {
+    return t;
+  }
+  return t.slice(firstNewline + 1, lastFence).trim();
+}
+
+function extractJsonObject(text: string): string | undefined {
+  const start = text.indexOf('{');
+  if (start === -1) {
+    return undefined;
+  }
+  const end = text.lastIndexOf('}');
+  if (end === -1 || end <= start) {
+    return undefined;
+  }
+  return text.slice(start, end + 1).trim();
 }

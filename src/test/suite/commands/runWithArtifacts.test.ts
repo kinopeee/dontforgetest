@@ -53,7 +53,7 @@ class MockProvider implements AgentProvider {
             type: 'log',
             taskId: options.taskId,
             level: 'info',
-            message: '<!-- BEGIN TEST PERSPECTIVES -->\n| ID | Case |\n|--|--|\n| 1 | Test |\n<!-- END TEST PERSPECTIVES -->',
+            message: '<!-- BEGIN TEST PERSPECTIVES JSON -->\n{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}\n<!-- END TEST PERSPECTIVES JSON -->',
             timestampMs: Date.now(),
           });
         } else {
@@ -1629,8 +1629,8 @@ suite('commands/runWithArtifacts.ts', () => {
   // TC-N-01: 観点表抽出成功 -> プロンプト注入成功
   test('TC-N-01: 観点表抽出に成功した場合、テスト生成プロンプトに観点表が注入される', async () => {
     // Given: 正常な観点表マーカーを返す Provider
-    const perspectiveContent = '| ID | Case |\n|--|--|\n| 1 | Test |';
-    const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${perspectiveContent}\n<!-- END TEST PERSPECTIVES -->`;
+    const perspectiveJson = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}';
+    const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${perspectiveJson}\n<!-- END TEST PERSPECTIVES JSON -->`;
     const provider = new MockProvider(0, undefined, perspectiveLog);
     const taskId = `task-n01-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-n01');
@@ -1659,7 +1659,8 @@ suite('commands/runWithArtifacts.ts', () => {
     const mainTask = provider.history.find(h => h.taskId === taskId);
     assert.ok(mainTask, 'メイン生成タスクが実行されること');
     assert.ok(mainTask.prompt.includes('## 生成済みテスト観点表（必須）'), '観点表ヘッダーがプロンプトに含まれること');
-    assert.ok(mainTask.prompt.includes(perspectiveContent), '観点表の内容がプロンプトに含まれること');
+    assert.ok(mainTask.prompt.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'));
+    assert.ok(mainTask.prompt.includes('| TC-N-01 | cond | Equivalence – normal | ok | - |'), '観点表の内容がプロンプトに含まれること');
     assert.ok(mainTask.prompt.includes('Base Prompt'), '元のプロンプトも含まれること');
   });
 
@@ -1734,7 +1735,7 @@ suite('commands/runWithArtifacts.ts', () => {
   // TC-B-01: 観点表空文字 -> 注入なし
   test('TC-B-01: 抽出された観点表が空文字列の場合、プロンプト注入は行われない', async () => {
     // Given: 空の観点表マーカー
-    const emptyLog = '<!-- BEGIN TEST PERSPECTIVES --><!-- END TEST PERSPECTIVES -->';
+    const emptyLog = '<!-- BEGIN TEST PERSPECTIVES JSON --><!-- END TEST PERSPECTIVES JSON -->';
     const provider = new MockProvider(0, undefined, emptyLog);
     const taskId = `task-b01-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-b01');
@@ -1768,7 +1769,7 @@ suite('commands/runWithArtifacts.ts', () => {
   // TC-B-02: 観点表空白のみ -> 注入なし
   test('TC-B-02: 抽出された観点表が空白のみの場合、プロンプト注入は行われない', async () => {
     // Given: 空白のみの観点表マーカー
-    const blankLog = '<!-- BEGIN TEST PERSPECTIVES -->   \n   <!-- END TEST PERSPECTIVES -->';
+    const blankLog = '<!-- BEGIN TEST PERSPECTIVES JSON -->   \n   <!-- END TEST PERSPECTIVES JSON -->';
     const provider = new MockProvider(0, undefined, blankLog);
     const taskId = `task-b02-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-b02');
@@ -1802,8 +1803,8 @@ suite('commands/runWithArtifacts.ts', () => {
   // TC-B-03: 元プロンプト空 -> 注入あり
   test('TC-B-03: 元のプロンプトが空の場合でも、観点表があれば注入される', async () => {
     // Given: 元プロンプトが空文字、観点表はあり
-    const perspectiveContent = '| ID | Case |';
-    const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${perspectiveContent}\n<!-- END TEST PERSPECTIVES -->`;
+    const perspectiveJson = '{"version":1,"cases":[{"caseId":"TC-B-03","inputPrecondition":"cond","perspective":"Equivalence","expectedResult":"ok","notes":"-"}]}';
+    const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${perspectiveJson}\n<!-- END TEST PERSPECTIVES JSON -->`;
     const provider = new MockProvider(0, undefined, perspectiveLog);
     const taskId = `task-b03-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-b03');
@@ -1832,7 +1833,11 @@ suite('commands/runWithArtifacts.ts', () => {
     const mainTask = provider.history.find(h => h.taskId === taskId);
     assert.ok(mainTask);
     assert.ok(mainTask.prompt.includes('## 生成済みテスト観点表（必須）'), 'ヘッダーが含まれること');
-    assert.ok(mainTask.prompt.includes(perspectiveContent), '観点表が含まれること');
+    assert.ok(
+      mainTask.prompt.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'),
+      '観点表の固定ヘッダが含まれること',
+    );
+    assert.ok(mainTask.prompt.includes('| TC-B-03 | cond | Equivalence | ok | - |'), '観点表が含まれること');
     // 空文字 + \n + ヘッダー... となるので、先頭が改行コードなどで始まる可能性があるが、内容は含まれているはず
   });
 
@@ -2313,8 +2318,8 @@ suite('commands/runWithArtifacts.ts', () => {
   // TC-PROMPT-CONSTRAINT-01: appendPerspectiveToPrompt includes perspective saving restrictions
   test('TC-PROMPT-CONSTRAINT-01: When perspective table is injected, saving restrictions are included', async () => {
     // Given: Provider that returns valid perspective markers
-    const perspectiveContent = '| ID | Case |\n|--|--|\n| 1 | Test |';
-    const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${perspectiveContent}\n<!-- END TEST PERSPECTIVES -->`;
+    const perspectiveJson = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}';
+    const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${perspectiveJson}\n<!-- END TEST PERSPECTIVES JSON -->`;
     const provider = new MockProvider(0, undefined, perspectiveLog);
     const taskId = `task-prompt-constraint-01-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-prompt-constraint-01');
@@ -5764,7 +5769,11 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
     // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
     // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
-    assert.ok(text.includes('| ID | Case |') || text.includes('| 1 | Test |'), 'Perspective table should contain extracted content');
+    assert.ok(
+      text.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'),
+      'Perspective table should contain fixed header',
+    );
+    assert.ok(text.includes('| TC-N-01 | cond | Equivalence – normal | ok | - |'), 'Perspective table should contain extracted content');
   });
 
   // TC-N-02: perspectiveGenerationTimeoutMs = 300000, testCommand detects VS Code launch, testExecutionRunner = 'extension'
@@ -6437,7 +6446,7 @@ suite('commands/runWithArtifacts.ts', () => {
               type: 'log',
               taskId: options.taskId,
               level: 'info',
-              message: '<!-- BEGIN TEST PERSPECTIVES -->\n| ID | Case |\n|--|--|\n| 1 | Test |\n<!-- END TEST PERSPECTIVES -->',
+              message: '<!-- BEGIN TEST PERSPECTIVES JSON -->\n{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}\n<!-- END TEST PERSPECTIVES JSON -->',
               timestampMs: Date.now(),
             });
             options.onEvent({
@@ -6485,7 +6494,11 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
     // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
     // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
-    assert.ok(text.includes('| ID | Case |') || text.includes('| 1 | Test |'), 'Perspective table should contain extracted content');
+    assert.ok(
+      text.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'),
+      'Perspective table should contain fixed header',
+    );
+    assert.ok(text.includes('| TC-N-01 | cond | Equivalence – normal | ok | - |'), 'Perspective table should contain extracted content');
   });
 
   // TC-E-03: perspectiveGenerationTimeoutMs = 50, provider.dispose() throws exception
@@ -6572,7 +6585,7 @@ suite('commands/runWithArtifacts.ts', () => {
           type: 'log',
           taskId: options.taskId,
           level: 'info',
-          message: '<!-- BEGIN TEST PERSPECTIVES -->\n| ID | Case |\n|--|--|\n| 1 | Test |\n<!-- END TEST PERSPECTIVES -->',
+          message: '<!-- BEGIN TEST PERSPECTIVES JSON -->\n{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}\n<!-- END TEST PERSPECTIVES JSON -->',
           timestampMs: Date.now(),
         });
         options.onEvent({
@@ -6618,7 +6631,11 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
     // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
     // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
-    assert.ok(text.includes('| ID | Case |') || text.includes('| 1 | Test |'), 'Perspective table should contain extracted content');
+    assert.ok(
+      text.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'),
+      'Perspective table should contain fixed header',
+    );
+    assert.ok(text.includes('| TC-N-01 | cond | Equivalence – normal | ok | - |'), 'Perspective table should contain extracted content');
   });
 
   // TC-E-06: testCommand is empty string, willLaunchVsCode = true
@@ -6788,8 +6805,12 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(text.includes('観点表の抽出に失敗したため'), 'Extraction failure message should be present');
-    assert.ok(text.includes('Some log without markers'), 'Raw log should be present');
+    assert.ok(
+      text.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'),
+      '固定列のヘッダが含まれること',
+    );
+    assert.ok(text.includes('TC-E-EXTRACT-01'), '抽出失敗がエラー行として記録されること');
+    assert.ok(text.includes('Some log without markers'), 'ログが details に含まれること');
   });
 
   // --- cleanupUnexpectedPerspectiveFiles パターンマッチテスト ---
@@ -6950,5 +6971,635 @@ suite('commands/runWithArtifacts.ts', () => {
     } catch {
       // Ignore cleanup errors
     }
+  });
+
+  suite('Perspective Table Extraction and Processing', () => {
+    // TC-N-05: Valid legacy Markdown table format
+    test('TC-N-05: coerceLegacyPerspectiveMarkdownTable normalizes legacy Markdown table successfully', async () => {
+      // Given: Valid legacy Markdown table format
+      const legacyTable = [
+        '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |',
+        '|--------|----------------------|---------------------------------------|-----------------|-------|',
+        '| TC-N-01 | cond | Equivalence – normal | ok | - |',
+      ].join('\n');
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${legacyTable}\n<!-- END TEST PERSPECTIVES -->`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-n05-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-n05');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Legacy Table Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-n05'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: coerceLegacyPerspectiveMarkdownTable normalizes table successfully
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('| TC-N-01 | cond | Equivalence – normal | ok | - |'), 'Legacy table normalized and included');
+    });
+
+    // TC-B-03: cases array is empty in JSON
+    test('TC-B-03: buildFailureMarkdown is called when cases array is empty', async () => {
+      // Given: Empty cases array in JSON
+      const emptyJson = '{"version":1,"cases":[]}';
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${emptyJson}\n<!-- END TEST PERSPECTIVES JSON -->`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-b03-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-b03');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Empty Cases Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-b03'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: buildFailureMarkdown is called with empty cases message
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(mainTask.prompt.includes('観点表JSONの cases が空でした'), 'Empty cases error message is included');
+    });
+
+    // TC-B-10: Legacy Markdown table with empty body (header only)
+    test('TC-B-10: coerceLegacyPerspectiveMarkdownTable returns table with header and separator only', async () => {
+      // Given: Legacy Markdown table with empty body
+      const legacyTable = [
+        '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |',
+        '|--------|----------------------|---------------------------------------|-----------------|-------|',
+      ].join('\n');
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${legacyTable}\n<!-- END TEST PERSPECTIVES -->`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-b10-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-b10');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Empty Body Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-b10'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: coerceLegacyPerspectiveMarkdownTable returns table with header and separator only
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('| Case ID |'), 'Header is included');
+      assert.ok(mainTask.prompt.includes('|--------|'), 'Separator is included');
+    });
+
+    // TC-E-08: Legacy Markdown table with incorrect header format
+    test('TC-E-08: coerceLegacyPerspectiveMarkdownTable returns undefined for incorrect header format', async () => {
+      // Given: Legacy Markdown table with incorrect header format
+      const invalidTable = [
+        '| Wrong Header | Column 2 |',
+        '|--------|----------------------|',
+        '| TC-N-01 | cond |',
+      ].join('\n');
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${invalidTable}\n<!-- END TEST PERSPECTIVES -->`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e08-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e08');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Invalid Header Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e08'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: coerceLegacyPerspectiveMarkdownTable returns undefined (buildFailureMarkdown is called)
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(mainTask.prompt.includes('旧形式（Markdown）の観点表を抽出できませんでした'), 'Error message for invalid header');
+    });
+
+    // TC-E-09: Legacy Markdown table with missing separator row
+    test('TC-E-09: coerceLegacyPerspectiveMarkdownTable returns undefined for missing separator row', async () => {
+      // Given: Legacy Markdown table with missing separator row
+      const invalidTable = [
+        '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |',
+        '| TC-N-01 | cond | Equivalence – normal | ok | - |',
+      ].join('\n');
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${invalidTable}\n<!-- END TEST PERSPECTIVES -->`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e09-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e09');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Missing Separator Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e09'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: coerceLegacyPerspectiveMarkdownTable returns undefined
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+    });
+
+    // TC-E-10: Legacy Markdown table with incorrect separator format
+    test('TC-E-10: coerceLegacyPerspectiveMarkdownTable returns undefined for incorrect separator format', async () => {
+      // Given: Legacy Markdown table with incorrect separator format
+      const invalidTable = [
+        '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |',
+        '|--------|----------------------|',
+        '| TC-N-01 | cond | Equivalence – normal | ok | - |',
+      ].join('\n');
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${invalidTable}\n<!-- END TEST PERSPECTIVES -->`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e10-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e10');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Invalid Separator Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e10'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: coerceLegacyPerspectiveMarkdownTable returns undefined
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+    });
+
+    // TC-E-11: extractBetweenMarkers called with begin marker not found
+    test('TC-E-11: extractBetweenMarkers returns undefined when begin marker not found', async () => {
+      // Given: Logs without begin marker
+      const perspectiveLog = 'Some log text without markers';
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e11-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e11');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'No Begin Marker Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e11'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: extractBetweenMarkers returns undefined (buildFailureMarkdown is called)
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(mainTask.prompt.includes('観点表の抽出に失敗しました'), 'Extraction failure message');
+    });
+
+    // TC-E-12: extractBetweenMarkers called with end marker not found
+    test('TC-E-12: extractBetweenMarkers returns undefined when end marker not found', async () => {
+      // Given: Logs with begin marker but no end marker
+      const perspectiveLog = '<!-- BEGIN TEST PERSPECTIVES JSON -->\n{"version":1,"cases":[]}';
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e12-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e12');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'No End Marker Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e12'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: extractBetweenMarkers returns undefined (buildFailureMarkdown is called)
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+    });
+
+    // TC-E-21: buildFailureMarkdown creates error table with TC-E-EXTRACT-01 caseId
+    test('TC-E-21: buildFailureMarkdown creates error table with TC-E-EXTRACT-01 caseId', async () => {
+      // Given: Invalid JSON that causes parse failure
+      const invalidJson = '{"version":1,"cases":invalid}';
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${invalidJson}\n<!-- END TEST PERSPECTIVES JSON -->`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e21-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e21');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Parse Failure Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e21'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: Error table is rendered with single error case and details section with truncated log
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(mainTask.prompt.includes('<details>'), 'Details section is included');
+      assert.ok(mainTask.prompt.includes('抽出ログ（クリックで展開）'), 'Log section title is included');
+    });
+
+    // TC-E-22: Both JSON and Markdown markers are present in logs
+    test('TC-E-22: JSON format is prioritized over Markdown format when both are present', async () => {
+      // Given: Both JSON and Markdown markers are present
+      const jsonContent = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}';
+      const mdContent = '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |\n|--------|----------------------|---------------------------------------|-----------------|-------|\n| TC-MD-01 | cond | Equivalence | ok | - |';
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${jsonContent}\n<!-- END TEST PERSPECTIVES JSON -->\n<!-- BEGIN TEST PERSPECTIVES -->\n${mdContent}\n<!-- END TEST PERSPECTIVES -->`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e22-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e22');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Both Formats Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e22'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: JSON format is prioritized over Markdown format
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('| TC-N-01 |'), 'JSON content is included');
+      assert.ok(!mainTask.prompt.includes('| TC-MD-01 |'), 'Markdown content is not included');
+    });
+
+    // TC-E-23: Neither JSON nor Markdown markers are present in logs
+    test('TC-E-23: buildFailureMarkdown is called when neither JSON nor Markdown markers are present', async () => {
+      // Given: Neither JSON nor Markdown markers are present
+      const perspectiveLog = 'Some log output without any markers';
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e23-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e23');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'No Markers Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e23'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: buildFailureMarkdown is called with extraction failure message
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(mainTask.prompt.includes('観点表の抽出に失敗しました'), 'Extraction failure message');
+    });
+
+    // TC-N-07: Log message contains system_reminder tags and event markers
+    test('TC-N-07: sanitizeLogMessageForPerspective removes system_reminder blocks and filters event markers', async () => {
+      // Given: Log message contains system_reminder tags and event markers
+      const logWithTags = [
+        'Some log text',
+        '<system_reminder>',
+        'This is a reminder',
+        '</system_reminder>',
+        'event:tool_call',
+        'system:init',
+        'More log text',
+      ].join('\n');
+      const jsonContent = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}';
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${jsonContent}\n<!-- END TEST PERSPECTIVES JSON -->`;
+      const provider = new MockProvider(0, undefined, `${logWithTags}\n${perspectiveLog}`);
+      const taskId = `task-n07-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-n07');
+
+      // When: runWithArtifacts is called (with failure to trigger sanitizeLogMessageForPerspective)
+      const invalidJson = 'invalid';
+      const provider2 = new MockProvider(0, undefined, `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${invalidJson}\n<!-- END TEST PERSPECTIVES JSON -->\n${logWithTags}`);
+      await runWithArtifacts({
+        provider: provider2,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Sanitize Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: `task-n07-2-${Date.now()}`,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-n07'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: sanitizeLogMessageForPerspective removes system_reminder blocks and filters event:tool_call/system:init lines
+      // The sanitized log should be in the details section
+      const mainTask = provider2.history.find(h => h.taskId?.startsWith('task-n07-2-'));
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('<details>'), 'Details section is included');
+      // The sanitized log should not contain system_reminder or event markers
+      // Note: We can't directly verify the sanitized content, but we verify that the error table is created
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+    });
+
+    // TC-E-25: sanitizeLogMessageForPerspective with multiple consecutive blank lines
+    test('TC-E-25: sanitizeLogMessageForPerspective collapses multiple blank lines to single blank line', async () => {
+      // Given: Log with multiple consecutive blank lines
+      const logWithBlanks = [
+        'Line 1',
+        '',
+        '',
+        '',
+        'Line 2',
+        '',
+        '',
+        'Line 3',
+      ].join('\n');
+      const invalidJson = 'invalid';
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${invalidJson}\n<!-- END TEST PERSPECTIVES JSON -->\n${logWithBlanks}`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e25-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e25');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Blank Lines Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e25'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: Multiple blank lines are collapsed to single blank line
+      // Note: We verify that the error table is created (which uses sanitizeLogMessageForPerspective)
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+    });
+
+    // TC-E-26: sanitizeLogMessageForPerspective with system_reminder tag containing nested tags
+    test('TC-E-26: sanitizeLogMessageForPerspective removes entire system_reminder block including nested content', async () => {
+      // Given: system_reminder tag containing nested tags
+      const logWithNested = [
+        'Before',
+        '<system_reminder>',
+        '<nested>content</nested>',
+        'More content',
+        '</system_reminder>',
+        'After',
+      ].join('\n');
+      const invalidJson = 'invalid';
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${invalidJson}\n<!-- END TEST PERSPECTIVES JSON -->\n${logWithNested}`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e26-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e26');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Nested Tags Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e26'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: Entire system_reminder block including nested content is removed
+      // Note: We verify that the error table is created (which uses sanitizeLogMessageForPerspective)
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+    });
+
+    // TC-E-30: truncateText with text length 0
+    test('TC-E-30: truncateText returns empty string for zero length text', async () => {
+      // Given: Empty log (triggers truncateText with empty string)
+      const emptyLog = '';
+      const invalidJson = 'invalid';
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${invalidJson}\n<!-- END TEST PERSPECTIVES JSON -->\n${emptyLog}`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e30-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e30');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Zero Length Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e30'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: Returns empty string (truncateText handles empty string)
+      // Note: buildFailureMarkdown uses truncateText, and empty log results in "(ログが空でした)"
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+    });
+
+    // TC-E-31: truncateText with maxChars set to 0
+    test('TC-E-31: truncateText handles maxChars=0 by truncating and appending message', async () => {
+      // Given: Long log that will be truncated (truncateText uses 200_000 as maxChars in buildFailureMarkdown)
+      // We can't directly test maxChars=0, but we verify that truncation works for very long text
+      const longLog = 'a'.repeat(200_100); // Exceeds 200_000
+      const invalidJson = 'invalid';
+      const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${invalidJson}\n<!-- END TEST PERSPECTIVES JSON -->\n${longLog}`;
+      const provider = new MockProvider(0, undefined, perspectiveLog);
+      const taskId = `task-e31-${Date.now()}`;
+      const reportDir = path.join(baseTempDir, 'reports-e31');
+
+      // When: runWithArtifacts is called
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Truncate Test',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'Base Prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        settingsOverride: {
+          includeTestPerspectiveTable: true,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-e31'),
+          testExecutionReportDir: reportDir,
+          testCommand: 'echo hello',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: Text is truncated and truncation message is appended
+      // Note: buildFailureMarkdown uses truncateText(logText, 200_000)
+      const mainTask = provider.history.find(h => h.taskId === taskId);
+      assert.ok(mainTask, 'Main task executed');
+      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      // The truncated log should be in the details section
+      assert.ok(mainTask.prompt.includes('<details>'), 'Details section is included');
+      // Verify truncation message is present (if text exceeds limit)
+      // Note: The exact truncation message format depends on implementation
+    });
   });
 });

@@ -444,17 +444,16 @@ suite('core/promptBuilder.ts', () => {
   });
 
   suite('buildTestPerspectivePrompt', () => {
-    // Given: 正常なワークスペースと設定ファイル
-    // When: buildTestPerspectivePromptを呼び出す
-    // Then: マーカー付きの観点表プロンプトが生成される
-    test('TC-N-07: 観点表プロンプト（マーカー付き）', async () => {
+    // TC-N-08: buildTestPerspectivePrompt generates prompt with JSON format markers
+    test('TC-N-08: buildTestPerspectivePrompt generates prompt with JSON format markers', async () => {
+      // Given: Valid workspace and default strategy
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) {
         assert.fail('ワークスペースが開かれていません');
         return;
       }
 
-      // 内蔵デフォルト戦略を使用（空文字）
+      // When: buildTestPerspectivePrompt is called
       const result = await buildTestPerspectivePrompt({
         workspaceRoot,
         targetLabel: 'テスト対象',
@@ -463,9 +462,62 @@ suite('core/promptBuilder.ts', () => {
         referenceText: 'diff snippet',
       });
 
-      assert.ok(result.prompt.includes('<!-- BEGIN TEST PERSPECTIVES -->'));
-      assert.ok(result.prompt.includes('<!-- END TEST PERSPECTIVES -->'));
-      assert.ok(result.prompt.includes('| Case ID |'), 'テーブルヘッダが含まれる');
+      // Then: Prompt includes <!-- BEGIN TEST PERSPECTIVES JSON --> markers and JSON schema instructions
+      assert.ok(result.prompt.includes('<!-- BEGIN TEST PERSPECTIVES JSON -->'), 'Begin marker is included');
+      assert.ok(result.prompt.includes('<!-- END TEST PERSPECTIVES JSON -->'), 'End marker is included');
+      assert.ok(result.prompt.includes('"version": 1'), 'JSON version is included');
+      assert.ok(result.prompt.includes('"cases"'), 'JSON cases field is included');
+    });
+
+    // TC-E-32: buildTestPerspectivePrompt includes JSON schema instructions
+    test('TC-E-32: buildTestPerspectivePrompt includes JSON schema instructions', async () => {
+      // Given: Valid workspace and default strategy
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('ワークスペースが開かれていません');
+        return;
+      }
+
+      // When: buildTestPerspectivePrompt is called
+      const result = await buildTestPerspectivePrompt({
+        workspaceRoot,
+        targetLabel: 'テスト対象',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '',
+        referenceText: 'diff snippet',
+      });
+
+      // Then: Prompt includes version:1 and PerspectiveCase schema description
+      assert.ok(result.prompt.includes('version": 1'), 'Version 1 is mentioned');
+      assert.ok(result.prompt.includes('PerspectiveCase'), 'PerspectiveCase schema is mentioned');
+      assert.ok(result.prompt.includes('caseId'), 'caseId field is mentioned');
+      assert.ok(result.prompt.includes('inputPrecondition'), 'inputPrecondition field is mentioned');
+      assert.ok(result.prompt.includes('perspective'), 'perspective field is mentioned');
+      assert.ok(result.prompt.includes('expectedResult'), 'expectedResult field is mentioned');
+      assert.ok(result.prompt.includes('notes'), 'notes field is mentioned');
+    });
+
+    // TC-E-33: buildTestPerspectivePrompt includes field constraints (one line, no newlines)
+    test('TC-E-33: buildTestPerspectivePrompt includes field constraints for single line format', async () => {
+      // Given: Valid workspace and default strategy
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('ワークスペースが開かれていません');
+        return;
+      }
+
+      // When: buildTestPerspectivePrompt is called
+      const result = await buildTestPerspectivePrompt({
+        workspaceRoot,
+        targetLabel: 'テスト対象',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '',
+        referenceText: 'diff snippet',
+      });
+
+      // Then: Prompt instructs to write fields on single line without newlines
+      assert.ok(result.prompt.includes('1行で書く'), 'Single line instruction is included');
+      assert.ok(result.prompt.includes('改行を含めない'), 'No newlines instruction is included');
     });
   });
 

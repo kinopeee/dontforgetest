@@ -6,6 +6,9 @@ import {
   emitLogEvent,
   formatTimestamp,
   getArtifactSettings,
+  parsePerspectiveJsonV1,
+  renderPerspectiveMarkdownTable,
+  type PerspectiveCase,
   saveTestExecutionReport,
   saveTestPerspectiveTable,
   type SavedArtifact,
@@ -727,16 +730,64 @@ async function runPerspectiveTableStep(params: {
   });
 
   const raw = logs.join('\n');
-  const extracted = extractBetweenMarkers(raw, '<!-- BEGIN TEST PERSPECTIVES -->', '<!-- END TEST PERSPECTIVES -->');
-  const wasExtracted = Boolean(extracted?.trim().length);
-  const perspectiveMarkdown = wasExtracted
-    ? extracted!.trim()
-    : [
-      '> 観点表の抽出に失敗したため、取得できたログをそのまま保存します。',
-      `> provider exit=${exitCode ?? 'null'}`,
+  const extractedJson = extractBetweenMarkers(raw, '<!-- BEGIN TEST PERSPECTIVES JSON -->', '<!-- END TEST PERSPECTIVES JSON -->');
+  const extractedMd = extractBetweenMarkers(raw, '<!-- BEGIN TEST PERSPECTIVES -->', '<!-- END TEST PERSPECTIVES -->');
+
+  /**
+   * 抽出失敗時でも「表として機械パース可能」な形を維持するため、
+   * 失敗は1行のエラーケースとして表に埋め込み、詳細ログは折りたたみで添付する。
+   */
+  const buildFailureMarkdown = (reason: string): string => {
+    const errorCase: PerspectiveCase = {
+      caseId: 'TC-E-EXTRACT-01',
+      inputPrecondition: '',
+      perspective: '',
+      expectedResult: '',
+      notes: reason,
+    };
+    const table = renderPerspectiveMarkdownTable([errorCase]);
+    const logText = sanitizeLogMessageForPerspective(raw.trim().length > 0 ? raw.trim() : '(ログが空でした)');
+    const truncated = truncateText(logText, 200_000);
+    const details = [
+      '<details>',
+      '<summary>抽出ログ（クリックで展開）</summary>',
       '',
-      raw.trim().length > 0 ? raw.trim() : '(ログが空でした)',
+      '```text',
+      truncated,
+      '```',
+      '',
+      '</details>',
+      '',
     ].join('\n');
+    return `${table}\n${details}`.trimEnd();
+  };
+
+  let wasExtracted = false;
+  let perspectiveMarkdown = '';
+
+  if (extractedJson && extractedJson.trim().length > 0) {
+    const parsed = parsePerspectiveJsonV1(extractedJson);
+    if (parsed.ok) {
+      if (parsed.value.cases.length > 0) {
+        perspectiveMarkdown = renderPerspectiveMarkdownTable(parsed.value.cases).trimEnd();
+        wasExtracted = true;
+      } else {
+        perspectiveMarkdown = buildFailureMarkdown('観点表JSONの cases が空でした');
+      }
+    } else {
+      perspectiveMarkdown = buildFailureMarkdown(`観点表JSONのパースに失敗しました: ${parsed.error}`);
+    }
+  } else if (extractedMd && extractedMd.trim().length > 0) {
+    const normalized = coerceLegacyPerspectiveMarkdownTable(extractedMd);
+    if (normalized) {
+      perspectiveMarkdown = normalized.trimEnd();
+      wasExtracted = true;
+    } else {
+      perspectiveMarkdown = buildFailureMarkdown('旧形式（Markdown）の観点表を抽出できませんでした');
+    }
+  } else {
+    perspectiveMarkdown = buildFailureMarkdown(`観点表の抽出に失敗しました: provider exit=${exitCode ?? 'null'}`);
+  }
 
   const saved = await saveTestPerspectiveTable({
     workspaceRoot: params.workspaceRoot,
@@ -846,6 +897,85 @@ function extractBetweenMarkers(text: string, begin: string, end: string): string
     return undefined;
   }
   return text.slice(afterStart, stop).trim();
+}
+
+/**
+ * 旧形式（Markdown）で抽出された観点表を、列固定のテーブルへ正規化する。
+ * - 期待する列名/列順のヘッダが見つからない場合は undefined を返す（失敗扱い）
+ * - 旧形式は移行期間の後方互換として残す
+ */
+function coerceLegacyPerspectiveMarkdownTable(markdown: string): string | undefined {
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  const header = '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |';
+  const separator = '|--------|----------------------|---------------------------------------|-----------------|-------|';
+
+  const headerIndex = lines.findIndex((l) => l.trim() === header);
+  if (headerIndex === -1) {
+    return undefined;
+  }
+  // 区切り行が続かない場合は不正とみなす
+  const sepLine = lines[headerIndex + 1]?.trim() ?? '';
+  if (sepLine !== separator) {
+    return undefined;
+  }
+
+  const body: string[] = [];
+  for (let i = headerIndex + 2; i < lines.length; i += 1) {
+    const line = lines[i] ?? '';
+    if (!line.trim().startsWith('|')) {
+      break;
+    }
+    body.push(line.trimEnd());
+  }
+
+  // 本文が空でも、ヘッダだけの表として返す（パーサ互換を維持）
+  const all = [header, separator, ...body].join('\n');
+  return `${all}\n`;
+}
+
+function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) {
+    return text;
+  }
+  return `${text.slice(0, maxChars)}\n\n... (truncated: ${text.length} chars -> ${maxChars} chars)`;
+}
+
+/**
+ * 観点表保存用のログを最小限サニタイズする。
+ * - system_reminder 等のユーザー向けでないブロックを除去
+ * - 末尾空白の除去、空行の畳み込み
+ */
+function sanitizeLogMessageForPerspective(message: string): string {
+  let text = message.replace(/\r\n/g, '\n');
+  text = text.replace(/<system_reminder>[\s\S]*?<\/system_reminder>/g, '');
+  const rawLines = text.split('\n').map((l) => l.replace(/\s+$/g, ''));
+  const filtered: string[] = [];
+  for (const line of rawLines) {
+    const trimmed = line.trim();
+    if (trimmed === 'event:tool_call') {
+      continue;
+    }
+    if (trimmed === 'system:init') {
+      continue;
+    }
+    filtered.push(line);
+  }
+  const collapsed: string[] = [];
+  let prevBlank = false;
+  for (const line of filtered) {
+    const isBlank = line.trim().length === 0;
+    if (isBlank) {
+      if (prevBlank) {
+        continue;
+      }
+      prevBlank = true;
+      collapsed.push('');
+      continue;
+    }
+    prevBlank = false;
+    collapsed.push(line);
+  }
+  return collapsed.join('\n').trim();
 }
 
 /**

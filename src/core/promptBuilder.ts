@@ -157,8 +157,10 @@ export async function buildTestPerspectivePrompt(
 ): Promise<{ prompt: string; languages: TestGenLanguageConfig }> {
   const { strategyText, languages } = await readStrategyAndLanguages(options.workspaceRoot, options.testStrategyPath);
 
-  const markerBegin = '<!-- BEGIN TEST PERSPECTIVES -->';
-  const markerEnd = '<!-- END TEST PERSPECTIVES -->';
+  // 観点表は「表（Markdown）」として最終保存されるが、cursor-agent からは揺れを避けるため JSON を返させる。
+  // 保存時に拡張機能側で列固定の Markdown 表へ整形する。
+  const markerBegin = '<!-- BEGIN TEST PERSPECTIVES JSON -->';
+  const markerEnd = '<!-- END TEST PERSPECTIVES JSON -->';
 
   const targetsText = options.targetPaths
     .map((p) => `- ${p}`)
@@ -178,11 +180,15 @@ export async function buildTestPerspectivePrompt(
   parts.push(`- テスト観点表（Markdown）: ${languages.perspectiveTableLanguage}`);
   parts.push('');
   parts.push('## 出力要件（必須）');
-  parts.push('- 返答は **Markdown の観点表（テーブル）だけ** にする');
+  parts.push('- 返答は **JSON だけ** にする（Markdownテーブルは出力しない）');
   parts.push('- 次のマーカーで出力全体を囲むこと（マーカー行も必ず含める）');
   parts.push(`  - ${markerBegin}`);
   parts.push(`  - ${markerEnd}`);
-  parts.push('- テーブルの列は次を含めること: `Case ID`, `Input / Precondition`, `Perspective (Equivalence / Boundary)`, `Expected Result`, `Notes`');
+  parts.push('- JSON は次のスキーマに従うこと（キー名は厳密に一致させる）:');
+  parts.push('  - ルート: `{ "version": 1, "cases": PerspectiveCase[] }`');
+  parts.push('  - `PerspectiveCase`: `{ "caseId": string, "inputPrecondition": string, "perspective": string, "expectedResult": string, "notes": string }`');
+  parts.push('- 各フィールドはできるだけ1行で書く（改行を含めない）');
+  parts.push('- 最終的に拡張機能側で次の列の Markdown 表へ変換される前提で内容を埋める: `Case ID`, `Input / Precondition`, `Perspective (Equivalence / Boundary)`, `Expected Result`, `Notes`');
   parts.push('- 正常系・異常系・境界値を網羅し、境界値は最低でも `0 / 最小値 / 最大値 / ±1 / 空 / NULL` を含める');
   parts.push('');
   parts.push('## ツール使用制約（必須）');
@@ -204,9 +210,18 @@ export async function buildTestPerspectivePrompt(
   parts.push('');
   parts.push('## 出力フォーマット（必須）');
   parts.push(markerBegin);
-  parts.push('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |');
-  parts.push('|--------|----------------------|---------------------------------------|-----------------|-------|');
-  parts.push('| TC-N-01 | ... | Equivalence – normal | ... | - |');
+  parts.push('{');
+  parts.push('  "version": 1,');
+  parts.push('  "cases": [');
+  parts.push('    {');
+  parts.push('      "caseId": "TC-N-01",');
+  parts.push('      "inputPrecondition": "...",');
+  parts.push('      "perspective": "Equivalence – normal",');
+  parts.push('      "expectedResult": "...",');
+  parts.push('      "notes": "-"');
+  parts.push('    }');
+  parts.push('  ]');
+  parts.push('}');
   parts.push(markerEnd);
 
   return { prompt: parts.join('\n'), languages };
