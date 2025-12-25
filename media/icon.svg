@@ -1,117 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <defs>
-    <!-- 背景グラデーション -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1a1a2e"/>
-      <stop offset="100%" style="stop-color:#16213e"/>
-    </linearGradient>
-    <!-- 液体グラデーション（サイバー感のあるティール〜パープル） -->
-    <linearGradient id="liquidGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#00d9ff"/>
-      <stop offset="50%" style="stop-color:#a855f7"/>
-      <stop offset="100%" style="stop-color:#ec4899"/>
-    </linearGradient>
-    <!-- 試験管のガラス感 -->
-    <linearGradient id="glassGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.3"/>
-      <stop offset="50%" style="stop-color:#ffffff;stop-opacity:0.1"/>
-      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0.2"/>
-    </linearGradient>
-    <!-- グロー効果 -->
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-      <feMerge>
-        <feMergeNode in="coloredBlur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
-      <feMerge>
-        <feMergeNode in="coloredBlur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-  </defs>
+  <!-- 背景（ダークブルー） -->
+  <rect x="0" y="0" width="128" height="128" rx="28" ry="28" fill="#1e293b"/>
   
-  <!-- 背景（角丸四角形） -->
-  <rect x="4" y="4" width="120" height="120" rx="24" ry="24" fill="url(#bgGrad)"/>
+  <!-- 試験管本体（明るいグレー・単色） -->
+  <rect x="52" y="28" width="24" height="32" fill="#64748b"/>
+  <path d="M52 60 L38 96 Q38 108 48 108 L80 108 Q90 108 90 96 L76 60 Z" fill="#64748b"/>
   
-  <!-- 背景のアクセント光 -->
-  <ellipse cx="90" cy="30" rx="40" ry="30" fill="#a855f7" opacity="0.15"/>
-  <ellipse cx="35" cy="100" rx="35" ry="25" fill="#00d9ff" opacity="0.1"/>
+  <!-- 液体（パープル・単色） -->
+  <path d="M52 80 L42 100 Q42 108 48 108 L80 108 Q86 108 86 100 L76 80 Z" fill="#8b5cf6"/>
   
-  <!-- 試験管の影 -->
-  <path 
-    d="M50 18h28M54 18v28l-18 50a10 10 0 0 0 9 14h38a10 10 0 0 0 9-14l-18-50V18"
-    fill="#000"
-    opacity="0.3"
-    transform="translate(2, 3)"
-  />
+  <!-- 泡（白・単色） -->
+  <circle cx="58" cy="94" r="3" fill="#ffffff"/>
+  <circle cx="68" cy="90" r="2.5" fill="#ffffff"/>
+  <circle cx="64" cy="100" r="2" fill="#ffffff"/>
   
-  <!-- 液体（下部に溜まっている） -->
-  <path 
-    d="M45 75l-9 25a10 10 0 0 0 9 14h38a10 10 0 0 0 9-14l-9-25z"
-    fill="url(#liquidGrad)"
-    filter="url(#glow)"
-  />
+  <!-- チェックマーク（白・太め） -->
+  <path d="M58 92 L62 96 L70 88" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
   
-  <!-- 試験管本体（ガラス） -->
-  <path 
-    d="M50 18h28M54 18v28l-18 50a10 10 0 0 0 9 14h38a10 10 0 0 0 9-14l-18-50V18"
-    fill="none"
-    stroke="url(#glassGrad)"
-    stroke-width="4"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  
-  <!-- 試験管のハイライト（左側の反射） -->
-  <path 
-    d="M52 22v26l-14 40"
-    fill="none"
-    stroke="#ffffff"
-    stroke-width="2"
-    stroke-linecap="round"
-    opacity="0.4"
-  />
-  
-  <!-- 泡（液体内） -->
-  <circle cx="55" cy="95" r="5" fill="#ffffff" opacity="0.6" filter="url(#glow)"/>
-  <circle cx="72" cy="88" r="3.5" fill="#ffffff" opacity="0.5"/>
-  <circle cx="62" cy="102" r="2.5" fill="#ffffff" opacity="0.4"/>
-  <circle cx="78" cy="98" r="2" fill="#ffffff" opacity="0.35"/>
-  <circle cx="68" cy="108" r="1.5" fill="#ffffff" opacity="0.3"/>
-  
-  <!-- 上昇する泡（アニメーション感） -->
-  <circle cx="60" cy="72" r="2" fill="#00d9ff" opacity="0.7" filter="url(#glow)"/>
-  <circle cx="70" cy="65" r="1.5" fill="#a855f7" opacity="0.6"/>
-  <circle cx="65" cy="58" r="1" fill="#ec4899" opacity="0.5"/>
-  
-  <!-- スパークル（AI・自動生成感） -->
-  <g filter="url(#glow)" fill="#00d9ff">
-    <!-- 右上のスパークル -->
-    <path d="M100 28l3 3M103 25v6M100 28h6" stroke="#00d9ff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-    <!-- 左のスパークル -->
-    <circle cx="28" cy="50" r="3" opacity="0.8"/>
-    <circle cx="22" cy="65" r="2" opacity="0.5"/>
-  </g>
-  
-  <!-- 追加のアクセントスパークル -->
-  <g fill="#a855f7" filter="url(#softGlow)">
-    <circle cx="95" cy="55" r="2" opacity="0.6"/>
-    <circle cx="105" cy="45" r="1.5" opacity="0.4"/>
-  </g>
-  
-  <!-- チェックマーク（テスト成功を暗示） -->
-  <path 
-    d="M58 92l5 5 10-10" 
-    stroke="#ffffff" 
-    stroke-width="3" 
-    stroke-linecap="round" 
-    stroke-linejoin="round"
-    fill="none"
-    filter="url(#glow)"
-    opacity="0.9"
-  />
+  <!-- スパークル（パープル・単色） -->
+  <circle cx="96" cy="36" r="3" fill="#8b5cf6"/>
+  <circle cx="32" cy="52" r="2.5" fill="#8b5cf6"/>
 </svg>
