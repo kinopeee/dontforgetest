@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "Dontforgetest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.76",
+  "version": "0.0.77",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
@@ -83,6 +83,10 @@
       {
         "command": "dontforgetest.openLatestExecutionReport",
         "title": "Dontforgetest: 最新の実行レポートを開く"
+      },
+      {
+        "command": "dontforgetest.openLatestMergeInstruction",
+        "title": "Dontforgetest: 手動マージ支援を開く（最新）"
       }
     ],
     "menus": {

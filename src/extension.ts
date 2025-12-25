@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { findLatestArtifact, getArtifactSettings } from './core/artifacts';
 import { generateTestFromLatestCommit } from './commands/generateFromCommit';
@@ -132,6 +134,47 @@ export function activate(context: vscode.ExtensionContext) {
 
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latestPath));
       await vscode.window.showTextDocument(doc);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('dontforgetest.openLatestMergeInstruction', async () => {
+      // 手動マージ支援の指示は globalStorage に保存するため、ワークスペース未オープンでも利用できる。
+      const baseDir = context.globalStorageUri.fsPath;
+      const instructionsDir = path.join(baseDir, 'merge-instructions');
+      let entries: string[] = [];
+      try {
+        entries = await fs.promises.readdir(instructionsDir);
+      } catch {
+        entries = [];
+      }
+
+      const mdFiles = entries.filter((name) => name.toLowerCase().endsWith('.md'));
+      if (mdFiles.length === 0) {
+        await vscode.window.showInformationMessage('手動マージ支援の指示ファイルが見つかりませんでした');
+        return;
+      }
+
+      const withStats = await Promise.all(
+        mdFiles.map(async (name) => {
+          const fullPath = path.join(instructionsDir, name);
+          try {
+            const stat = await fs.promises.stat(fullPath);
+            return { fullPath, mtimeMs: stat.mtimeMs };
+          } catch {
+            return { fullPath, mtimeMs: 0 };
+          }
+        }),
+      );
+
+      const latest = withStats.sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
+      if (!latest) {
+        await vscode.window.showInformationMessage('手動マージ支援の指示ファイルが見つかりませんでした');
+        return;
+      }
+
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latest.fullPath));
+      await vscode.window.showTextDocument(doc, { preview: true });
     }),
   );
 }

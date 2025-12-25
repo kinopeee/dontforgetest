@@ -48,13 +48,19 @@ export async function applyWorktreeTestChanges(params: {
       }
     }
 
-    const patchText = (
-      await execGitStdout(params.runWorkspaceRoot, ['diff', '--no-color', '--binary', '--', ...testPaths], 20 * 1024 * 1024)
-    ).trimEnd();
-    if (patchText.trim().length === 0) {
+    // NOTE:
+    // git apply はパッチ末尾が改行で終わっていないと `corrupt patch` になることがある。
+    // そのため、git diff の生出力の末尾改行は削らず、必要なら補完して保存する。
+    const patchTextRaw = await execGitStdout(
+      params.runWorkspaceRoot,
+      ['diff', '--no-color', '--binary', '--', ...testPaths],
+      20 * 1024 * 1024,
+    );
+    if (patchTextRaw.trim().length === 0) {
       appendEventToOutput(emitLogEvent(params.generationTaskId, 'info', 'worktreeでテスト差分パッチが空だったため、ローカルへの適用は行いません'));
       return;
     }
+    const patchText = patchTextRaw.endsWith('\n') ? patchTextRaw : `${patchTextRaw}\n`;
 
     // 生成が失敗している場合は、安全のため自動適用しない（パッチ/スナップショットを保存して案内）
     const shouldAutoApply = params.genExit === 0;
@@ -106,44 +112,40 @@ export async function applyWorktreeTestChanges(params: {
     });
 
     // ユーザーへ案内（AI向けプロンプトも提供）
+    // NOTE:
+    // - ここでユーザー操作待ち（await）にすると、バックグラウンド実行の完了や worktree 削除が遅れる。
+    // - 通知は表示するが、処理自体は先に進める（ボタン選択は then で非同期に処理する）。
     const warnMsg =
-      'worktreeで生成したテスト差分をローカルへ自動適用できませんでした（競合の可能性）。' +
-      'パッチ/スナップショット/AI向け指示を保存したので、手動で統合してください。';
+      'Worktreeのテスト差分をローカルへ自動適用できませんでした（ローカルは未変更）。手動マージが必要です。';
     appendEventToOutput(emitLogEvent(params.generationTaskId, 'warn', warnMsg));
 
+    // ボタンが多いと視認性が悪化するため、導線は2つに絞る（詳細は指示ファイルに集約）
+    const actionOpenInstruction = '手動マージ手順を開く';
     const actionCopy = 'AI用プロンプトをコピー';
-    const actionOpenInstruction = '指示ファイルを開く';
-    const actionOpenPatch = 'パッチを開く';
-    const actionOpenSnapshot = 'スナップショットを開く';
-    const picked = await vscode.window.showWarningMessage(warnMsg, actionCopy, actionOpenInstruction, actionOpenPatch, actionOpenSnapshot);
-
-    if (picked === actionCopy) {
-      const promptText = buildMergeAssistancePromptText({
-        taskId: params.generationTaskId,
-        applyCheckOutput,
-        patchPath: persisted.patchPath,
-        snapshotDir: persisted.snapshotDir,
-        testPaths,
-        preTestCheckCommand: params.preTestCheckCommand,
-      });
-      await vscode.env.clipboard.writeText(promptText);
-      void vscode.window.showInformationMessage('AI用プロンプトをクリップボードにコピーしました');
-      return;
-    }
-    if (picked === actionOpenInstruction) {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(persisted.instructionPath));
-      await vscode.window.showTextDocument(doc);
-      return;
-    }
-    if (picked === actionOpenPatch) {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(persisted.patchPath));
-      await vscode.window.showTextDocument(doc);
-      return;
-    }
-    if (picked === actionOpenSnapshot) {
-      await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(persisted.snapshotDir));
-      return;
-    }
+    void vscode.window.showWarningMessage(warnMsg, actionOpenInstruction, actionCopy).then(async (picked) => {
+      try {
+        if (picked === actionCopy) {
+          const promptText = buildMergeAssistancePromptText({
+            taskId: params.generationTaskId,
+            applyCheckOutput,
+            patchPath: persisted.patchPath,
+            snapshotDir: persisted.snapshotDir,
+            testPaths,
+            preTestCheckCommand: params.preTestCheckCommand,
+          });
+          await vscode.env.clipboard.writeText(promptText);
+          void vscode.window.showInformationMessage('AI用プロンプトをクリップボードにコピーしました');
+          return;
+        }
+        if (picked === actionOpenInstruction) {
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(persisted.instructionPath));
+          await vscode.window.showTextDocument(doc, { preview: true });
+          return;
+        }
+      } catch {
+        // noop（通知導線の失敗は本処理の失敗ではない）
+      }
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     appendEventToOutput(emitLogEvent(params.generationTaskId, 'warn', `worktree差分の適用処理で例外が発生しました（続行します）: ${message}`));

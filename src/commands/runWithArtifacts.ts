@@ -325,7 +325,11 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         ? `テスト生成が完了しました: ${options.generationLabel}`
         : `テスト生成に失敗しました: ${options.generationLabel} (exit=${genExit ?? 'null'})`;
     if (genExit === 0) {
-      void vscode.window.showInformationMessage(genMsg);
+      // Worktreeモードは「適用結果（成功/要手動マージ）」の通知を別途出すため、
+      // ここで完了トーストを出すと二重通知になり、誤解を招きやすい。
+      if (runLocation === 'local') {
+        void vscode.window.showInformationMessage(genMsg);
+      }
     } else {
       void vscode.window.showErrorMessage(genMsg);
     }

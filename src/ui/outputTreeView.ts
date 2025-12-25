@@ -38,6 +38,11 @@ export class OutputTreeViewProvider implements vscode.TreeDataProvider<OutputTre
         item.iconPath = new vscode.ThemeIcon('report');
         return item;
       })(),
+      (() => {
+        const item = new OutputTreeItem('手動マージ', 'dontforgetest.openLatestMergeInstruction');
+        item.iconPath = new vscode.ThemeIcon('git-merge');
+        return item;
+      })(),
     ];
   }
 }

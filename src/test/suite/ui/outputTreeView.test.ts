@@ -64,14 +64,17 @@ suite('src/ui/outputTreeView.ts', () => {
     // When: getChildren is called
     const items = provider.getChildren();
 
-    // Then: Two items displayed: "観点表" and "実行レポート" with correct icons
-    assert.strictEqual(items.length, 2, 'Two items are displayed');
+    // Then: Three items displayed: "観点表" / "実行レポート" / "手動マージ" with correct icons
+    assert.strictEqual(items.length, 3, 'Three items are displayed');
     const perspectiveItem = items.find(item => item.label === '観点表');
     const reportItem = items.find(item => item.label === '実行レポート');
+    const mergeItem = items.find(item => item.label === '手動マージ');
     assert.ok(perspectiveItem, 'Perspective item exists');
     assert.ok(reportItem, 'Report item exists');
+    assert.ok(mergeItem, 'Merge item exists');
     assert.ok(perspectiveItem.iconPath, 'Perspective item has icon');
     assert.ok(reportItem.iconPath, 'Report item has icon');
+    assert.ok(mergeItem.iconPath, 'Merge item has icon');
   });
 
   // TC-N-16: OutputTreeView item click (perspective item)
@@ -130,6 +133,33 @@ suite('src/ui/outputTreeView.ts', () => {
     }
   });
 
+  // TC-N-18: OutputTreeView item click (merge item)
+  // Given: OutputTreeView merge item
+  // When: Item is clicked
+  // Then: Corresponding command executed (dontforgetest.openLatestMergeInstruction)
+  test('TC-N-18: OutputTreeView item click (merge item)', () => {
+    // Given: OutputTreeView initialized
+    initializeOutputTreeView(context);
+    const provider = new OutputTreeViewProvider();
+
+    // When: getChildren is called to get items
+    const items = provider.getChildren();
+
+    // Then: Merge item has correct command
+    const mergeItem = items.find(item => item.label === '手動マージ');
+    assert.ok(mergeItem, 'Merge item exists');
+
+    if (mergeItem.command) {
+      assert.strictEqual(
+        mergeItem.command.command,
+        'dontforgetest.openLatestMergeInstruction',
+        'Merge item has correct command'
+      );
+    } else {
+      assert.fail('Merge item should have command');
+    }
+  });
+
   // TC-E-02: initializeOutputTreeView called multiple times
   // Given: initializeOutputTreeView called multiple times
   // When: Function is called again
@@ -175,8 +205,8 @@ suite('src/ui/outputTreeView.ts', () => {
     // When: getChildren is called
     const items = provider.getChildren();
 
-    // Then: Two items returned correctly
-    assert.strictEqual(items.length, 2, 'Two items are returned');
+    // Then: Three items returned correctly
+    assert.strictEqual(items.length, 3, 'Three items are returned');
     assert.ok(Array.isArray(items), 'Items is an array');
   });
 

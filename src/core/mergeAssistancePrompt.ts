@@ -25,9 +25,11 @@ export function buildMergeAssistancePromptText(params: MergeAssistancePromptPara
       : '3. 型チェック/Lint を実行し、エラーがあれば **テストコードのみ** 修正する（最大3回）';
 
   return [
-    'あなたはソフトウェアエンジニアです。',
     'worktreeで生成されたテスト変更を、現在のワークスペース（ローカル作業ツリー）に手動でマージしてください。',
     '自動適用（git apply --check）が失敗しているため、競合を解決して統合する必要があります。',
+    '',
+    '## 注意',
+    '一時worktreeは既に削除されている可能性があります。worktreeがなくても、以下のパッチ/スナップショットだけでマージできます。',
     '',
     '## 背景',
     `- taskId: ${params.taskId}`,

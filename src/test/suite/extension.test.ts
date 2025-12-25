@@ -201,7 +201,8 @@ suite('src/extension.ts', () => {
         'dontforgetest.showTestGeneratorOutput',
         'dontforgetest.openSettings',
         'dontforgetest.openLatestPerspective',
-        'dontforgetest.openLatestExecutionReport'
+        'dontforgetest.openLatestExecutionReport',
+        'dontforgetest.openLatestMergeInstruction'
       ];
 
       // Then: All expected commands are present
