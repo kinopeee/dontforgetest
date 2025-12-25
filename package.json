@@ -3,7 +3,8 @@
   "publisher": "local",
   "displayName": "Dontforgetest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.68",
+  "version": "0.0.69",
+  "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -189,7 +190,12 @@
     "pretest": "npm run compile",
     "lint": "eslint src/",
     "test": "node ./out/test/runTest.js",
-    "package:vsix": "npm run compile && VERSION=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce package --out \"dontforgetest-$VERSION.vsix\" --allow-missing-repository --no-rewrite-relative-links"
+    "package:vsix": "npm run compile && VERSION=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce package --out \"dontforgetest-$VERSION.vsix\" --allow-missing-repository --no-rewrite-relative-links",
+    "vsix:install": "code --install-extension \"$(ls -t dontforgetest-*.vsix | head -1)\" --force",
+    "vsix:build": "npm run package:vsix",
+    "vsix:build-install": "npm run package:vsix && npm run vsix:install",
+    "vsix:build-install:bump": "npm version patch --no-git-tag-version && npm run vsix:build-install",
+    "vsix:build:bump": "npm version patch --no-git-tag-version && npm run vsix:build"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

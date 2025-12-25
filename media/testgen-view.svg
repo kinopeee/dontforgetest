@@ -1,17 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-  <!-- シンプルな試験管（アウトライン、太め） -->
+  <!-- 試験管本体 -->
   <path 
     stroke="currentColor" 
-    stroke-width="2" 
+    stroke-width="1.8" 
     stroke-linecap="round" 
     stroke-linejoin="round"
-    d="M9 3h6M10 3v7l-4 8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l-4-8V3"
+    fill="none"
+    d="M9 2h6M10 2v8l-5 10a2.5 2.5 0 0 0 2.2 3.5h9.6a2.5 2.5 0 0 0 2.2-3.5l-5-10V2"
   />
-  <!-- 液体の線 -->
+  <!-- 液体（グラデーション効果を線で表現） -->
   <path 
     stroke="currentColor" 
-    stroke-width="2" 
+    stroke-width="1.5" 
     stroke-linecap="round"
-    d="M7 15h10"
+    opacity="0.7"
+    d="M7.5 16h9"
   />
+  <!-- 泡・パーティクル効果 -->
+  <circle cx="11" cy="18" r="1" fill="currentColor" opacity="0.5"/>
+  <circle cx="14" cy="17" r="0.7" fill="currentColor" opacity="0.4"/>
+  <circle cx="12.5" cy="19.5" r="0.5" fill="currentColor" opacity="0.3"/>
+  <!-- スパークル（自動生成・AI感） -->
+  <path 
+    stroke="currentColor" 
+    stroke-width="1.2" 
+    stroke-linecap="round"
+    d="M19 4l1 1M20 3v2M19 4h2"
+  />
+  <circle cx="5" cy="8" r="0.8" fill="currentColor" opacity="0.6"/>
+  <circle cx="4" cy="11" r="0.5" fill="currentColor" opacity="0.4"/>
 </svg>
