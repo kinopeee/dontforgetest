@@ -4,192 +4,101 @@
   "cases": [
     {
       "caseId": "TC-N-01",
-      "inputPrecondition": "Provider initialized with valid context",
+      "inputPrecondition": "package-lock.json exists in sourceExtensionRoot",
       "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains @keyframes pulse animation definition",
-      "notes": "CSS animation for pulse effect is defined"
+      "expectedResult": "package-lock.json is copied to stageExtensionRoot successfully",
+      "notes": "Happy path for package-lock.json copy operation"
     },
     {
       "caseId": "TC-N-02",
-      "inputPrecondition": "Provider initialized with valid context",
+      "inputPrecondition": "package-lock.json exists and other files (package.json, LICENSE, out, src, media) also exist",
       "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains @keyframes shimmer animation definition",
-      "notes": "CSS animation for shimmer effect is defined"
-    },
-    {
-      "caseId": "TC-N-03",
-      "inputPrecondition": "Provider initialized with valid context",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains @keyframes glow animation definition",
-      "notes": "CSS animation for glow effect is defined"
-    },
-    {
-      "caseId": "TC-N-04",
-      "inputPrecondition": "Provider initialized with valid context",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains button.running class style definition with gradient background",
-      "notes": "Running state button style is defined"
-    },
-    {
-      "caseId": "TC-N-05",
-      "inputPrecondition": "Provider initialized with valid context",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains button.running:hover style definition",
-      "notes": "Hover state for running button is defined"
-    },
-    {
-      "caseId": "TC-N-06",
-      "inputPrecondition": "Provider initialized with valid context, HTML generated",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains updateButtonState function with classList.add('running') call",
-      "notes": "Function uses classList.add instead of inline styles"
-    },
-    {
-      "caseId": "TC-N-07",
-      "inputPrecondition": "Provider initialized with valid context, HTML generated",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains updateButtonState function with classList.remove('running') call",
-      "notes": "Function uses classList.remove instead of inline styles"
-    },
-    {
-      "caseId": "TC-N-08",
-      "inputPrecondition": "Provider initialized with valid context, HTML generated",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains button text '✨ テスト作成中 (中断)' when running state is set",
-      "notes": "Button text includes emoji character"
-    },
-    {
-      "caseId": "TC-N-09",
-      "inputPrecondition": "Provider initialized with valid context, HTML generated",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains button text 'テスト生成' when not running",
-      "notes": "Default button text is correct"
-    },
-    {
-      "caseId": "TC-N-10",
-      "inputPrecondition": "Provider initialized with valid context, HTML generated",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains animation: shimmer 2s linear infinite, glow 1.5s ease-in-out infinite",
-      "notes": "Running button has correct animation properties"
-    },
-    {
-      "caseId": "TC-N-11",
-      "inputPrecondition": "Provider initialized with valid context, HTML generated",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "HTML contains animation: shimmer 1.5s linear infinite, glow 1s ease-in-out infinite for hover state",
-      "notes": "Hover state has faster animation timing"
+      "expectedResult": "All files including package-lock.json are copied successfully",
+      "notes": "Verify package-lock.json is copied along with other required files"
     },
     {
       "caseId": "TC-E-01",
-      "inputPrecondition": "Provider initialized, updateButtonState called with null runBtn element",
-      "perspective": "Boundary – null",
-      "expectedResult": "Throws TypeError or handles gracefully",
-      "notes": "DOM element may not exist in test environment"
+      "inputPrecondition": "package-lock.json does not exist in sourceExtensionRoot",
+      "perspective": "Boundary – missing file",
+      "expectedResult": "fs.promises.cp throws ENOENT error or handles gracefully",
+      "notes": "Error handling when package-lock.json is missing"
     },
     {
       "caseId": "TC-E-02",
-      "inputPrecondition": "Provider initialized, updateButtonState called with undefined runBtn",
-      "perspective": "Boundary – null",
-      "expectedResult": "Throws TypeError or handles gracefully",
-      "notes": "DOM element may not be initialized"
+      "inputPrecondition": "package-lock.json exists but sourceExtensionRoot path is invalid",
+      "perspective": "Equivalence – error",
+      "expectedResult": "fs.promises.cp throws error (ENOENT or similar)",
+      "notes": "Invalid source path handling"
     },
     {
       "caseId": "TC-E-03",
-      "inputPrecondition": "Provider initialized, updateButtonState called with running=true but classList.add fails",
+      "inputPrecondition": "package-lock.json exists but destination directory is read-only",
       "perspective": "Equivalence – error",
-      "expectedResult": "Error is handled gracefully, button text still updates",
-      "notes": "classList API may not be available in some environments"
+      "expectedResult": "fs.promises.cp throws EACCES error or handles gracefully",
+      "notes": "Permission error handling for destination directory"
     },
     {
       "caseId": "TC-E-04",
-      "inputPrecondition": "Provider initialized, updateButtonState called with running=false but classList.remove fails",
+      "inputPrecondition": "package-lock.json exists but disk is full",
       "perspective": "Equivalence – error",
-      "expectedResult": "Error is handled gracefully, button text still updates",
-      "notes": "classList API may not be available in some environments"
+      "expectedResult": "fs.promises.cp throws ENOSPC error or handles gracefully",
+      "notes": "Disk space error handling"
     },
     {
       "caseId": "TC-B-01",
-      "inputPrecondition": "Provider initialized, updateButtonState called with running=true immediately after running=false",
-      "perspective": "Boundary – state transition",
-      "expectedResult": "Button state transitions correctly, class is added",
-      "notes": "Rapid state changes should work correctly"
+      "inputPrecondition": "package-lock.json exists but is empty (0 bytes)",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Empty package-lock.json is copied successfully",
+      "notes": "Handle empty file correctly"
     },
     {
       "caseId": "TC-B-02",
-      "inputPrecondition": "Provider initialized, updateButtonState called with running=false immediately after running=true",
-      "perspective": "Boundary – state transition",
-      "expectedResult": "Button state transitions correctly, class is removed",
-      "notes": "Rapid state changes should work correctly"
+      "inputPrecondition": "package-lock.json exists and is very large (e.g., 100MB+)",
+      "perspective": "Boundary – max",
+      "expectedResult": "Large package-lock.json is copied successfully or throws error if too large",
+      "notes": "Handle very large files"
     },
     {
       "caseId": "TC-B-03",
-      "inputPrecondition": "Provider initialized, updateButtonState called multiple times with running=true",
-      "perspective": "Boundary – repeated calls",
-      "expectedResult": "Button state remains consistent, no duplicate classes added",
-      "notes": "classList.add is idempotent"
+      "inputPrecondition": "package-lock.json is a symbolic link",
+      "perspective": "Equivalence – special file",
+      "expectedResult": "Symbolic link is copied (as link or resolved file) based on cp options",
+      "notes": "Handle symbolic links correctly"
     },
     {
       "caseId": "TC-B-04",
-      "inputPrecondition": "Provider initialized, updateButtonState called multiple times with running=false",
-      "perspective": "Boundary – repeated calls",
-      "expectedResult": "Button state remains consistent, no errors when removing non-existent class",
-      "notes": "classList.remove is safe to call multiple times"
+      "inputPrecondition": "package-lock.json exists but sourceExtensionRoot is null",
+      "perspective": "Boundary – null",
+      "expectedResult": "path.join throws TypeError or handles gracefully",
+      "notes": "Null source path handling"
     },
     {
       "caseId": "TC-B-05",
-      "inputPrecondition": "Provider initialized, animation duration set to 0s",
-      "perspective": "Boundary – zero",
-      "expectedResult": "Animation still defined but executes instantly",
-      "notes": "CSS animation with 0s duration is valid"
+      "inputPrecondition": "package-lock.json exists but stageExtensionRoot is null",
+      "perspective": "Boundary – null",
+      "expectedResult": "path.join throws TypeError or handles gracefully",
+      "notes": "Null destination path handling"
+    },
+    {
+      "caseId": "TC-N-03",
+      "inputPrecondition": "ControlPanel HTML is generated with button element",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "HTML contains button element with height: 30px style",
+      "notes": "Verify button height is updated from 26px to 30px"
     },
     {
       "caseId": "TC-B-06",
-      "inputPrecondition": "Provider initialized, animation duration set to very large value (999999s)",
-      "perspective": "Boundary – max",
-      "expectedResult": "Animation still defined and executes",
-      "notes": "CSS accepts large duration values"
+      "inputPrecondition": "ControlPanel HTML is generated",
+      "perspective": "Boundary – value change",
+      "expectedResult": "HTML does not contain height: 26px (old value)",
+      "notes": "Verify old height value (26px) is not present"
     },
     {
       "caseId": "TC-B-07",
-      "inputPrecondition": "Provider initialized, HTML contains emoji character in button text",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Emoji character is correctly encoded in HTML",
-      "notes": "UTF-8 encoding should handle emoji correctly"
-    },
-    {
-      "caseId": "TC-B-08",
-      "inputPrecondition": "Provider initialized, stateUpdate message received with isRunning=true",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "updateButtonState is called with true, button shows running state",
-      "notes": "Message handler correctly updates button state"
-    },
-    {
-      "caseId": "TC-B-09",
-      "inputPrecondition": "Provider initialized, stateUpdate message received with isRunning=false",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "updateButtonState is called with false, button shows default state",
-      "notes": "Message handler correctly updates button state"
-    },
-    {
-      "caseId": "TC-B-10",
-      "inputPrecondition": "Provider initialized, background-size set to 200% auto",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Gradient background animates correctly with shimmer effect",
-      "notes": "Background size enables animation effect"
-    },
-    {
-      "caseId": "TC-PKG-01",
-      "inputPrecondition": "package.json file exists",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Version field is 0.0.63",
-      "notes": "Version number is updated correctly"
-    },
-    {
-      "caseId": "TC-PKG-02",
-      "inputPrecondition": "package-lock.json file exists",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Version field in root and packages[''] is 0.0.63",
-      "notes": "Version number is synchronized in lock file"
+      "inputPrecondition": "ControlPanel HTML is generated",
+      "perspective": "Boundary – value change",
+      "expectedResult": "HTML contains height: 30px exactly (not 29px or 31px)",
+      "notes": "Verify exact height value is 30px"
     }
   ]
 }

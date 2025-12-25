@@ -105,7 +105,7 @@ export function printMochaLikeResultsFromTestResultFile(
   }
 }
 
-async function stageExtensionToTemp(params: {
+export async function stageExtensionToTemp(params: {
   sourceExtensionRoot: string;
   stageExtensionRoot: string;
 }): Promise<void> {

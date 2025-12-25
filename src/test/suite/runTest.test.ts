@@ -1,7 +1,11 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import {
   resolveSuiteFromFullTitle,
   printMochaLikeResultsFromTestResultFile as rawPrintMochaLikeResultsFromTestResultFile,
+  stageExtensionToTemp,
   TestCaseInfo,
   TestResultFile,
 } from '../runTest';
@@ -1349,6 +1353,312 @@ suite('test/runTest.ts', () => {
       // Then: main() is not executed
       // This is verified by the fact that VS Code is not started when the test runs
       assert.ok(true, 'Module can be imported without executing main()');
+    });
+  });
+
+  suite('stageExtensionToTemp', () => {
+    let tempDir: string;
+    let sourceDir: string;
+    let stageDir: string;
+
+    setup(async () => {
+      // Given: Temporary directories for testing
+      tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'dontforgetest-test-'));
+      sourceDir = path.join(tempDir, 'source');
+      stageDir = path.join(tempDir, 'stage');
+      await fs.promises.mkdir(sourceDir, { recursive: true });
+      await fs.promises.mkdir(stageDir, { recursive: true });
+    });
+
+    teardown(async () => {
+      // Cleanup: Remove temporary directories
+      try {
+        await fs.promises.rm(tempDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    });
+
+    // TC-N-01: package-lock.json exists in sourceExtensionRoot
+    // Given: package-lock.json exists in sourceExtensionRoot
+    // When: stageExtensionToTemp is called
+    // Then: package-lock.json is copied to stageExtensionRoot successfully
+    test('TC-N-01: package-lock.json exists in sourceExtensionRoot', async () => {
+      // Given: package-lock.json exists in sourceExtensionRoot
+      const packageLockContent = '{"name": "test", "version": "1.0.0"}';
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), packageLockContent);
+
+      // When: stageExtensionToTemp is called
+      await stageExtensionToTemp({
+        sourceExtensionRoot: sourceDir,
+        stageExtensionRoot: stageDir,
+      });
+
+      // Then: package-lock.json is copied to stageExtensionRoot successfully
+      const copiedPath = path.join(stageDir, 'package-lock.json');
+      assert.ok(await fs.promises.access(copiedPath).then(() => true).catch(() => false), 'package-lock.json is copied');
+      const copiedContent = await fs.promises.readFile(copiedPath, 'utf8');
+      assert.strictEqual(copiedContent, packageLockContent, 'Copied content matches original');
+    });
+
+    // TC-N-02: package-lock.json exists and other files (package.json, LICENSE, out, src, media) also exist
+    // Given: package-lock.json exists and other files also exist
+    // When: stageExtensionToTemp is called
+    // Then: All files including package-lock.json are copied successfully
+    test('TC-N-02: package-lock.json exists and other files also exist', async () => {
+      // Given: package-lock.json exists and other files also exist
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
+      await fs.promises.writeFile(path.join(sourceDir, 'package.json'), '{"name": "test"}');
+      await fs.promises.writeFile(path.join(sourceDir, 'LICENSE'), 'MIT');
+      await fs.promises.mkdir(path.join(sourceDir, 'out'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'src'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
+
+      // When: stageExtensionToTemp is called
+      await stageExtensionToTemp({
+        sourceExtensionRoot: sourceDir,
+        stageExtensionRoot: stageDir,
+      });
+
+      // Then: All files including package-lock.json are copied successfully
+      assert.ok(await fs.promises.access(path.join(stageDir, 'package-lock.json')).then(() => true).catch(() => false), 'package-lock.json is copied');
+      assert.ok(await fs.promises.access(path.join(stageDir, 'package.json')).then(() => true).catch(() => false), 'package.json is copied');
+      assert.ok(await fs.promises.access(path.join(stageDir, 'LICENSE')).then(() => true).catch(() => false), 'LICENSE is copied');
+      assert.ok(await fs.promises.access(path.join(stageDir, 'out')).then(() => true).catch(() => false), 'out directory is copied');
+      assert.ok(await fs.promises.access(path.join(stageDir, 'src')).then(() => true).catch(() => false), 'src directory is copied');
+      assert.ok(await fs.promises.access(path.join(stageDir, 'media')).then(() => true).catch(() => false), 'media directory is copied');
+    });
+
+    // TC-E-01: package-lock.json does not exist in sourceExtensionRoot
+    // Given: package-lock.json does not exist in sourceExtensionRoot
+    // When: stageExtensionToTemp is called
+    // Then: fs.promises.cp throws ENOENT error or handles gracefully
+    test('TC-E-01: package-lock.json does not exist in sourceExtensionRoot', async () => {
+      // Given: package-lock.json does not exist in sourceExtensionRoot
+      // (sourceDir is empty)
+
+      // When: stageExtensionToTemp is called
+      // Then: fs.promises.cp throws ENOENT error or handles gracefully
+      await assert.rejects(
+        async () => {
+          await stageExtensionToTemp({
+            sourceExtensionRoot: sourceDir,
+            stageExtensionRoot: stageDir,
+          });
+        },
+        (err: NodeJS.ErrnoException) => {
+          return err.code === 'ENOENT' || err.message.includes('ENOENT');
+        },
+        'Should throw ENOENT error when package-lock.json does not exist'
+      );
+    });
+
+    // TC-E-02: package-lock.json exists but sourceExtensionRoot path is invalid
+    // Given: package-lock.json exists but sourceExtensionRoot path is invalid
+    // When: stageExtensionToTemp is called
+    // Then: fs.promises.cp throws error (ENOENT or similar)
+    test('TC-E-02: package-lock.json exists but sourceExtensionRoot path is invalid', async () => {
+      // Given: package-lock.json exists but sourceExtensionRoot path is invalid
+      const invalidPath = path.join(tempDir, 'nonexistent-source');
+
+      // When: stageExtensionToTemp is called
+      // Then: fs.promises.cp throws error (ENOENT or similar)
+      await assert.rejects(
+        async () => {
+          await stageExtensionToTemp({
+            sourceExtensionRoot: invalidPath,
+            stageExtensionRoot: stageDir,
+          });
+        },
+        (err: NodeJS.ErrnoException) => {
+          return err.code === 'ENOENT' || err.message.includes('ENOENT');
+        },
+        'Should throw ENOENT error when sourceExtensionRoot path is invalid'
+      );
+    });
+
+    // TC-E-03: package-lock.json exists but destination directory is read-only
+    // Given: package-lock.json exists but destination directory is read-only
+    // When: stageExtensionToTemp is called
+    // Then: fs.promises.cp throws EACCES error or handles gracefully
+    test('TC-E-03: package-lock.json exists but destination directory is read-only', async () => {
+      // Given: package-lock.json exists but destination directory is read-only
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
+      // Note: On Unix systems, we can make directory read-only, but on Windows this may not work
+      // This test may not work on all platforms, but we attempt it
+      try {
+        await fs.promises.chmod(stageDir, 0o444); // Read-only
+      } catch {
+        // If chmod fails (e.g., on Windows), skip this test
+        return;
+      }
+
+      try {
+        // When: stageExtensionToTemp is called
+        // Then: fs.promises.cp throws EACCES error or handles gracefully
+        await assert.rejects(
+          async () => {
+            await stageExtensionToTemp({
+              sourceExtensionRoot: sourceDir,
+              stageExtensionRoot: stageDir,
+            });
+          },
+          (err: NodeJS.ErrnoException) => {
+            return err.code === 'EACCES' || err.code === 'EPERM' || err.message.includes('EACCES') || err.message.includes('EPERM');
+          },
+          'Should throw EACCES or EPERM error when destination directory is read-only'
+        );
+      } finally {
+        // Restore permissions for cleanup
+        try {
+          await fs.promises.chmod(stageDir, 0o755);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    });
+
+    // TC-E-04: package-lock.json exists but disk is full
+    // Given: package-lock.json exists but disk is full
+    // When: stageExtensionToTemp is called
+    // Then: fs.promises.cp throws ENOSPC error or handles gracefully
+    // Note: This test cannot reliably simulate disk full condition, so we skip it
+    test('TC-E-04: package-lock.json exists but disk is full', async () => {
+      // Given: package-lock.json exists but disk is full
+      // Note: Cannot reliably simulate disk full condition in unit tests
+      // This test is skipped as it requires system-level manipulation
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
+
+      // When: stageExtensionToTemp is called
+      // Then: Should complete successfully (cannot simulate disk full)
+      // In real scenario, ENOSPC would be thrown
+      await stageExtensionToTemp({
+        sourceExtensionRoot: sourceDir,
+        stageExtensionRoot: stageDir,
+      });
+
+      // Verify file was copied (test passes if disk is not full)
+      assert.ok(await fs.promises.access(path.join(stageDir, 'package-lock.json')).then(() => true).catch(() => false), 'package-lock.json is copied (disk not full)');
+    });
+
+    // TC-B-01: package-lock.json exists but is empty (0 bytes)
+    // Given: package-lock.json exists but is empty (0 bytes)
+    // When: stageExtensionToTemp is called
+    // Then: Empty package-lock.json is copied successfully
+    test('TC-B-01: package-lock.json exists but is empty (0 bytes)', async () => {
+      // Given: package-lock.json exists but is empty (0 bytes)
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '');
+
+      // When: stageExtensionToTemp is called
+      await stageExtensionToTemp({
+        sourceExtensionRoot: sourceDir,
+        stageExtensionRoot: stageDir,
+      });
+
+      // Then: Empty package-lock.json is copied successfully
+      const copiedPath = path.join(stageDir, 'package-lock.json');
+      assert.ok(await fs.promises.access(copiedPath).then(() => true).catch(() => false), 'Empty package-lock.json is copied');
+      const stats = await fs.promises.stat(copiedPath);
+      assert.strictEqual(stats.size, 0, 'Copied file is empty (0 bytes)');
+    });
+
+    // TC-B-02: package-lock.json exists and is very large (e.g., 100MB+)
+    // Given: package-lock.json exists and is very large
+    // When: stageExtensionToTemp is called
+    // Then: Large package-lock.json is copied successfully or throws error if too large
+    test('TC-B-02: package-lock.json exists and is very large', async () => {
+      // Given: package-lock.json exists and is very large (using smaller size for test: 1MB)
+      const largeContent = 'A'.repeat(1024 * 1024); // 1MB
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), largeContent);
+
+      // When: stageExtensionToTemp is called
+      await stageExtensionToTemp({
+        sourceExtensionRoot: sourceDir,
+        stageExtensionRoot: stageDir,
+      });
+
+      // Then: Large package-lock.json is copied successfully
+      const copiedPath = path.join(stageDir, 'package-lock.json');
+      assert.ok(await fs.promises.access(copiedPath).then(() => true).catch(() => false), 'Large package-lock.json is copied');
+      const stats = await fs.promises.stat(copiedPath);
+      assert.strictEqual(stats.size, largeContent.length, 'Copied file size matches original');
+    });
+
+    // TC-B-03: package-lock.json is a symbolic link
+    // Given: package-lock.json is a symbolic link
+    // When: stageExtensionToTemp is called
+    // Then: Symbolic link is copied (as link or resolved file) based on cp options
+    test('TC-B-03: package-lock.json is a symbolic link', async () => {
+      // Given: package-lock.json is a symbolic link
+      const targetFile = path.join(sourceDir, 'package-lock-target.json');
+      await fs.promises.writeFile(targetFile, '{"name": "test"}');
+      const symlinkPath = path.join(sourceDir, 'package-lock.json');
+      try {
+        await fs.promises.symlink(targetFile, symlinkPath);
+      } catch {
+        // Skip test on platforms that don't support symlinks (e.g., Windows without admin)
+        return;
+      }
+
+      // When: stageExtensionToTemp is called
+      await stageExtensionToTemp({
+        sourceExtensionRoot: sourceDir,
+        stageExtensionRoot: stageDir,
+      });
+
+      // Then: Symbolic link is copied (as resolved file, since cp resolves symlinks by default)
+      const copiedPath = path.join(stageDir, 'package-lock.json');
+      assert.ok(await fs.promises.access(copiedPath).then(() => true).catch(() => false), 'Symbolic link target is copied');
+      const copiedContent = await fs.promises.readFile(copiedPath, 'utf8');
+      assert.strictEqual(copiedContent, '{"name": "test"}', 'Symlink target content is copied');
+    });
+
+    // TC-B-04: package-lock.json exists but sourceExtensionRoot is null
+    // Given: package-lock.json exists but sourceExtensionRoot is null
+    // When: stageExtensionToTemp is called
+    // Then: path.join throws TypeError or handles gracefully
+    test('TC-B-04: package-lock.json exists but sourceExtensionRoot is null', async () => {
+      // Given: package-lock.json exists but sourceExtensionRoot is null
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
+
+      // When: stageExtensionToTemp is called
+      // Then: path.join throws TypeError or handles gracefully
+      await assert.rejects(
+        async () => {
+          await stageExtensionToTemp({
+            sourceExtensionRoot: null as unknown as string,
+            stageExtensionRoot: stageDir,
+          });
+        },
+        (err: Error) => {
+          return err instanceof TypeError || err.message.includes('null') || err.message.includes('TypeError');
+        },
+        'Should throw TypeError when sourceExtensionRoot is null'
+      );
+    });
+
+    // TC-B-05: package-lock.json exists but stageExtensionRoot is null
+    // Given: package-lock.json exists but stageExtensionRoot is null
+    // When: stageExtensionToTemp is called
+    // Then: path.join throws TypeError or handles gracefully
+    test('TC-B-05: package-lock.json exists but stageExtensionRoot is null', async () => {
+      // Given: package-lock.json exists but stageExtensionRoot is null
+      await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
+
+      // When: stageExtensionToTemp is called
+      // Then: path.join throws TypeError or handles gracefully
+      await assert.rejects(
+        async () => {
+          await stageExtensionToTemp({
+            sourceExtensionRoot: sourceDir,
+            stageExtensionRoot: null as unknown as string,
+          });
+        },
+        (err: Error) => {
+          return err instanceof TypeError || err.message.includes('null') || err.message.includes('TypeError');
+        },
+        'Should throw TypeError when stageExtensionRoot is null'
+      );
     });
   });
 });

@@ -185,6 +185,39 @@ suite('src/ui/controlPanel.ts', () => {
     assert.ok(html.includes('border-radius: 2px;'), 'Button has border-radius: 2px');
   });
 
+  // TC-N-03: ControlPanel HTML is generated with button element
+  // Given: Provider initialized with valid context
+  // When: HTML is generated
+  // Then: HTML contains button element with height: 30px style
+  test('TC-N-03: ControlPanel HTML is generated with button element', () => {
+    resolveView();
+    const html = webviewView.webview.html;
+    assert.ok(html.includes('height: 30px;'), 'HTML contains button element with height: 30px style');
+    assert.ok(html.includes('<button'), 'HTML contains button element');
+  });
+
+  // TC-B-06: ControlPanel HTML is generated
+  // Given: Provider initialized with valid context
+  // When: HTML is generated
+  // Then: HTML does not contain height: 26px (old value)
+  test('TC-B-06: ControlPanel HTML does not contain old height value', () => {
+    resolveView();
+    const html = webviewView.webview.html;
+    assert.ok(!html.includes('height: 26px;'), 'HTML does not contain height: 26px (old value)');
+  });
+
+  // TC-B-07: ControlPanel HTML is generated
+  // Given: Provider initialized with valid context
+  // When: HTML is generated
+  // Then: HTML contains height: 30px exactly (not 29px or 31px)
+  test('TC-B-07: ControlPanel HTML contains exact height value', () => {
+    resolveView();
+    const html = webviewView.webview.html;
+    assert.ok(html.includes('height: 30px;'), 'HTML contains height: 30px exactly');
+    assert.ok(!html.includes('height: 29px;'), 'HTML does not contain height: 29px');
+    assert.ok(!html.includes('height: 31px;'), 'HTML does not contain height: 31px');
+  });
+
   // TC-N-08: Button hover and focus styles
   // Given: Provider initialized with valid context
   // When: HTML is generated
