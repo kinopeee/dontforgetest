@@ -53,6 +53,20 @@ GitHub Actions 等では問題なく全テストが完走します。
 
 ## 実行手順
 
+### AI（スラッシュコマンド）向け：ビルド→VSIX生成→インストール（最短）
+
+```bash
+cd "/Users/yoo/dev/dontforgetest" && npm run vsix:build
+```
+
+次にインストール：
+
+```bash
+cd "/Users/yoo/dev/dontforgetest" && npm run vsix:install
+```
+
+> **注意**: インストール後、拡張機能を有効にするには IDE のリロード（`Developer: Reload Window`）が必要な場合があります。
+
 ### A) パッチバージョンを上げて VSIX を生成（推奨）
 
 #### ワンライナー（コピペ用）
@@ -108,7 +122,35 @@ git commit -m "chore: バージョンを$(node -p \"require('./package.json').ve
 
 ## インストール方法
 
+### GUI からインストール
+
 VS Code の拡張機能ビューで `...` → **Install from VSIX...** を選び、生成された `.vsix` を指定します。
+
+### CLI からインストール（自動化）
+
+コマンドラインから直接インストールできます。`--force` で既存バージョンを上書きします。
+
+```bash
+cd "/Users/yoo/dev/dontforgetest" && npm run vsix:install
+```
+
+> **備考**: Cursor 環境では `code` コマンドも `cursor` コマンドも Cursor を指します。どちらを使っても同じです。
+
+### ビルド＆インストール（分割推奨）
+
+AI 実行では **ビルドとインストールを分けた方が失敗時に再試行しやすく、結果も確認しやすい**です。
+
+```bash
+cd "/Users/yoo/dev/dontforgetest" && npm run vsix:build
+cd "/Users/yoo/dev/dontforgetest" && npm run vsix:install
+```
+
+バージョンも上げる場合：
+
+```bash
+cd "/Users/yoo/dev/dontforgetest" && npm run vsix:build:bump
+cd "/Users/yoo/dev/dontforgetest" && npm run vsix:install
+```
 
 ## ノート
 
