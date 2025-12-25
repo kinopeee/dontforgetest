@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { initializeProgressTreeView, _resetForTesting as resetProgressTreeView } from '../../ui/progressTreeView';
 import { initializeOutputTreeView } from '../../ui/outputTreeView';
 
@@ -365,6 +366,148 @@ suite('src/extension.ts', () => {
       // セマンティックバージョニング形式（x.y.z）であること
       const semverPattern = /^\d+\.\d+\.\d+$/;
       assert.ok(semverPattern.test(version), `バージョン "${version}" はセマンティックバージョニング形式（x.y.z）ではありません`);
+    });
+
+    // TC-PKG-01: package.json version field is 0.0.67
+    // Given: package.json file exists
+    // When: Reading package.json
+    // Then: Version field is 0.0.67
+    test('TC-PKG-01: package.json version field is 0.0.67', () => {
+      // Given: package.json file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      const packageJsonPath = path.join(ext.extensionPath, 'package.json');
+      assert.ok(fs.existsSync(packageJsonPath), 'package.json file exists');
+      
+      // When: Reading package.json
+      const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+      const packageJson = JSON.parse(packageJsonContent) as { version?: string };
+      
+      // Then: Version field is 0.0.67
+      assert.strictEqual(packageJson.version, '0.0.67', 'Version number is updated correctly');
+    });
+
+    // TC-PKG-02: package-lock.json version field is 0.0.67
+    // Given: package-lock.json file exists
+    // When: Reading package-lock.json
+    // Then: Version field in root and packages[''] is 0.0.67
+    test('TC-PKG-02: package-lock.json version field is 0.0.67', () => {
+      // Given: package-lock.json file exists
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      const packageLockJsonPath = path.join(ext.extensionPath, 'package-lock.json');
+      assert.ok(fs.existsSync(packageLockJsonPath), 'package-lock.json file exists');
+      
+      // When: Reading package-lock.json
+      const packageLockJsonContent = fs.readFileSync(packageLockJsonPath, 'utf8');
+      const packageLockJson = JSON.parse(packageLockJsonContent) as {
+        version?: string;
+        packages?: Record<string, { version?: string }>;
+      };
+      
+      // Then: Version field in root and packages[''] is 0.0.67
+      assert.strictEqual(packageLockJson.version, '0.0.67', 'Version number is synchronized in lock file root');
+      if (packageLockJson.packages && packageLockJson.packages['']) {
+        assert.strictEqual(packageLockJson.packages[''].version, '0.0.67', 'Version number is synchronized in lock file packages[""]');
+      }
+    });
+
+    // TC-PKG-03: package.json file does not exist
+    // Given: package.json file does not exist
+    // When: Attempting to read package.json
+    // Then: File read operation throws error or returns null
+    test('TC-PKG-03: package.json file does not exist', () => {
+      // Given: Non-existent file path
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      const nonExistentPath = path.join(ext.extensionPath, 'non-existent-package.json');
+      
+      // When: Attempting to read non-existent file
+      // Then: File read operation throws error
+      assert.throws(() => {
+        fs.readFileSync(nonExistentPath, 'utf8');
+      }, /ENOENT|no such file/i, 'Reading non-existent file should throw error');
+    });
+
+    // TC-PKG-04: package-lock.json file does not exist
+    // Given: package-lock.json file does not exist
+    // When: Attempting to read package-lock.json
+    // Then: File read operation throws error or returns null
+    test('TC-PKG-04: package-lock.json file does not exist', () => {
+      // Given: Non-existent file path
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      
+      const nonExistentPath = path.join(ext.extensionPath, 'non-existent-package-lock.json');
+      
+      // When: Attempting to read non-existent file
+      // Then: File read operation throws error
+      assert.throws(() => {
+        fs.readFileSync(nonExistentPath, 'utf8');
+      }, /ENOENT|no such file/i, 'Reading non-existent file should throw error');
+    });
+
+    // TC-PKG-05: package.json contains invalid JSON
+    // Given: package.json contains invalid JSON
+    // When: Parsing JSON content
+    // Then: JSON.parse throws SyntaxError
+    test('TC-PKG-05: package.json contains invalid JSON', () => {
+      // Given: Invalid JSON string
+      const invalidJson = '{ "version": "0.0.67", invalid }';
+      
+      // When: Parsing invalid JSON
+      // Then: JSON.parse throws SyntaxError
+      assert.throws(() => {
+        JSON.parse(invalidJson);
+      }, SyntaxError, 'Parsing invalid JSON should throw SyntaxError');
+    });
+
+    // TC-PKG-06: package.json version field is missing
+    // Given: package.json version field is missing
+    // When: Reading package.json without version field
+    // Then: Version field is undefined or null
+    test('TC-PKG-06: package.json version field is missing', () => {
+      // Given: JSON without version field
+      const jsonWithoutVersion = '{}';
+      const packageJson = JSON.parse(jsonWithoutVersion) as { version?: string };
+      
+      // When: Reading version field
+      // Then: Version field is undefined
+      assert.strictEqual(packageJson.version, undefined, 'Version field should be undefined when missing');
+    });
+
+    // TC-PKG-07: package.json version field is empty string
+    // Given: package.json version field is empty string
+    // When: Reading package.json with empty version
+    // Then: Version field is empty string
+    test('TC-PKG-07: package.json version field is empty string', () => {
+      // Given: JSON with empty version field
+      const jsonWithEmptyVersion = '{"version": ""}';
+      const packageJson = JSON.parse(jsonWithEmptyVersion) as { version?: string };
+      
+      // When: Reading version field
+      // Then: Version field is empty string
+      assert.strictEqual(packageJson.version, '', 'Version field should be empty string');
+    });
+
+    // TC-PKG-08: package-lock.json packages[''] is missing
+    // Given: package-lock.json packages[''] is missing
+    // When: Reading package-lock.json without packages['']
+    // Then: packages[''] is undefined, test handles gracefully
+    test('TC-PKG-08: package-lock.json packages[""] is missing', () => {
+      // Given: JSON without packages[''] field
+      const jsonWithoutPackages = '{"version": "0.0.67"}';
+      const packageLockJson = JSON.parse(jsonWithoutPackages) as {
+        version?: string;
+        packages?: Record<string, { version?: string }>;
+      };
+      
+      // When: Reading packages[''] field
+      // Then: packages[''] is undefined
+      assert.strictEqual(packageLockJson.packages?.[''], undefined, 'packages[""] should be undefined when missing');
     });
 
     // TC-RES-02: testgen-view.svg のレンダリング

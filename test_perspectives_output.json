@@ -3,305 +3,235 @@
   "version": 1,
   "cases": [
     {
-      "caseId": "TC-N-01",
-      "inputPrecondition": "parsePerspectiveJsonV1 with valid JSON object starting with '{'",
+      "caseId": "TC-PKG-01",
+      "inputPrecondition": "package.json file exists in extension directory",
       "perspective": "Equivalence – normal",
-      "expectedResult": "Returns ok: true with parsed PerspectiveJsonV1",
-      "notes": "Standard happy path for object input"
+      "expectedResult": "Version field is 0.0.67 (matches current version)",
+      "notes": "Validates version synchronization in package.json"
     },
     {
-      "caseId": "TC-N-02",
-      "inputPrecondition": "parsePerspectiveJsonV1 with JSON array starting with '[' containing valid object '[{\"version\":1,\"cases\":[]}]'",
+      "caseId": "TC-PKG-02",
+      "inputPrecondition": "package-lock.json file exists in extension directory",
       "perspective": "Equivalence – normal",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Array is parsed but asRecord returns undefined, error 'json-not-object'"
+      "expectedResult": "Version field in root and packages[''] is 0.0.67",
+      "notes": "Validates version synchronization in package-lock.json"
     },
     {
-      "caseId": "TC-N-03",
-      "inputPrecondition": "parsePerspectiveJsonV1 with JSON array starting with '[' containing invalid JSON syntax",
+      "caseId": "TC-PKG-03",
+      "inputPrecondition": "package.json file does not exist",
+      "perspective": "Boundary – null",
+      "expectedResult": "File read operation throws ENOENT error",
+      "notes": "Error handling for missing package.json"
+    },
+    {
+      "caseId": "TC-PKG-04",
+      "inputPrecondition": "package-lock.json file does not exist",
+      "perspective": "Boundary – null",
+      "expectedResult": "File read operation throws ENOENT error",
+      "notes": "Error handling for missing package-lock.json"
+    },
+    {
+      "caseId": "TC-PKG-05",
+      "inputPrecondition": "package.json contains invalid JSON syntax",
       "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'invalid-json: <message>'",
-      "notes": "JSON.parse throws exception for invalid array syntax"
+      "expectedResult": "JSON.parse throws SyntaxError",
+      "notes": "Error handling for malformed JSON"
     },
     {
-      "caseId": "TC-N-04",
-      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input starting with '['",
+      "caseId": "TC-PKG-06",
+      "inputPrecondition": "package.json version field is missing",
+      "perspective": "Boundary – null",
+      "expectedResult": "Version field is undefined",
+      "notes": "Handles missing version field gracefully"
+    },
+    {
+      "caseId": "TC-PKG-07",
+      "inputPrecondition": "package.json version field is empty string",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Version field is empty string",
+      "notes": "Handles empty version string"
+    },
+    {
+      "caseId": "TC-PKG-08",
+      "inputPrecondition": "package-lock.json packages[''] is missing",
+      "perspective": "Boundary – null",
+      "expectedResult": "packages[''] is undefined, test handles gracefully",
+      "notes": "Handles missing packages[''] field"
+    },
+    {
+      "caseId": "TC-CSS-01",
+      "inputPrecondition": "Provider initialized with valid context",
       "perspective": "Equivalence – normal",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Input starts with '[' but parsed value is not object"
+      "expectedResult": "HTML contains @keyframes pulse-opacity animation definition with 0%, 100% { opacity: 1; } and 50% { opacity: 0.75; }",
+      "notes": "Validates pulse-opacity animation keyframes are defined"
     },
     {
-      "caseId": "TC-N-05",
-      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input starting with '\"'",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "String is valid JSON but not object"
+      "caseId": "TC-CSS-02",
+      "inputPrecondition": "Provider initialized with valid context",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "HTML contains @keyframes progress-slide animation definition with 0% { background-position: 0% 0; } and 100% { background-position: 200% 0; }",
+      "notes": "Validates progress-slide animation keyframes are defined"
+    },
+    {
+      "caseId": "TC-CSS-03",
+      "inputPrecondition": "Provider initialized with valid context",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "HTML does not contain @keyframes glow animation definition",
+      "notes": "Validates that glow animation is not used (implementation uses pulse-opacity and progress-slide)"
+    },
+    {
+      "caseId": "TC-CSS-04",
+      "inputPrecondition": "Provider initialized with valid context",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "HTML contains button.running class style definition with VS Code theme variables (background-color: var(--vscode-button-secondaryBackground)) and animation: pulse-opacity 2s ease-in-out infinite",
+      "notes": "Validates running button uses VS Code theme variables and pulse-opacity animation"
+    },
+    {
+      "caseId": "TC-CSS-05",
+      "inputPrecondition": "Provider initialized with valid context",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "HTML contains button.running:hover style definition with background-color: var(--vscode-button-secondaryHoverBackground)",
+      "notes": "Validates hover state uses VS Code theme variable"
     },
     {
       "caseId": "TC-N-06",
-      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input equals 'null'",
-      "perspective": "Boundary – null",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "null is valid JSON but not object"
+      "inputPrecondition": "Provider initialized with valid context, HTML generated",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "HTML contains updateButtonState function with classList.add('running') call",
+      "notes": "Validates button state management uses classList.add instead of inline styles"
     },
     {
       "caseId": "TC-N-07",
-      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input equals 'true'",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Boolean true is valid JSON but not object"
+      "inputPrecondition": "Provider initialized with valid context, HTML generated",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "HTML contains updateButtonState function with classList.remove('running') call",
+      "notes": "Validates button state management uses classList.remove instead of inline styles"
     },
     {
       "caseId": "TC-N-08",
-      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input equals 'false'",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Boolean false is valid JSON but not object"
+      "inputPrecondition": "Provider initialized with valid context, HTML generated",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "HTML contains button text '✨ テスト作成中 (中断)' when running state is set",
+      "notes": "Validates button text includes emoji character when running"
     },
     {
       "caseId": "TC-N-09",
-      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input starting with '{' but missing closing '}'",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'no-json-object'",
-      "notes": "extractJsonObject fails, then checks for '{' start"
+      "inputPrecondition": "Provider initialized with valid context, HTML generated",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "HTML contains button text 'テスト生成' when not running",
+      "notes": "Validates default button text is correct"
     },
     {
       "caseId": "TC-N-10",
-      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input not matching any special pattern",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'no-json-object'",
-      "notes": "No JSON object found and doesn't match primitive patterns"
+      "inputPrecondition": "Provider initialized with valid context, HTML generated",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "HTML contains animation: shimmer 2s linear infinite, glow 1.5s ease-in-out infinite",
+      "notes": "Validates running button has correct animation properties"
     },
     {
       "caseId": "TC-N-11",
-      "inputPrecondition": "parseTestExecutionJsonV1 with valid JSON object starting with '{'",
+      "inputPrecondition": "Provider initialized with valid context, HTML generated",
       "perspective": "Equivalence – normal",
-      "expectedResult": "Returns ok: true with parsed TestExecutionJsonV1",
-      "notes": "Standard happy path for object input"
-    },
-    {
-      "caseId": "TC-N-12",
-      "inputPrecondition": "parseTestExecutionJsonV1 with JSON array starting with '[' containing valid object '[{\"version\":1}]'",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Array is parsed but asRecord returns undefined, error 'json-not-object'"
-    },
-    {
-      "caseId": "TC-N-13",
-      "inputPrecondition": "parseTestExecutionJsonV1 with JSON array starting with '[' containing invalid JSON syntax",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'invalid-json: <message>'",
-      "notes": "JSON.parse throws exception for invalid array syntax"
-    },
-    {
-      "caseId": "TC-N-14",
-      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input starting with '['",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Input starts with '[' but parsed value is not object"
-    },
-    {
-      "caseId": "TC-N-15",
-      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input starting with '\"'",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "String is valid JSON but not object"
-    },
-    {
-      "caseId": "TC-N-16",
-      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input equals 'null'",
-      "perspective": "Boundary – null",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "null is valid JSON but not object"
-    },
-    {
-      "caseId": "TC-N-17",
-      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input equals 'true'",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Boolean true is valid JSON but not object"
-    },
-    {
-      "caseId": "TC-N-18",
-      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input equals 'false'",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Boolean false is valid JSON but not object"
-    },
-    {
-      "caseId": "TC-N-19",
-      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input starting with '{' but missing closing '}'",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'no-json-object'",
-      "notes": "extractJsonObject fails, then checks for '{' start"
-    },
-    {
-      "caseId": "TC-N-20",
-      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input not matching any special pattern",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'no-json-object'",
-      "notes": "No JSON object found and doesn't match primitive patterns"
-    },
-    {
-      "caseId": "TC-N-21",
-      "inputPrecondition": "buildTestExecutionArtifactMarkdown with all parameters provided",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Returns markdown with sections in order: title, execution info, summary, details, detailed logs",
-      "notes": "summarySection and detailsSection appear after execution info section"
-    },
-    {
-      "caseId": "TC-N-22",
-      "inputPrecondition": "buildTestExecutionArtifactMarkdown with empty targetPaths array",
-      "perspective": "Boundary – empty",
-      "expectedResult": "Returns markdown with '- (なし)' for target files",
-      "notes": "Empty array is handled correctly"
-    },
-    {
-      "caseId": "TC-N-23",
-      "inputPrecondition": "buildTestExecutionArtifactMarkdown with skipped result",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Returns markdown with '- status: skipped' and skipReason if provided",
-      "notes": "Skipped status is displayed correctly"
-    },
-    {
-      "caseId": "TC-N-24",
-      "inputPrecondition": "buildTestExecutionArtifactMarkdown with errorMessage in result",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Returns markdown with '- spawn error: <message>' line",
-      "notes": "Error message is included in execution info section"
+      "expectedResult": "HTML contains animation: shimmer 1.5s linear infinite, glow 1s ease-in-out infinite for hover state",
+      "notes": "Validates hover state has faster animation timing"
     },
     {
       "caseId": "TC-E-01",
-      "inputPrecondition": "parsePerspectiveJsonV1 with empty string",
-      "perspective": "Boundary – empty",
-      "expectedResult": "Returns ok: false with error 'empty'",
-      "notes": "Empty input handling"
+      "inputPrecondition": "Provider initialized, updateButtonState called with null runBtn element",
+      "perspective": "Boundary – null",
+      "expectedResult": "Throws TypeError or handles gracefully (getElementById returns null)",
+      "notes": "Error handling for null DOM element (tested in browser environment)"
     },
     {
       "caseId": "TC-E-02",
-      "inputPrecondition": "parsePerspectiveJsonV1 with whitespace-only string",
-      "perspective": "Boundary – empty",
-      "expectedResult": "Returns ok: false with error 'empty'",
-      "notes": "Trimmed empty string"
+      "inputPrecondition": "Provider initialized, updateButtonState called with undefined runBtn",
+      "perspective": "Boundary – null",
+      "expectedResult": "Throws TypeError or handles gracefully (getElementById returns undefined)",
+      "notes": "Error handling for undefined DOM element (tested in browser environment)"
     },
     {
       "caseId": "TC-E-03",
-      "inputPrecondition": "parsePerspectiveJsonV1 with invalid JSON syntax in object",
+      "inputPrecondition": "Provider initialized, updateButtonState called with running=true but classList.add fails",
       "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'invalid-json: <message>'",
-      "notes": "JSON.parse throws exception"
+      "expectedResult": "Error is handled gracefully, button text still updates to '✨ テスト作成中 (中断)'",
+      "notes": "Error handling for classList.add failure (tested in browser environment with mocked classList)"
     },
     {
       "caseId": "TC-E-04",
-      "inputPrecondition": "parsePerspectiveJsonV1 with valid JSON object but version !== 1",
+      "inputPrecondition": "Provider initialized, updateButtonState called with running=false but classList.remove fails",
       "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'unsupported-version'",
-      "notes": "Version validation"
-    },
-    {
-      "caseId": "TC-E-05",
-      "inputPrecondition": "parsePerspectiveJsonV1 with valid JSON object but cases is not array",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'cases-not-array'",
-      "notes": "cases must be array"
-    },
-    {
-      "caseId": "TC-E-06",
-      "inputPrecondition": "parseTestExecutionJsonV1 with empty string",
-      "perspective": "Boundary – empty",
-      "expectedResult": "Returns ok: false with error 'empty'",
-      "notes": "Empty input handling"
-    },
-    {
-      "caseId": "TC-E-07",
-      "inputPrecondition": "parseTestExecutionJsonV1 with whitespace-only string",
-      "perspective": "Boundary – empty",
-      "expectedResult": "Returns ok: false with error 'empty'",
-      "notes": "Trimmed empty string"
-    },
-    {
-      "caseId": "TC-E-08",
-      "inputPrecondition": "parseTestExecutionJsonV1 with invalid JSON syntax in object",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'invalid-json: <message>'",
-      "notes": "JSON.parse throws exception"
-    },
-    {
-      "caseId": "TC-E-09",
-      "inputPrecondition": "parseTestExecutionJsonV1 with valid JSON object but version !== 1",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns ok: false with error 'unsupported-version'",
-      "notes": "Version validation"
+      "expectedResult": "Error is handled gracefully, button text still updates to 'テスト生成'",
+      "notes": "Error handling for classList.remove failure (tested in browser environment with mocked classList)"
     },
     {
       "caseId": "TC-B-01",
-      "inputPrecondition": "parsePerspectiveJsonV1 with JSON array containing zero elements '[]'",
-      "perspective": "Boundary – zero",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Empty array is valid JSON but not object"
+      "inputPrecondition": "Provider initialized, updateButtonState called with running=true immediately after running=false",
+      "perspective": "Boundary – state transition",
+      "expectedResult": "Button state transitions correctly, class is added, running state check exists",
+      "notes": "Rapid state transition from false to true"
     },
     {
       "caseId": "TC-B-02",
-      "inputPrecondition": "parsePerspectiveJsonV1 with JSON array containing single element '[{\"version\":1}]'",
-      "perspective": "Boundary – min",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Single element array is still array"
+      "inputPrecondition": "Provider initialized, updateButtonState called with running=false immediately after running=true",
+      "perspective": "Boundary – state transition",
+      "expectedResult": "Button state transitions correctly, class is removed",
+      "notes": "Rapid state transition from true to false"
     },
     {
       "caseId": "TC-B-03",
-      "inputPrecondition": "parsePerspectiveJsonV1 with valid JSON object with cases array containing zero cases",
-      "perspective": "Boundary – zero",
-      "expectedResult": "Returns ok: true with empty cases array",
-      "notes": "Empty cases array is valid"
+      "inputPrecondition": "Provider initialized, updateButtonState called multiple times with running=true",
+      "perspective": "Boundary – idempotency",
+      "expectedResult": "Button state remains consistent, no duplicate classes added (classList.add is idempotent)",
+      "notes": "Multiple calls with same state should be safe"
     },
     {
       "caseId": "TC-B-04",
-      "inputPrecondition": "parsePerspectiveJsonV1 with valid JSON object with cases array containing exactly one case",
-      "perspective": "Boundary – min",
-      "expectedResult": "Returns ok: true with single case in array",
-      "notes": "Minimum valid cases array size"
+      "inputPrecondition": "Provider initialized, updateButtonState called multiple times with running=false",
+      "perspective": "Boundary – idempotency",
+      "expectedResult": "Button state remains consistent, no errors when removing non-existent class (classList.remove is safe)",
+      "notes": "Multiple calls with same state should be safe"
     },
     {
       "caseId": "TC-B-05",
-      "inputPrecondition": "parseTestExecutionJsonV1 with JSON array containing zero elements '[]'",
+      "inputPrecondition": "Provider initialized, animation duration set to 0s",
       "perspective": "Boundary – zero",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Empty array is valid JSON but not object"
+      "expectedResult": "Animation still defined but executes instantly (CSS accepts 0s duration)",
+      "notes": "0s duration is valid CSS but not used in current implementation"
     },
     {
       "caseId": "TC-B-06",
-      "inputPrecondition": "parseTestExecutionJsonV1 with JSON array containing single element '[{\"version\":1}]'",
-      "perspective": "Boundary – min",
-      "expectedResult": "Returns ok: false with error 'json-not-object'",
-      "notes": "Single element array is still array"
+      "inputPrecondition": "Provider initialized, animation duration set to very large value (999999s)",
+      "perspective": "Boundary – max",
+      "expectedResult": "Animation still defined and executes (CSS accepts large duration values)",
+      "notes": "Very large values are not used in current implementation but CSS accepts them"
     },
     {
       "caseId": "TC-B-07",
-      "inputPrecondition": "buildTestExecutionArtifactMarkdown with durationMs = 0",
-      "perspective": "Boundary – zero",
-      "expectedResult": "Returns markdown with '0.0秒' for execution time",
-      "notes": "Zero duration is handled correctly"
+      "inputPrecondition": "Provider initialized, HTML contains emoji character in button text",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Emoji character is correctly encoded in HTML with UTF-8 charset declaration",
+      "notes": "UTF-8 encoding should handle emoji correctly"
     },
     {
       "caseId": "TC-B-08",
-      "inputPrecondition": "buildTestExecutionArtifactMarkdown with exitCode = null",
-      "perspective": "Boundary – null",
-      "expectedResult": "Returns markdown with 'exitCode: null' in summary",
-      "notes": "Null exitCode is handled correctly"
+      "inputPrecondition": "Provider initialized, stateUpdate message received with isRunning=true",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "updateButtonState is called with true, button shows running state",
+      "notes": "Message handler correctly processes stateUpdate with isRunning=true"
     },
     {
       "caseId": "TC-B-09",
-      "inputPrecondition": "buildTestExecutionArtifactMarkdown with empty stdout and stderr",
-      "perspective": "Boundary – empty",
-      "expectedResult": "Returns markdown without stdout/stderr collapsible sections",
-      "notes": "Empty logs are not displayed"
+      "inputPrecondition": "Provider initialized, stateUpdate message received with isRunning=false",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "updateButtonState is called with false, button shows default state",
+      "notes": "Message handler correctly processes stateUpdate with isRunning=false"
     },
     {
       "caseId": "TC-B-10",
-      "inputPrecondition": "buildTestExecutionArtifactMarkdown with extensionLog = empty string",
-      "perspective": "Boundary – empty",
-      "expectedResult": "Returns markdown without extension log collapsible section",
-      "notes": "Empty extension log is not displayed"
+      "inputPrecondition": "Provider initialized, background-size set to 200% auto",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Gradient background animates correctly with shimmer effect, background-size: 200% auto, @keyframes shimmer defined",
+      "notes": "Validates background animation setup for shimmer effect"
     }
   ]
 }
