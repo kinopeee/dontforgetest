@@ -16,9 +16,16 @@ Cursor CLI（cursor-agent）をヘッドレスモードで非同期呼び出し�
 
 ```
 src/
-└── extension.ts    # 拡張機能のエントリーポイント（activate/deactivate）
+├── extension.ts    # 拡張機能のエントリーポイント（activate/deactivate）
+├── commands/       # コマンド実装（コミット差分/作業ツリー/成果物付き実行など）
+├── core/           # 生成戦略・プロンプト・成果物管理・事前チェック等の中核ロジック
+├── providers/      # cursor-agent 実行や実行制御（Run-to-completion）関連
+├── git/            # git差分解析・worktree管理
+├── ui/             # WebView/TreeView/QuickPick/StatusBar 等のUI層
+└── test/           # VS Code拡張機能テスト（@vscode/test-electron + mocha）
 
 out/                # コンパイル済みJS（gitignore対象）
+docs/               # 自動生成レポート等（例: docs/test-perspectives, docs/test-execution-reports）
 package.json        # 拡張機能マニフェスト（commands, activationEvents等）
 tsconfig.json       # TypeScript設定
 ```
@@ -43,7 +50,7 @@ tsconfig.json       # TypeScript設定
 ## 開発コマンド
 
 ```bash
-# ビルド
+# ビルド（TypeScriptコンパイル）
 npm run compile
 
 # ウォッチモード（開発時推奨）
@@ -51,6 +58,24 @@ npm run watch
 
 # リント
 npm run lint
+
+# テスト（事前に compile が走る: pretest）
+npm test
+
+# VSIX生成（ローカルで配布/動作確認したい場合）
+npm run vsix:build
+
+# VSIXインストール（直近に生成された dontforgetest-*.vsix を強制インストール）
+npm run vsix:install
+
+# ビルド→インストール（一括）
+npm run vsix:build-install
+
+# バージョン上げ→ビルド→インストール（一括）
+npm run vsix:build-install:bump
+
+# バージョン上げ→VSIX生成（インストールしない）
+npm run vsix:build:bump
 ```
 
 ## デバッグ方法
