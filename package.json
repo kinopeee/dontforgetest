@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "Dontforgetest",
   "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.60",
+  "version": "0.0.62",
   "engines": {
     "vscode": "^1.85.0"
   },

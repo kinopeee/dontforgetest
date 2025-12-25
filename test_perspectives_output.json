@@ -1,0 +1,308 @@
+<!-- BEGIN TEST PERSPECTIVES JSON -->
+{
+  "version": 1,
+  "cases": [
+    {
+      "caseId": "TC-N-01",
+      "inputPrecondition": "parsePerspectiveJsonV1 with valid JSON object starting with '{'",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns ok: true with parsed PerspectiveJsonV1",
+      "notes": "Standard happy path for object input"
+    },
+    {
+      "caseId": "TC-N-02",
+      "inputPrecondition": "parsePerspectiveJsonV1 with JSON array starting with '[' containing valid object '[{\"version\":1,\"cases\":[]}]'",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Array is parsed but asRecord returns undefined, error 'json-not-object'"
+    },
+    {
+      "caseId": "TC-N-03",
+      "inputPrecondition": "parsePerspectiveJsonV1 with JSON array starting with '[' containing invalid JSON syntax",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'invalid-json: <message>'",
+      "notes": "JSON.parse throws exception for invalid array syntax"
+    },
+    {
+      "caseId": "TC-N-04",
+      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input starting with '['",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Input starts with '[' but parsed value is not object"
+    },
+    {
+      "caseId": "TC-N-05",
+      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input starting with '\"'",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "String is valid JSON but not object"
+    },
+    {
+      "caseId": "TC-N-06",
+      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input equals 'null'",
+      "perspective": "Boundary – null",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "null is valid JSON but not object"
+    },
+    {
+      "caseId": "TC-N-07",
+      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input equals 'true'",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Boolean true is valid JSON but not object"
+    },
+    {
+      "caseId": "TC-N-08",
+      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input equals 'false'",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Boolean false is valid JSON but not object"
+    },
+    {
+      "caseId": "TC-N-09",
+      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input starting with '{' but missing closing '}'",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'no-json-object'",
+      "notes": "extractJsonObject fails, then checks for '{' start"
+    },
+    {
+      "caseId": "TC-N-10",
+      "inputPrecondition": "parsePerspectiveJsonV1 with extractJsonObject returning undefined and input not matching any special pattern",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'no-json-object'",
+      "notes": "No JSON object found and doesn't match primitive patterns"
+    },
+    {
+      "caseId": "TC-N-11",
+      "inputPrecondition": "parseTestExecutionJsonV1 with valid JSON object starting with '{'",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns ok: true with parsed TestExecutionJsonV1",
+      "notes": "Standard happy path for object input"
+    },
+    {
+      "caseId": "TC-N-12",
+      "inputPrecondition": "parseTestExecutionJsonV1 with JSON array starting with '[' containing valid object '[{\"version\":1}]'",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Array is parsed but asRecord returns undefined, error 'json-not-object'"
+    },
+    {
+      "caseId": "TC-N-13",
+      "inputPrecondition": "parseTestExecutionJsonV1 with JSON array starting with '[' containing invalid JSON syntax",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'invalid-json: <message>'",
+      "notes": "JSON.parse throws exception for invalid array syntax"
+    },
+    {
+      "caseId": "TC-N-14",
+      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input starting with '['",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Input starts with '[' but parsed value is not object"
+    },
+    {
+      "caseId": "TC-N-15",
+      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input starting with '\"'",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "String is valid JSON but not object"
+    },
+    {
+      "caseId": "TC-N-16",
+      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input equals 'null'",
+      "perspective": "Boundary – null",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "null is valid JSON but not object"
+    },
+    {
+      "caseId": "TC-N-17",
+      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input equals 'true'",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Boolean true is valid JSON but not object"
+    },
+    {
+      "caseId": "TC-N-18",
+      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input equals 'false'",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Boolean false is valid JSON but not object"
+    },
+    {
+      "caseId": "TC-N-19",
+      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input starting with '{' but missing closing '}'",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'no-json-object'",
+      "notes": "extractJsonObject fails, then checks for '{' start"
+    },
+    {
+      "caseId": "TC-N-20",
+      "inputPrecondition": "parseTestExecutionJsonV1 with extractJsonObject returning undefined and input not matching any special pattern",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'no-json-object'",
+      "notes": "No JSON object found and doesn't match primitive patterns"
+    },
+    {
+      "caseId": "TC-N-21",
+      "inputPrecondition": "buildTestExecutionArtifactMarkdown with all parameters provided",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns markdown with sections in order: title, execution info, summary, details, detailed logs",
+      "notes": "summarySection and detailsSection appear after execution info section"
+    },
+    {
+      "caseId": "TC-N-22",
+      "inputPrecondition": "buildTestExecutionArtifactMarkdown with empty targetPaths array",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Returns markdown with '- (なし)' for target files",
+      "notes": "Empty array is handled correctly"
+    },
+    {
+      "caseId": "TC-N-23",
+      "inputPrecondition": "buildTestExecutionArtifactMarkdown with skipped result",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns markdown with '- status: skipped' and skipReason if provided",
+      "notes": "Skipped status is displayed correctly"
+    },
+    {
+      "caseId": "TC-N-24",
+      "inputPrecondition": "buildTestExecutionArtifactMarkdown with errorMessage in result",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns markdown with '- spawn error: <message>' line",
+      "notes": "Error message is included in execution info section"
+    },
+    {
+      "caseId": "TC-E-01",
+      "inputPrecondition": "parsePerspectiveJsonV1 with empty string",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Returns ok: false with error 'empty'",
+      "notes": "Empty input handling"
+    },
+    {
+      "caseId": "TC-E-02",
+      "inputPrecondition": "parsePerspectiveJsonV1 with whitespace-only string",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Returns ok: false with error 'empty'",
+      "notes": "Trimmed empty string"
+    },
+    {
+      "caseId": "TC-E-03",
+      "inputPrecondition": "parsePerspectiveJsonV1 with invalid JSON syntax in object",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'invalid-json: <message>'",
+      "notes": "JSON.parse throws exception"
+    },
+    {
+      "caseId": "TC-E-04",
+      "inputPrecondition": "parsePerspectiveJsonV1 with valid JSON object but version !== 1",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'unsupported-version'",
+      "notes": "Version validation"
+    },
+    {
+      "caseId": "TC-E-05",
+      "inputPrecondition": "parsePerspectiveJsonV1 with valid JSON object but cases is not array",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'cases-not-array'",
+      "notes": "cases must be array"
+    },
+    {
+      "caseId": "TC-E-06",
+      "inputPrecondition": "parseTestExecutionJsonV1 with empty string",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Returns ok: false with error 'empty'",
+      "notes": "Empty input handling"
+    },
+    {
+      "caseId": "TC-E-07",
+      "inputPrecondition": "parseTestExecutionJsonV1 with whitespace-only string",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Returns ok: false with error 'empty'",
+      "notes": "Trimmed empty string"
+    },
+    {
+      "caseId": "TC-E-08",
+      "inputPrecondition": "parseTestExecutionJsonV1 with invalid JSON syntax in object",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'invalid-json: <message>'",
+      "notes": "JSON.parse throws exception"
+    },
+    {
+      "caseId": "TC-E-09",
+      "inputPrecondition": "parseTestExecutionJsonV1 with valid JSON object but version !== 1",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'unsupported-version'",
+      "notes": "Version validation"
+    },
+    {
+      "caseId": "TC-B-01",
+      "inputPrecondition": "parsePerspectiveJsonV1 with JSON array containing zero elements '[]'",
+      "perspective": "Boundary – zero",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Empty array is valid JSON but not object"
+    },
+    {
+      "caseId": "TC-B-02",
+      "inputPrecondition": "parsePerspectiveJsonV1 with JSON array containing single element '[{\"version\":1}]'",
+      "perspective": "Boundary – min",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Single element array is still array"
+    },
+    {
+      "caseId": "TC-B-03",
+      "inputPrecondition": "parsePerspectiveJsonV1 with valid JSON object with cases array containing zero cases",
+      "perspective": "Boundary – zero",
+      "expectedResult": "Returns ok: true with empty cases array",
+      "notes": "Empty cases array is valid"
+    },
+    {
+      "caseId": "TC-B-04",
+      "inputPrecondition": "parsePerspectiveJsonV1 with valid JSON object with cases array containing exactly one case",
+      "perspective": "Boundary – min",
+      "expectedResult": "Returns ok: true with single case in array",
+      "notes": "Minimum valid cases array size"
+    },
+    {
+      "caseId": "TC-B-05",
+      "inputPrecondition": "parseTestExecutionJsonV1 with JSON array containing zero elements '[]'",
+      "perspective": "Boundary – zero",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Empty array is valid JSON but not object"
+    },
+    {
+      "caseId": "TC-B-06",
+      "inputPrecondition": "parseTestExecutionJsonV1 with JSON array containing single element '[{\"version\":1}]'",
+      "perspective": "Boundary – min",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Single element array is still array"
+    },
+    {
+      "caseId": "TC-B-07",
+      "inputPrecondition": "buildTestExecutionArtifactMarkdown with durationMs = 0",
+      "perspective": "Boundary – zero",
+      "expectedResult": "Returns markdown with '0.0秒' for execution time",
+      "notes": "Zero duration is handled correctly"
+    },
+    {
+      "caseId": "TC-B-08",
+      "inputPrecondition": "buildTestExecutionArtifactMarkdown with exitCode = null",
+      "perspective": "Boundary – null",
+      "expectedResult": "Returns markdown with 'exitCode: null' in summary",
+      "notes": "Null exitCode is handled correctly"
+    },
+    {
+      "caseId": "TC-B-09",
+      "inputPrecondition": "buildTestExecutionArtifactMarkdown with empty stdout and stderr",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Returns markdown without stdout/stderr collapsible sections",
+      "notes": "Empty logs are not displayed"
+    },
+    {
+      "caseId": "TC-B-10",
+      "inputPrecondition": "buildTestExecutionArtifactMarkdown with extensionLog = empty string",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Returns markdown without extension log collapsible section",
+      "notes": "Empty extension log is not displayed"
+    }
+  ]
+}
+<!-- END TEST PERSPECTIVES JSON -->

@@ -66,17 +66,78 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
   }
 
   const unfenced = stripCodeFence(trimmed);
-  const jsonText = extractJsonObject(unfenced);
-  if (!jsonText) {
-    return { ok: false, error: 'no-json-object' };
+  const t = unfenced.trim();
+
+  // 入力が JSON 配列から始まる場合は、内側の `{...}` を拾わずに全体をパースして型検証する。
+  // 例: `[{"version":1}]` は JSON だが object ではないため json-not-object とする。
+  if (t.startsWith('[')) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(t);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: `invalid-json: ${msg}` };
+    }
+    const rec = asRecord(parsed);
+    if (!rec) {
+      return { ok: false, error: 'json-not-object' };
+    }
+    // 以降は object として通常の検証へ進める
+    const versionRaw = rec.version;
+    if (versionRaw !== 1) {
+      return { ok: false, error: 'unsupported-version' };
+    }
+
+    const casesRaw = rec.cases;
+    if (!Array.isArray(casesRaw)) {
+      return { ok: false, error: 'cases-not-array' };
+    }
+
+    const cases: PerspectiveCase[] = [];
+    for (const item of casesRaw) {
+      const itemRec = asRecord(item);
+      if (!itemRec) {
+        continue;
+      }
+      cases.push({
+        caseId: getStringOrEmpty(itemRec.caseId),
+        inputPrecondition: getStringOrEmpty(itemRec.inputPrecondition),
+        perspective: getStringOrEmpty(itemRec.perspective),
+        expectedResult: getStringOrEmpty(itemRec.expectedResult),
+        notes: getStringOrEmpty(itemRec.notes),
+      });
+    }
+
+    return { ok: true, value: { version: 1, cases } };
   }
 
+  const jsonText = extractJsonObject(unfenced);
+
   let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonText);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: `invalid-json: ${msg}` };
+  if (jsonText) {
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: `invalid-json: ${msg}` };
+    }
+  } else {
+    // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
+    // 例: [] / "..." / null / true / false は JSON として成立し、object でないため json-not-object を返したい。
+    if (t.startsWith('{')) {
+      // `{` はあるが閉じ `}` がない等のケースは、従来どおり no-json-object 扱いとする。
+      return { ok: false, error: 'no-json-object' };
+    }
+    if (t.startsWith('[') || t.startsWith('"') || t === 'null' || t === 'true' || t === 'false') {
+      try {
+        parsed = JSON.parse(t);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { ok: false, error: `invalid-json: ${msg}` };
+      }
+    } else {
+      return { ok: false, error: 'no-json-object' };
+    }
   }
 
   const rec = asRecord(parsed);
@@ -124,17 +185,71 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
   }
 
   const unfenced = stripCodeFence(trimmed);
-  const jsonText = extractJsonObject(unfenced);
-  if (!jsonText) {
-    return { ok: false, error: 'no-json-object' };
+  const t = unfenced.trim();
+
+  // 入力が JSON 配列から始まる場合は、内側の `{...}` を拾わずに全体をパースして型検証する。
+  // 例: `[{"version":1}]` は JSON だが object ではないため json-not-object とする。
+  if (t.startsWith('[')) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(t);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: `invalid-json: ${msg}` };
+    }
+    const rec = asRecord(parsed);
+    if (!rec) {
+      return { ok: false, error: 'json-not-object' };
+    }
+    // 以降は object として通常の検証へ進める
+    if (rec.version !== 1) {
+      return { ok: false, error: 'unsupported-version' };
+    }
+
+    const exitCode = getNumberOrNull(rec.exitCode);
+    const signal = getStringOrNull(rec.signal);
+    const durationMs = getNonNegativeNumberOrDefault(rec.durationMs, 0);
+    const stdout = getStringOrEmpty(rec.stdout);
+    const stderr = getStringOrEmpty(rec.stderr);
+
+    return {
+      ok: true,
+      value: {
+        version: 1,
+        exitCode,
+        signal,
+        durationMs,
+        stdout,
+        stderr,
+      },
+    };
   }
 
+  const jsonText = extractJsonObject(unfenced);
+
   let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonText);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: `invalid-json: ${msg}` };
+  if (jsonText) {
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: `invalid-json: ${msg}` };
+    }
+  } else {
+    // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
+    if (t.startsWith('{')) {
+      return { ok: false, error: 'no-json-object' };
+    }
+    if (t.startsWith('[') || t.startsWith('"') || t === 'null' || t === 'true' || t === 'false') {
+      try {
+        parsed = JSON.parse(t);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { ok: false, error: `invalid-json: ${msg}` };
+      }
+    } else {
+      return { ok: false, error: 'no-json-object' };
+    }
   }
 
   const rec = asRecord(parsed);
@@ -492,9 +607,6 @@ export function buildTestExecutionArtifactMarkdown(params: {
 
   const sections: string[] = [
     '# テスト実行レポート（自動生成）',
-    '',
-    summarySection,
-    detailsSection,
     '## 実行情報',
     '',
     `- 生成日時: ${tsLocal}`,
@@ -509,6 +621,8 @@ export function buildTestExecutionArtifactMarkdown(params: {
     `- 対象ファイル:`,
     targets.length > 0 ? targets : '- (なし)',
     '',
+    summarySection,
+    detailsSection,
     '## 詳細ログ',
     '',
     stdoutCollapsible,

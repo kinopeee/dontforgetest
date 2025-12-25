@@ -221,6 +221,7 @@ suite('core/artifacts.ts', () => {
       assert.ok(md.includes('# テスト実行レポート（自動生成）'), 'タイトルが含まれること');
       assert.ok(md.includes('exitCode: 0'), 'exitCodeが含まれること');
       assert.ok(md.includes('## テスト結果サマリー'), 'サマリーセクションが含まれること');
+      assert.ok(md.indexOf('## 実行情報') < md.indexOf('## テスト結果サマリー'), '実行情報がサマリーより前に出力されること');
       assert.ok(md.includes('status: executed'), 'status: executed が含まれること');
       assert.ok(md.includes('<summary>実行ログ（拡張機能）（クリックで展開）</summary>'), '実行ログセクションが含まれること');
       assert.ok(md.includes('[INFO] Extension Log'), '拡張機能ログが含まれること');
@@ -297,6 +298,114 @@ suite('core/artifacts.ts', () => {
 
     // Then: エラーメッセージが含まれること
     assert.ok(md.includes('spawn error: Spawn failed'), 'エラーメッセージが含まれること');
+  });
+
+  // TC-N-21: buildTestExecutionArtifactMarkdown with all parameters provided
+  test('TC-N-21: buildTestExecutionArtifactMarkdown generates markdown with sections in order: title, execution info, summary, details, detailed logs', () => {
+    // Given: All parameters provided
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '  ✔ test case 1\n  ✔ test case 2',
+        stderr: '',
+      },
+    });
+
+    // Then: Sections appear in order: title, execution info, summary, details, detailed logs
+    const titleIndex = md.indexOf('# テスト実行レポート（自動生成）');
+    const execInfoIndex = md.indexOf('## 実行情報');
+    const summaryIndex = md.indexOf('## テスト結果サマリー');
+    const detailsIndex = md.indexOf('## テスト詳細');
+    const detailedLogsIndex = md.indexOf('## 詳細ログ');
+
+    assert.ok(titleIndex >= 0, 'Title section is present');
+    assert.ok(execInfoIndex >= 0, 'Execution info section is present');
+    assert.ok(summaryIndex >= 0, 'Summary section is present');
+    assert.ok(detailsIndex >= 0, 'Details section is present');
+    assert.ok(detailedLogsIndex >= 0, 'Detailed logs section is present');
+
+    // Verify order: title < execution info < summary < details < detailed logs
+    assert.ok(titleIndex < execInfoIndex, 'Title comes before execution info');
+    assert.ok(execInfoIndex < summaryIndex, 'Execution info comes before summary');
+    assert.ok(summaryIndex < detailsIndex, 'Summary comes before details');
+    assert.ok(detailsIndex < detailedLogsIndex, 'Details comes before detailed logs');
+  });
+
+  // TC-N-22: buildTestExecutionArtifactMarkdown with empty targetPaths array
+  test('TC-N-22: buildTestExecutionArtifactMarkdown generates markdown with "- (なし)" for target files when targetPaths is empty', () => {
+    // Given: Empty targetPaths array
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: [],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: Markdown contains "- (なし)" for target files
+    assert.ok(md.includes('- (なし)'), 'Empty array is handled correctly');
+  });
+
+  // TC-N-23: buildTestExecutionArtifactMarkdown with skipped result
+  test('TC-N-23: buildTestExecutionArtifactMarkdown generates markdown with "- status: skipped" and skipReason if provided', () => {
+    // Given: Skipped result
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: null,
+        signal: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+        skipped: true,
+        skipReason: 'Pre-test check failed',
+      },
+    });
+
+    // Then: Markdown contains "- status: skipped" and skipReason
+    assert.ok(md.includes('status: skipped'), 'Skipped status is displayed correctly');
+    assert.ok(md.includes('skipReason: Pre-test check failed'), 'SkipReason is included');
+  });
+
+  // TC-N-24: buildTestExecutionArtifactMarkdown with errorMessage in result
+  test('TC-N-24: buildTestExecutionArtifactMarkdown generates markdown with "- spawn error: <message>" line', () => {
+    // Given: Error message in result
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: null,
+        signal: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+        errorMessage: 'Command execution failed',
+      },
+    });
+
+    // Then: Markdown contains "- spawn error: <message>" line in execution info section
+    assert.ok(md.includes('spawn error: Command execution failed'), 'Error message is included in execution info section');
   });
 
   // TC-ART-10: 実行レポートMarkdown生成（空出力）
@@ -430,6 +539,96 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes('| 成功 | - |'), 'Passed shows "-"');
     assert.ok(md.includes('| 失敗 | - |'), 'Failed shows "-"');
     assert.ok(md.includes('| 合計 | - |'), 'Total shows "-"');
+  });
+
+  // TC-B-07: buildTestExecutionArtifactMarkdown with durationMs = 0
+  test('TC-B-07: buildTestExecutionArtifactMarkdown generates report with durationSec="0.0" for zero duration', () => {
+    // Given: TestExecutionResult with durationMs=0
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: Zero duration is handled correctly
+    assert.ok(md.includes('| 実行時間 | 0.0秒 |'), 'Duration shows 0.0 seconds');
+  });
+
+  // TC-B-08: buildTestExecutionArtifactMarkdown with exitCode = null
+  test('TC-B-08: buildTestExecutionArtifactMarkdown generates report showing "null" for exitCode when exitCode is null', () => {
+    // Given: TestExecutionResult with exitCode=null
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: null,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: Null exitCode is handled correctly
+    assert.ok(md.includes('exitCode: null'), 'exitCode shows "null"');
+  });
+
+  // TC-B-09: buildTestExecutionArtifactMarkdown with empty stdout and stderr
+  test('TC-B-09: buildTestExecutionArtifactMarkdown generates report without stdout/stderr collapsible sections when empty', () => {
+    // Given: TestExecutionResult with empty stdout and stderr
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // Then: Empty logs are not displayed
+    assert.ok(!md.includes('<summary>stdout'), 'Empty stdout section is not displayed');
+    assert.ok(!md.includes('<summary>stderr'), 'Empty stderr section is not displayed');
+  });
+
+  // TC-B-10: buildTestExecutionArtifactMarkdown with extensionLog = empty string
+  test('TC-B-10: buildTestExecutionArtifactMarkdown generates report without extension log collapsible section when empty', () => {
+    // Given: TestExecutionResult with extensionLog = empty string
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        extensionLog: '',
+      },
+    });
+
+    // Then: Empty extension log is not displayed
+    assert.ok(!md.includes('<summary>実行ログ（拡張機能）'), 'Empty extension log section is not displayed');
   });
 
   // TC-REPORT-B-01: TestExecutionResult with durationMs=0
@@ -2324,8 +2523,25 @@ suite('core/artifacts.ts', () => {
       assert.strictEqual(result.value.cases.length, 1);
     });
 
-    // TC-N-04: JSON with extra text before/after
-    test('TC-N-04: parsePerspectiveJsonV1 extracts JSON object from text with surrounding content', () => {
+    // TC-N-04: JSON object with empty cases array
+    test('TC-N-04: parsePerspectiveJsonV1 parses valid JSON with empty cases array', () => {
+      // Given: JSON object with empty cases array
+      const raw = '{"version":1,"cases":[]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=true with empty cases array
+      assert.ok(result.ok, 'parsePerspectiveJsonV1 returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.version, 1);
+      assert.strictEqual(result.value.cases.length, 0);
+    });
+
+    // TC-N-05: JSON with extra text before/after
+    test('TC-N-05: parsePerspectiveJsonV1 extracts JSON object from text with surrounding content', () => {
       // Given: JSON with extra text before/after
       const raw = 'Some text before {"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]} some text after';
 
@@ -2338,6 +2554,27 @@ suite('core/artifacts.ts', () => {
         return;
       }
       assert.strictEqual(result.value.cases.length, 1);
+    });
+
+    // TC-N-06: JSON object with cases array containing objects with missing optional fields
+    test('TC-N-06: parsePerspectiveJsonV1 handles cases array with objects missing optional fields', () => {
+      // Given: JSON object with cases array containing objects with missing optional fields
+      const raw = '{"version":1,"cases":[{"caseId":"TC-N-01"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=true with empty strings for missing fields
+      assert.ok(result.ok, 'parsePerspectiveJsonV1 returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.cases.length, 1);
+      assert.strictEqual(result.value.cases[0]?.caseId, 'TC-N-01');
+      assert.strictEqual(result.value.cases[0]?.inputPrecondition, '');
+      assert.strictEqual(result.value.cases[0]?.perspective, '');
+      assert.strictEqual(result.value.cases[0]?.expectedResult, '');
+      assert.strictEqual(result.value.cases[0]?.notes, '');
     });
 
     // TC-N-05: Valid legacy Markdown table format
@@ -2383,8 +2620,145 @@ suite('core/artifacts.ts', () => {
       assert.ok(md.includes('| TC-N-01 | a b | p\\|q | ok | note |'), 'Newlines converted to spaces and pipes escaped');
     });
 
-    // TC-B-01: Empty string input to parsePerspectiveJsonV1
-    test('TC-B-01: parsePerspectiveJsonV1 returns ok=false with error=empty for empty string', () => {
+    // TC-B-01: JSON array containing zero elements '[]'
+    test('TC-B-01: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for empty array', () => {
+      // Given: JSON array containing zero elements '[]'
+      const raw = '[]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (empty array is valid JSON but not object)
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-B-02: JSON array containing single element '[{"version":1}]'
+    test('TC-B-02: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for single element array', () => {
+      // Given: JSON array containing single element '[{"version":1}]'
+      const raw = '[{"version":1}]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (single element array is still array)
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-B-01 (legacy): JSON array with single element '[{"version":1,"cases":[]}]'
+    test('TC-B-01 (legacy): parsePerspectiveJsonV1 returns ok=false with error=json-not-object for single element array', () => {
+      // Given: JSON array with single element
+      const raw = '[{"version":1,"cases":[]}]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=json-not-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-B-02: JSON object with cases array containing exactly one case
+    test('TC-B-02: parsePerspectiveJsonV1 parses valid JSON with single case', () => {
+      // Given: JSON object with cases array containing exactly one case
+      const raw = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"p","expectedResult":"ok","notes":"-"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=true with single case in array
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.cases.length, 1);
+      assert.strictEqual(result.value.cases[0]?.caseId, 'TC-N-01');
+    });
+
+    // TC-B-03: JSON object with cases array containing zero cases
+    test('TC-B-03: parsePerspectiveJsonV1 parses valid JSON with zero cases', () => {
+      // Given: JSON object with cases array containing zero cases
+      const raw = '{"version":1,"cases":[]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=true with empty cases array
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.cases.length, 0);
+    });
+
+    // TC-E-01: parsePerspectiveJsonV1 with empty string
+    test('TC-E-01: parsePerspectiveJsonV1 returns ok=false with error=empty for empty string', () => {
+      // Given: Empty string input to parsePerspectiveJsonV1
+      const raw = '';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=empty
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'empty');
+    });
+
+    // TC-E-02: parsePerspectiveJsonV1 with whitespace-only string
+    test('TC-E-02: parsePerspectiveJsonV1 returns ok=false with error=empty for whitespace-only string', () => {
+      // Given: Whitespace-only string input to parsePerspectiveJsonV1
+      const raw = '   \n\t  ';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=empty (trimmed empty string)
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'empty');
+    });
+
+    // TC-E-03: parsePerspectiveJsonV1 with invalid JSON syntax in object
+    test('TC-E-03: parsePerspectiveJsonV1 returns ok=false with error starting with invalid-json: for invalid JSON syntax in object', () => {
+      // Given: Invalid JSON syntax in object
+      const raw = '{"version":1,"cases":[invalid]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error starting with invalid-json:
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+    });
+
+    // TC-E-04: parsePerspectiveJsonV1 with valid JSON object but version !== 1
+    test('TC-E-04: parsePerspectiveJsonV1 returns ok=false with error=unsupported-version for version !== 1', () => {
+      // Given: Valid JSON object but version !== 1
+      const raw = '{"version":2,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"p","expectedResult":"ok","notes":"-"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=unsupported-version
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'unsupported-version');
+    });
+
+    // TC-E-05: parsePerspectiveJsonV1 with valid JSON object but cases is not array
+    test('TC-E-05: parsePerspectiveJsonV1 returns ok=false with error=cases-not-array for non-array cases', () => {
+      // Given: Valid JSON object but cases is not array
+      const raw = '{"version":1,"cases":"not-an-array"}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=cases-not-array
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'cases-not-array');
+    });
+
+    // TC-B-04: Empty string input to parsePerspectiveJsonV1
+    test('TC-B-04: parsePerspectiveJsonV1 returns ok=false with error=empty for empty string', () => {
       // Given: Empty string input to parsePerspectiveJsonV1
       const raw = '';
 
@@ -2396,8 +2770,8 @@ suite('core/artifacts.ts', () => {
       assert.strictEqual(result.error, 'empty');
     });
 
-    // TC-B-02: Whitespace-only string input to parsePerspectiveJsonV1
-    test('TC-B-02: parsePerspectiveJsonV1 returns ok=false with error=empty after trim', () => {
+    // TC-B-05: Whitespace-only string input to parsePerspectiveJsonV1
+    test('TC-B-05: parsePerspectiveJsonV1 returns ok=false with error=empty after trim', () => {
       // Given: Whitespace-only string input to parsePerspectiveJsonV1
       const raw = '   \n\t  ';
 
@@ -2543,6 +2917,307 @@ suite('core/artifacts.ts', () => {
       // Then: parsePerspectiveJsonV1 returns ok=false with error=json-not-object
       assert.ok(!result.ok, 'Returns ok=false');
       assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-E-03: JSON array starting with '[' (e.g., '[1,2,3]')
+    test('TC-E-03: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for JSON array', () => {
+      // Given: JSON array starting with '['
+      const raw = '[1,2,3]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=json-not-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-E-04: JSON array containing object '[{"version":1}]'
+    test('TC-E-04: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for array containing object', () => {
+      // Given: JSON array containing object
+      const raw = '[{"version":1}]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=json-not-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-E-05: Empty JSON array '[]'
+    test('TC-E-05: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for empty array', () => {
+      // Given: Empty JSON array
+      const raw = '[]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=json-not-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-E-06: JSON primitive null
+    test('TC-E-06: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for null primitive', () => {
+      // Given: JSON primitive null
+      const raw = 'null';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=json-not-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-E-07: JSON primitive true
+    test('TC-E-07: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for true primitive', () => {
+      // Given: JSON primitive true
+      const raw = 'true';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=json-not-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-E-08: JSON primitive false
+    test('TC-E-08: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for false primitive', () => {
+      // Given: JSON primitive false
+      const raw = 'false';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=json-not-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-E-09: JSON string '"hello"'
+    test('TC-E-09: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for string primitive', () => {
+      // Given: JSON string primitive
+      const raw = '"hello"';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=json-not-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-E-10: JSON number '123'
+    test('TC-E-10: parsePerspectiveJsonV1 returns ok=false with error=no-json-object for number primitive', () => {
+      // Given: JSON number primitive
+      const raw = '123';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=no-json-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'no-json-object');
+    });
+
+    // TC-E-11: Text starting with '{' but missing closing '}'
+    test('TC-E-11: parsePerspectiveJsonV1 returns ok=false with error=no-json-object for unclosed object', () => {
+      // Given: Text starting with '{' but missing closing '}'
+      const raw = '{"version":1,"cases":[]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=no-json-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'no-json-object');
+    });
+
+    // TC-E-12: Invalid JSON syntax (e.g., '{version:1}')
+    test('TC-E-12: parsePerspectiveJsonV1 returns ok=false with error starting with invalid-json: for invalid JSON', () => {
+      // Given: Invalid JSON syntax
+      const raw = '{version:1}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error starting with invalid-json:
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+    });
+
+    // TC-E-14: Valid JSON object with version = 0
+    test('TC-E-14: parsePerspectiveJsonV1 returns ok=false with error=unsupported-version for version 0', () => {
+      // Given: Valid JSON object with version = 0
+      const raw = '{"version":0,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"p","expectedResult":"ok","notes":"-"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=unsupported-version
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'unsupported-version');
+    });
+
+    // TC-E-15: Valid JSON object with version = 2
+    test('TC-E-15: parsePerspectiveJsonV1 returns ok=false with error=unsupported-version for version 2', () => {
+      // Given: Valid JSON object with version = 2
+      const raw = '{"version":2,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"p","expectedResult":"ok","notes":"-"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=unsupported-version
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'unsupported-version');
+    });
+
+    // TC-E-20: JSON array starting with '[' containing invalid JSON
+    test('TC-E-20: parsePerspectiveJsonV1 returns ok=false with error starting with invalid-json: for invalid array JSON', () => {
+      // Given: JSON array starting with '[' containing invalid JSON
+      const raw = '[invalid json]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error starting with invalid-json:
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+    });
+
+    // TC-N-02: parsePerspectiveJsonV1 with JSON array starting with '[' containing valid object '[{"version":1,"cases":[]}]'
+    test('TC-N-02: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for JSON array containing valid object', () => {
+      // Given: JSON array starting with '[' containing valid object '[{"version":1,"cases":[]}]'
+      const raw = '[{"version":1,"cases":[]}]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (array is parsed but asRecord returns undefined)
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-03: parsePerspectiveJsonV1 with JSON array starting with '[' containing invalid JSON syntax
+    test('TC-N-03: parsePerspectiveJsonV1 returns ok=false with error starting with invalid-json: for invalid array JSON syntax', () => {
+      // Given: JSON array starting with '[' containing invalid JSON syntax
+      const raw = '[{"version":1,"cases":invalid]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error starting with invalid-json:
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+    });
+
+    // TC-N-04: parsePerspectiveJsonV1 with extractJsonObject returning undefined and input starting with '['
+    test('TC-N-04: parsePerspectiveJsonV1 returns ok=false with error=json-not-object when extractJsonObject returns undefined and input starts with [', () => {
+      // Given: extractJsonObject returns undefined and input starts with '['
+      // This happens when input is like '[{"version":1}]' but extractJsonObject can't find '{...}'
+      // In the new logic, if input starts with '[', it's parsed directly
+      const raw = '[{"version":1}]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (array is parsed but asRecord returns undefined)
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-05: parsePerspectiveJsonV1 with extractJsonObject returning undefined and input starting with '"'
+    test('TC-N-05: parsePerspectiveJsonV1 returns ok=false with error=json-not-object when extractJsonObject returns undefined and input starts with "', () => {
+      // Given: extractJsonObject returns undefined and input starts with '"'
+      const raw = '"hello"';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (string is valid JSON but not object)
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-06: parsePerspectiveJsonV1 with extractJsonObject returning undefined and input equals 'null'
+    test('TC-N-06: parsePerspectiveJsonV1 returns ok=false with error=json-not-object when extractJsonObject returns undefined and input equals null', () => {
+      // Given: extractJsonObject returns undefined and input equals 'null'
+      const raw = 'null';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (null is valid JSON but not object)
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-07: parsePerspectiveJsonV1 with extractJsonObject returning undefined and input equals 'true'
+    test('TC-N-07: parsePerspectiveJsonV1 returns ok=false with error=json-not-object when extractJsonObject returns undefined and input equals true', () => {
+      // Given: extractJsonObject returns undefined and input equals 'true'
+      const raw = 'true';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (boolean true is valid JSON but not object)
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-08: parsePerspectiveJsonV1 with extractJsonObject returning undefined and input equals 'false'
+    test('TC-N-08: parsePerspectiveJsonV1 returns ok=false with error=json-not-object when extractJsonObject returns undefined and input equals false', () => {
+      // Given: extractJsonObject returns undefined and input equals 'false'
+      const raw = 'false';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (boolean false is valid JSON but not object)
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-09: parsePerspectiveJsonV1 with extractJsonObject returning undefined and input starting with '{' but missing closing '}'
+    test('TC-N-09: parsePerspectiveJsonV1 returns ok=false with error=no-json-object when extractJsonObject returns undefined and input starts with { but missing closing }', () => {
+      // Given: extractJsonObject returns undefined and input starts with '{' but missing closing '}'
+      const raw = '{"version":1,"cases":[]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=no-json-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'no-json-object');
+    });
+
+    // TC-N-10: parsePerspectiveJsonV1 with extractJsonObject returning undefined and input not matching any special pattern
+    test('TC-N-10: parsePerspectiveJsonV1 returns ok=false with error=no-json-object when extractJsonObject returns undefined and input not matching any special pattern', () => {
+      // Given: extractJsonObject returns undefined and input not matching any special pattern
+      const raw = 'just some text';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error=no-json-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'no-json-object');
+    });
+
+    // TC-E-21: Text that doesn't start with '{', '[', '"', 'null', 'true', 'false'
+    test('TC-E-21: parsePerspectiveJsonV1 returns ok=false with error=no-json-object for text not matching patterns', () => {
+      // Given: Text that doesn't start with '{', '[', '"', 'null', 'true', 'false'
+      const raw = 'just some text';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: parsePerspectiveJsonV1 returns ok=false with error=no-json-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.strictEqual(result.error, 'no-json-object');
     });
 
     // TC-E-03: JSON object without version field
@@ -3101,6 +3776,70 @@ suite('core/artifacts.ts', () => {
       assert.strictEqual(result.value.stdout, 'line1\nline2');
     });
 
+    // TC-E-06: parseTestExecutionJsonV1 with empty string
+    test('TC-E-06: parseTestExecutionJsonV1 returns ok=false with error=empty for empty string', () => {
+      // Given: Empty string input
+      const raw = '';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=empty
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'empty');
+    });
+
+    // TC-E-07: parseTestExecutionJsonV1 with whitespace-only string
+    test('TC-E-07: parseTestExecutionJsonV1 returns ok=false with error=empty for whitespace-only string', () => {
+      // Given: Whitespace-only string input
+      const raw = '   \n\t  ';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=empty (trimmed empty string)
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'empty');
+    });
+
+    // TC-E-08: parseTestExecutionJsonV1 with invalid JSON syntax in object
+    test('TC-E-08: parseTestExecutionJsonV1 returns ok=false with error starting with invalid-json: for invalid JSON syntax in object', () => {
+      // Given: Invalid JSON syntax in object
+      const raw = '{"version":1,"exitCode":}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error starting with invalid-json:
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+    });
+
+    // TC-E-09: parseTestExecutionJsonV1 with valid JSON object but version !== 1
+    test('TC-E-09: parseTestExecutionJsonV1 returns ok=false with error=unsupported-version for version !== 1', () => {
+      // Given: Valid JSON object but version !== 1
+      const raw = '{"version":2,"exitCode":0,"signal":null,"durationMs":1,"stdout":"","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=unsupported-version
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'unsupported-version');
+    });
+
     // TC-PARSE-E-01: Empty string input
     test('TC-PARSE-E-01: parseTestExecutionJsonV1 returns ok=false for empty string', () => {
       // Given: Empty string input
@@ -3149,6 +3888,38 @@ suite('core/artifacts.ts', () => {
       assert.strictEqual(result.error, 'no-json-object');
     });
 
+    // TC-B-05: JSON array containing zero elements '[]'
+    test('TC-B-05: parseTestExecutionJsonV1 returns ok=false with error=json-not-object for empty array', () => {
+      // Given: JSON array containing zero elements '[]'
+      const raw = '[]';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (empty array is valid JSON but not object)
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-B-06: JSON array containing single element '[{"version":1}]'
+    test('TC-B-06: parseTestExecutionJsonV1 returns ok=false with error=json-not-object for single element array', () => {
+      // Given: JSON array containing single element '[{"version":1}]'
+      const raw = '[{"version":1}]';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (single element array is still array)
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
     // TC-PARSE-E-05: JSON is not an object (array)
     test('TC-PARSE-E-05: parseTestExecutionJsonV1 returns ok=false when JSON is an array', () => {
       // Given: JSON is an array, not an object
@@ -3163,6 +3934,221 @@ suite('core/artifacts.ts', () => {
         return;
       }
       assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-E-22: parseTestExecutionJsonV1 with JSON array '[{"version":1}]'
+    test('TC-E-22: parseTestExecutionJsonV1 returns ok=false with error=json-not-object for JSON array', () => {
+      // Given: JSON array containing object
+      const raw = '[{"version":1}]';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: parseTestExecutionJsonV1 returns ok=false with error=json-not-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-12: parseTestExecutionJsonV1 with JSON array starting with '[' containing valid object '[{"version":1}]'
+    test('TC-N-12: parseTestExecutionJsonV1 returns ok=false with error=json-not-object for JSON array containing valid object', () => {
+      // Given: JSON array starting with '[' containing valid object '[{"version":1}]'
+      const raw = '[{"version":1}]';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (array is parsed but asRecord returns undefined)
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-13: parseTestExecutionJsonV1 with JSON array starting with '[' containing invalid JSON syntax
+    test('TC-N-13: parseTestExecutionJsonV1 returns ok=false with error starting with invalid-json: for invalid array JSON syntax', () => {
+      // Given: JSON array starting with '[' containing invalid JSON syntax
+      const raw = '[{"version":1,"exitCode":invalid}]';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error starting with invalid-json:
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+    });
+
+    // TC-N-14: parseTestExecutionJsonV1 with extractJsonObject returning undefined and input starting with '['
+    test('TC-N-14: parseTestExecutionJsonV1 returns ok=false with error=json-not-object when extractJsonObject returns undefined and input starts with [', () => {
+      // Given: extractJsonObject returns undefined and input starts with '['
+      // This happens when input is like '[{"version":1}]' but extractJsonObject can't find '{...}'
+      // In the new logic, if input starts with '[', it's parsed directly
+      const raw = '[{"version":1}]';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (array is parsed but asRecord returns undefined)
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-15: parseTestExecutionJsonV1 with extractJsonObject returning undefined and input starting with '"'
+    test('TC-N-15: parseTestExecutionJsonV1 returns ok=false with error=json-not-object when extractJsonObject returns undefined and input starts with "', () => {
+      // Given: extractJsonObject returns undefined and input starts with '"'
+      const raw = '"hello"';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (string is valid JSON but not object)
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-16: parseTestExecutionJsonV1 with extractJsonObject returning undefined and input equals 'null'
+    test('TC-N-16: parseTestExecutionJsonV1 returns ok=false with error=json-not-object when extractJsonObject returns undefined and input equals null', () => {
+      // Given: extractJsonObject returns undefined and input equals 'null'
+      const raw = 'null';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (null is valid JSON but not object)
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-17: parseTestExecutionJsonV1 with extractJsonObject returning undefined and input equals 'true'
+    test('TC-N-17: parseTestExecutionJsonV1 returns ok=false with error=json-not-object when extractJsonObject returns undefined and input equals true', () => {
+      // Given: extractJsonObject returns undefined and input equals 'true'
+      const raw = 'true';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (boolean true is valid JSON but not object)
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-18: parseTestExecutionJsonV1 with extractJsonObject returning undefined and input equals 'false'
+    test('TC-N-18: parseTestExecutionJsonV1 returns ok=false with error=json-not-object when extractJsonObject returns undefined and input equals false', () => {
+      // Given: extractJsonObject returns undefined and input equals 'false'
+      const raw = 'false';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=json-not-object (boolean false is valid JSON but not object)
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-N-19: parseTestExecutionJsonV1 with extractJsonObject returning undefined and input starting with '{' but missing closing '}'
+    test('TC-N-19: parseTestExecutionJsonV1 returns ok=false with error=no-json-object when extractJsonObject returns undefined and input starts with { but missing closing }', () => {
+      // Given: extractJsonObject returns undefined and input starts with '{' but missing closing '}'
+      const raw = '{"version":1,"exitCode":0';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=no-json-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'no-json-object');
+    });
+
+    // TC-N-20: parseTestExecutionJsonV1 with extractJsonObject returning undefined and input not matching any special pattern
+    test('TC-N-20: parseTestExecutionJsonV1 returns ok=false with error=no-json-object when extractJsonObject returns undefined and input not matching any special pattern', () => {
+      // Given: extractJsonObject returns undefined and input not matching any special pattern
+      const raw = 'just some text';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error=no-json-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'no-json-object');
+    });
+
+    // TC-E-23: parseTestExecutionJsonV1 with JSON primitive null
+    test('TC-E-23: parseTestExecutionJsonV1 returns ok=false with error=json-not-object for null primitive', () => {
+      // Given: JSON primitive null
+      const raw = 'null';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: parseTestExecutionJsonV1 returns ok=false with error=json-not-object
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'json-not-object');
+    });
+
+    // TC-E-24: parseTestExecutionJsonV1 with valid JSON object but version !== 1
+    test('TC-E-24: parseTestExecutionJsonV1 returns ok=false with error=unsupported-version for version != 1', () => {
+      // Given: Valid JSON object but version !== 1
+      const raw = '{"version":2,"exitCode":0,"signal":null,"durationMs":1,"stdout":"","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: parseTestExecutionJsonV1 returns ok=false with error=unsupported-version
+      assert.ok(!result.ok, 'Returns ok=false');
+      if (result.ok) {
+        return;
+      }
+      assert.strictEqual(result.error, 'unsupported-version');
+    });
+
+    // TC-N-07: parseTestExecutionJsonV1 with valid JSON object version 1 and all required fields
+    test('TC-N-07: parseTestExecutionJsonV1 parses valid JSON object version 1 with all required fields', () => {
+      // Given: Valid JSON object version 1 and all required fields
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":12,"stdout":"out","stderr":"err"}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: parseTestExecutionJsonV1 returns ok=true with parsed TestExecutionJsonV1
+      assert.ok(result.ok, 'Returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.version, 1);
+      assert.strictEqual(result.value.exitCode, 0);
+      assert.strictEqual(result.value.signal, null);
+      assert.strictEqual(result.value.durationMs, 12);
+      assert.strictEqual(result.value.stdout, 'out');
+      assert.strictEqual(result.value.stderr, 'err');
     });
 
     // TC-PARSE-E-06: JSON is not an object (primitive)

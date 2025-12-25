@@ -4,409 +4,255 @@
   "cases": [
     {
       "caseId": "TC-N-01",
-      "inputPrecondition": "Valid JSON perspective table with single case",
+      "inputPrecondition": "Valid JSON object with version 1 and cases array",
       "perspective": "Equivalence – normal",
-      "expectedResult": "parsePerspectiveJsonV1 returns ok=true with parsed cases and renderPerspectiveMarkdownTable generates valid Markdown table",
-      "notes": "Basic happy path for JSON parsing and Markdown rendering"
+      "expectedResult": "Returns ok: true with parsed PerspectiveJsonV1",
+      "notes": "Standard happy path"
     },
     {
       "caseId": "TC-N-02",
-      "inputPrecondition": "Valid JSON perspective table with multiple cases",
+      "inputPrecondition": "JSON object wrapped in code fence (```json ... ```)",
       "perspective": "Equivalence – normal",
-      "expectedResult": "All cases are parsed correctly and rendered in Markdown table",
-      "notes": "Multiple cases handling"
+      "expectedResult": "Returns ok: true with parsed PerspectiveJsonV1 after stripping fence",
+      "notes": "Code fence handling"
     },
     {
       "caseId": "TC-N-03",
-      "inputPrecondition": "JSON wrapped in code fences",
+      "inputPrecondition": "JSON object with surrounding text before and after",
       "perspective": "Equivalence – normal",
-      "expectedResult": "Code fences are stripped and JSON is parsed successfully",
-      "notes": "stripCodeFence removes ```json and ``` markers"
+      "expectedResult": "Returns ok: true with extracted JSON object",
+      "notes": "extractJsonObject extracts { ... } from text"
     },
     {
       "caseId": "TC-N-04",
-      "inputPrecondition": "JSON with extra text before/after",
+      "inputPrecondition": "JSON object with empty cases array",
       "perspective": "Equivalence – normal",
-      "expectedResult": "extractJsonObject extracts JSON object from text with surrounding content",
-      "notes": "Tolerance for extra text around JSON"
-    },
-    {
-      "caseId": "TC-N-05",
-      "inputPrecondition": "Valid legacy Markdown table format",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "coerceLegacyPerspectiveMarkdownTable normalizes table successfully",
-      "notes": "Backward compatibility with old Markdown format"
-    },
-    {
-      "caseId": "TC-N-06",
-      "inputPrecondition": "Cells contain newlines and pipe characters",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "normalizeTableCell converts newlines to spaces and escapes pipe characters",
-      "notes": "Cell normalization for Markdown compatibility"
-    },
-    {
-      "caseId": "TC-N-07",
-      "inputPrecondition": "Log message contains system_reminder tags and event markers",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "sanitizeLogMessageForPerspective removes system_reminder blocks and filters event:tool_call/system:init lines",
-      "notes": "Log sanitization for clean error messages"
-    },
-    {
-      "caseId": "TC-N-08",
-      "inputPrecondition": "buildTestPerspectivePrompt generates prompt with JSON format markers",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Prompt includes <!-- BEGIN TEST PERSPECTIVES JSON --> markers and JSON schema instructions",
-      "notes": "Prompt generation for JSON format"
-    },
-    {
-      "caseId": "TC-B-01",
-      "inputPrecondition": "Empty string input to parsePerspectiveJsonV1",
-      "perspective": "Boundary – empty",
-      "expectedResult": "parsePerspectiveJsonV1 returns ok=false with error='empty'",
-      "notes": "Empty input handling"
-    },
-    {
-      "caseId": "TC-B-02",
-      "inputPrecondition": "Whitespace-only string input to parsePerspectiveJsonV1",
-      "perspective": "Boundary – empty",
-      "expectedResult": "parsePerspectiveJsonV1 returns ok=false with error='empty' after trim",
-      "notes": "Whitespace-only input treated as empty"
-    },
-    {
-      "caseId": "TC-B-03",
-      "inputPrecondition": "cases array is empty in JSON",
-      "perspective": "Boundary – empty",
-      "expectedResult": "buildFailureMarkdown is called with '観点表JSONの cases が空でした' message",
-      "notes": "Empty cases array handling"
-    },
-    {
-      "caseId": "TC-B-04",
-      "inputPrecondition": "Text length equals maxChars in truncateText",
-      "perspective": "Boundary – max",
-      "expectedResult": "truncateText returns original text without truncation",
-      "notes": "Text length at boundary"
-    },
-    {
-      "caseId": "TC-B-05",
-      "inputPrecondition": "Text length equals maxChars + 1 in truncateText",
-      "perspective": "Boundary – max+1",
-      "expectedResult": "truncateText truncates text and appends truncation message",
-      "notes": "Text length one character over boundary"
-    },
-    {
-      "caseId": "TC-B-06",
-      "inputPrecondition": "Cell value is empty string in normalizeTableCell",
-      "perspective": "Boundary – empty",
-      "expectedResult": "normalizeTableCell returns empty string",
-      "notes": "Empty cell handling"
-    },
-    {
-      "caseId": "TC-B-07",
-      "inputPrecondition": "Single newline character in cell value",
-      "perspective": "Boundary – min",
-      "expectedResult": "normalizeTableCell converts single newline to space",
-      "notes": "Minimum newline count"
-    },
-    {
-      "caseId": "TC-B-08",
-      "inputPrecondition": "Multiple consecutive newlines in cell value",
-      "perspective": "Boundary – max",
-      "expectedResult": "normalizeTableCell collapses all newlines to single space",
-      "notes": "Multiple newlines normalization"
-    },
-    {
-      "caseId": "TC-B-09",
-      "inputPrecondition": "Single pipe character in cell value",
-      "perspective": "Boundary – min",
-      "expectedResult": "normalizeTableCell escapes pipe as \\|",
-      "notes": "Single pipe character escape"
-    },
-    {
-      "caseId": "TC-B-10",
-      "inputPrecondition": "Legacy Markdown table with empty body (header only)",
-      "perspective": "Boundary – empty",
-      "expectedResult": "coerceLegacyPerspectiveMarkdownTable returns table with header and separator only",
-      "notes": "Empty body table compatibility"
+      "expectedResult": "Returns ok: true with empty cases array",
+      "notes": "Empty cases is valid"
     },
     {
       "caseId": "TC-E-01",
-      "inputPrecondition": "Invalid JSON syntax in parsePerspectiveJsonV1",
-      "perspective": "Equivalence – error",
-      "expectedResult": "parsePerspectiveJsonV1 returns ok=false with error starting with 'invalid-json:'",
-      "notes": "JSON parse error handling"
+      "inputPrecondition": "Empty string input",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Returns ok: false with error 'empty'",
+      "notes": "Empty input handling"
     },
     {
       "caseId": "TC-E-02",
-      "inputPrecondition": "JSON is not an object (e.g., array or primitive)",
-      "perspective": "Equivalence – error",
-      "expectedResult": "parsePerspectiveJsonV1 returns ok=false with error='json-not-object'",
-      "notes": "Non-object JSON handling"
+      "inputPrecondition": "Whitespace-only string",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Returns ok: false with error 'empty'",
+      "notes": "Trimmed empty string"
     },
     {
       "caseId": "TC-E-03",
-      "inputPrecondition": "JSON object without version field",
+      "inputPrecondition": "JSON array starting with '[' (e.g., '[1,2,3]')",
       "perspective": "Equivalence – error",
-      "expectedResult": "parsePerspectiveJsonV1 returns ok=false with error='unsupported-version'",
-      "notes": "Missing version field"
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Array is valid JSON but not an object"
     },
     {
       "caseId": "TC-E-04",
-      "inputPrecondition": "JSON object with version field not equal to 1",
+      "inputPrecondition": "JSON array containing object '[{\"version\":1}]'",
       "perspective": "Equivalence – error",
-      "expectedResult": "parsePerspectiveJsonV1 returns ok=false with error='unsupported-version'",
-      "notes": "Unsupported version number"
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Array with object element is still array, not object"
     },
     {
       "caseId": "TC-E-05",
-      "inputPrecondition": "JSON object with cases field that is not an array",
-      "perspective": "Equivalence – error",
-      "expectedResult": "parsePerspectiveJsonV1 returns ok=false with error='cases-not-array'",
-      "notes": "Cases field type validation"
+      "inputPrecondition": "Empty JSON array '[]'",
+      "perspective": "Boundary – empty",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Empty array is valid JSON but not object"
     },
     {
       "caseId": "TC-E-06",
-      "inputPrecondition": "JSON object without cases field",
-      "perspective": "Equivalence – error",
-      "expectedResult": "parsePerspectiveJsonV1 returns ok=false with error='cases-not-array'",
-      "notes": "Missing cases field"
+      "inputPrecondition": "JSON primitive null",
+      "perspective": "Boundary – null",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "null is valid JSON but not object"
     },
     {
       "caseId": "TC-E-07",
-      "inputPrecondition": "Text without JSON object (no { or })",
+      "inputPrecondition": "JSON primitive true",
       "perspective": "Equivalence – error",
-      "expectedResult": "parsePerspectiveJsonV1 returns ok=false with error='no-json-object'",
-      "notes": "No JSON object found in text"
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Boolean true is valid JSON but not object"
     },
     {
       "caseId": "TC-E-08",
-      "inputPrecondition": "Legacy Markdown table with incorrect header format",
+      "inputPrecondition": "JSON primitive false",
       "perspective": "Equivalence – error",
-      "expectedResult": "coerceLegacyPerspectiveMarkdownTable returns undefined",
-      "notes": "Invalid header format handling"
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Boolean false is valid JSON but not object"
     },
     {
       "caseId": "TC-E-09",
-      "inputPrecondition": "Legacy Markdown table with missing separator row",
+      "inputPrecondition": "JSON string '\"hello\"'",
       "perspective": "Equivalence – error",
-      "expectedResult": "coerceLegacyPerspectiveMarkdownTable returns undefined",
-      "notes": "Missing separator row handling"
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "String is valid JSON but not object"
     },
     {
       "caseId": "TC-E-10",
-      "inputPrecondition": "Legacy Markdown table with incorrect separator format",
+      "inputPrecondition": "JSON number '123'",
       "perspective": "Equivalence – error",
-      "expectedResult": "coerceLegacyPerspectiveMarkdownTable returns undefined",
-      "notes": "Invalid separator format handling"
+      "expectedResult": "Returns ok: false with error 'no-json-object'",
+      "notes": "Number is valid JSON but not object, and doesn't match special cases"
     },
     {
       "caseId": "TC-E-11",
-      "inputPrecondition": "extractBetweenMarkers called with begin marker not found",
+      "inputPrecondition": "Text starting with '{' but missing closing '}'",
       "perspective": "Equivalence – error",
-      "expectedResult": "extractBetweenMarkers returns undefined",
-      "notes": "Missing begin marker handling"
+      "expectedResult": "Returns ok: false with error 'no-json-object'",
+      "notes": "extractJsonObject fails, then checks for '{' start"
     },
     {
       "caseId": "TC-E-12",
-      "inputPrecondition": "extractBetweenMarkers called with end marker not found",
+      "inputPrecondition": "Invalid JSON syntax (e.g., '{version:1}')",
       "perspective": "Equivalence – error",
-      "expectedResult": "extractBetweenMarkers returns undefined",
-      "notes": "Missing end marker handling"
+      "expectedResult": "Returns ok: false with error 'invalid-json: <message>'",
+      "notes": "JSON.parse throws exception"
     },
     {
       "caseId": "TC-E-13",
-      "inputPrecondition": "extractJsonObject with text containing { but no }",
+      "inputPrecondition": "Valid JSON object with version !== 1",
       "perspective": "Equivalence – error",
-      "expectedResult": "extractJsonObject returns undefined",
-      "notes": "Unclosed JSON object"
+      "expectedResult": "Returns ok: false with error 'unsupported-version'",
+      "notes": "Version validation"
     },
     {
       "caseId": "TC-E-14",
-      "inputPrecondition": "extractJsonObject with text containing } but no {",
-      "perspective": "Equivalence – error",
-      "expectedResult": "extractJsonObject returns undefined",
-      "notes": "Closing brace without opening brace"
+      "inputPrecondition": "Valid JSON object with version = 0",
+      "perspective": "Boundary – zero",
+      "expectedResult": "Returns ok: false with error 'unsupported-version'",
+      "notes": "Version 0 is not supported"
     },
     {
       "caseId": "TC-E-15",
-      "inputPrecondition": "extractJsonObject with } appearing before {",
-      "perspective": "Equivalence – error",
-      "expectedResult": "extractJsonObject returns undefined",
-      "notes": "Invalid brace order"
+      "inputPrecondition": "Valid JSON object with version = 2",
+      "perspective": "Boundary – max+1",
+      "expectedResult": "Returns ok: false with error 'unsupported-version'",
+      "notes": "Version 2 is not supported (only version 1)"
     },
     {
       "caseId": "TC-E-16",
-      "inputPrecondition": "Case item in cases array is not an object",
+      "inputPrecondition": "Valid JSON object with cases as non-array (e.g., string)",
       "perspective": "Equivalence – error",
-      "expectedResult": "parsePerspectiveJsonV1 skips invalid item and continues processing other cases",
-      "notes": "Invalid case item is skipped silently"
+      "expectedResult": "Returns ok: false with error 'cases-not-array'",
+      "notes": "cases must be array"
     },
     {
       "caseId": "TC-E-17",
-      "inputPrecondition": "Case item missing required fields (caseId, inputPrecondition, etc.)",
-      "perspective": "Equivalence – error",
-      "expectedResult": "parsePerspectiveJsonV1 uses getStringOrEmpty to set empty string for missing fields",
-      "notes": "Missing fields are set to empty string"
+      "inputPrecondition": "Valid JSON object with cases as null",
+      "perspective": "Boundary – null",
+      "expectedResult": "Returns ok: false with error 'cases-not-array'",
+      "notes": "cases cannot be null"
     },
     {
       "caseId": "TC-E-18",
-      "inputPrecondition": "Case item with non-string field values (number, boolean, null)",
+      "inputPrecondition": "Valid JSON object with cases array containing non-object elements",
       "perspective": "Equivalence – error",
-      "expectedResult": "getStringOrEmpty converts numbers and booleans to strings, null/undefined to empty string",
-      "notes": "Type coercion for case fields"
+      "expectedResult": "Returns ok: true with cases array excluding non-object items",
+      "notes": "Non-object items are skipped (continue in loop)"
     },
     {
       "caseId": "TC-E-19",
-      "inputPrecondition": "stripCodeFence with code fence but no newline",
-      "perspective": "Equivalence – error",
-      "expectedResult": "stripCodeFence returns original text unchanged",
-      "notes": "Code fence without newline handling"
+      "inputPrecondition": "Valid JSON object with cases array containing mixed object and non-object elements",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns ok: true with only object items in cases array",
+      "notes": "Filters out non-object items"
     },
     {
       "caseId": "TC-E-20",
-      "inputPrecondition": "stripCodeFence with only opening fence, no closing fence",
+      "inputPrecondition": "JSON array starting with '[' containing invalid JSON",
       "perspective": "Equivalence – error",
-      "expectedResult": "stripCodeFence returns original text unchanged",
-      "notes": "Incomplete code fence handling"
+      "expectedResult": "Returns ok: false with error 'invalid-json: <message>'",
+      "notes": "JSON.parse fails for array syntax"
     },
     {
       "caseId": "TC-E-21",
-      "inputPrecondition": "buildFailureMarkdown creates error table with TC-E-EXTRACT-01 caseId",
+      "inputPrecondition": "Text that doesn't start with '{', '[', '\"', 'null', 'true', 'false'",
       "perspective": "Equivalence – error",
-      "expectedResult": "Error table is rendered with single error case and details section with truncated log",
-      "notes": "Error table generation"
+      "expectedResult": "Returns ok: false with error 'no-json-object'",
+      "notes": "No JSON object found and doesn't match primitive patterns"
+    },
+    {
+      "caseId": "TC-N-05",
+      "inputPrecondition": "JSON object with cases array containing objects with missing optional fields",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns ok: true with empty strings for missing fields",
+      "notes": "getStringOrEmpty handles missing fields gracefully"
+    },
+    {
+      "caseId": "TC-N-06",
+      "inputPrecondition": "JSON object with cases array containing objects with non-string field types",
+      "perspective": "Equivalence – normal",
+      "expectedResult": "Returns ok: true with converted string values",
+      "notes": "getStringOrEmpty converts numbers/booleans to strings"
+    },
+    {
+      "caseId": "TC-B-01",
+      "inputPrecondition": "JSON array with single element '[{\"version\":1,\"cases\":[]}]'",
+      "perspective": "Boundary – min",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Single element array is still array"
+    },
+    {
+      "caseId": "TC-B-02",
+      "inputPrecondition": "JSON object with cases array containing exactly one case",
+      "perspective": "Boundary – min",
+      "expectedResult": "Returns ok: true with single case in array",
+      "notes": "Minimum valid cases array size"
+    },
+    {
+      "caseId": "TC-B-03",
+      "inputPrecondition": "JSON object with cases array containing zero cases",
+      "perspective": "Boundary – zero",
+      "expectedResult": "Returns ok: true with empty cases array",
+      "notes": "Empty cases array is valid"
+    },
+    {
+      "caseId": "TC-B-04",
+      "inputPrecondition": "Text with only opening brace '{'",
+      "perspective": "Boundary – min",
+      "expectedResult": "Returns ok: false with error 'no-json-object'",
+      "notes": "extractJsonObject fails, then checks for '{' start"
+    },
+    {
+      "caseId": "TC-B-05",
+      "inputPrecondition": "Text with '{' at start but no matching '}'",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'no-json-object'",
+      "notes": "extractJsonObject returns undefined, then checks for '{' start"
     },
     {
       "caseId": "TC-E-22",
-      "inputPrecondition": "Both JSON and Markdown markers are present in logs",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "JSON format is prioritized over Markdown format",
-      "notes": "Format priority handling"
+      "inputPrecondition": "parseTestExecutionJsonV1 with JSON array '[{\"version\":1}]'",
+      "perspective": "Equivalence – error",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Same array handling logic as parsePerspectiveJsonV1"
     },
     {
       "caseId": "TC-E-23",
-      "inputPrecondition": "Neither JSON nor Markdown markers are present in logs",
-      "perspective": "Equivalence – error",
-      "expectedResult": "buildFailureMarkdown is called with extraction failure message",
-      "notes": "No markers found handling"
+      "inputPrecondition": "parseTestExecutionJsonV1 with JSON primitive null",
+      "perspective": "Boundary – null",
+      "expectedResult": "Returns ok: false with error 'json-not-object'",
+      "notes": "Same primitive handling logic as parsePerspectiveJsonV1"
     },
     {
       "caseId": "TC-E-24",
-      "inputPrecondition": "renderPerspectiveMarkdownTable called with empty cases array",
-      "perspective": "Boundary – empty",
-      "expectedResult": "Returns table with header and separator only, no data rows",
-      "notes": "Empty cases array rendering"
-    },
-    {
-      "caseId": "TC-E-25",
-      "inputPrecondition": "sanitizeLogMessageForPerspective with multiple consecutive blank lines",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Collapses multiple blank lines to single blank line",
-      "notes": "Blank line collapse handling"
-    },
-    {
-      "caseId": "TC-E-26",
-      "inputPrecondition": "sanitizeLogMessageForPerspective with system_reminder tag containing nested tags",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Entire system_reminder block including nested content is removed",
-      "notes": "nested tag removal"
-    },
-    {
-      "caseId": "TC-E-27",
-      "inputPrecondition": "normalizeTableCell with CRLF line endings",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "CRLF are converted to LF first, then normalized to spaces",
-      "notes": "Windows line ending handling"
-    },
-    {
-      "caseId": "TC-E-28",
-      "inputPrecondition": "normalizeTableCell with multiple consecutive spaces",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Multiple spaces are collapsed to single space",
-      "notes": "Space collapse handling"
-    },
-    {
-      "caseId": "TC-E-29",
-      "inputPrecondition": "normalizeTableCell with leading/trailing whitespace",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Leading and trailing whitespace is trimmed",
-      "notes": "Whitespace trimming"
-    },
-    {
-      "caseId": "TC-E-30",
-      "inputPrecondition": "truncateText with text length 0",
-      "perspective": "Boundary – zero",
-      "expectedResult": "Returns empty string",
-      "notes": "Zero length text handling"
-    },
-    {
-      "caseId": "TC-E-31",
-      "inputPrecondition": "truncateText with maxChars set to 0",
-      "perspective": "Boundary – zero",
-      "expectedResult": "Returns text with truncation message",
-      "notes": "Zero maxChars handling"
-    },
-    {
-      "caseId": "TC-E-32",
-      "inputPrecondition": "buildTestPerspectivePrompt includes JSON schema instructions",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Prompt includes version:1 and PerspectiveCase schema description",
-      "notes": "JSON schema documentation in prompt"
-    },
-    {
-      "caseId": "TC-E-33",
-      "inputPrecondition": "buildTestPerspectivePrompt includes field constraints (one line, no newlines)",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Prompt instructs to write fields on single line without newlines",
-      "notes": "Field format constraints in prompt"
-    },
-    {
-      "caseId": "TC-E-34",
-      "inputPrecondition": "asRecord called with null value",
-      "perspective": "Boundary – null",
-      "expectedResult": "Returns undefined",
-      "notes": "null value handling"
-    },
-    {
-      "caseId": "TC-E-35",
-      "inputPrecondition": "asRecord called with array value",
+      "inputPrecondition": "parseTestExecutionJsonV1 with valid JSON object but version !== 1",
       "perspective": "Equivalence – error",
-      "expectedResult": "Returns undefined",
-      "notes": "Array value rejection"
+      "expectedResult": "Returns ok: false with error 'unsupported-version'",
+      "notes": "Same version validation as parsePerspectiveJsonV1"
     },
     {
-      "caseId": "TC-E-36",
-      "inputPrecondition": "getStringOrEmpty called with Infinity or -Infinity",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns empty string (not finite number)",
-      "notes": "Infinite number handling"
-    },
-    {
-      "caseId": "TC-E-37",
-      "inputPrecondition": "getStringOrEmpty called with NaN",
-      "perspective": "Equivalence – error",
-      "expectedResult": "Returns empty string (not finite number)",
-      "notes": "NaN handling"
-    },
-    {
-      "caseId": "TC-E-38",
-      "inputPrecondition": "renderPerspectiveMarkdownTable generates table with PERSPECTIVE_TABLE_HEADER constant",
+      "caseId": "TC-N-07",
+      "inputPrecondition": "parseTestExecutionJsonV1 with valid JSON object version 1 and all required fields",
       "perspective": "Equivalence – normal",
-      "expectedResult": "Table header matches PERSPECTIVE_TABLE_HEADER exactly",
-      "notes": "Header constant usage"
-    },
-    {
-      "caseId": "TC-E-39",
-      "inputPrecondition": "renderPerspectiveMarkdownTable generates table with PERSPECTIVE_TABLE_SEPARATOR constant",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Table separator matches PERSPECTIVE_TABLE_SEPARATOR exactly",
-      "notes": "Separator constant usage"
-    },
-    {
-      "caseId": "TC-E-40",
-      "inputPrecondition": "renderPerspectiveMarkdownTable table ends with newline character",
-      "perspective": "Equivalence – normal",
-      "expectedResult": "Returned string ends with \\n",
-      "notes": "Table format ending"
+      "expectedResult": "Returns ok: true with parsed TestExecutionJsonV1",
+      "notes": "Standard happy path for test execution JSON"
     }
   ]
 }

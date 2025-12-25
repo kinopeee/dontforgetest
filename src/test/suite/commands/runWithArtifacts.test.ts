@@ -79,6 +79,15 @@ class MockProvider implements AgentProvider {
   }
 }
 
+async function readLatestPerspectiveArtifactText(workspaceRoot: string, perspectiveReportDir: string): Promise<string> {
+  const dirUri = vscode.Uri.file(path.join(workspaceRoot, perspectiveReportDir));
+  const files = await vscode.workspace.findFiles(new vscode.RelativePattern(dirUri, 'test-perspectives_*.md'));
+  assert.ok(files.length > 0, '観点表成果物ファイルが生成されること');
+  const sorted = [...files].sort((a, b) => b.fsPath.localeCompare(a.fsPath));
+  const doc = await vscode.workspace.openTextDocument(sorted[0]);
+  return doc.getText();
+}
+
 suite('commands/runWithArtifacts.ts', () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
   // テスト間での衝突を避けるためユニークなディレクトリを使用
@@ -7431,11 +7440,14 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: buildFailureMarkdown is called with empty cases message
+      // Then: 観点表成果物にエラー行とメッセージが含まれる（注入は行われない仕様）
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
-      assert.ok(mainTask.prompt.includes('観点表JSONの cases が空でした'), 'Empty cases error message is included');
+      assert.strictEqual(mainTask.prompt, 'Base Prompt', '抽出失敗時はプロンプトが元のままであること');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-b03'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(perspectiveText.includes('観点表JSONの cases が空でした'), 'Empty cases error message is included');
     });
 
     // TC-B-10: Legacy Markdown table with empty body (header only)
@@ -7510,11 +7522,13 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: coerceLegacyPerspectiveMarkdownTable returns undefined (buildFailureMarkdown is called)
+      // Then: 観点表成果物にエラー行が含まれる
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
-      assert.ok(mainTask.prompt.includes('旧形式（Markdown）の観点表を抽出できませんでした'), 'Error message for invalid header');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e08'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(perspectiveText.includes('旧形式（Markdown）の観点表を抽出できませんでした'), 'Error message for invalid header');
     });
 
     // TC-E-09: Legacy Markdown table with missing separator row
@@ -7549,10 +7563,12 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: coerceLegacyPerspectiveMarkdownTable returns undefined
+      // Then: 観点表成果物にエラー行が含まれる
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e09'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
     });
 
     // TC-E-10: Legacy Markdown table with incorrect separator format
@@ -7588,10 +7604,12 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: coerceLegacyPerspectiveMarkdownTable returns undefined
+      // Then: 観点表成果物にエラー行が含まれる
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e10'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
     });
 
     // TC-E-11: extractBetweenMarkers called with begin marker not found
@@ -7622,11 +7640,13 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: extractBetweenMarkers returns undefined (buildFailureMarkdown is called)
+      // Then: 観点表成果物にエラー行と抽出失敗メッセージが含まれる
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
-      assert.ok(mainTask.prompt.includes('観点表の抽出に失敗しました'), 'Extraction failure message');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e11'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(perspectiveText.includes('観点表の抽出に失敗しました'), 'Extraction failure message');
     });
 
     // TC-E-12: extractBetweenMarkers called with end marker not found
@@ -7657,10 +7677,12 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: extractBetweenMarkers returns undefined (buildFailureMarkdown is called)
+      // Then: 観点表成果物にエラー行が含まれる
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e12'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
     });
 
     // TC-E-21: buildFailureMarkdown creates error table with TC-E-EXTRACT-01 caseId
@@ -7692,12 +7714,14 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: Error table is rendered with single error case and details section with truncated log
+      // Then: 観点表成果物にエラー行と details が含まれる
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
-      assert.ok(mainTask.prompt.includes('<details>'), 'Details section is included');
-      assert.ok(mainTask.prompt.includes('抽出ログ（クリックで展開）'), 'Log section title is included');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e21'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(perspectiveText.includes('<details>'), 'Details section is included');
+      assert.ok(perspectiveText.includes('抽出ログ（クリックで展開）'), 'Log section title is included');
     });
 
     // TC-E-22: Both JSON and Markdown markers are present in logs
@@ -7765,11 +7789,13 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: buildFailureMarkdown is called with extraction failure message
+      // Then: 観点表成果物に抽出失敗が記録される
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
-      assert.ok(mainTask.prompt.includes('観点表の抽出に失敗しました'), 'Extraction failure message');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e23'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(perspectiveText.includes('観点表の抽出に失敗しました'), 'Extraction failure message');
     });
 
     // TC-N-07: Log message contains system_reminder tags and event markers
@@ -7812,14 +7838,19 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: sanitizeLogMessageForPerspective removes system_reminder blocks and filters event:tool_call/system:init lines
-      // The sanitized log should be in the details section
+      // Then: 観点表成果物の details ログから system_reminder とイベントマーカーが除去されている
       const mainTask = provider2.history.find(h => h.taskId?.startsWith('task-n07-2-'));
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('<details>'), 'Details section is included');
-      // The sanitized log should not contain system_reminder or event markers
-      // Note: We can't directly verify the sanitized content, but we verify that the error table is created
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-n07'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(perspectiveText.includes('<details>'), 'Details section is included');
+
+      assert.ok(!perspectiveText.includes('<system_reminder>'), 'system_reminder ブロックが除去されること');
+      assert.ok(!perspectiveText.includes('</system_reminder>'), 'system_reminder ブロックが除去されること');
+      assert.ok(!perspectiveText.includes('This is a reminder'), 'system_reminder 内の文言が除去されること');
+      assert.ok(!perspectiveText.includes('event:tool_call'), 'event:tool_call 行が除去されること');
+      assert.ok(!perspectiveText.includes('system:init'), 'system:init 行が除去されること');
     });
 
     // TC-E-25: sanitizeLogMessageForPerspective with multiple consecutive blank lines
@@ -7861,11 +7892,13 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: Multiple blank lines are collapsed to single blank line
-      // Note: We verify that the error table is created (which uses sanitizeLogMessageForPerspective)
+      // Then: 観点表成果物のログで空行が畳み込まれている
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e25'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(!perspectiveText.includes('\n\n\n'), '連続する空行が2つ以上にならないこと');
     });
 
     // TC-E-26: sanitizeLogMessageForPerspective with system_reminder tag containing nested tags
@@ -7905,11 +7938,16 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: Entire system_reminder block including nested content is removed
-      // Note: We verify that the error table is created (which uses sanitizeLogMessageForPerspective)
+      // Then: 観点表成果物から system_reminder ブロックが丸ごと除去される
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e26'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(!perspectiveText.includes('<system_reminder>'), 'system_reminder 開始タグが除去されること');
+      assert.ok(!perspectiveText.includes('</system_reminder>'), 'system_reminder 終了タグが除去されること');
+      assert.ok(!perspectiveText.includes('<nested>'), 'system_reminder 内のネスト要素も除去されること');
+      assert.ok(!perspectiveText.includes('More content'), 'system_reminder 内の本文も除去されること');
     });
 
     // TC-E-30: truncateText with text length 0
@@ -7942,11 +7980,12 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: Returns empty string (truncateText handles empty string)
-      // Note: buildFailureMarkdown uses truncateText, and empty log results in "(ログが空でした)"
+      // Then: 観点表成果物にエラー行が含まれる（空ログでも安全に処理される）
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e30'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
     });
 
     // TC-E-31: truncateText with maxChars set to 0
@@ -7980,15 +8019,14 @@ suite('commands/runWithArtifacts.ts', () => {
         },
       });
 
-      // Then: Text is truncated and truncation message is appended
-      // Note: buildFailureMarkdown uses truncateText(logText, 200_000)
+      // Then: 観点表成果物の details でログが切り詰められる
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
-      // The truncated log should be in the details section
-      assert.ok(mainTask.prompt.includes('<details>'), 'Details section is included');
-      // Verify truncation message is present (if text exceeds limit)
-      // Note: The exact truncation message format depends on implementation
+
+      const perspectiveText = await readLatestPerspectiveArtifactText(workspaceRoot, path.join(baseTempDir, 'perspectives-e31'));
+      assert.ok(perspectiveText.includes('TC-E-EXTRACT-01'), 'Error case ID is included');
+      assert.ok(perspectiveText.includes('<details>'), 'Details section is included');
+      assert.ok(perspectiveText.includes('... (truncated:'), 'Truncation message is present');
     });
   });
 });
