@@ -60,7 +60,7 @@ npm run watch
 npm test
 ```
 
-ローカルにインストール済みの Cursor を使って実行する場合は、実行ファイルのパスを指定します。
+ローカルにインストール済みの Cursor を使って実行する場合は、実行ファイルのパスを指定します（環境変数名は互換性のため VSCODE のままです）。
 
 ```bash
 DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<Cursor 実行ファイルのパス>" npm test

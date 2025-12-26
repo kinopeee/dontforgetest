@@ -64,7 +64,7 @@ npm run watch
 npm test
 ```
 
-To use a locally installed Cursor, set the executable path.
+To use a locally installed Cursor, set the executable path (keep the env var name for compatibility).
 
 ```bash
 DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<path to Cursor executable>" npm test
