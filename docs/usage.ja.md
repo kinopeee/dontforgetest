@@ -1,13 +1,13 @@
 # 操作手順（Dontforgetest）
 
-このドキュメントは、VS Code / Cursor 上で「テスト生成エージェント」拡張機能を使うための操作手順です。
+このドキュメントは、Cursor 上で「テスト生成エージェント」拡張機能を使うための操作手順です。
 
 - English docs: `../README.md`, `usage.md`
 
 ## 前提条件
 
 - **ワークスペースをフォルダとして開いている**（単一ファイルだけ開いている状態は不可）
-- Cursor **2.2** 以降 / VS Code **1.105** 以降
+- Cursor **2.2** 以降
 - **`cursor-agent` が実行できる**（PATHに入っている、または設定でパス指定）
 - コミット差分系を使う場合は **Gitリポジトリである** こと
 
@@ -19,7 +19,7 @@
 
 ### VSIX からインストール（配布/手動）
 
-1. VS Code / Cursor を開く
+1. Cursor を開く
 2. コマンドパレットを開く（macOS: Cmd+Shift+P）
 3. **`Extensions: Install from VSIX...`** を実行
 4. `.vsix` ファイルを選択
@@ -29,7 +29,7 @@
 
 コマンドパレットを使わず、ファイルツリーから直接インストールすることもできます。
 
-1. VS Code / Cursor のエクスプローラーで `.vsix` ファイルを表示
+1. Cursor のエクスプローラーで `.vsix` ファイルを表示
 2. `.vsix` を右クリック
 3. **`拡張機能の VSIX のインストール`**（英語UIの場合は **`Install Extension VSIX`**）を選択
 4. 必要に応じて再読み込み（Reload）
@@ -38,12 +38,12 @@
 
 1. 依存関係をインストール: `npm install`
 2. ビルド: `npm run compile`
-3. VS Codeでこのリポジトリを開き **F5**（Run Extension）
+3. Cursorでこのリポジトリを開き **F5**（Run Extension）
 4. Extension Development Host でコマンドを実行して動作確認
 
 ## 設定
 
-VS Code / Cursor の設定（Settings）で `dontforgetest.*` を検索します。
+Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 
 - **`dontforgetest.cursorAgentPath`**: `cursor-agent` の実行パス（未指定なら PATH から解決）
 - **`dontforgetest.defaultModel`**: `cursor-agent --model` に渡すモデル（空なら自動）

@@ -1,6 +1,6 @@
 # Test Generation Agent (Dontforgetest)
 
-**Don't forget test!** — One-click, commit-based test generation for VS Code / Cursor.
+**Don't forget test!** — One-click, commit-based test generation for Cursor.
 
 Powered by Cursor CLI (`cursor-agent`), this extension automatically generates test code from commit diffs and selections.
 
@@ -35,7 +35,7 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 
 ## Requirements
 
-- Cursor **2.2+** / VS Code **1.105+**
+- Cursor **2.2+**
 - Cursor CLI (`cursor-agent`)
 
 ## Development (for contributors)
@@ -64,9 +64,15 @@ npm run watch
 npm test
 ```
 
+To use a locally installed Cursor, set the executable path.
+
+```bash
+DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<path to Cursor executable>" npm test
+```
+
 ### Run extension (debug)
 
-1. Open this repository in VS Code / Cursor
+1. Open this repository in Cursor
 2. Press F5 (Run Extension)
 3. In the Extension Development Host, run commands starting with `Dontforgetest:` from the command palette
 

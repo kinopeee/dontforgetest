@@ -2,13 +2,13 @@
 
 ## プロジェクト概要
 
-Cursor CLI（cursor-agent）をヘッドレスモードで非同期呼び出しし、コミット差分や選択範囲からテストコードを自動生成するVS Code拡張機能。TypeScriptで記述され、VS Code Extension APIを使用。
+Cursor CLI（cursor-agent）をヘッドレスモードで非同期呼び出しし、コミット差分や選択範囲からテストコードを自動生成するCursor拡張機能。TypeScriptで記述され、VS Code Extension APIを使用。
 
 ## 技術スタック
 
 - **言語**: TypeScript 5.7+
 - **ランタイム**: Node.js
-- **ターゲット**: VS Code 1.85.0+
+- **ターゲット**: Cursor（VS Code 1.85.0+ 互換）
 - **ビルド**: tsc (TypeScript Compiler)
 - **出力先**: `out/` ディレクトリ
 
@@ -42,7 +42,7 @@ tsconfig.json       # TypeScript設定
 - `vscode` APIはimportで使用: `import * as vscode from 'vscode'`
 - バージョン番号に限らず、環境・実行時に変わり得る情報（例: ポート番号、外部コマンド/実行ファイルのパス、ファイル/ディレクトリパス、APIエンドポイント、モデル名、タイムアウト値など）のハードコードは**厳禁**（必要な場合は設定ファイル・環境変数・定数定義に集約し、参照する）
 
-### VS Code拡張機能パターン
+### Cursor拡張機能パターン
 - コマンドは `context.subscriptions.push()` で登録
 - リソースは `Disposable` パターンで管理
 - コマンドIDは `dontforgetest.commandName` 形式
