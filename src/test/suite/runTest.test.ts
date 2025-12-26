@@ -1370,7 +1370,7 @@ suite('test/runTest.ts', () => {
       await fs.promises.mkdir(path.join(sourceDir, 'docs'), { recursive: true });
       await fs.promises.writeFile(
         path.join(sourceDir, 'docs', 'usage.md'),
-        'dontforgetest.testExecutionRunner\n既定: `extension`\n- extension\n- cursorAgent\n自動フォールバック\n',
+        'dontforgetest.testExecutionRunner\nDefault: `extension`\n- extension\n- cursorAgent\nautomatic fallback\n',
       );
       await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
     };

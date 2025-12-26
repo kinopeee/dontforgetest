@@ -1,6 +1,6 @@
 {
   "displayName": "Dontforgetest",
-  "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
+  "description": "コミット単位でワンアクションでテスト生成",
   "viewsContainers.activitybar.title": "Dontforgetest",
   "views.controlPanel.name": "操作",
   "views.progressView.name": "進捗",
