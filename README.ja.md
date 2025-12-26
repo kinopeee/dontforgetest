@@ -2,13 +2,13 @@
 
 **Don't forget test!** — コミット差分から、ワンクリックでテストを自動生成。
 
-Cursor CLI（`cursor-agent`）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する VS Code / Cursor 拡張機能です。
+Cursor CLI（`cursor-agent`）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する Cursor 拡張機能です。
 
 - English docs: `README.md`, `docs/usage.md`
 
 ## Requirements
 
-- Cursor **2.2** 以降 / VS Code **1.105** 以降
+- Cursor **2.2** 以降
 - Cursor CLI（`cursor-agent`）
 
 ## 主な機能
@@ -60,15 +60,15 @@ npm run watch
 npm test
 ```
 
-ローカルにインストール済みの VS Code を使って実行する場合は、実行ファイルのパスを指定します。
+ローカルにインストール済みの Cursor を使って実行する場合は、実行ファイルのパスを指定します（環境変数名は互換性のため VSCODE のままです）。
 
 ```bash
-DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<VS Code 実行ファイルのパス>" npm test
+DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<Cursor 実行ファイルのパス>" npm test
 ```
 
 ### 拡張機能の実行（デバッグ）
 
-1. VS Code / Cursor でこのリポジトリを開く
+1. Cursor でこのリポジトリを開く
 2. F5（Run Extension）
 3. Extension Development Host のコマンドパレットで `Dontforgetest:` を実行
 

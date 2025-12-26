@@ -1,13 +1,13 @@
 # Usage (Dontforgetest)
 
-This document explains how to use the **Test Generation Agent** extension in VS Code / Cursor.
+This document explains how to use the **Test Generation Agent** extension in Cursor.
 
 - Japanese docs: `usage.ja.md`
 
 ## Prerequisites
 
 - You opened a workspace as a **folder** (single-file window is not supported)
-- Cursor **2.2+** / VS Code **1.105+**
+- Cursor **2.2+**
 - `cursor-agent` is executable (available in PATH, or configured via settings)
 - For diff-based sources, your workspace must be a **Git repository**
 
@@ -19,7 +19,7 @@ This document explains how to use the **Test Generation Agent** extension in VS 
 
 ### Install from VSIX (manual / distribution)
 
-1. Open VS Code / Cursor
+1. Open Cursor
 2. Open the command palette (macOS: Cmd+Shift+P)
 3. Run **`Extensions: Install from VSIX...`**
 4. Select the `.vsix` file
@@ -29,7 +29,7 @@ This document explains how to use the **Test Generation Agent** extension in VS 
 
 You can also install directly from the file tree without using the command palette:
 
-1. Locate the `.vsix` file in the Explorer
+1. Locate the `.vsix` file in Cursor's Explorer
 2. Right-click the `.vsix` file
 3. Select **`Install Extension VSIX`** (Japanese UI: **`拡張機能の VSIX のインストール`**)
 4. Reload if necessary
@@ -38,12 +38,12 @@ You can also install directly from the file tree without using the command palet
 
 1. Install dependencies: `npm install`
 2. Build: `npm run compile`
-3. Open this repository in VS Code and press **F5** (Run Extension)
+3. Open this repository in Cursor and press **F5** (Run Extension)
 4. Verify behavior in the Extension Development Host
 
 ## Settings
 
-Search `dontforgetest.*` in VS Code / Cursor Settings.
+Search `dontforgetest.*` in Cursor Settings.
 
 - **`dontforgetest.cursorAgentPath`**: Path to `cursor-agent` (if empty, resolves from PATH)
 - **`dontforgetest.defaultModel`**: Model passed to `cursor-agent --model` (if empty, auto)

@@ -117,7 +117,7 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
       `## ツール使用制約（必須）`,
       `- **許可されたコマンドのみ実行可能**: \`${preTestCheckCommand}\``,
       `- **テスト実行コマンド（\`npm test\` / \`pnpm test\` / \`pytest\` 等）は禁止**`,
-      `- **VS Code / Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）`,
+      `- **Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）`,
       `- 必要な情報は、対象ファイルの読み取り（read）と、こちらから提示する差分/対象パスから判断すること`,
       ``,
     );
@@ -125,7 +125,7 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     promptParts.push(
       `## ツール使用制約（必須）`,
       `- **shell（コマンド実行）ツールは使用禁止**（\`git diff\` / \`npm test\` 等を実行しない）`,
-      `- **VS Code / Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）`,
+      `- **Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）`,
       `- 必要な情報は、対象ファイルの読み取り（read）と、こちらから提示する差分/対象パスから判断すること`,
       ``,
     );
@@ -198,7 +198,7 @@ export async function buildTestPerspectivePrompt(
   parts.push('');
   parts.push('## ツール使用制約（必須）');
   parts.push('- **shell（コマンド実行）ツールは使用禁止**（`git diff` / `npm test` 等を実行しない）');
-  parts.push('- **VS Code / Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）');
+  parts.push('- **Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）');
   parts.push('- ファイルの編集/追加は不要（実施しない）');
   parts.push('');
   parts.push('## テスト戦略ルール（参考）');
