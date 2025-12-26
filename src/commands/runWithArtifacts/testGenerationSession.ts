@@ -26,6 +26,43 @@ import { runTestCommandViaCursorAgent } from './testExecutionStep';
 import { runPerspectiveTableStep } from './perspectiveStep';
 import type { RunWithArtifactsOptions, WorktreeOps } from '../runWithArtifacts';
 
+type ReadFileUtf8 = (filePath: string) => Promise<string>;
+
+async function looksLikeVsCodeLaunchingTestCommand(params: {
+  workspaceRoot: string;
+  testCommand: string;
+  readFileUtf8: ReadFileUtf8;
+}): Promise<boolean> {
+  const cmd = params.testCommand.trim();
+
+  if (/(^|[\s/])out[/\\]test[/\\]runTest(\.js)?\b/.test(cmd) || /@vscode\/test-electron/.test(cmd)) {
+    return true;
+  }
+
+  if (!/^npm(\s+run)?\s+test\b/.test(cmd)) {
+    return false;
+  }
+
+  const pkgPath = path.join(params.workspaceRoot, 'package.json');
+  try {
+    const raw = await params.readFileUtf8(pkgPath);
+    const parsed: unknown = JSON.parse(raw);
+    const pkg = parsed as { scripts?: Record<string, unknown> } | undefined;
+    const scripts = pkg?.scripts;
+    const testScript = scripts?.test;
+    if (typeof testScript !== 'string') {
+      return false;
+    }
+
+    if (/(@vscode\/test-electron|vscode-test|out\/test\/runTest\.js|out\\test\\runTest\.js)/.test(testScript)) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export class TestGenerationSession {
   private readonly options: RunWithArtifactsOptions;
   private readonly settings: ArtifactSettings;
@@ -569,33 +606,18 @@ export class TestGenerationSession {
   }
 
   private async looksLikeVsCodeLaunchingTestCommand(workspaceRoot: string, testCommand: string): Promise<boolean> {
-    const cmd = testCommand.trim();
-
-    if (/(^|[\s/])out[/\\]test[/\\]runTest(\.js)?\b/.test(cmd) || /@vscode\/test-electron/.test(cmd)) {
-      return true;
-    }
-
-    if (!/^npm(\s+run)?\s+test\b/.test(cmd)) {
-      return false;
-    }
-
-    const pkgPath = path.join(workspaceRoot, 'package.json');
-    try {
-      const raw = await fs.promises.readFile(pkgPath, 'utf8');
-      const parsed: unknown = JSON.parse(raw);
-      const pkg = parsed as { scripts?: Record<string, unknown> } | undefined;
-      const scripts = pkg?.scripts;
-      const testScript = scripts?.test;
-      if (typeof testScript !== 'string') {
-        return false;
-      }
-
-      if (/(@vscode\/test-electron|vscode-test|out\/test\/runTest\.js|out\\test\\runTest\.js)/.test(testScript)) {
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
+    return await looksLikeVsCodeLaunchingTestCommand({
+      workspaceRoot,
+      testCommand,
+      readFileUtf8: (filePath: string) => fs.promises.readFile(filePath, 'utf8'),
+    });
   }
 }
+
+/**
+ * テスト専用の内部関数エクスポート。
+ * 本番利用は禁止。
+ */
+export const __test__ = {
+  looksLikeVsCodeLaunchingTestCommand,
+};
