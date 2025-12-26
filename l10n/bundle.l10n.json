@@ -67,6 +67,7 @@
     "artifact.perspectiveTable.target": "Target",
     "artifact.perspectiveTable.targetFiles": "Target files",
     "artifact.perspectiveTable.empty": "(Perspective table generation result was empty)",
+    "artifact.perspectiveTable.tableHeader": "| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |",
     "artifact.executionReport.title": "Test Execution Report (Auto-generated)",
     "artifact.executionReport.executionInfo": "Execution Information",
     "artifact.executionReport.generatedAt": "Generated at",

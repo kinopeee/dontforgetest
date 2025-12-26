@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { extractBetweenMarkers, coerceLegacyPerspectiveMarkdownTable, truncateText } from '../../../../commands/runWithArtifacts/utils';
+import { PERSPECTIVE_TABLE_HEADER, PERSPECTIVE_TABLE_SEPARATOR } from '../../../../core/artifacts';
 
 suite('commands/runWithArtifacts/utils.ts', () => {
   // TC-B-26: extractBetweenMarkers called with text containing begin marker but no end marker
@@ -45,13 +46,81 @@ suite('commands/runWithArtifacts/utils.ts', () => {
   // TC-B-29: coerceLegacyPerspectiveMarkdownTable called with markdown having header but no separator
   test('TC-B-29: coerceLegacyPerspectiveMarkdownTable returns undefined when separator is missing', () => {
     // Given: Markdown having header but no separator
-    const markdown = '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |\n| Some | Table |';
+    const markdown = `${PERSPECTIVE_TABLE_HEADER}\n| Some | Table |`;
 
     // When: coerceLegacyPerspectiveMarkdownTable is called
     const result = coerceLegacyPerspectiveMarkdownTable(markdown);
 
     // Then: Returns undefined
     assert.strictEqual(result, undefined, 'Should return undefined when separator is missing');
+  });
+
+  // TC-B-32: 本体行の列数が不正なMarkdownでcoerceLegacyPerspectiveMarkdownTableを呼び出す
+  test('TC-B-32: 本体行の列数が不正な場合、coerceLegacyPerspectiveMarkdownTableはundefinedを返す', () => {
+    // Given: 有効なヘッダー/区切り行を持つが、本体行が6列（正しくは5列）のMarkdown
+    const markdown = [
+      PERSPECTIVE_TABLE_HEADER,
+      PERSPECTIVE_TABLE_SEPARATOR,
+      '| TC-01 | Input | Perspective | Expected | Notes | Priority |', // 6列（7個のパイプ）
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTableを呼び出す
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: undefinedを返す（列数不一致の不正なテーブルを拒否）
+    assert.strictEqual(result, undefined, 'Should return undefined when body rows have incorrect column count');
+  });
+
+  // TC-N-33: 行末パイプが無い本体行（5列）でもcoerceLegacyPerspectiveMarkdownTableが受理する
+  test('TC-N-33: 行末パイプが無い本体行でも、列数が正しければ受理される', () => {
+    // Given: 有効なヘッダー/区切り行を持ち、本体行が5列だが行末のパイプが無いMarkdown
+    const bodyRow = '| TC-01 | Input | Perspective | Expected | Notes'; // 5列、行末パイプなし
+    const markdown = [
+      PERSPECTIVE_TABLE_HEADER,
+      PERSPECTIVE_TABLE_SEPARATOR,
+      bodyRow,
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTableを呼び出す
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: 受理され、行末パイプなしの本体行がそのまま保持される
+    assert.ok(typeof result === 'string' && result.length > 0, 'Should return normalized table string');
+    assert.ok(result.includes(bodyRow), 'Body row should be included as-is');
+  });
+
+  // TC-B-33: 行末パイプが無くても、6列の本体行はcoerceLegacyPerspectiveMarkdownTableが拒否する
+  test('TC-B-33: 行末パイプが無い場合でも、本体行が6列なら拒否される', () => {
+    // Given: 有効なヘッダー/区切り行を持つが、本体行が6列（正しくは5列）で行末パイプが無いMarkdown
+    const markdown = [
+      PERSPECTIVE_TABLE_HEADER,
+      PERSPECTIVE_TABLE_SEPARATOR,
+      '| TC-01 | Input | Perspective | Expected | Notes | Priority', // 6列、行末パイプなし
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTableを呼び出す
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: undefinedを返す（列数不一致の不正なテーブルを拒否）
+    assert.strictEqual(result, undefined, 'Should return undefined when body rows have extra columns without trailing pipe');
+  });
+
+  // TC-N-34: セル内にエスケープされたパイプ（\\|）が含まれていてもcoerceLegacyPerspectiveMarkdownTableが受理する
+  test('TC-N-34: セル内のエスケープされたパイプを含む本体行でも受理される', () => {
+    // Given: 有効なヘッダー/区切り行を持ち、セル内にエスケープされたパイプ（\\|）を含むMarkdown
+    const bodyRow = '| TC-01 | Input \\| More | Perspective | Expected | Notes |';
+    const markdown = [
+      PERSPECTIVE_TABLE_HEADER,
+      PERSPECTIVE_TABLE_SEPARATOR,
+      bodyRow,
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTableを呼び出す
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: 受理され、エスケープされたパイプを含む本体行がそのまま保持される
+    assert.ok(typeof result === 'string' && result.length > 0, 'Should return normalized table string');
+    assert.ok(result.includes(bodyRow), 'Body row with escaped pipe should be included as-is');
   });
 
   // TC-B-30: truncateText called with text length exactly equal to maxChars

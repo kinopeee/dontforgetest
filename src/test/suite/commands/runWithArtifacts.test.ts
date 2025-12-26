@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { runWithArtifacts } from '../../../commands/runWithArtifacts';
+import { PERSPECTIVE_TABLE_HEADER, PERSPECTIVE_TABLE_SEPARATOR } from '../../../core/artifacts';
 import { AgentProvider, AgentRunOptions, RunningTask } from '../../../providers/provider';
 import { initializeProgressTreeView } from '../../../ui/progressTreeView';
 import { createMockExtensionContext } from '../testUtils/vscodeMocks';
@@ -2060,7 +2061,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const mainTask = provider.history.find(h => h.taskId === taskId);
     assert.ok(mainTask, 'メイン生成タスクが実行されること');
     assert.ok(mainTask.prompt.includes('## 生成済みテスト観点表（必須）'), '観点表ヘッダーがプロンプトに含まれること');
-    assert.ok(mainTask.prompt.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'));
+    assert.ok(mainTask.prompt.includes(PERSPECTIVE_TABLE_HEADER), '観点表テーブルヘッダが含まれること');
     assert.ok(mainTask.prompt.includes('| TC-N-01 | cond | Equivalence – normal | ok | - |'), '観点表の内容がプロンプトに含まれること');
     assert.ok(mainTask.prompt.includes('Base Prompt'), '元のプロンプトも含まれること');
   });
@@ -2235,7 +2236,7 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(mainTask);
     assert.ok(mainTask.prompt.includes('## 生成済みテスト観点表（必須）'), 'ヘッダーが含まれること');
     assert.ok(
-      mainTask.prompt.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'),
+      mainTask.prompt.includes(PERSPECTIVE_TABLE_HEADER),
       '観点表の固定ヘッダが含まれること',
     );
     assert.ok(mainTask.prompt.includes('| TC-B-03 | cond | Equivalence | ok | - |'), '観点表が含まれること');
@@ -6165,7 +6166,7 @@ suite('commands/runWithArtifacts.ts', () => {
     // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
     // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
     assert.ok(
-      text.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'),
+      text.includes(PERSPECTIVE_TABLE_HEADER),
       'Perspective table should contain fixed header',
     );
     assert.ok(text.includes('| TC-N-01 | cond | Equivalence – normal | ok | - |'), 'Perspective table should contain extracted content');
@@ -6891,7 +6892,7 @@ suite('commands/runWithArtifacts.ts', () => {
     // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
     // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
     assert.ok(
-      text.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'),
+      text.includes(PERSPECTIVE_TABLE_HEADER),
       'Perspective table should contain fixed header',
     );
     assert.ok(text.includes('| TC-N-01 | cond | Equivalence – normal | ok | - |'), 'Perspective table should contain extracted content');
@@ -7028,7 +7029,7 @@ suite('commands/runWithArtifacts.ts', () => {
     // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
     // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
     assert.ok(
-      text.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'),
+      text.includes(PERSPECTIVE_TABLE_HEADER),
       'Perspective table should contain fixed header',
     );
     assert.ok(text.includes('| TC-N-01 | cond | Equivalence – normal | ok | - |'), 'Perspective table should contain extracted content');
@@ -7203,7 +7204,7 @@ suite('commands/runWithArtifacts.ts', () => {
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
     assert.ok(
-      text.includes('| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |'),
+      text.includes(PERSPECTIVE_TABLE_HEADER),
       '固定列のヘッダが含まれること',
     );
     assert.ok(text.includes('TC-E-EXTRACT-01'), '抽出失敗がエラー行として記録されること');
@@ -8383,8 +8384,8 @@ suite('commands/runWithArtifacts.ts', () => {
     test('TC-N-05: coerceLegacyPerspectiveMarkdownTable normalizes legacy Markdown table successfully', async () => {
       // Given: Valid legacy Markdown table format
       const legacyTable = [
-        '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |',
-        '|--------|----------------------|---------------------------------------|-----------------|-------|',
+        PERSPECTIVE_TABLE_HEADER,
+        PERSPECTIVE_TABLE_SEPARATOR,
         '| TC-N-01 | cond | Equivalence – normal | ok | - |',
       ].join('\n');
       const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${legacyTable}\n<!-- END TEST PERSPECTIVES -->`;
@@ -8461,8 +8462,8 @@ suite('commands/runWithArtifacts.ts', () => {
     test('TC-B-10: coerceLegacyPerspectiveMarkdownTable returns table with header and separator only', async () => {
       // Given: Legacy Markdown table with empty body
       const legacyTable = [
-        '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |',
-        '|--------|----------------------|---------------------------------------|-----------------|-------|',
+        PERSPECTIVE_TABLE_HEADER,
+        PERSPECTIVE_TABLE_SEPARATOR,
       ].join('\n');
       const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${legacyTable}\n<!-- END TEST PERSPECTIVES -->`;
       const provider = new MockProvider(0, undefined, perspectiveLog);
@@ -8492,8 +8493,8 @@ suite('commands/runWithArtifacts.ts', () => {
       // Then: coerceLegacyPerspectiveMarkdownTable returns table with header and separator only
       const mainTask = provider.history.find(h => h.taskId === taskId);
       assert.ok(mainTask, 'Main task executed');
-      assert.ok(mainTask.prompt.includes('| Case ID |'), 'Header is included');
-      assert.ok(mainTask.prompt.includes('|--------|'), 'Separator is included');
+      assert.ok(mainTask.prompt.includes(PERSPECTIVE_TABLE_HEADER), 'Header is included');
+      assert.ok(mainTask.prompt.includes(PERSPECTIVE_TABLE_SEPARATOR), 'Separator is included');
     });
 
     // TC-E-08: Legacy Markdown table with incorrect header format
@@ -8542,7 +8543,7 @@ suite('commands/runWithArtifacts.ts', () => {
     test('TC-E-09: coerceLegacyPerspectiveMarkdownTable returns undefined for missing separator row', async () => {
       // Given: Legacy Markdown table with missing separator row
       const invalidTable = [
-        '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |',
+        PERSPECTIVE_TABLE_HEADER,
         '| TC-N-01 | cond | Equivalence – normal | ok | - |',
       ].join('\n');
       const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES -->\n${invalidTable}\n<!-- END TEST PERSPECTIVES -->`;
@@ -8582,7 +8583,7 @@ suite('commands/runWithArtifacts.ts', () => {
     test('TC-E-10: coerceLegacyPerspectiveMarkdownTable returns undefined for incorrect separator format', async () => {
       // Given: Legacy Markdown table with incorrect separator format
       const invalidTable = [
-        '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |',
+        PERSPECTIVE_TABLE_HEADER,
         '|--------|----------------------|',
         '| TC-N-01 | cond | Equivalence – normal | ok | - |',
       ].join('\n');
@@ -8741,7 +8742,7 @@ suite('commands/runWithArtifacts.ts', () => {
     test('TC-E-22: JSON format is prioritized over Markdown format when both are present', async () => {
       // Given: Both JSON and Markdown markers are present
       const jsonContent = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"ok","notes":"-"}]}';
-      const mdContent = '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |\n|--------|----------------------|---------------------------------------|-----------------|-------|\n| TC-MD-01 | cond | Equivalence | ok | - |';
+      const mdContent = `${PERSPECTIVE_TABLE_HEADER}\n${PERSPECTIVE_TABLE_SEPARATOR}\n| TC-MD-01 | cond | Equivalence | ok | - |`;
       const perspectiveLog = `<!-- BEGIN TEST PERSPECTIVES JSON -->\n${jsonContent}\n<!-- END TEST PERSPECTIVES JSON -->\n<!-- BEGIN TEST PERSPECTIVES -->\n${mdContent}\n<!-- END TEST PERSPECTIVES -->`;
       const provider = new MockProvider(0, undefined, perspectiveLog);
       const taskId = `task-e22-${Date.now()}`;
