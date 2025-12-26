@@ -9,6 +9,17 @@ import { execGitResult, execGitStdout } from '../../git/gitExec';
 import { appendEventToOutput } from '../../ui/outputChannel';
 import { dedupeStable } from './utils';
 
+export type WorktreeApplyResult = {
+  applied: boolean;
+  reason:
+    | 'applied'
+    | 'no-test-diff'
+    | 'empty-patch'
+    | 'gen-failed'
+    | 'apply-failed'
+    | 'exception';
+};
+
 export async function applyWorktreeTestChanges(params: {
   generationTaskId: string;
   genExit: number | null;
@@ -16,10 +27,10 @@ export async function applyWorktreeTestChanges(params: {
   runWorkspaceRoot: string;
   extensionContext: vscode.ExtensionContext;
   preTestCheckCommand: string;
-}): Promise<void> {
+}): Promise<WorktreeApplyResult> {
   // 念のため。呼び出し側で worktreeDir を保証する想定だが、防御的に扱う。
   if (!params.runWorkspaceRoot || params.runWorkspaceRoot.trim().length === 0) {
-    return;
+    return { applied: false, reason: 'exception' };
   }
 
   try {
@@ -30,7 +41,7 @@ export async function applyWorktreeTestChanges(params: {
 
     if (testPaths.length === 0) {
       appendEventToOutput(emitLogEvent(params.generationTaskId, 'info', t('worktree.apply.noTestDiffFound')));
-      return;
+      return { applied: false, reason: 'no-test-diff' };
     }
 
     // 新規ファイル（untracked）は `git add -N`（intent-to-add）にして diff に含める
@@ -59,7 +70,7 @@ export async function applyWorktreeTestChanges(params: {
     );
     if (patchTextRaw.trim().length === 0) {
       appendEventToOutput(emitLogEvent(params.generationTaskId, 'info', t('worktree.apply.emptyPatch')));
-      return;
+      return { applied: false, reason: 'empty-patch' };
     }
     const patchText = patchTextRaw.endsWith('\n') ? patchTextRaw : `${patchTextRaw}\n`;
 
@@ -92,7 +103,7 @@ export async function applyWorktreeTestChanges(params: {
             emitLogEvent(params.generationTaskId, 'info', `worktreeで生成したテスト差分をローカルへ適用しました（${testPaths.length}件）`),
           );
           void vscode.window.showInformationMessage(`Worktreeのテスト差分をローカルへ適用しました（${testPaths.length}件）`);
-          return;
+          return { applied: true, reason: 'applied' };
         }
         applyCheckOutput = applyRes.output;
       }
@@ -146,9 +157,11 @@ export async function applyWorktreeTestChanges(params: {
         // noop（通知導線の失敗は本処理の失敗ではない）
       }
     });
+    return { applied: false, reason: shouldAutoApply ? 'apply-failed' : 'gen-failed' };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     appendEventToOutput(emitLogEvent(params.generationTaskId, 'warn', `worktree差分の適用処理で例外が発生しました（続行します）: ${message}`));
+    return { applied: false, reason: 'exception' };
   }
 }
 
@@ -228,4 +241,3 @@ async function listGitPaths(cwd: string, args: string[]): Promise<string[]> {
     .filter((l) => l.length > 0)
     .map((p) => p.replace(/\\/g, '/'));
 }
-
