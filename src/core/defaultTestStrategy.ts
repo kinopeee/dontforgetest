@@ -185,8 +185,11 @@ Before completing a test task, verify:
 /**
  * デフォルトの言語設定
  */
-export const DEFAULT_LANGUAGE_CONFIG = {
+// NOTE:
+// - `as const` は TypeScript の型推論上の readonly であり、実行時のプロパティ記述子は変更しない。
+// - テストでは writable/configurable が false であること（実行時 readonly）も検証するため、freeze する。
+export const DEFAULT_LANGUAGE_CONFIG = Object.freeze({
   answerLanguage: 'en',
   commentLanguage: 'en',
   perspectiveTableLanguage: 'en',
-} as const;
+} as const);

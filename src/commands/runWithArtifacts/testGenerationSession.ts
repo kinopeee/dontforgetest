@@ -33,7 +33,8 @@ export class TestGenerationSession {
   private readonly runLocation: 'local' | 'worktree';
   private readonly localWorkspaceRoot: string;
   private readonly worktreeOps: WorktreeOps;
-  
+
+  private aborted: boolean = false;
   private runWorkspaceRoot: string;
   private worktreeDir: string | undefined;
   private testExecutionLogLines: string[] = [];
@@ -72,8 +73,14 @@ export class TestGenerationSession {
     taskManager.register(this.options.generationTaskId, this.options.generationLabel, initialRunningTask);
 
     try {
+      // キャンセルチェック（開始直後）
+      if (this.checkCancelled()) return;
+
       // 準備フェーズ (Worktree作成など)
       await this.prepare();
+
+      // 準備フェーズで中断された場合は以降を実行しない
+      if (this.aborted) return;
 
       // キャンセルチェック
       if (this.checkCancelled()) return;
@@ -101,11 +108,11 @@ export class TestGenerationSession {
   private checkCancelled(): boolean {
     if (taskManager.isCancelled(this.options.generationTaskId)) {
       appendEventToOutput(emitLogEvent(this.options.generationTaskId, 'warn', t('task.cancelled')));
-      handleTestGenEventForProgressView({ 
-        type: 'completed', 
-        taskId: this.options.generationTaskId, 
-        exitCode: null, 
-        timestampMs: nowMs() 
+      handleTestGenEventForProgressView({
+        type: 'completed',
+        taskId: this.options.generationTaskId,
+        exitCode: null,
+        timestampMs: nowMs()
       });
       return true;
     }
@@ -158,7 +165,10 @@ export class TestGenerationSession {
         appendEventToOutput(emitLogEvent(this.options.generationTaskId, 'error', msg));
         void vscode.window.showErrorMessage(msg);
         handleTestGenEventForProgressView({ type: 'completed', taskId: this.options.generationTaskId, exitCode: null, timestampMs: nowMs() });
-        throw new Error('Extension context required for worktree mode');
+        // 例外を投げるとコマンド実行全体が失敗扱いになり、呼び出し側（テスト含む）で扱いづらい。
+        // エラーメッセージを表示して安全に中断する。
+        this.aborted = true;
+        return;
       }
 
       try {
@@ -180,7 +190,9 @@ export class TestGenerationSession {
         appendEventToOutput(emitLogEvent(this.options.generationTaskId, 'error', msg));
         void vscode.window.showErrorMessage(msg);
         handleTestGenEventForProgressView({ type: 'completed', taskId: this.options.generationTaskId, exitCode: null, timestampMs: nowMs() });
-        throw e;
+        // worktree 作成に失敗しても、拡張機能全体をクラッシュさせずに中断する。
+        this.aborted = true;
+        return;
       }
     }
   }
@@ -274,7 +286,7 @@ export class TestGenerationSession {
       genExit === 0
         ? t('testGeneration.completed', this.options.generationLabel)
         : t('testGeneration.failed', this.options.generationLabel, String(genExit ?? 'null'));
-    
+
     if (genExit === 0) {
       // Worktreeモードは「適用結果（成功/要手動マージ）」の通知を別途出すため、
       // ここで完了トーストを出すと二重通知になり、誤解を招きやすい。
