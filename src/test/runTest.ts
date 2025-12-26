@@ -111,6 +111,16 @@ async function waitForFile(params: { filePath: string; timeoutMs: number; interv
   return await fileExists(params.filePath);
 }
 
+async function tryRemoveVscodeCache(cachePath: string): Promise<void> {
+  try {
+    await fs.promises.rm(cachePath, { recursive: true, force: true });
+    console.warn(`[dontforgetest] 再試行前に VS Code キャッシュを削除しました: ${cachePath}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[dontforgetest] VS Code キャッシュ削除に失敗しました（続行します）: ${message}`);
+  }
+}
+
 export function resolveSuiteFromFullTitle(fullTitle: string, title: string): string {
   // 不正な入力は明示的に弾く（テスト観点上、TypeError を期待するケースがある）
   if (typeof fullTitle !== 'string' || typeof title !== 'string') {
@@ -415,6 +425,10 @@ async function main() {
     // Cursor 側のプロセス検知（VS Code起動）に巻き込まれにくくするため、
     // VS Code本体/ユーザーデータ/ワークスペース等は tmp 配下へ隔離して起動する。
     const vscodeTestRoot = path.join(os.tmpdir(), 'dontforgetest-vscode-test');
+    // NOTE:
+    // VS Code 本体のダウンロード/展開キャッシュはテストセッション間でも共有する。
+    // 毎回削除すると初回実行が大幅に遅くなるため、通常は保持して速度を優先する。
+    // 一方で、稀にキャッシュ起因で起動が不安定になる場合があるため「再試行する直前のみ」削除して安定性を優先する。
     const vscodeCachePath = path.join(vscodeTestRoot, 'vscode');
     const runtimeRoot = path.join(vscodeTestRoot, 'runtime');
 
@@ -572,6 +586,8 @@ async function main() {
           throw resultErr;
         }
         if (attemptIndex + 1 < maxAttempts && !pinnedLauncher) {
+          // NOTE: 初回実行はキャッシュを残し、再試行時のみ削除する（速度と安定性のバランス）。
+          await tryRemoveVscodeCache(vscodeCachePath);
           console.warn(
             `[dontforgetest] テスト実行が不安定なため再試行します (attempt=${attemptIndex + 1}/${maxAttempts}, launcher=${launcher})`,
           );

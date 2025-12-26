@@ -321,12 +321,17 @@ export class TestGenerationSession {
       emitPhaseEvent(this.options.generationTaskId, 'running-tests', t('progressTreeView.phase.runningTests')),
     );
 
-    const shouldSkipTestExecution =
-      this.settings.testCommand.trim().length === 0 ||
-      (this.runLocation === 'worktree' && !worktreeApplyResult?.applied);
+    const trimmedTestCommand = this.settings.testCommand.trim();
+    const isTestCommandEmpty = trimmedTestCommand.length === 0;
+    const isWorktreeMode = this.runLocation === 'worktree';
+    // NOTE:
+    // Worktree モードでは、ローカルへテスト差分の適用に成功した場合のみ自動テストを実行する。
+    // worktreeApplyResult が未設定（例: 途中で例外が発生）な場合も「適用できていない」とみなし、テストは安全側でスキップする。
+    const isWorktreeAppliedToLocal = worktreeApplyResult?.applied === true;
+    const shouldSkipTestExecution = isTestCommandEmpty || (isWorktreeMode && !isWorktreeAppliedToLocal);
     if (shouldSkipTestExecution) {
       const msg =
-        this.settings.testCommand.trim().length === 0
+        isTestCommandEmpty
           ? t('testExecution.skip.emptyCommand')
           : t('testExecution.skip.worktreeMvp');
       const ev = emitLogEvent(`${this.options.generationTaskId}-test`, 'warn', msg);
