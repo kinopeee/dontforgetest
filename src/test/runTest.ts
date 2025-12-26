@@ -111,6 +111,16 @@ async function waitForFile(params: { filePath: string; timeoutMs: number; interv
   return await fileExists(params.filePath);
 }
 
+async function tryRemoveVscodeCache(cachePath: string): Promise<void> {
+  try {
+    await fs.promises.rm(cachePath, { recursive: true, force: true });
+    console.warn(`[dontforgetest] 再試行前に VS Code キャッシュを削除しました: ${cachePath}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[dontforgetest] VS Code キャッシュ削除に失敗しました（続行します）: ${message}`);
+  }
+}
+
 export function resolveSuiteFromFullTitle(fullTitle: string, title: string): string {
   // 不正な入力は明示的に弾く（テスト観点上、TypeError を期待するケースがある）
   if (typeof fullTitle !== 'string' || typeof title !== 'string') {
@@ -572,6 +582,7 @@ async function main() {
           throw resultErr;
         }
         if (attemptIndex + 1 < maxAttempts && !pinnedLauncher) {
+          await tryRemoveVscodeCache(vscodeCachePath);
           console.warn(
             `[dontforgetest] テスト実行が不安定なため再試行します (attempt=${attemptIndex + 1}/${maxAttempts}, launcher=${launcher})`,
           );
