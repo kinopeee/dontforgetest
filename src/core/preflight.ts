@@ -48,6 +48,14 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
 
   const agentAvailable = await canSpawnCommand(cursorAgentCommand, ['--version'], workspaceRoot);
   if (!agentAvailable) {
+    // VS Code 拡張機能テスト（@vscode/test-electron）では showErrorMessage が解決されず、
+    // await するとテストがタイムアウトすることがある。
+    // テスト環境ではブロッキングせずに案内だけ出して終了する。
+    if (process.env.VSCODE_TEST_RUNNER === '1') {
+      void vscode.window.showErrorMessage(t('cursorAgent.notFound', cursorAgentCommand));
+      return undefined;
+    }
+
     const openSettingsLabel = t('cursorAgent.openSettings');
     const openDocsLabel = t('cursorAgent.openDocs');
     const picked = await vscode.window.showErrorMessage(

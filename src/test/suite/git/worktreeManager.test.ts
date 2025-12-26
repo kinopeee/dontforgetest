@@ -178,8 +178,8 @@ suite('git/worktreeManager.ts', () => {
 
       // Then: TaskId sanitized to safe path segment, worktree created
       assert.ok(worktree !== undefined, 'Worktree should be created');
-      assert.ok(!worktree.worktreeDir.includes('/'), 'Worktree directory should not contain special characters');
-      assert.ok(!worktree.worktreeDir.includes('<'), 'Worktree directory should not contain <');
+      const worktreeDirName = path.basename(worktree.worktreeDir);
+      assert.ok(!/[<>:"|?*\\/]/.test(worktreeDirName), 'Worktree directory should not contain special characters');
     } finally {
       if (worktree) {
         try {

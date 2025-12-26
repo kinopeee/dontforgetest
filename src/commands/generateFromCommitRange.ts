@@ -23,12 +23,6 @@ export async function generateTestFromCommitRange(
   modelOverride?: string,
   options: GenerateTestCommandOptions = {},
 ): Promise<void> {
-  const preflight = await ensurePreflight();
-  if (!preflight) {
-    return;
-  }
-  const { workspaceRoot, defaultModel, testStrategyPath, cursorAgentCommand } = preflight;
-
   const range = await vscode.window.showInputBox({
     title: t('quickPick.commitRangeTitle'),
     prompt: t('quickPick.commitRangePrompt'),
@@ -44,6 +38,12 @@ export async function generateTestFromCommitRange(
     return;
   }
   const trimmedRange = range.trim();
+
+  const preflight = await ensurePreflight();
+  if (!preflight) {
+    return;
+  }
+  const { workspaceRoot, defaultModel, testStrategyPath, cursorAgentCommand } = preflight;
 
   let diffText: string;
   try {

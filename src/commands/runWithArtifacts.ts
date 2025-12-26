@@ -313,7 +313,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
           emitLogEvent(
             `${options.generationTaskId}-guard`,
             'warn',
-            `所定フロー外で作成された観点表ファイルを削除しました: ${cleanup.relativePath}`,
+            t('cleanup.unexpectedPerspectiveDeleted', cleanup.relativePath),
           ),
         );
       } else if (cleanup.errorMessage) {
@@ -321,7 +321,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
           emitLogEvent(
             `${options.generationTaskId}-guard`,
             'warn',
-            `所定フロー外の観点表ファイル削除を試みましたが失敗しました: ${cleanup.relativePath} - ${cleanup.errorMessage}`,
+            t('cleanup.unexpectedPerspectiveDeleteFailed', cleanup.relativePath, cleanup.errorMessage),
           ),
         );
       }
@@ -329,8 +329,8 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
     const genMsg =
       genExit === 0
-        ? `テスト生成が完了しました: ${options.generationLabel}`
-        : `テスト生成に失敗しました: ${options.generationLabel} (exit=${genExit ?? 'null'})`;
+        ? t('testGeneration.completed', options.generationLabel)
+        : t('testGeneration.failed', options.generationLabel, String(genExit ?? 'null'));
     if (genExit === 0) {
       // Worktreeモードは「適用結果（成功/要手動マージ）」の通知を別途出すため、
       // ここで完了トーストを出すと二重通知になり、誤解を招きやすい。
@@ -560,20 +560,18 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
     const result = await runTestCommand({ command: settings.testCommand, cwd: runWorkspaceRoot });
 
-    appendEventToOutput(
-      emitLogEvent(
-        testTaskId,
-        result.exitCode === 0 ? 'info' : 'error',
-        `テスト実行が完了しました: exit=${result.exitCode ?? 'null'} durationMs=${result.durationMs}`,
-      ),
+    const testCompletedMsg = t(
+      'testExecution.completed',
+      String(result.exitCode ?? 'null'),
+      String(result.durationMs),
     );
-    captureEvent(
-      emitLogEvent(
-        testTaskId,
-        result.exitCode === 0 ? 'info' : 'error',
-        `テスト実行が完了しました: exit=${result.exitCode ?? 'null'} durationMs=${result.durationMs}`,
-      ),
+    const testCompletedEvent = emitLogEvent(
+      testTaskId,
+      result.exitCode === 0 ? 'info' : 'error',
+      testCompletedMsg,
     );
+    appendEventToOutput(testCompletedEvent);
+    captureEvent(testCompletedEvent);
 
     const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: result.exitCode, timestampMs: nowMs() };
     handleTestGenEventForStatusBar(completed);
