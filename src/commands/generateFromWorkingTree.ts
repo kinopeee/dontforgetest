@@ -5,6 +5,7 @@ import { buildTestGenPrompt } from '../core/promptBuilder';
 import { analyzeGitUnifiedDiff, extractChangedPaths, getWorkingTreeDiff, type WorkingTreeDiffMode } from '../git/diffAnalyzer';
 import { type AgentProvider } from '../providers/provider';
 import { runWithArtifacts } from './runWithArtifacts';
+import { truncateText } from './runWithArtifacts/utils';
 
 /** プロンプトに含める差分テキストの最大文字数 */
 const MAX_DIFF_CHARS_FOR_PROMPT = 20_000;
@@ -110,11 +111,4 @@ export async function generateTestFromWorkingTree(
     model: modelOverride ?? defaultModel,
     generationTaskId: taskId,
   });
-}
-
-function truncateText(text: string, maxChars: number): string {
-  if (text.length <= maxChars) {
-    return text;
-  }
-  return `${text.slice(0, maxChars)}\n\n... (truncated: ${text.length} chars -> ${maxChars} chars)`;
 }
