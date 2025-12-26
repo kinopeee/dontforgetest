@@ -138,10 +138,11 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
 
   private buildHtml(): string {
     const nonce = getNonce();
+    const htmlLang = (vscode.env.language || 'en').split('-')[0];
 
     return [
       '<!DOCTYPE html>',
-      '<html lang="ja">',
+      `<html lang="${htmlLang}">`,
       '<head>',
       '  <meta charset="UTF-8" />',
       '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
