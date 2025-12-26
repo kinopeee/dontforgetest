@@ -9,6 +9,7 @@ dist
 # テスト生成物
 docs/test-execution-reports/
 docs/test-perspectives/
+coverage/
 
 # 所定フロー外の副産物（cursor-agent がルート直下に生成してしまうことがある）
 /test_perspectives*.md
