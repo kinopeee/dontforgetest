@@ -7,6 +7,8 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as vscode from 'vscode';
+import { t } from '../../../core/l10n';
 
 suite('l10n key consistency', () => {
   // テスト用にbundleファイルを読み込む
@@ -137,5 +139,27 @@ suite('l10n key consistency', () => {
     }
 
     assert.strictEqual(errors.length, 0, errors.join('\n'));
+  });
+
+  // TC-L10N-04: runtime の t('key') が現在ロケールに応じて期待値を返すこと
+  // Given: 英語/日本語bundleが存在し、VS Code の表示言語が固定されている（--locale / VSCODE_NLS_CONFIG）
+  // When: 既知のキーを t('key') で解決する
+  // Then: ja なら日本語、その他は英語（デフォルト言語時は英語bundleへのフォールバック）になる
+  test('TC-L10N-04: t() returns expected localized string (with en fallback for default language)', () => {
+    // Given: 英語bundle と 日本語bundle
+    const bundleEnContent = fs.readFileSync(bundleEnPath, 'utf8');
+    const bundleJaContent = fs.readFileSync(bundleJaPath, 'utf8');
+    const bundleEn = JSON.parse(bundleEnContent) as Record<string, string>;
+    const bundleJa = JSON.parse(bundleJaContent) as Record<string, string>;
+
+    const key = 'controlPanel.generateTests';
+    const expected = (vscode.env.language ?? '').startsWith('ja') ? bundleJa[key] : bundleEn[key];
+    assert.ok(typeof expected === 'string' && expected.trim() !== '', 'expected localized string exists in bundles');
+
+    // When: 既知のキーを解決
+    const actual = t(key);
+
+    // Then: ロケールに応じた期待値
+    assert.strictEqual(actual, expected);
   });
 });
