@@ -336,9 +336,12 @@ async function runDetachedVscodeExtensionTests(options: {
     console.log(`[dontforgetest] VS Code tests launcher: open (-n -W) appPath=${appPath}`);
 
     await new Promise<void>((resolve, reject) => {
+      // NOTE:
+      // macOS では `open -a <appPath>` が LaunchServices 側の解釈により失敗する場合がある（kLSNoExecutableErr 等）。
+      // `open <appPath>`（アプリバンドルへのパスを直接渡す）に統一し、起動の安定性を優先する。
       const cmd = childProcess.spawn(
         'open',
-        ['-n', '-W', '-a', appPath, '--args', ...allArgs],
+        ['-n', '-W', appPath, '--args', ...allArgs],
         {
           // open には env を渡せるが、起動されたGUIアプリ側には伝播しない可能性が高い
           env: fullEnv,
@@ -471,8 +474,18 @@ async function main() {
       await fs.promises.mkdir(path.dirname(testResultFilePath), { recursive: true });
       await fs.promises.rm(testResultFilePath, { force: true });
 
-      const launcher: VscodeTestLauncher =
-        pinnedLauncher ?? (attemptIndex === 0 ? defaultLauncher : defaultLauncher === 'open' ? 'direct' : 'open');
+      const launcher: VscodeTestLauncher = (() => {
+        if (pinnedLauncher) {
+          return pinnedLauncher;
+        }
+        if (process.platform === 'darwin') {
+          // NOTE:
+          // macOS では direct(spawn) 起動が SIGABRT で落ちるケースがある（AppKit の _RegisterApplication 等）。
+          // 安定性優先で、未指定の場合は open 起動に固定する。
+          return 'open';
+        }
+        return attemptIndex === 0 ? defaultLauncher : defaultLauncher === 'open' ? 'direct' : 'open';
+      })();
 
       const locale = normalizeLocale(process.env.DONTFORGETEST_VSCODE_TEST_LOCALE);
       // VS Code 本体の表示言語を強制するための設定。
