@@ -25,6 +25,15 @@
 4. `.vsix` ファイルを選択
 5. 必要に応じて再読み込み（Reload）
 
+#### 別手順（エクスプローラーから）
+
+コマンドパレットを使わず、ファイルツリーから直接インストールすることもできます。
+
+1. VS Code / Cursor のエクスプローラーで `.vsix` ファイルを表示
+2. `.vsix` を右クリック
+3. **`拡張機能の VSIX のインストール`**（英語UIの場合は **`Install Extension VSIX`**）を選択
+4. 必要に応じて再読み込み（Reload）
+
 ### 開発版として試す（このリポジトリを開発する場合）
 
 1. 依存関係をインストール: `npm install`
@@ -38,6 +47,7 @@ VS Code / Cursor の設定（Settings）で `dontforgetest.*` を検索します
 
 - **`dontforgetest.cursorAgentPath`**: `cursor-agent` の実行パス（未指定なら PATH から解決）
 - **`dontforgetest.defaultModel`**: `cursor-agent --model` に渡すモデル（空なら自動）
+
 - **`dontforgetest.testStrategyPath`**: テスト戦略ファイルのパス（空なら内蔵デフォルトを使用）
 - **`dontforgetest.includeTestPerspectiveTable`**: テスト生成前にテスト観点表を生成して保存するか（既定: true）
 - **`dontforgetest.perspectiveReportDir`**: 観点表（自動生成）の保存先（既定: `docs/test-perspectives`）
@@ -47,6 +57,31 @@ VS Code / Cursor の設定（Settings）で `dontforgetest.*` を検索します
   - `extension`: 拡張機能がローカルで `testCommand` を実行し、stdout/stderr/exitCode を収集してレポート化
   - `cursorAgent`: `cursor-agent` に実行させ、マーカー付きの結果から stdout/stderr/exitCode を抽出してレポート化
   - `cursorAgent` が実行拒否/空結果になる場合は、拡張機能側で **自動フォールバック**して実行します（警告ログが出ます）
+
+> **補足（モデル名）**: `dontforgetest.defaultModel` に指定するモデル名は、Cursor CLI の **`/model`** コマンドでリストされる名前を使用してください。
+>
+> 例（2025.12.25 時点）:
+>
+> ```
+> composer-1
+> auto
+> sonnet-4.5
+> sonnet-4.5-thinking
+> opus-4.5
+> opus-4.5-thinking
+> gemini-3-pro
+> gemini-3-flash
+> gpt-5.2
+> gpt-5.1
+> gpt-5.2-high
+> gpt-5.1-high
+> gpt-5.1-codex
+> gpt-5.1-codex-high
+> gpt-5.1-codex-max
+> gpt-5.1-codex-max-high
+> opus-4.1
+> grok
+> ```
 
 ### テスト戦略ファイルについて
 
