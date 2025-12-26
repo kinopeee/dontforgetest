@@ -25,6 +25,15 @@ This document explains how to use the **Test Generation Agent** extension in VS 
 4. Select the `.vsix` file
 5. Reload if necessary
 
+#### Alternative (from Explorer)
+
+You can also install directly from the file tree without using the command palette:
+
+1. Locate the `.vsix` file in the Explorer
+2. Right-click the `.vsix` file
+3. Select **`Install Extension VSIX`** (Japanese UI: **`拡張機能の VSIX のインストール`**)
+4. Reload if necessary
+
 ### Try as a development build (when developing this repo)
 
 1. Install dependencies: `npm install`
