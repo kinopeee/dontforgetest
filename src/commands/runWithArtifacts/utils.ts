@@ -24,9 +24,65 @@ const ALL_HEADER_KEYWORDS = [...HEADER_KEYWORDS_EN, ...HEADER_KEYWORDS_JA] as co
 const PERSPECTIVE_TABLE_SEPARATOR = '|---|---|---|---|---|';
 
 /**
- * 5列テーブルのパイプ数（先頭/末尾を含めて「|」が6個）
+ * 観点表の列数（5列固定）
  */
-const PERSPECTIVE_TABLE_PIPE_COUNT = 6;
+const PERSPECTIVE_TABLE_COLUMN_COUNT = 5;
+
+/**
+ * Markdownテーブル行（`|` 区切り）をセル配列へ分割する。
+ *
+ * 注意:
+ * - `\|` のようなエスケープされたパイプは区切りとして扱わない
+ * - 行末の `|` は任意（あってもなくても分割結果は同じ）
+ */
+function splitPipeRowCells(line: string): string[] | undefined {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|')) {
+    return undefined;
+  }
+
+  const lastIndex = trimmed.length - 1;
+  const hasTrailingDelimiter = trimmed.endsWith('|') && !isEscapedPipeAt(trimmed, lastIndex);
+
+  // 先頭の `|` は必須（区切り）。末尾の `|` はあれば除去する。
+  const core = hasTrailingDelimiter ? trimmed.slice(1, -1) : trimmed.slice(1);
+
+  const cells: string[] = [];
+  let buf = '';
+  for (let i = 0; i < core.length; i += 1) {
+    const ch = core[i];
+    if (ch === '|' && !isEscapedPipeAt(core, i)) {
+      cells.push(buf);
+      buf = '';
+      continue;
+    }
+    buf += ch;
+  }
+  cells.push(buf);
+
+  return cells;
+}
+
+/**
+ * 指定位置の `|` がエスケープされているか判定する。
+ * - 直前の連続する `\` の数が奇数ならエスケープ扱い
+ */
+function isEscapedPipeAt(text: string, pipeIndex: number): boolean {
+  if (pipeIndex < 0 || pipeIndex >= text.length) {
+    return false;
+  }
+  if (text[pipeIndex] !== '|') {
+    return false;
+  }
+  let backslashCount = 0;
+  for (let i = pipeIndex - 1; i >= 0; i -= 1) {
+    if (text[i] !== '\\') {
+      break;
+    }
+    backslashCount += 1;
+  }
+  return backslashCount % 2 === 1;
+}
 
 /**
  * マーカーで囲まれた部分を抽出する。
@@ -64,26 +120,24 @@ export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string |
     if (trimmed === legacyHeaderEn) {
       return true;
     }
-    // 5列（= 先頭/末尾含めてパイプが6個）で、かつヘッダらしい語が含まれる
-    const pipeCount = (trimmed.match(/\|/g) ?? []).length;
-    if (pipeCount !== PERSPECTIVE_TABLE_PIPE_COUNT) {
+    // 5列で、かつヘッダらしい語が含まれる
+    const cells = splitPipeRowCells(trimmed);
+    if (!cells || cells.length !== PERSPECTIVE_TABLE_COLUMN_COUNT) {
       return false;
     }
     return ALL_HEADER_KEYWORDS.some((keyword) => trimmed.includes(keyword));
   };
   const isLikelySeparator = (line: string): boolean => {
     const trimmed = line.trim();
-    // 旧形式の長いダッシュ行も許容
-    if (trimmed.startsWith('|--------|')) {
-      const pipeCount = (trimmed.match(/\|/g) ?? []).length;
-      return pipeCount === PERSPECTIVE_TABLE_PIPE_COUNT;
-    }
-    // 新形式: |---|---|...|---| だが、観点表は5列固定のため列数も一致していること
-    if (!/^\|(?:\s*-+\s*\|)+$/.test(trimmed)) {
+    const cells = splitPipeRowCells(trimmed);
+    if (!cells || cells.length !== PERSPECTIVE_TABLE_COLUMN_COUNT) {
       return false;
     }
-    const pipeCount = (trimmed.match(/\|/g) ?? []).length;
-    return pipeCount === PERSPECTIVE_TABLE_PIPE_COUNT;
+    // セパレーター行は「ダッシュのみ」のセルで構成される
+    return cells.every((cell) => {
+      const c = cell.trim();
+      return c.length > 0 && /^-+$/.test(c);
+    });
   };
 
   const headerIndex = lines.findIndex((l) => isLikelyHeader(l));
@@ -102,7 +156,14 @@ export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string |
     if (!line.trim().startsWith('|')) {
       break;
     }
-    body.push(line.trimEnd());
+    const trimmed = line.trimEnd();
+    // 本文行の列数が一致することを確認（5列固定）
+    const cells = splitPipeRowCells(trimmed);
+    if (!cells || cells.length !== PERSPECTIVE_TABLE_COLUMN_COUNT) {
+      // 列数が不一致の場合は不正なテーブルとして拒否
+      return undefined;
+    }
+    body.push(trimmed);
   }
 
   // 本文が空でも、ヘッダだけの表として返す（パーサ互換を維持）

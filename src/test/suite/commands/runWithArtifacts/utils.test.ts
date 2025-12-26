@@ -55,6 +55,74 @@ suite('commands/runWithArtifacts/utils.ts', () => {
     assert.strictEqual(result, undefined, 'Should return undefined when separator is missing');
   });
 
+  // TC-B-32: coerceLegacyPerspectiveMarkdownTable called with markdown having body rows with incorrect column count
+  test('TC-B-32: coerceLegacyPerspectiveMarkdownTable returns undefined when body rows have incorrect column count', () => {
+    // Given: Markdown with valid header/separator but body rows with 6 columns (should be 5)
+    const markdown = [
+      PERSPECTIVE_TABLE_HEADER,
+      '|---|---|---|---|---|',
+      '| TC-01 | Input | Perspective | Expected | Notes | Priority |', // 6 columns (7 pipes)
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTable is called
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: Returns undefined (rejects malformed table with column mismatch)
+    assert.strictEqual(result, undefined, 'Should return undefined when body rows have incorrect column count');
+  });
+
+  // TC-N-33: coerceLegacyPerspectiveMarkdownTable accepts body rows without trailing pipe when columns are correct
+  test('TC-N-33: coerceLegacyPerspectiveMarkdownTable accepts body rows without trailing pipe when columns are correct', () => {
+    // Given: Markdown with valid header/separator and 5-column body row missing trailing pipe
+    const bodyRow = '| TC-01 | Input | Perspective | Expected | Notes'; // 5 columns, no trailing pipe
+    const markdown = [
+      PERSPECTIVE_TABLE_HEADER,
+      '|---|---|---|---|---|',
+      bodyRow,
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTable is called
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: Table is accepted and body row is preserved
+    assert.ok(typeof result === 'string' && result.length > 0, 'Should return normalized table string');
+    assert.ok(result.includes(bodyRow), 'Body row should be included as-is');
+  });
+
+  // TC-B-33: coerceLegacyPerspectiveMarkdownTable rejects extra-column rows even when trailing pipe is omitted
+  test('TC-B-33: coerceLegacyPerspectiveMarkdownTable rejects extra-column rows even when trailing pipe is omitted', () => {
+    // Given: Markdown with valid header/separator but 6-column body row without trailing pipe
+    const markdown = [
+      PERSPECTIVE_TABLE_HEADER,
+      '|---|---|---|---|---|',
+      '| TC-01 | Input | Perspective | Expected | Notes | Priority', // 6 columns, no trailing pipe
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTable is called
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: Returns undefined (rejects malformed table with column mismatch)
+    assert.strictEqual(result, undefined, 'Should return undefined when body rows have extra columns without trailing pipe');
+  });
+
+  // TC-N-34: coerceLegacyPerspectiveMarkdownTable accepts escaped pipe in cell content
+  test('TC-N-34: coerceLegacyPerspectiveMarkdownTable accepts escaped pipe in cell content', () => {
+    // Given: Markdown with valid header/separator and escaped pipe within a cell (\|)
+    const bodyRow = '| TC-01 | Input \\| More | Perspective | Expected | Notes |';
+    const markdown = [
+      PERSPECTIVE_TABLE_HEADER,
+      '|---|---|---|---|---|',
+      bodyRow,
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTable is called
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: Table is accepted and body row is preserved
+    assert.ok(typeof result === 'string' && result.length > 0, 'Should return normalized table string');
+    assert.ok(result.includes(bodyRow), 'Body row with escaped pipe should be included as-is');
+  });
+
   // TC-B-30: truncateText called with text length exactly equal to maxChars
   test('TC-B-30: truncateText returns original text when length equals maxChars', () => {
     // Given: Text length exactly equal to maxChars
