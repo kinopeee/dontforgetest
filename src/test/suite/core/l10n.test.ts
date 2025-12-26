@@ -162,4 +162,58 @@ suite('l10n key consistency', () => {
     // Then: ロケールに応じた期待値
     assert.strictEqual(actual, expected);
   });
+
+  // TC-L10N-05: 存在しないキーの場合、キー文字列がそのまま返されること
+  // Given: バンドルに存在しないキー
+  // When: t('nonexistent.key') を呼び出す
+  // Then: キー文字列がそのまま返される（フォールバックも見つからない）
+  test('TC-L10N-05: t() returns key string for non-existent key', () => {
+    // Given: 存在しないキー
+    const key = 'nonexistent.key.that.does.not.exist';
+
+    // When: 存在しないキーを解決
+    const actual = t(key);
+
+    // Then: キー文字列がそのまま返される
+    assert.strictEqual(actual, key);
+  });
+
+  // TC-L10N-06: 空文字キーの場合、空文字がそのまま返されること（境界値）
+  // Given: 空文字キー
+  // When: t('') を呼び出す
+  // Then: 空文字が返る
+  test('TC-L10N-06: t() returns empty string for empty key', () => {
+    // Given: 空文字キー
+    const key = '';
+
+    // When: 空文字キーを解決
+    const actual = t(key);
+
+    // Then: 空文字が返る
+    assert.strictEqual(actual, '');
+  });
+
+  // TC-L10N-07: プレースホルダー（{0}）が正しく置換されること
+  // Given: {0} を含む既知キーと置換引数
+  // When: t(key, arg0) を呼び出す
+  // Then: 現在ロケールに応じたテンプレートに対して {0} が置換された文字列になる
+  test('TC-L10N-07: t() replaces placeholders with positional args', () => {
+    // Given: 英語bundle と 日本語bundle
+    const bundleEnContent = fs.readFileSync(bundleEnPath, 'utf8');
+    const bundleJaContent = fs.readFileSync(bundleJaPath, 'utf8');
+    const bundleEn = JSON.parse(bundleEnContent) as Record<string, string>;
+    const bundleJa = JSON.parse(bundleJaContent) as Record<string, string>;
+
+    const key = 'testStrategy.fileNotFound';
+    const arg0 = 'dummy-strategy.ts';
+    const template = (vscode.env.language ?? '').startsWith('ja') ? bundleJa[key] : bundleEn[key];
+    assert.ok(typeof template === 'string' && template.includes('{0}'), 'expected template string with {0} exists in bundles');
+    const expected = vscode.l10n.t(template, arg0);
+
+    // When: 置換引数つきでキーを解決
+    const actual = t(key, arg0);
+
+    // Then: 置換された文字列が返る
+    assert.strictEqual(actual, expected);
+  });
 });

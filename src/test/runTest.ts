@@ -33,6 +33,31 @@ const DEFAULT_TEST_RESULT_WAIT_INTERVAL_MS = 100;
 const DEFAULT_VSCODE_TEST_MAX_ATTEMPTS = 2;
 const DEFAULT_VSCODE_TEST_LOCALE = 'ja';
 
+function normalizeBooleanEnv(value: string | undefined): boolean | undefined {
+  const v = (value ?? '').trim().toLowerCase();
+  if (v === '') {
+    return undefined;
+  }
+  if (v === '1' || v === 'true' || v === 'yes' || v === 'on') {
+    return true;
+  }
+  if (v === '0' || v === 'false' || v === 'no' || v === 'off') {
+    return false;
+  }
+  return undefined;
+}
+
+function shouldUseXvfb(): boolean {
+  // Linux では DISPLAY が設定されていても X サーバが存在しない環境がある（例: DISPLAY=:1 だが実体が無い）。
+  // その場合、VS Code（Electron）が SIGSEGV 等で落ちてテストが実行できない。
+  // 安定性を優先し、Linux ではデフォルトで xvfb-run を使う（明示的に無効化したい場合は env で opt-out）。
+  if (process.platform !== 'linux') {
+    return false;
+  }
+  const opt = normalizeBooleanEnv(process.env.DONTFORGETEST_VSCODE_TEST_USE_XVFB);
+  return opt ?? true;
+}
+
 function parseIntOrFallback(params: { value: string | undefined; fallback: number; min: number; label: string }): number {
   const raw = params.value?.trim();
   if (!raw) {
@@ -337,7 +362,14 @@ async function runDetachedVscodeExtensionTests(options: {
   console.log(`[dontforgetest] VS Code tests launcher: direct (spawn) executable=${vscodeExecutablePath}`);
 
   await new Promise<void>((resolve, reject) => {
-    const cmd = childProcess.spawn(shell ? `"${vscodeExecutablePath}"` : vscodeExecutablePath, allArgs, {
+    const useXvfb = shouldUseXvfb();
+    const command = useXvfb ? 'xvfb-run' : shell ? `"${vscodeExecutablePath}"` : vscodeExecutablePath;
+    const args = useXvfb ? ['-a', vscodeExecutablePath, ...allArgs] : allArgs;
+    if (useXvfb) {
+      console.log('[dontforgetest] xvfb-run を使用してヘッドレス環境で VS Code を起動します');
+    }
+
+    const cmd = childProcess.spawn(command, args, {
       env: fullEnv,
       shell,
       detached: true,

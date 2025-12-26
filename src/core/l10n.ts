@@ -53,7 +53,11 @@ function loadEnglishFallbackBundle(): Record<string, string> {
     }
     enFallbackBundle = out;
     return out;
-  } catch {
+  } catch (error) {
+    // NOTE:
+    // - 英語フォールバックの読み込みに失敗しても、拡張機能の主要な機能は継続できる。
+    // - ただし原因特定が難しくなるため、ログだけは残す。
+    console.warn('[dontforgetest] 英語フォールバックバンドルの読み込みに失敗しました', error);
     enFallbackBundle = {};
     return enFallbackBundle;
   }
@@ -75,7 +79,18 @@ export function t(message: string, ...rest: Array<PrimitiveArg | NamedArgs>): st
   if (!fallback) {
     return translated;
   }
-  return named ? vscode.l10n.t(fallback, named) : vscode.l10n.t(fallback, ...(rest as PrimitiveArg[]));
+
+  // NOTE:
+  // - fallback は英語文言そのものだが、引数がある場合はプレースホルダー置換のために vscode.l10n.t を使う。
+  // - 引数がない場合は、そのまま返して余計な処理を避ける。
+  if (named) {
+    return Object.keys(named).length === 0 ? fallback : vscode.l10n.t(fallback, named);
+  }
+  const positionalArgs = rest as PrimitiveArg[];
+  if (positionalArgs.length === 0) {
+    return fallback;
+  }
+  return vscode.l10n.t(fallback, ...positionalArgs);
 }
 
 /**
