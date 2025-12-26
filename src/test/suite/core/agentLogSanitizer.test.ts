@@ -26,10 +26,14 @@ Final line`;
     assert.ok(!result.includes('system:init'), 'system:init markers should be removed');
     assert.ok(result.includes('Some actual log message'), 'Actual log content should be preserved');
     assert.ok(result.includes('with trailing whitespace'), 'Content should be preserved');
-    assert.ok(!result.includes('  '), 'Trailing whitespace should be trimmed');
-    // Blank lines should be collapsed to maximum 1
-    const blankLineCount = (result.match(/\n\s*\n/g) || []).length;
-    assert.ok(blankLineCount <= 1, 'Blank lines should be collapsed to maximum 1');
+    // 末尾空白がトリムされていること（行末に空白がないことを確認）
+    const lines = result.split('\n');
+    for (const line of lines) {
+      assert.strictEqual(line, line.replace(/\s+$/, ''), 'Trailing whitespace should be trimmed for each line');
+    }
+    // 連続した空行が1つに畳まれていること（\n\n\n が \n\n になる）
+    // 非連続の空行は維持されるので、空行の総数ではなく連続する空行がないことを確認
+    assert.ok(!result.includes('\n\n\n'), 'Consecutive blank lines should be collapsed to 1');
   });
 
   // TC-B-03: sanitizeAgentLogMessage called with empty string

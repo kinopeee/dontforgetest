@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { TestGenControlPanelViewProvider } from '../../../ui/controlPanel';
 import { taskManager } from '../../../core/taskManager';
 import { type RunningTask } from '../../../providers/provider';
+import { t } from '../../../core/l10n';
 
 // Test type definitions
 interface MockWebviewView {
@@ -356,9 +357,18 @@ suite('src/ui/controlPanel.ts', () => {
   test('TC-N-19: Select options', () => {
     resolveView();
     const html = webviewView.webview.html;
-    assert.ok(html.includes('<option value="workingTree">未コミット差分</option>'), 'workingTree option is present');
-    assert.ok(html.includes('<option value="latestCommit">最新コミット</option>'), 'latestCommit option is present');
-    assert.ok(html.includes('<option value="commitRange">コミット範囲</option>'), 'commitRange option is present');
+    assert.ok(
+      html.includes(`<option value="workingTree">${t('controlPanel.uncommittedDiff')}</option>`),
+      'workingTree option is present',
+    );
+    assert.ok(
+      html.includes(`<option value="latestCommit">${t('controlPanel.latestCommit')}</option>`),
+      'latestCommit option is present',
+    );
+    assert.ok(
+      html.includes(`<option value="commitRange">${t('controlPanel.commitRange')}</option>`),
+      'commitRange option is present',
+    );
   });
 
   // TC-N-20: JavaScript event listeners
@@ -798,8 +808,8 @@ suite('src/ui/controlPanel.ts', () => {
     // Then: HTML contains state management code
     assert.ok(html.includes('let isRunning = false;'), 'isRunning state variable exists');
     assert.ok(html.includes('function updateButtonState(running)'), 'updateButtonState function exists');
-    assert.ok(html.includes('テスト作成中 (中断)'), 'Running state button text exists');
-    assert.ok(html.includes('テスト生成'), 'Default button text exists');
+    assert.ok(html.includes(t('controlPanel.generatingTests')), 'Running state button text exists');
+    assert.ok(html.includes(t('controlPanel.generateTests')), 'Default button text exists');
   });
 
   // TC-N-33: HTML contains message handler for stateUpdate
@@ -954,7 +964,10 @@ suite('src/ui/controlPanel.ts', () => {
   test('TC-N-08: HTML contains button text when running', () => {
     resolveView();
     const html = webviewView.webview.html;
-    assert.ok(html.includes('runBtn.textContent = "テスト作成中 (中断)"'), 'Button text is correct when running');
+    assert.ok(
+      html.includes(`runBtn.textContent = "${t('controlPanel.generatingTests')}"`),
+      'Button text is correct when running',
+    );
   });
 
   // TC-N-09: HTML contains button text 'テスト生成' when not running
@@ -964,7 +977,7 @@ suite('src/ui/controlPanel.ts', () => {
   test('TC-N-09: HTML contains button text when not running', () => {
     resolveView();
     const html = webviewView.webview.html;
-    assert.ok(html.includes('runBtn.textContent = "テスト生成"'), 'Default button text is correct');
+    assert.ok(html.includes(`runBtn.textContent = "${t('controlPanel.generateTests')}"`), 'Default button text is correct');
   });
 
   // TC-N-10: HTML contains animation properties for running button
@@ -1025,7 +1038,10 @@ suite('src/ui/controlPanel.ts', () => {
     const html = webviewView.webview.html;
     // The code should update textContent before classList operations
     // If classList.add fails, textContent should still be updated
-    assert.ok(html.includes('runBtn.textContent = "テスト作成中 (中断)"'), 'Button text is updated');
+    assert.ok(
+      html.includes(`runBtn.textContent = "${t('controlPanel.generatingTests')}"`),
+      'Button text is updated',
+    );
     assert.ok(html.includes('runBtn.classList.add("running")'), 'classList.add is called');
     // Note: Actual error handling is tested in browser environment with mocked classList
   });
@@ -1039,7 +1055,7 @@ suite('src/ui/controlPanel.ts', () => {
     const html = webviewView.webview.html;
     // The code should update textContent before classList operations
     // If classList.remove fails, textContent should still be updated
-    assert.ok(html.includes('runBtn.textContent = "テスト生成"'), 'Button text is updated');
+    assert.ok(html.includes(`runBtn.textContent = "${t('controlPanel.generateTests')}"`), 'Button text is updated');
     assert.ok(html.includes('runBtn.classList.remove("running")'), 'classList.remove is called');
     // Note: Actual error handling is tested in browser environment with mocked classList
   });
@@ -1126,9 +1142,9 @@ suite('src/ui/controlPanel.ts', () => {
   test('TC-B-07: HTML contains UTF-8 charset declaration', () => {
     resolveView();
     const html = webviewView.webview.html;
-    // UTF-8 encoding should handle all text correctly including Japanese characters
+    // UTF-8 encoding should handle all text correctly including localized characters
     assert.ok(html.includes('charset="UTF-8"'), 'HTML has UTF-8 charset declaration');
-    assert.ok(html.includes('テスト作成中 (中断)'), 'Japanese text is present in HTML');
+    assert.ok(html.includes(t('controlPanel.generatingTests')), 'Localized text is present in HTML');
   });
 
   // TC-B-08: stateUpdate message received with isRunning=true

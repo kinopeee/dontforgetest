@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { findLatestArtifact, getArtifactSettings } from './core/artifacts';
+import { t } from './core/l10n';
 import { generateTestFromLatestCommit } from './commands/generateFromCommit';
 import { generateTestFromCommitRange } from './commands/generateFromCommitRange';
 import { generateTestFromWorkingTree } from './commands/generateFromWorkingTree';
@@ -97,7 +98,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('dontforgetest.openLatestPerspective', async () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders || workspaceFolders.length === 0) {
-        await vscode.window.showWarningMessage('ワークスペースが開かれていません');
+        await vscode.window.showWarningMessage(t('workspace.notOpen'));
         return;
       }
 
@@ -106,7 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
       const latestPath = await findLatestArtifact(workspaceRoot, settings.perspectiveReportDir, 'test-perspectives_');
 
       if (!latestPath) {
-        await vscode.window.showInformationMessage('テスト観点表が見つかりませんでした');
+        await vscode.window.showInformationMessage(t('artifact.latestPerspective.notFound'));
         return;
       }
 
@@ -119,7 +120,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('dontforgetest.openLatestExecutionReport', async () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders || workspaceFolders.length === 0) {
-        await vscode.window.showWarningMessage('ワークスペースが開かれていません');
+        await vscode.window.showWarningMessage(t('workspace.notOpen'));
         return;
       }
 
@@ -128,7 +129,7 @@ export function activate(context: vscode.ExtensionContext) {
       const latestPath = await findLatestArtifact(workspaceRoot, settings.testExecutionReportDir, 'test-execution_');
 
       if (!latestPath) {
-        await vscode.window.showInformationMessage('テスト実行レポートが見つかりませんでした');
+        await vscode.window.showInformationMessage(t('artifact.latestExecutionReport.notFound'));
         return;
       }
 
@@ -151,7 +152,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const mdFiles = entries.filter((name) => name.toLowerCase().endsWith('.md'));
       if (mdFiles.length === 0) {
-        await vscode.window.showInformationMessage('手動マージ支援の指示ファイルが見つかりませんでした');
+        await vscode.window.showInformationMessage(t('artifact.mergeInstruction.notFound'));
         return;
       }
 
@@ -169,7 +170,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const latest = withStats.sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
       if (!latest) {
-        await vscode.window.showInformationMessage('手動マージ支援の指示ファイルが見つかりませんでした');
+        await vscode.window.showInformationMessage(t('artifact.mergeInstruction.notFound'));
         return;
       }
 

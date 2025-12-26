@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { nowMs, type TestGenEvent } from './event';
+import { t } from './l10n';
 import { parseMochaOutput, stripAnsi, type ParsedTestResult, type TestCaseResult } from './testResultParser';
 
 // 型の再エクスポート（既存の利用箇所との互換性のため）
@@ -66,14 +67,14 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
   }
 
   const unfenced = stripCodeFence(trimmed);
-  const t = unfenced.trim();
+  const trimmedUnfenced = unfenced.trim();
 
   // 入力が JSON 配列から始まる場合は、内側の `{...}` を拾わずに全体をパースして型検証する。
   // 例: `[{"version":1}]` は JSON だが object ではないため json-not-object とする。
-  if (t.startsWith('[')) {
+  if (trimmedUnfenced.startsWith('[')) {
     let parsed: unknown;
     try {
-      parsed = JSON.parse(t);
+      parsed = JSON.parse(trimmedUnfenced);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return { ok: false, error: `invalid-json: ${msg}` };
@@ -124,13 +125,19 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
   } else {
     // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
     // 例: [] / "..." / null / true / false は JSON として成立し、object でないため json-not-object を返したい。
-    if (t.startsWith('{')) {
+    if (trimmedUnfenced.startsWith('{')) {
       // `{` はあるが閉じ `}` がない等のケースは、従来どおり no-json-object 扱いとする。
       return { ok: false, error: 'no-json-object' };
     }
-    if (t.startsWith('[') || t.startsWith('"') || t === 'null' || t === 'true' || t === 'false') {
+    if (
+      trimmedUnfenced.startsWith('[') ||
+      trimmedUnfenced.startsWith('"') ||
+      trimmedUnfenced === 'null' ||
+      trimmedUnfenced === 'true' ||
+      trimmedUnfenced === 'false'
+    ) {
       try {
-        parsed = JSON.parse(t);
+        parsed = JSON.parse(trimmedUnfenced);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return { ok: false, error: `invalid-json: ${msg}` };
@@ -185,14 +192,14 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
   }
 
   const unfenced = stripCodeFence(trimmed);
-  const t = unfenced.trim();
+  const trimmedUnfenced = unfenced.trim();
 
   // 入力が JSON 配列から始まる場合は、内側の `{...}` を拾わずに全体をパースして型検証する。
   // 例: `[{"version":1}]` は JSON だが object ではないため json-not-object とする。
-  if (t.startsWith('[')) {
+  if (trimmedUnfenced.startsWith('[')) {
     let parsed: unknown;
     try {
-      parsed = JSON.parse(t);
+      parsed = JSON.parse(trimmedUnfenced);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return { ok: false, error: `invalid-json: ${msg}` };
@@ -237,12 +244,18 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
     }
   } else {
     // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
-    if (t.startsWith('{')) {
+    if (trimmedUnfenced.startsWith('{')) {
       return { ok: false, error: 'no-json-object' };
     }
-    if (t.startsWith('[') || t.startsWith('"') || t === 'null' || t === 'true' || t === 'false') {
+    if (
+      trimmedUnfenced.startsWith('[') ||
+      trimmedUnfenced.startsWith('"') ||
+      trimmedUnfenced === 'null' ||
+      trimmedUnfenced === 'true' ||
+      trimmedUnfenced === 'false'
+    ) {
       try {
-        parsed = JSON.parse(t);
+        parsed = JSON.parse(trimmedUnfenced);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return { ok: false, error: `invalid-json: ${msg}` };
@@ -555,16 +568,16 @@ export function buildTestPerspectiveArtifactMarkdown(params: {
   const targets = params.targetPaths.map((p) => `- ${p}`).join('\n');
   const table = params.perspectiveMarkdown.trim();
   return [
-    '# テスト観点表（自動生成）',
+    `# ${t('artifact.perspectiveTable.title')}`,
     '',
-    `- 生成日時: ${tsLocal}`,
-    `- 対象: ${params.targetLabel}`,
-    `- 対象ファイル:`,
-    targets.length > 0 ? targets : '- (なし)',
+    `- ${t('artifact.perspectiveTable.generatedAt')}: ${tsLocal}`,
+    `- ${t('artifact.perspectiveTable.target')}: ${params.targetLabel}`,
+    `- ${t('artifact.perspectiveTable.targetFiles')}:`,
+    targets.length > 0 ? targets : `- ${t('artifact.none')}`,
     '',
     '---',
     '',
-    table.length > 0 ? table : '(観点表の生成結果が空でした)',
+    table.length > 0 ? table : t('artifact.perspectiveTable.empty'),
     '',
   ].join('\n');
 }
@@ -579,7 +592,10 @@ export function buildTestExecutionArtifactMarkdown(params: {
   assertNumber(params.generatedAtMs, 'generatedAtMs');
   const tsLocal = formatLocalIso8601WithOffset(new Date(params.generatedAtMs));
   const targets = params.targetPaths.map((p) => `- ${p}`).join('\n');
-  const modelLine = params.model && params.model.trim().length > 0 ? `- model: ${params.model}` : '- model: (auto)';
+  const modelLine =
+    params.model && params.model.trim().length > 0
+      ? `- ${t('artifact.executionReport.model')}: ${params.model}`
+      : `- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`;
 
   // stdoutをパースしてテスト結果を抽出
   const testResult = parseMochaOutput(params.result.stdout);
@@ -592,11 +608,15 @@ export function buildTestExecutionArtifactMarkdown(params: {
     `- Node.js: ${process.version}`,
     `- VS Code: ${vscode.version}`,
   ].join('\n');
-  const errMsg = params.result.errorMessage ? `- spawn error: ${params.result.errorMessage}` : '';
-  const statusLine = params.result.skipped ? '- status: skipped' : '- status: executed';
+  const errMsg = params.result.errorMessage
+    ? `- ${t('artifact.executionReport.spawnError')}: ${params.result.errorMessage}`
+    : '';
+  const statusLine = params.result.skipped
+    ? `- ${t('artifact.executionReport.status')}: ${t('artifact.executionReport.statusSkipped')}`
+    : `- ${t('artifact.executionReport.status')}: ${t('artifact.executionReport.statusExecuted')}`;
   const skipReasonLine =
     params.result.skipped && params.result.skipReason && params.result.skipReason.trim().length > 0
-      ? `- skipReason: ${params.result.skipReason.trim()}`
+      ? `- ${t('artifact.executionReport.skipReason')}: ${params.result.skipReason.trim()}`
       : '';
 
   // 折りたたみ式の詳細ログセクション
@@ -606,27 +626,30 @@ export function buildTestExecutionArtifactMarkdown(params: {
   const extensionLogContent = truncate(stripAnsi(extensionLog.length > 0 ? extensionLog : ''), 200_000);
   const stdoutCollapsible = buildCollapsibleSection('stdout', stdoutContent);
   const stderrCollapsible = buildCollapsibleSection('stderr', stderrContent);
-  const extensionLogCollapsible = buildCollapsibleSection('実行ログ（拡張機能）', extensionLogContent);
+  const extensionLogCollapsible = buildCollapsibleSection(
+    t('artifact.executionReport.extensionLog'),
+    extensionLogContent,
+  );
 
   const sections: string[] = [
-    '# テスト実行レポート（自動生成）',
-    '## 実行情報',
+    `# ${t('artifact.executionReport.title')}`,
+    `## ${t('artifact.executionReport.executionInfo')}`,
     '',
-    `- 生成日時: ${tsLocal}`,
-    `- 生成対象: ${params.generationLabel}`,
+    `- ${t('artifact.executionReport.generatedAt')}: ${tsLocal}`,
+    `- ${t('artifact.executionReport.generationTarget')}: ${params.generationLabel}`,
     modelLine,
-    `- 実行コマンド: \`${params.result.command}\``,
+    `- ${t('artifact.executionReport.executionCommand')}: \`${params.result.command}\``,
     statusLine,
     skipReasonLine,
     errMsg,
     envLines,
     '',
-    `- 対象ファイル:`,
-    targets.length > 0 ? targets : '- (なし)',
+    `- ${t('artifact.executionReport.targetFiles')}:`,
+    targets.length > 0 ? targets : `- ${t('artifact.none')}`,
     '',
     summarySection,
     detailsSection,
-    '## 詳細ログ',
+    `## ${t('artifact.executionReport.detailedLogs')}`,
     '',
     stdoutCollapsible,
     stderrCollapsible,
@@ -718,11 +741,11 @@ function buildTestSummarySection(exitCode: number | null, durationMs: number, te
   //    （VS Code 拡張機能テストでは Extension Host が別プロセスで起動するため exitCode が null になることがある）
   const isSuccess = exitCode === 0 || (exitCode === null && testResult.parsed && testResult.failed === 0);
   const statusEmoji = isSuccess ? '✅' : '❌';
-  const statusText = isSuccess ? '成功' : '失敗';
+  const statusText = isSuccess ? t('artifact.executionReport.success') : t('artifact.executionReport.failure');
   const durationSec = (durationMs / 1000).toFixed(1);
 
   const lines: string[] = [
-    '## テスト結果サマリー',
+    `## ${t('artifact.executionReport.testSummary')}`,
     '',
     `${statusEmoji} **${statusText}** (exitCode: ${exitCode ?? 'null'})`,
     '',
@@ -732,12 +755,12 @@ function buildTestSummarySection(exitCode: number | null, durationMs: number, te
   const failed = testResult.parsed ? String(testResult.failed) : '-';
   const total = testResult.parsed ? String(testResult.passed + testResult.failed) : '-';
   lines.push(
-    '| 項目 | 結果 |',
+    `| ${t('artifact.tableHeader.item')} | ${t('artifact.tableHeader.result')} |`,
     '|------|------|',
-    `| 成功 | ${passed} |`,
-    `| 失敗 | ${failed} |`,
-    `| 合計 | ${total} |`,
-    `| 実行時間 | ${durationSec}秒 |`,
+    `| ${t('artifact.executionReport.passed')} | ${passed} |`,
+    `| ${t('artifact.executionReport.failed')} | ${failed} |`,
+    `| ${t('artifact.executionReport.total')} | ${total} |`,
+    `| ${t('artifact.executionReport.duration')} | ${durationSec} ${t('artifact.executionReport.seconds')} |`,
     '',
   );
 
@@ -749,9 +772,9 @@ function buildTestSummarySection(exitCode: number | null, durationMs: number, te
  */
 function buildTestDetailsSection(testResult: ParsedTestResult): string {
   const lines: string[] = [
-    '## テスト詳細',
+    `## ${t('artifact.executionReport.testDetails')}`,
     '',
-    '| スイート | テスト名 | 結果 |',
+    `| ${t('artifact.executionReport.suite')} | ${t('artifact.executionReport.testName')} | ${t('artifact.executionReport.result')} |`,
     '|---------|---------|------|',
   ];
 
@@ -777,12 +800,12 @@ function buildTestDetailsSection(testResult: ParsedTestResult): string {
  */
 function buildCollapsibleSection(title: string, content: string): string {
   const trimmed = content.trim();
-  if (trimmed.length === 0 || trimmed === '(ログなし)') {
+  if (trimmed.length === 0 || trimmed === t('artifact.noLog')) {
     return '';
   }
   return [
     '<details>',
-    `<summary>${title}（クリックで展開）</summary>`,
+    `<summary>${title}${t('artifact.executionReport.clickToExpand')}</summary>`,
     '',
     '```text',
     trimmed,
@@ -859,22 +882,22 @@ function normalizeTableCell(value: string): string {
 }
 
 function stripCodeFence(text: string): string {
-  const t = text.trim();
-  if (!t.startsWith('```')) {
-    return t;
+  const trimmedText = text.trim();
+  if (!trimmedText.startsWith('```')) {
+    return trimmedText;
   }
-  const firstNewline = t.indexOf('\n');
+  const firstNewline = trimmedText.indexOf('\n');
   if (firstNewline === -1) {
-    return t;
+    return trimmedText;
   }
-  const lastFence = t.lastIndexOf('```');
+  const lastFence = trimmedText.lastIndexOf('```');
   if (lastFence <= 0 || lastFence === 0) {
-    return t;
+    return trimmedText;
   }
   if (lastFence <= firstNewline) {
-    return t;
+    return trimmedText;
   }
-  return t.slice(firstNewline + 1, lastFence).trim();
+  return trimmedText.slice(firstNewline + 1, lastFence).trim();
 }
 
 function extractJsonObject(text: string): string | undefined {

@@ -1,9 +1,9 @@
 {
   "name": "dontforgetest",
   "publisher": "local",
-  "displayName": "Dontforgetest",
-  "description": "Cursor CLIを活用してテストコードを自動生成するVS Code拡張機能",
-  "version": "0.0.77",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "0.0.80",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.85.0"
@@ -12,13 +12,14 @@
     "Other"
   ],
   "main": "./out/extension.js",
+  "l10n": "./l10n",
   "activationEvents": [],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
           "id": "dontforgetest",
-          "title": "Dontforgetest",
+          "title": "%viewsContainers.activitybar.title%",
           "icon": "media/testgen-view.svg"
         }
       ]
@@ -27,17 +28,17 @@
       "dontforgetest": [
         {
           "id": "dontforgetest.controlPanel",
-          "name": "操作",
+          "name": "%views.controlPanel.name%",
           "type": "webview"
         },
         {
           "id": "dontforgetest.progressView",
-          "name": "進捗",
+          "name": "%views.progressView.name%",
           "type": "tree"
         },
         {
           "id": "dontforgetest.outputView",
-          "name": "出力",
+          "name": "%views.outputView.name%",
           "type": "tree"
         }
       ]
@@ -45,48 +46,48 @@
     "commands": [
       {
         "command": "dontforgetest.generateTest",
-        "title": "Dontforgetest: テスト生成（QuickPick）"
+        "title": "%command.generateTest.title%"
       },
       {
         "command": "dontforgetest.openPanel",
-        "title": "Dontforgetest: パネルを開く"
+        "title": "%command.openPanel.title%"
       },
       {
         "command": "dontforgetest.generateTestFromCommit",
-        "title": "Dontforgetest: 最新コミット差分からテスト生成"
+        "title": "%command.generateTestFromCommit.title%"
       },
       {
         "command": "dontforgetest.generateTestFromCommitRange",
-        "title": "Dontforgetest: コミット範囲差分からテスト生成"
+        "title": "%command.generateTestFromCommitRange.title%"
       },
       {
         "command": "dontforgetest.generateTestFromWorkingTree",
-        "title": "Dontforgetest: 未コミット差分からテスト生成"
+        "title": "%command.generateTestFromWorkingTree.title%"
       },
       {
         "command": "dontforgetest.showTestGeneratorOutput",
-        "title": "Dontforgetest: 出力ログを表示"
+        "title": "%command.showTestGeneratorOutput.title%"
       },
       {
         "command": "dontforgetest.selectDefaultModel",
-        "title": "Dontforgetest: デフォルトモデルを選択"
+        "title": "%command.selectDefaultModel.title%"
       },
       {
         "command": "dontforgetest.openSettings",
-        "title": "Dontforgetest: 設定を開く",
+        "title": "%command.openSettings.title%",
         "icon": "$(gear)"
       },
       {
         "command": "dontforgetest.openLatestPerspective",
-        "title": "Dontforgetest: 最新の観点表を開く"
+        "title": "%command.openLatestPerspective.title%"
       },
       {
         "command": "dontforgetest.openLatestExecutionReport",
-        "title": "Dontforgetest: 最新の実行レポートを開く"
+        "title": "%command.openLatestExecutionReport.title%"
       },
       {
         "command": "dontforgetest.openLatestMergeInstruction",
-        "title": "Dontforgetest: 手動マージ支援を開く（最新）"
+        "title": "%command.openLatestMergeInstruction.title%"
       }
     ],
     "menus": {
@@ -99,22 +100,22 @@
       ]
     },
     "configuration": {
-      "title": "Dontforgetest",
+      "title": "%configuration.title%",
       "properties": {
         "dontforgetest.cursorAgentPath": {
           "type": "string",
           "default": "",
-          "description": "cursor-agent コマンドのパス（未指定の場合は PATH から解決）"
+          "description": "%configuration.cursorAgentPath.description%"
         },
         "dontforgetest.maxParallelTasks": {
           "type": "number",
           "default": 4,
-          "description": "複数ファイル処理の同時実行数上限（スナップショット取得/復元など）"
+          "description": "%configuration.maxParallelTasks.description%"
         },
         "dontforgetest.defaultModel": {
           "type": "string",
           "default": "",
-          "description": "cursor-agent に渡すデフォルトモデル（空の場合は自動）"
+          "description": "%configuration.defaultModel.description%"
         },
         "dontforgetest.customModels": {
           "type": "array",
@@ -122,38 +123,38 @@
           "items": {
             "type": "string"
           },
-          "description": "モデル候補のフォールバックリスト（QuickPick等で使用）"
+          "description": "%configuration.customModels.description%"
         },
         "dontforgetest.testStrategyPath": {
           "type": "string",
           "default": "",
-          "description": "テスト戦略ルールファイルのパス（空の場合は内蔵デフォルトを使用）"
+          "description": "%configuration.testStrategyPath.description%"
         },
         "dontforgetest.includeTestPerspectiveTable": {
           "type": "boolean",
           "default": true,
-          "description": "テスト生成前にテスト観点表（Markdown）を生成してファイル保存する"
+          "description": "%configuration.includeTestPerspectiveTable.description%"
         },
         "dontforgetest.perspectiveReportDir": {
           "type": "string",
           "default": "docs/test-perspectives",
-          "description": "テスト観点表（自動生成）の保存先ディレクトリ（ワークスペース相対または絶対）"
+          "description": "%configuration.perspectiveReportDir.description%"
         },
         "dontforgetest.perspectiveGenerationTimeoutMs": {
           "type": "number",
           "default": 300000,
           "minimum": 0,
-          "description": "テスト観点表生成（cursor-agent）の最大実行時間（ミリ秒）。0以下の場合はタイムアウトしません。"
+          "description": "%configuration.perspectiveGenerationTimeoutMs.description%"
         },
         "dontforgetest.testExecutionReportDir": {
           "type": "string",
           "default": "docs/test-execution-reports",
-          "description": "テスト実行レポート（自動生成）の保存先ディレクトリ（ワークスペース相対または絶対）"
+          "description": "%configuration.testExecutionReportDir.description%"
         },
         "dontforgetest.testCommand": {
           "type": "string",
           "default": "npm test",
-          "description": "テスト実行コマンド（空の場合は実行しない。例: npm test, pnpm test, pytest）"
+          "description": "%configuration.testCommand.description%"
         },
         "dontforgetest.testExecutionRunner": {
           "type": "string",
@@ -162,27 +163,27 @@
             "extension"
           ],
           "default": "extension",
-          "description": "テスト実行の担当者（cursorAgent=cursor-agentに実行させて結果を抽出、extension=拡張機能が直接実行）"
+          "description": "%configuration.testExecutionRunner.description%"
         },
         "dontforgetest.allowUnsafeTestCommand": {
           "type": "boolean",
           "default": false,
-          "description": "（互換性のため残置）以前は testExecutionRunner=extension の場合に、VS Code を別プロセスで起動しそうなテストコマンドをスキップしていました。現在は改善策により常に実行するため、本設定は基本的に無視されます。"
+          "description": "%configuration.allowUnsafeTestCommand.description%"
         },
         "dontforgetest.cursorAgentForceForTestExecution": {
           "type": "boolean",
           "default": false,
-          "description": "testExecutionRunner=cursorAgent のテスト実行で cursor-agent に --force を付与する（コマンド実行の拒否回避を試す。ファイル編集も可能になるため注意）"
+          "description": "%configuration.cursorAgentForceForTestExecution.description%"
         },
         "dontforgetest.enablePreTestCheck": {
           "type": "boolean",
           "default": true,
-          "description": "テストコード生成後に型チェック/Lintを実行し、エラーがあれば自動修正を試みる"
+          "description": "%configuration.enablePreTestCheck.description%"
         },
         "dontforgetest.preTestCheckCommand": {
           "type": "string",
           "default": "npm run compile",
-          "description": "生成後に実行する型チェック/Lintコマンド（例: npm run compile, npm run lint, tsc --noEmit）"
+          "description": "%configuration.preTestCheckCommand.description%"
         }
       }
     }
@@ -194,6 +195,8 @@
     "pretest": "npm run compile",
     "lint": "eslint src/",
     "test": "node ./out/test/runTest.js",
+    "test:ja": "DONTFORGETEST_VSCODE_TEST_LOCALE=ja npm test",
+    "test:en": "DONTFORGETEST_VSCODE_TEST_LOCALE=en npm test",
     "package:vsix": "npm run compile && VERSION=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce package --out \"dontforgetest-$VERSION.vsix\" --allow-missing-repository --no-rewrite-relative-links",
     "vsix:install": "code --install-extension \"$(ls -t dontforgetest-*.vsix | head -1)\" --force",
     "vsix:build": "npm run package:vsix",

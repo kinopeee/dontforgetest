@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ensurePreflight } from '../core/preflight';
+import { t } from '../core/l10n';
 import { buildTestGenPrompt } from '../core/promptBuilder';
 import { execGitStdout } from '../git/gitExec';
 import { runWithArtifacts } from './runWithArtifacts';
@@ -26,13 +27,13 @@ export async function generateTestFromLatestCommit(
 
   const commit = await getHeadCommitHash(workspaceRoot);
   if (!commit) {
-    vscode.window.showErrorMessage('Git の HEAD が解決できません。まだコミットが存在しない可能性があります。');
+    vscode.window.showErrorMessage(t('git.head.resolveFailed'));
     return;
   }
 
   const changedFiles = await getChangedFilesInHead(workspaceRoot);
   if (changedFiles.length === 0) {
-    vscode.window.showInformationMessage(`最新コミット（${commit.slice(0, 7)}）に変更ファイルが見つかりませんでした。`);
+    vscode.window.showInformationMessage(t('git.head.noChanges', commit.slice(0, 7)));
     return;
   }
 
@@ -41,7 +42,7 @@ export async function generateTestFromLatestCommit(
 
   const { prompt } = await buildTestGenPrompt({
     workspaceRoot,
-    targetLabel: `最新コミット差分 (${commit.slice(0, 7)})`,
+    targetLabel: t('prompt.latestCommitLabel', commit.slice(0, 7)),
     targetPaths: changedFiles,
     testStrategyPath,
   });
@@ -49,18 +50,18 @@ export async function generateTestFromLatestCommit(
   const finalPrompt = [
     prompt,
     '',
-    '## 最新コミット差分（参考）',
-    '以下は HEAD の差分です。必要に応じて参照してください。',
+    t('prompt.latestCommitSection'),
+    t('prompt.latestCommitHint'),
     '',
     diffForPrompt,
   ].join('\n');
 
   const taskId = `fromCommit-${Date.now()}`;
-  const generationLabel = `最新コミット (${commit.slice(0, 7)})`;
+  const generationLabel = t('prompt.generationLabel.latestCommit', commit.slice(0, 7));
 
   const runLocation = options.runLocation === 'worktree' ? 'worktree' : 'local';
   if (runLocation === 'worktree' && !options.extensionContext) {
-    vscode.window.showErrorMessage('Worktree 実行には拡張機能コンテキストが必要です（内部エラー）。');
+    vscode.window.showErrorMessage(t('worktree.extensionContextRequired'));
     return;
   }
 
@@ -107,7 +108,7 @@ async function getHeadDiffText(cwd: string): Promise<string> {
     const stdout = await execGitStdout(cwd, ['show', '--no-color', '--pretty=format:COMMIT %H%nSUBJECT %s%n', 'HEAD'], 20 * 1024 * 1024);
     return stdout.trim();
   } catch {
-    return '(差分の取得に失敗しました)';
+    return t('git.diff.failed');
   }
 }
 

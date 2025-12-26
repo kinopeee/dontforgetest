@@ -8,17 +8,18 @@ import { execGitStdout } from '../../../git/gitExec';
 suite('git/worktreeManager.ts', () => {
   let tempBaseDir: string;
   let repoRoot: string;
+  let isGitRepo = false;
 
-  suiteSetup(() => {
+  suiteSetup(async () => {
     // Find the actual git repository root
     repoRoot = process.cwd();
     // Verify we're in a git repo
     try {
-      execGitStdout(repoRoot, ['rev-parse', '--git-dir'], 1024 * 1024).catch(() => {
-        // Not a git repo, skip tests
-      });
+      await execGitStdout(repoRoot, ['rev-parse', '--git-dir'], 1024 * 1024);
+      isGitRepo = true;
     } catch {
-      // Not a git repo, skip tests
+      // Not a git repo, tests will be skipped
+      isGitRepo = false;
     }
     tempBaseDir = path.join(os.tmpdir(), `dontforgetest-test-${Date.now()}`);
     fs.mkdirSync(tempBaseDir, { recursive: true });
@@ -35,6 +36,9 @@ suite('git/worktreeManager.ts', () => {
 
   // TC-N-12: createTemporaryWorktree called with valid repoRoot, baseDir, and taskId
   test('TC-N-12: createTemporaryWorktree creates temporary worktree successfully', async function () {
+    if (!isGitRepo) {
+      this.skip(); // Skip test if not in a git repository
+    }
     // Given: Valid repoRoot, baseDir, and taskId
     const taskId = `test-task-${Date.now()}`;
     const params = {
@@ -68,6 +72,9 @@ suite('git/worktreeManager.ts', () => {
 
   // TC-N-13: removeTemporaryWorktree called with valid repoRoot and worktreeDir
   test('TC-N-13: removeTemporaryWorktree removes worktree successfully', async function () {
+    if (!isGitRepo) {
+      this.skip(); // Skip test if not in a git repository
+    }
     // Given: Valid repoRoot and worktreeDir (created worktree)
     const taskId = `test-task-remove-${Date.now()}`;
     const worktree = await createTemporaryWorktree({
@@ -123,6 +130,9 @@ suite('git/worktreeManager.ts', () => {
 
   // TC-B-13: createTemporaryWorktree called with empty taskId
   test('TC-B-13: createTemporaryWorktree sanitizes empty taskId to default', async function () {
+    if (!isGitRepo) {
+      this.skip(); // Skip test if not in a git repository
+    }
     // Given: Empty taskId
     const taskId = '';
     let worktree: TemporaryWorktree | undefined;
@@ -151,6 +161,9 @@ suite('git/worktreeManager.ts', () => {
 
   // TC-B-14: createTemporaryWorktree called with taskId containing special characters
   test('TC-B-14: createTemporaryWorktree sanitizes special characters in taskId', async function () {
+    if (!isGitRepo) {
+      this.skip(); // Skip test if not in a git repository
+    }
     // Given: taskId containing special characters
     const taskId = 'test/task<>:"|?*\\';
     let worktree: TemporaryWorktree | undefined;
@@ -165,8 +178,8 @@ suite('git/worktreeManager.ts', () => {
 
       // Then: TaskId sanitized to safe path segment, worktree created
       assert.ok(worktree !== undefined, 'Worktree should be created');
-      assert.ok(!worktree.worktreeDir.includes('/'), 'Worktree directory should not contain special characters');
-      assert.ok(!worktree.worktreeDir.includes('<'), 'Worktree directory should not contain <');
+      const worktreeDirName = path.basename(worktree.worktreeDir);
+      assert.ok(!/[<>:"|?*\\/]/.test(worktreeDirName), 'Worktree directory should not contain special characters');
     } finally {
       if (worktree) {
         try {
@@ -180,6 +193,9 @@ suite('git/worktreeManager.ts', () => {
 
   // TC-B-15: createTemporaryWorktree called with taskId length > 120
   test('TC-B-15: createTemporaryWorktree truncates long taskId', async function () {
+    if (!isGitRepo) {
+      this.skip(); // Skip test if not in a git repository
+    }
     // Given: taskId length > 120
     const longTaskId = 'a'.repeat(150);
     let worktree: TemporaryWorktree | undefined;

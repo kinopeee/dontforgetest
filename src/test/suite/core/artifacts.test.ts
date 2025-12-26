@@ -18,6 +18,7 @@ import {
   type PerspectiveCase,
 } from '../../../core/artifacts';
 import { stripAnsi } from '../../../core/testResultParser';
+import { t } from '../../../core/l10n';
 
 suite('core/artifacts.ts', () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
@@ -341,8 +342,8 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: フォーマットが正しいこと
-    assert.ok(md.includes('# テスト観点表（自動生成）'), 'タイトルが含まれること');
-    assert.ok(md.includes('- 対象: Label'), '対象ラベルが含まれること');
+    assert.ok(md.includes(`# ${t('artifact.perspectiveTable.title')}`), 'タイトルが含まれること');
+    assert.ok(md.includes(`- ${t('artifact.perspectiveTable.target')}: Label`), '対象ラベルが含まれること');
     assert.ok(md.includes('content'), 'コンテンツが含まれること');
   });
 
@@ -357,7 +358,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: (なし) と表示されること
-    assert.ok(md.includes('- 対象ファイル:\n- (なし)'), '対象ファイルなしの表示が正しいこと');
+    assert.ok(md.includes(`- ${t('artifact.perspectiveTable.targetFiles')}:\n- ${t('artifact.none')}`), '対象ファイルなしの表示が正しいこと');
   });
 
     // TC-ART-08: 実行レポートMarkdown生成（正常）
@@ -380,15 +381,15 @@ suite('core/artifacts.ts', () => {
       });
   
       // Then: フォーマットが正しく、終了コードや出力が含まれること
-      assert.ok(md.includes('# テスト実行レポート（自動生成）'), 'タイトルが含まれること');
+      assert.ok(md.includes(`# ${t('artifact.executionReport.title')}`), 'タイトルが含まれること');
       assert.ok(md.includes('exitCode: 0'), 'exitCodeが含まれること');
-      assert.ok(md.includes('## テスト結果サマリー'), 'サマリーセクションが含まれること');
-      assert.ok(md.indexOf('## 実行情報') < md.indexOf('## テスト結果サマリー'), '実行情報がサマリーより前に出力されること');
-      assert.ok(md.includes('status: executed'), 'status: executed が含まれること');
-      assert.ok(md.includes('<summary>実行ログ（拡張機能）（クリックで展開）</summary>'), '実行ログセクションが含まれること');
+      assert.ok(md.includes(`## ${t('artifact.executionReport.testSummary')}`), 'サマリーセクションが含まれること');
+      assert.ok(md.indexOf(`## ${t('artifact.executionReport.executionInfo')}`) < md.indexOf(`## ${t('artifact.executionReport.testSummary')}`), '実行情報がサマリーより前に出力されること');
+      assert.ok(md.includes(`${t('artifact.executionReport.status')}: ${t('artifact.executionReport.statusExecuted')}`), 'status: executed が含まれること');
+      assert.ok(md.includes(`<summary>${t('artifact.executionReport.extensionLog')}${t('artifact.executionReport.clickToExpand')}</summary>`), '実行ログセクションが含まれること');
       assert.ok(md.includes('[INFO] Extension Log'), '拡張機能ログが含まれること');
       // Added: model未指定時のデフォルト表示確認
-      assert.ok(md.includes('- model: (auto)'), 'model未指定時は (auto) と表示されること');
+      assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`), 'model未指定時は (auto) と表示されること');
     });
 
     // TC-ART-16: 実行レポートMarkdown生成（モデル指定あり）
@@ -412,7 +413,7 @@ suite('core/artifacts.ts', () => {
       });
 
       // Then: モデル名が含まれること
-      assert.ok(md.includes('- model: gpt-4-custom'), '指定されたモデル名が表示されること');
+      assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: gpt-4-custom`), '指定されたモデル名が表示されること');
     });
 
     // TC-ART-17: 実行レポートMarkdown生成（モデル空文字）
@@ -436,7 +437,7 @@ suite('core/artifacts.ts', () => {
       });
 
       // Then: (auto) と表示されること
-      assert.ok(md.includes('- model: (auto)'), 'modelが空白のみの場合は (auto) と表示されること');
+      assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`), 'modelが空白のみの場合は (auto) と表示されること');
     });
 
   // TC-ART-09: 実行レポートMarkdown生成（エラー）
@@ -459,7 +460,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: エラーメッセージが含まれること
-    assert.ok(md.includes('spawn error: Spawn failed'), 'エラーメッセージが含まれること');
+    assert.ok(md.includes(`${t('artifact.executionReport.spawnError')}: Spawn failed`), 'エラーメッセージが含まれること');
   });
 
   // TC-N-21: buildTestExecutionArtifactMarkdown with all parameters provided
@@ -481,11 +482,11 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Sections appear in order: title, execution info, summary, details, detailed logs
-    const titleIndex = md.indexOf('# テスト実行レポート（自動生成）');
-    const execInfoIndex = md.indexOf('## 実行情報');
-    const summaryIndex = md.indexOf('## テスト結果サマリー');
-    const detailsIndex = md.indexOf('## テスト詳細');
-    const detailedLogsIndex = md.indexOf('## 詳細ログ');
+    const titleIndex = md.indexOf(`# ${t('artifact.executionReport.title')}`);
+    const execInfoIndex = md.indexOf(`## ${t('artifact.executionReport.executionInfo')}`);
+    const summaryIndex = md.indexOf(`## ${t('artifact.executionReport.testSummary')}`);
+    const detailsIndex = md.indexOf(`## ${t('artifact.executionReport.testDetails')}`);
+    const detailedLogsIndex = md.indexOf(`## ${t('artifact.executionReport.detailedLogs')}`);
 
     assert.ok(titleIndex >= 0, 'Title section is present');
     assert.ok(execInfoIndex >= 0, 'Execution info section is present');
@@ -519,7 +520,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Markdown contains "- (なし)" for target files
-    assert.ok(md.includes('- (なし)'), 'Empty array is handled correctly');
+    assert.ok(md.includes(`- ${t('artifact.none')}`), 'Empty array is handled correctly');
   });
 
   // TC-N-23: buildTestExecutionArtifactMarkdown with skipped result
@@ -543,8 +544,8 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Markdown contains "- status: skipped" and skipReason
-    assert.ok(md.includes('status: skipped'), 'Skipped status is displayed correctly');
-    assert.ok(md.includes('skipReason: Pre-test check failed'), 'SkipReason is included');
+    assert.ok(md.includes(`${t('artifact.executionReport.status')}: ${t('artifact.executionReport.statusSkipped')}`), 'Skipped status is displayed correctly');
+    assert.ok(md.includes(`${t('artifact.executionReport.skipReason')}: Pre-test check failed`), 'SkipReason is included');
   });
 
   // TC-N-24: buildTestExecutionArtifactMarkdown with errorMessage in result
@@ -567,7 +568,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Markdown contains "- spawn error: <message>" line in execution info section
-    assert.ok(md.includes('spawn error: Command execution failed'), 'Error message is included in execution info section');
+    assert.ok(md.includes(`${t('artifact.executionReport.spawnError')}: Command execution failed`), 'Error message is included in execution info section');
   });
 
   // TC-ART-10: 実行レポートMarkdown生成（空出力）
@@ -592,8 +593,8 @@ suite('core/artifacts.ts', () => {
     assert.ok(!md.includes('<summary>stdout'), '空のstdoutセクションは省略されること');
     assert.ok(!md.includes('<summary>stderr'), '空のstderrセクションは省略されること');
     // 基本情報は含まれること
-    assert.ok(md.includes('## テスト結果サマリー'), 'サマリーセクションは含まれること');
-    assert.ok(md.includes('## 詳細ログ'), '詳細ログセクションヘッダーは含まれること');
+    assert.ok(md.includes(`## ${t('artifact.executionReport.testSummary')}`), 'サマリーセクションは含まれること');
+    assert.ok(md.includes(`## ${t('artifact.executionReport.detailedLogs')}`), '詳細ログセクションヘッダーは含まれること');
   });
 
   // TC-ART-20: 実行レポートMarkdown生成（stdoutパース失敗でも固定フォーマット）
@@ -615,12 +616,12 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: 章立てと表の列が固定で含まれること
-    assert.ok(md.includes('## テスト結果サマリー'), 'サマリー見出しが必ず含まれること');
-    assert.ok(md.includes('| 項目 | 結果 |'), 'サマリー表が必ず含まれること');
-    assert.ok(md.includes('## テスト詳細'), 'テスト詳細見出しが必ず含まれること');
-    assert.ok(md.includes('| スイート | テスト名 | 結果 |'), 'テスト詳細表が必ず含まれること');
-    assert.ok(md.includes('## 実行情報'), '実行情報見出しが必ず含まれること');
-    assert.ok(md.includes('## 詳細ログ'), '詳細ログ見出しが必ず含まれること');
+    assert.ok(md.includes(`## ${t('artifact.executionReport.testSummary')}`), 'サマリー見出しが必ず含まれること');
+    assert.ok(md.includes(`| ${t('artifact.tableHeader.item')} | ${t('artifact.tableHeader.result')} |`), 'サマリー表が必ず含まれること');
+    assert.ok(md.includes(`## ${t('artifact.executionReport.testDetails')}`), 'テスト詳細見出しが必ず含まれること');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.suite')} | ${t('artifact.executionReport.testName')} | ${t('artifact.executionReport.result')} |`), 'テスト詳細表が必ず含まれること');
+    assert.ok(md.includes(`## ${t('artifact.executionReport.executionInfo')}`), '実行情報見出しが必ず含まれること');
+    assert.ok(md.includes(`## ${t('artifact.executionReport.detailedLogs')}`), '詳細ログ見出しが必ず含まれること');
   });
 
   // TC-REPORT-N-01: TestExecutionResult with parsed Mocha output
@@ -642,11 +643,11 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Summary table and details table are generated with parsed test counts
-    assert.ok(md.includes('| 項目 | 結果 |'), 'Summary table header is present');
-    assert.ok(md.includes('| 成功 | 2 |'), 'Passed count is shown');
-    assert.ok(md.includes('| 失敗 | 0 |'), 'Failed count is shown');
-    assert.ok(md.includes('| 合計 | 2 |'), 'Total count is shown');
-    assert.ok(md.includes('| スイート | テスト名 | 結果 |'), 'Details table header is present');
+    assert.ok(md.includes(`| ${t('artifact.tableHeader.item')} | ${t('artifact.tableHeader.result')} |`), 'Summary table header is present');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 2 |`), 'Passed count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 2 |`), 'Total count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.suite')} | ${t('artifact.executionReport.testName')} | ${t('artifact.executionReport.result')} |`), 'Details table header is present');
     assert.ok(md.includes('test case 1'), 'Test case 1 is in details');
     assert.ok(md.includes('test case 2'), 'Test case 2 is in details');
   });
@@ -670,9 +671,9 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Details table header is present but no test rows
-    assert.ok(md.includes('| スイート | テスト名 | 結果 |'), 'Details table header is present');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.suite')} | ${t('artifact.executionReport.testName')} | ${t('artifact.executionReport.result')} |`), 'Details table header is present');
     // The table should have header and separator, but no test rows
-    const detailsSection = md.split('## テスト詳細')[1]?.split('##')[0] || '';
+    const detailsSection = md.split(`## ${t('artifact.executionReport.testDetails')}`)[1]?.split('##')[0] || '';
     const testRows = detailsSection.match(/\|.*\|.*\|.*\|/g) || [];
     // Only header and separator rows should exist (2 rows)
     assert.ok(testRows.length <= 2, 'No test case rows in details table');
@@ -697,10 +698,10 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Summary table always shows "-" when testResult.parsed is false
-    assert.ok(md.includes('| 項目 | 結果 |'), 'Summary table header is present');
-    assert.ok(md.includes('| 成功 | - |'), 'Passed shows "-"');
-    assert.ok(md.includes('| 失敗 | - |'), 'Failed shows "-"');
-    assert.ok(md.includes('| 合計 | - |'), 'Total shows "-"');
+    assert.ok(md.includes(`| ${t('artifact.tableHeader.item')} | ${t('artifact.tableHeader.result')} |`), 'Summary table header is present');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed shows "-"');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | - |`), 'Failed shows "-"');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | - |`), 'Total shows "-"');
   });
 
   // TC-B-07: buildTestExecutionArtifactMarkdown with durationMs = 0
@@ -722,7 +723,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Zero duration is handled correctly
-    assert.ok(md.includes('| 実行時間 | 0.0秒 |'), 'Duration shows 0.0 seconds');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} | 0.0 ${t('artifact.executionReport.seconds')} |`), 'Duration shows 0.0 seconds');
   });
 
   // TC-B-08: buildTestExecutionArtifactMarkdown with exitCode = null
@@ -790,7 +791,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Empty extension log is not displayed
-    assert.ok(!md.includes('<summary>実行ログ（拡張機能）'), 'Empty extension log section is not displayed');
+    assert.ok(!md.includes(`<summary>${t('artifact.executionReport.extensionLog')}`), 'Empty extension log section is not displayed');
   });
 
   // TC-REPORT-B-01: TestExecutionResult with durationMs=0
@@ -812,7 +813,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Zero duration is formatted correctly
-    assert.ok(md.includes('| 実行時間 | 0.0秒 |'), 'Duration shows 0.0 seconds');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} | 0.0 ${t('artifact.executionReport.seconds')} |`), 'Duration shows 0.0 seconds');
   });
 
   // TC-REPORT-B-02: TestExecutionResult with very large durationMs
@@ -835,7 +836,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Large duration values are formatted correctly
-    assert.ok(md.includes('| 実行時間 | 3600.0秒 |'), 'Large duration is formatted correctly');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} | 3600.0 ${t('artifact.executionReport.seconds')} |`), 'Large duration is formatted correctly');
   });
 
   // TC-REPORT-B-03: TestExecutionResult with exitCode=null
@@ -881,7 +882,7 @@ suite('core/artifacts.ts', () => {
     // Then: Zero test counts are displayed correctly
     // When parsed=false, it shows "-", but if somehow parsed=true with 0 tests, it should show 0
     // Since stdout doesn't match Mocha pattern, parsed should be false
-    assert.ok(md.includes('| 合計 | - |') || md.includes('| 合計 | 0 |'), 'Total shows "-" or "0"');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | - |`) || md.includes(`| ${t('artifact.executionReport.total')} | 0 |`), 'Total shows "-" or "0"');
   });
 
   // TC-ART-13: 実行レポートMarkdown生成（スキップ）
@@ -906,11 +907,11 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: status と skipReason が含まれること
-    assert.ok(md.includes('status: skipped'), 'status: skipped が含まれること');
-    assert.ok(md.includes('skipReason: 安全のためスキップしました'), 'skipReason が含まれること');
+    assert.ok(md.includes(`${t('artifact.executionReport.status')}: ${t('artifact.executionReport.statusSkipped')}`), 'status: skipped が含まれること');
+    assert.ok(md.includes(`${t('artifact.executionReport.skipReason')}: 安全のためスキップしました`), 'skipReason が含まれること');
     
     // And: 実行ログが折りたたみセクションとして含まれること
-    assert.ok(md.includes('<summary>実行ログ（拡張機能）（クリックで展開）</summary>'), '実行ログセクションが含まれること');
+    assert.ok(md.includes(`<summary>${t('artifact.executionReport.extensionLog')}${t('artifact.executionReport.clickToExpand')}</summary>`), '実行ログセクションが含まれること');
     assert.ok(md.includes('[INFO] Something happened'), 'ログ内容が含まれること');
   });
 
@@ -934,9 +935,9 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: 空の場合は折りたたみセクションが省略されること
-    assert.ok(!md.includes('<summary>実行ログ（拡張機能）'), '空のログセクションは省略されること');
+    assert.ok(!md.includes(`<summary>${t('artifact.executionReport.extensionLog')}`), '空のログセクションは省略されること');
     // 基本情報は含まれること
-    assert.ok(md.includes('## 詳細ログ'), '詳細ログセクションヘッダーは含まれること');
+    assert.ok(md.includes(`## ${t('artifact.executionReport.detailedLogs')}`), '詳細ログセクションヘッダーは含まれること');
   });
 
   // TC-ART-11: 観点表保存
@@ -1019,7 +1020,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: 空の場合は折りたたみセクションが省略されること
-    assert.ok(!md.includes('<summary>実行ログ（拡張機能）'), '空のログセクションは省略されること');
+    assert.ok(!md.includes(`<summary>${t('artifact.executionReport.extensionLog')}`), '空のログセクションは省略されること');
   });
 
   // TC-ART-18: レポート生成時にANSIエスケープシーケンスが除去される
@@ -1288,7 +1289,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: 詳細テーブルが含まれること
-    assert.ok(md.includes('| スイート | テスト名 | 結果 |'), 'テーブルヘッダが含まれること');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.suite')} | ${t('artifact.executionReport.testName')} | ${t('artifact.executionReport.result')} |`), 'テーブルヘッダが含まれること');
     assert.ok(md.includes('| test passed | ✅ |'), '成功行が含まれること');
     assert.ok(md.includes('| test failed | ❌ |'), '失敗行が含まれること');
   });
@@ -1331,7 +1332,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns readable timestamp string with local timezone offset
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Format: YYYY-MM-DD  HH:mm:ss.SSS ±HH:mm
@@ -1356,7 +1357,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ".000" milliseconds
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('.000'), 'ミリ秒が .000 でフォーマットされること');
@@ -1377,7 +1378,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ".001" milliseconds
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('.001'), 'ミリ秒が .001 でフォーマットされること');
@@ -1398,7 +1399,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ".999" milliseconds
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('.999'), 'ミリ秒が .999 でフォーマットされること');
@@ -1419,7 +1420,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "00:00:00.000" (in local timezone)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Time portion format: HH:mm:ss.SSS
@@ -1441,7 +1442,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "23:59:59.999" (in local timezone)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Time portion format: HH:mm:ss.SSS
@@ -1463,7 +1464,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "01-01" date
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('2025-01-01'), '日付が 01-01 でフォーマットされること');
@@ -1484,7 +1485,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "12-31" date
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('2025-12-31'), '日付が 12-31 でフォーマットされること');
@@ -1505,7 +1506,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "02-29" date
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('2024-02-29'), '日付が 02-29 でフォーマットされること');
@@ -1526,7 +1527,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "02-28" date
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('2025-02-28'), '日付が 02-28 でフォーマットされること');
@@ -1548,7 +1549,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with timezone offset in format ±HH:mm
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(/[+-]\d{2}:\d{2}$/.test(timestamp), 'タイムゾーンオフセットが ±HH:mm 形式であること');
@@ -1569,7 +1570,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with timezone offset (format verified)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify offset format: +HH:mm or -HH:mm
@@ -1591,7 +1592,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with timezone offset (format verified)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify offset format supports both positive and negative
@@ -1613,7 +1614,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with timezone offset (format verified)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify offset format
@@ -1635,7 +1636,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with timezone offset (format verified)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify offset format supports negative
@@ -1657,7 +1658,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ":00" minutes in offset
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify offset format includes minutes (may be :00 or :30 or :45 depending on timezone)
@@ -1679,7 +1680,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with offset including minutes
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify offset format includes minutes
@@ -1701,7 +1702,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with offset including minutes
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify offset format includes minutes
@@ -1727,7 +1728,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ".000" milliseconds (pad3(0) = "000")
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('.000'), 'ミリ秒が 000 でパディングされること');
@@ -1748,7 +1749,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ".001" milliseconds (pad3(1) = "001")
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('.001'), 'ミリ秒が 001 でパディングされること');
@@ -1769,7 +1770,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ".009" milliseconds (pad3(9) = "009")
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('.009'), 'ミリ秒が 009 でパディングされること');
@@ -1790,7 +1791,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ".010" milliseconds (pad3(10) = "010")
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('.010'), 'ミリ秒が 010 でパディングされること');
@@ -1811,7 +1812,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ".099" milliseconds (pad3(99) = "099")
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('.099'), 'ミリ秒が 099 でパディングされること');
@@ -1832,7 +1833,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ".100" milliseconds (pad3(100) = "100")
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('.100'), 'ミリ秒が 100 でフォーマットされること（パディングなし）');
@@ -1853,7 +1854,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with ".999" milliseconds (pad3(999) = "999")
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('.999'), 'ミリ秒が 999 でフォーマットされること');
@@ -1873,7 +1874,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns markdown string with formatted timestamp using formatLocalIso8601WithOffset
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify readable timestamp format with offset
@@ -1905,7 +1906,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns markdown string with formatted timestamp using formatLocalIso8601WithOffset
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.executionReport.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify readable timestamp format with offset
@@ -1989,7 +1990,7 @@ suite('core/artifacts.ts', () => {
 
     // Behavior depends on Date constructor - invalid dates may produce "Invalid Date" string
     // or NaN values in formatted output
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     // The output may contain NaN or Invalid Date, which is acceptable behavior
   });
@@ -2013,7 +2014,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Function completes (negative milliseconds not possible in Date)
-    assert.ok(md.includes('- 生成日時:'), '正常に処理されること');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.generatedAt')}:`) || md.includes(`- ${t('artifact.perspectiveTable.generatedAt')}:`), '正常に処理されること');
   });
 
   // TC-E-05: pad3 function with n = 1000
@@ -2034,7 +2035,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Function completes (milliseconds overflow not possible in Date)
-    assert.ok(md.includes('- 生成日時:'), '正常に処理されること');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.generatedAt')}:`) || md.includes(`- ${t('artifact.perspectiveTable.generatedAt')}:`), '正常に処理されること');
   });
 
   // TC-E-06: pad3 function with null input
@@ -2109,7 +2110,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns markdown with formatted date from epoch (1970-01-01)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('1970-01-01'), 'エポック時刻が正しくフォーマットされること');
@@ -2129,7 +2130,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns markdown with formatted date (may produce invalid date)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     // The output may contain invalid date or very large year, which is acceptable
   });
@@ -2148,7 +2149,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns markdown with formatted date (1969-12-31)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // ローカルタイムゾーンでは日付が変わり得るため、期待値はDateから算出する
@@ -2179,7 +2180,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns markdown with formatted date from epoch
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.executionReport.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('1970-01-01'), 'エポック時刻が正しくフォーマットされること');
@@ -2207,7 +2208,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns markdown with formatted date (may produce invalid date)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.executionReport.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     // The output may contain invalid date or very large year, which is acceptable
   });
@@ -2234,7 +2235,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns markdown with formatted date (1969-12-31)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.executionReport.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // ローカルタイムゾーンでは日付が変わり得るため、期待値はDateから算出する
@@ -2258,7 +2259,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "01" month
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('2025-01-'), '月が 01 でフォーマットされること');
@@ -2279,7 +2280,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "12" month
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('2025-12-'), '月が 12 でフォーマットされること');
@@ -2300,7 +2301,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "01" date
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('-01  '), '日が 01 でフォーマットされること');
@@ -2321,7 +2322,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "31" date
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     assert.ok(timestamp.includes('-31  '), '日が 31 でフォーマットされること');
@@ -2342,7 +2343,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "00" hours (in local timezone)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify time format includes hours
@@ -2364,7 +2365,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "23" hours (in local timezone)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify time format includes hours
@@ -2386,7 +2387,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "00" minutes (in local timezone)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify time format includes minutes
@@ -2408,7 +2409,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "59" minutes (in local timezone)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify time format includes minutes
@@ -2430,7 +2431,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "00" seconds (in local timezone)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify time format includes seconds
@@ -2452,7 +2453,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Returns formatted string with "59" seconds (in local timezone)
-    const match = md.match(/- 生成日時: (.+)/);
+    const match = md.match(`- ${t('artifact.perspectiveTable.generatedAt')}: (.+)`);
     assert.ok(match, '生成日時が含まれること');
     const timestamp = match![1];
     // Verify time format includes seconds
@@ -2477,7 +2478,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Function completes (decimal milliseconds not possible in Date)
-    assert.ok(md.includes('- 生成日時:'), '正常に処理されること');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.generatedAt')}:`) || md.includes(`- ${t('artifact.perspectiveTable.generatedAt')}:`), '正常に処理されること');
   });
 
   // TC-B-12: pad3 function with n = 999.9 (decimal)
@@ -2498,7 +2499,7 @@ suite('core/artifacts.ts', () => {
     });
 
     // Then: Function completes (decimal milliseconds not possible in Date)
-    assert.ok(md.includes('- 生成日時:'), '正常に処理されること');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.generatedAt')}:`) || md.includes(`- ${t('artifact.perspectiveTable.generatedAt')}:`), '正常に処理されること');
   });
 
   // TC-E-09: buildTestExecutionArtifactMarkdown with generatedAtMs = null

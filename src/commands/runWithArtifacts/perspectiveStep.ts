@@ -1,6 +1,7 @@
 import { sanitizeAgentLogMessage } from '../../core/agentLogSanitizer';
 import { emitLogEvent, parsePerspectiveJsonV1, renderPerspectiveMarkdownTable, saveTestPerspectiveTable, type PerspectiveCase, type SavedArtifact } from '../../core/artifacts';
 import { type TestGenEvent } from '../../core/event';
+import { t } from '../../core/l10n';
 import { buildTestPerspectivePrompt } from '../../core/promptBuilder';
 import { type AgentProvider, type RunningTask } from '../../providers/provider';
 import { runProviderToCompletion } from '../../providers/runToCompletion';
@@ -90,11 +91,11 @@ export async function runPerspectiveTableStep(params: {
       notes: reason,
     };
     const table = renderPerspectiveMarkdownTable([errorCase]);
-    const logText = sanitizeAgentLogMessage(raw.trim().length > 0 ? raw.trim() : '(ログが空でした)');
+    const logText = sanitizeAgentLogMessage(raw.trim().length > 0 ? raw.trim() : t('artifact.noLog'));
     const truncated = truncateText(logText, 200_000);
     const details = [
       '<details>',
-      '<summary>抽出ログ（クリックで展開）</summary>',
+      `<summary>${t('perspective.extractLogSummary')}</summary>`,
       '',
       '```text',
       truncated,
@@ -116,10 +117,10 @@ export async function runPerspectiveTableStep(params: {
         perspectiveMarkdown = renderPerspectiveMarkdownTable(parsed.value.cases).trimEnd();
         wasExtracted = true;
       } else {
-        perspectiveMarkdown = buildFailureMarkdown('観点表JSONの cases が空でした');
+        perspectiveMarkdown = buildFailureMarkdown(t('perspective.failure.jsonCasesEmpty'));
       }
     } else {
-      perspectiveMarkdown = buildFailureMarkdown(`観点表JSONのパースに失敗しました: ${parsed.error}`);
+      perspectiveMarkdown = buildFailureMarkdown(t('perspective.failure.jsonParseFailed', parsed.error));
     }
   } else if (extractedMd && extractedMd.trim().length > 0) {
     const normalized = coerceLegacyPerspectiveMarkdownTable(extractedMd);
@@ -127,10 +128,10 @@ export async function runPerspectiveTableStep(params: {
       perspectiveMarkdown = normalized.trimEnd();
       wasExtracted = true;
     } else {
-      perspectiveMarkdown = buildFailureMarkdown('旧形式（Markdown）の観点表を抽出できませんでした');
+      perspectiveMarkdown = buildFailureMarkdown(t('perspective.failure.legacyExtractFailed'));
     }
   } else {
-    perspectiveMarkdown = buildFailureMarkdown(`観点表の抽出に失敗しました: provider exit=${exitCode ?? 'null'}`);
+    perspectiveMarkdown = buildFailureMarkdown(t('perspective.failure.extractFailedWithExit', exitCode ?? 'null'));
   }
 
   const saved = await saveTestPerspectiveTable({
@@ -142,7 +143,7 @@ export async function runPerspectiveTableStep(params: {
     timestamp: params.timestamp,
   });
 
-  appendEventToOutput(emitLogEvent(taskId, 'info', `テスト観点表を保存しました: ${saved.relativePath ?? saved.absolutePath}`));
+  appendEventToOutput(emitLogEvent(taskId, 'info', t('perspective.saved', saved.relativePath ?? saved.absolutePath)));
   return { saved, markdown: perspectiveMarkdown, extracted: wasExtracted };
 }
 

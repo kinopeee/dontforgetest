@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { emitLogEvent } from '../../core/artifacts';
+import { t } from '../../core/l10n';
 import { buildMergeAssistanceInstructionMarkdown, buildMergeAssistancePromptText } from '../../core/mergeAssistancePrompt';
 import { filterTestLikePaths } from '../../core/testPathClassifier';
 import { execGitResult, execGitStdout } from '../../git/gitExec';
@@ -28,7 +29,7 @@ export async function applyWorktreeTestChanges(params: {
     const testPaths = filterTestLikePaths(allChanged);
 
     if (testPaths.length === 0) {
-      appendEventToOutput(emitLogEvent(params.generationTaskId, 'info', 'worktreeでテスト差分が見つからなかったため、ローカルへの適用は行いません'));
+      appendEventToOutput(emitLogEvent(params.generationTaskId, 'info', t('worktree.apply.noTestDiffFound')));
       return;
     }
 
@@ -57,7 +58,7 @@ export async function applyWorktreeTestChanges(params: {
       20 * 1024 * 1024,
     );
     if (patchTextRaw.trim().length === 0) {
-      appendEventToOutput(emitLogEvent(params.generationTaskId, 'info', 'worktreeでテスト差分パッチが空だったため、ローカルへの適用は行いません'));
+      appendEventToOutput(emitLogEvent(params.generationTaskId, 'info', t('worktree.apply.emptyPatch')));
       return;
     }
     const patchText = patchTextRaw.endsWith('\n') ? patchTextRaw : `${patchTextRaw}\n`;
@@ -115,13 +116,12 @@ export async function applyWorktreeTestChanges(params: {
     // NOTE:
     // - ここでユーザー操作待ち（await）にすると、バックグラウンド実行の完了や worktree 削除が遅れる。
     // - 通知は表示するが、処理自体は先に進める（ボタン選択は then で非同期に処理する）。
-    const warnMsg =
-      'Worktreeのテスト差分をローカルへ自動適用できませんでした（ローカルは未変更）。手動マージが必要です。';
+    const warnMsg = t('worktree.apply.manualMergeRequired');
     appendEventToOutput(emitLogEvent(params.generationTaskId, 'warn', warnMsg));
 
     // ボタンが多いと視認性が悪化するため、導線は2つに絞る（詳細は指示ファイルに集約）
-    const actionOpenInstruction = '手動マージ手順を開く';
-    const actionCopy = 'AI用プロンプトをコピー';
+    const actionOpenInstruction = t('worktree.apply.actionOpenInstructions');
+    const actionCopy = t('worktree.apply.actionCopyPrompt');
     void vscode.window.showWarningMessage(warnMsg, actionOpenInstruction, actionCopy).then(async (picked) => {
       try {
         if (picked === actionCopy) {
@@ -134,7 +134,7 @@ export async function applyWorktreeTestChanges(params: {
             preTestCheckCommand: params.preTestCheckCommand,
           });
           await vscode.env.clipboard.writeText(promptText);
-          void vscode.window.showInformationMessage('AI用プロンプトをクリップボードにコピーしました');
+          void vscode.window.showInformationMessage(t('worktree.apply.promptCopied'));
           return;
         }
         if (picked === actionOpenInstruction) {

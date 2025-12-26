@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ensurePreflight } from '../core/preflight';
+import { t } from '../core/l10n';
 import { buildTestGenPrompt } from '../core/promptBuilder';
 import { analyzeGitUnifiedDiff, extractChangedPaths, getCommitRangeDiff } from '../git/diffAnalyzer';
 import { type AgentProvider } from '../providers/provider';
@@ -22,19 +23,13 @@ export async function generateTestFromCommitRange(
   modelOverride?: string,
   options: GenerateTestCommandOptions = {},
 ): Promise<void> {
-  const preflight = await ensurePreflight();
-  if (!preflight) {
-    return;
-  }
-  const { workspaceRoot, defaultModel, testStrategyPath, cursorAgentCommand } = preflight;
-
   const range = await vscode.window.showInputBox({
-    title: 'コミット範囲差分からテスト生成',
-    prompt: '差分対象のコミット範囲を入力してください（例: main..HEAD, HEAD~3..HEAD）',
+    title: t('quickPick.commitRangeTitle'),
+    prompt: t('quickPick.commitRangePrompt'),
     value: 'HEAD~1..HEAD',
     validateInput: (value) => {
       if (value.trim().length === 0) {
-        return 'コミット範囲を入力してください。';
+        return t('quickPick.commitRangeValidation');
       }
       return undefined;
     },
@@ -44,17 +39,23 @@ export async function generateTestFromCommitRange(
   }
   const trimmedRange = range.trim();
 
+  const preflight = await ensurePreflight();
+  if (!preflight) {
+    return;
+  }
+  const { workspaceRoot, defaultModel, testStrategyPath, cursorAgentCommand } = preflight;
+
   let diffText: string;
   try {
     diffText = await getCommitRangeDiff(workspaceRoot, trimmedRange);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    vscode.window.showErrorMessage(`git diff の取得に失敗しました: ${message}`);
+    vscode.window.showErrorMessage(t('git.diff.fetchFailed', message));
     return;
   }
 
   if (diffText.trim().length === 0) {
-    vscode.window.showInformationMessage(`指定範囲（${trimmedRange}）に差分がありませんでした。`);
+    vscode.window.showInformationMessage(t('git.diff.noChanges', trimmedRange));
     return;
   }
 
@@ -63,7 +64,7 @@ export async function generateTestFromCommitRange(
 
   const { prompt } = await buildTestGenPrompt({
     workspaceRoot,
-    targetLabel: `コミット範囲差分 (${trimmedRange})`,
+    targetLabel: t('prompt.commitRangeLabel', trimmedRange),
     targetPaths: changedFiles,
     testStrategyPath,
   });
@@ -72,18 +73,18 @@ export async function generateTestFromCommitRange(
   const finalPrompt = [
     prompt,
     '',
-    '## コミット範囲差分（参考）',
-    `以下は ${trimmedRange} の差分です。必要に応じて参照してください。`,
+    t('prompt.commitRangeSection'),
+    t('prompt.commitRangeHint', trimmedRange),
     '',
     diffForPrompt,
   ].join('\n');
 
   const taskId = `fromCommitRange-${Date.now()}`;
-  const generationLabel = `コミット範囲 (${trimmedRange})`;
+  const generationLabel = t('prompt.generationLabel.commitRange', trimmedRange);
 
   const runLocation = options.runLocation === 'worktree' ? 'worktree' : 'local';
   if (runLocation === 'worktree' && !options.extensionContext) {
-    vscode.window.showErrorMessage('Worktree 実行には拡張機能コンテキストが必要です（内部エラー）。');
+    vscode.window.showErrorMessage(t('worktree.extensionContextRequired'));
     return;
   }
 

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { getModelSettings, setDefaultModel } from '../core/modelSettings';
+import { t } from '../core/l10n';
 
 type DefaultModelPickMode = 'unset' | 'useCandidate' | 'input' | 'separator';
 type DefaultModelPickItem = vscode.QuickPickItem & { mode: DefaultModelPickMode; modelValue?: string };
@@ -13,8 +14,8 @@ export async function selectDefaultModel(): Promise<void> {
 
   const items: DefaultModelPickItem[] = [
     {
-      label: '自動選択（未設定）',
-      description: 'cursor-agent 側の自動選択に任せます',
+      label: t('selectDefaultModel.unsetLabel'),
+      description: t('selectDefaultModel.unsetDesc'),
       mode: 'unset',
     },
   ];
@@ -28,7 +29,7 @@ export async function selectDefaultModel(): Promise<void> {
     for (const model of customModels) {
       items.push({
         label: model,
-        description: '設定: dontforgetest.customModels',
+        description: t('quickPick.customModelsDesc'),
         mode: 'useCandidate',
         modelValue: model,
       });
@@ -36,14 +37,14 @@ export async function selectDefaultModel(): Promise<void> {
   }
 
   items.push({
-    label: 'モデルを入力して設定',
-    description: '例: claude-3.5-sonnet',
+    label: t('selectDefaultModel.inputLabel'),
+    description: t('selectDefaultModel.inputDesc'),
     mode: 'input',
   });
 
   const picked = await vscode.window.showQuickPick<DefaultModelPickItem>(items, {
-    title: 'Dontforgetest: defaultModel を設定',
-    placeHolder: defaultModel ? `現在: ${defaultModel}` : '現在: （未設定）',
+    title: t('selectDefaultModel.title'),
+    placeHolder: defaultModel ? t('selectDefaultModel.placeholderCurrent', defaultModel) : t('selectDefaultModel.placeholderUnset'),
   });
 
   if (!picked) {
@@ -52,7 +53,7 @@ export async function selectDefaultModel(): Promise<void> {
 
   if (picked.mode === 'unset') {
     await setDefaultModel(undefined);
-    void vscode.window.showInformationMessage('defaultModel を未設定（自動選択）にしました。');
+    void vscode.window.showInformationMessage(t('selectDefaultModel.infoUnset'));
     return;
   }
 
@@ -62,18 +63,18 @@ export async function selectDefaultModel(): Promise<void> {
       return;
     }
     await setDefaultModel(model);
-    void vscode.window.showInformationMessage(`defaultModel を設定しました: ${model}`);
+    void vscode.window.showInformationMessage(t('selectDefaultModel.infoSet', model));
     return;
   }
 
   if (picked.mode === 'input') {
     const input = await vscode.window.showInputBox({
-      title: 'defaultModel を入力',
-      prompt: 'cursor-agent に渡すモデル名を入力してください（空の場合はキャンセル）',
+      title: t('selectDefaultModel.inputBoxTitle'),
+      prompt: t('selectDefaultModel.inputBoxPrompt'),
       value: defaultModel ?? '',
       validateInput: (value) => {
         if (value.trim().length === 0) {
-          return 'モデル名を入力してください。';
+          return t('selectDefaultModel.inputBoxValidation');
         }
         return undefined;
       },
@@ -83,7 +84,7 @@ export async function selectDefaultModel(): Promise<void> {
     }
     const model = input.trim();
     await setDefaultModel(model);
-    void vscode.window.showInformationMessage(`defaultModel を設定しました: ${model}`);
+    void vscode.window.showInformationMessage(t('selectDefaultModel.infoSet', model));
     return;
   }
 }

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { type TestGenEvent, type TestGenPhase, nowMs } from '../core/event';
+import { t } from '../core/l10n';
 
 /**
  * 進行中タスクの状態
@@ -94,7 +95,7 @@ export class ProgressTreeViewProvider implements vscode.TreeDataProvider<Progres
           detail: event.detail,
           startedAt: event.timestampMs,
           currentPhase: 'preparing',
-          phaseLabel: '準備中',
+          phaseLabel: t('progressTreeView.phase.preparing'),
           phaseHistory: new Map([
             ['preparing', 'running'],
             ['perspectives', 'pending'],
@@ -130,7 +131,7 @@ export class ProgressTreeViewProvider implements vscode.TreeDataProvider<Progres
           task.phaseHistory.set(task.currentPhase, 'done');
           task.phaseHistory.set('done', 'done');
           task.currentPhase = 'done';
-          task.phaseLabel = '完了';
+          task.phaseLabel = t('progressTreeView.phase.done');
           this._onDidChangeTreeData.fire();
 
           // 少し待ってからタスクを削除
@@ -182,7 +183,7 @@ export class ProgressTreeViewProvider implements vscode.TreeDataProvider<Progres
 
     if (items.length === 0) {
       const emptyItem = new ProgressTreeItem(
-        'タスクなし',
+        t('progressTreeView.noTasks'),
         vscode.TreeItemCollapsibleState.None,
         'task',
       );
@@ -200,11 +201,11 @@ export class ProgressTreeViewProvider implements vscode.TreeDataProvider<Progres
     }
 
     const phases: Array<{ phase: TestGenPhase; label: string }> = [
-      { phase: 'preparing', label: '準備' },
-      { phase: 'perspectives', label: '観点表生成' },
-      { phase: 'generating', label: 'テストコード生成' },
-      { phase: 'running-tests', label: 'テスト実行' },
-      { phase: 'done', label: '完了' },
+      { phase: 'preparing', label: t('progressTreeView.phase.preparing') },
+      { phase: 'perspectives', label: t('progressTreeView.phase.perspectives') },
+      { phase: 'generating', label: t('progressTreeView.phase.generating') },
+      { phase: 'running-tests', label: t('progressTreeView.phase.runningTests') },
+      { phase: 'done', label: t('progressTreeView.phase.done') },
     ];
 
     return phases.map(({ phase, label }) => {

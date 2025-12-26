@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { getModelSettings } from './modelSettings';
+import { t } from './l10n';
 
 export interface PreflightOk {
   workspaceRoot: string;
@@ -21,7 +22,7 @@ export interface PreflightOk {
 export async function ensurePreflight(): Promise<PreflightOk | undefined> {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!workspaceRoot) {
-    void vscode.window.showErrorMessage('ワークスペースが開かれていません。フォルダを開いてから再実行してください。');
+    void vscode.window.showErrorMessage(t('workspace.notOpen'));
     return undefined;
   }
 
@@ -40,25 +41,33 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
     const strategyExists = await fileExists(strategyAbsPath);
     if (!strategyExists) {
       // 警告を出すが、処理は続行（内蔵デフォルトにフォールバック）
-      void vscode.window.showWarningMessage(
-        `テスト戦略ファイルが見つかりません: ${testStrategyPath}（内蔵デフォルトを使用します）`
-      );
+      void vscode.window.showWarningMessage(t('testStrategy.fileNotFound', testStrategyPath));
       effectiveTestStrategyPath = ''; // 空にして内蔵デフォルト使用を示す
     }
   }
 
   const agentAvailable = await canSpawnCommand(cursorAgentCommand, ['--version'], workspaceRoot);
   if (!agentAvailable) {
+    // VS Code 拡張機能テスト（@vscode/test-electron）では showErrorMessage が解決されず、
+    // await するとテストがタイムアウトすることがある。
+    // テスト環境ではブロッキングせずに案内だけ出して終了する。
+    if (process.env.VSCODE_TEST_RUNNER === '1') {
+      void vscode.window.showErrorMessage(t('cursorAgent.notFound', cursorAgentCommand));
+      return undefined;
+    }
+
+    const openSettingsLabel = t('cursorAgent.openSettings');
+    const openDocsLabel = t('cursorAgent.openDocs');
     const picked = await vscode.window.showErrorMessage(
-      `cursor-agent が見つかりません（PATH未設定、または未インストールの可能性があります）: ${cursorAgentCommand}`,
-      '設定を開く',
-      'ドキュメントを開く',
+      t('cursorAgent.notFound', cursorAgentCommand),
+      openSettingsLabel,
+      openDocsLabel,
     );
-    if (picked === '設定を開く') {
+    if (picked === openSettingsLabel) {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.cursorAgentPath');
     }
-    if (picked === 'ドキュメントを開く') {
-      await vscode.env.openExternal(vscode.Uri.parse('https://cursor.com/ja/docs/cli/overview'));
+    if (picked === openDocsLabel) {
+      await vscode.env.openExternal(vscode.Uri.parse('https://cursor.com/docs/cli/overview'));
     }
     return undefined;
   }

@@ -8,6 +8,7 @@ import {
   _resetForTesting,
 } from '../../../ui/progressTreeView';
 import { type TestGenEvent, type TestGenPhase, nowMs } from '../../../core/event';
+import { t } from '../../../core/l10n';
 
 suite('src/ui/progressTreeView.ts', () => {
   let context: vscode.ExtensionContext;
@@ -571,7 +572,7 @@ suite('src/ui/progressTreeView.ts', () => {
 
       // Then: Empty tree view displayed (shows "タスクなし" message)
       assert.ok(children.length > 0, 'Empty message item is displayed');
-      const emptyItem = children.find(item => item.label === 'タスクなし');
+      const emptyItem = children.find(item => item.label === t('progressTreeView.noTasks'));
       assert.ok(emptyItem, 'Empty message item exists');
     });
 
