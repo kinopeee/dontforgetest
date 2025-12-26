@@ -47,6 +47,7 @@ Search `dontforgetest.*` in VS Code / Cursor Settings.
 
 - **`dontforgetest.cursorAgentPath`**: Path to `cursor-agent` (if empty, resolves from PATH)
 - **`dontforgetest.defaultModel`**: Model passed to `cursor-agent --model` (if empty, auto)
+
 - **`dontforgetest.testStrategyPath`**: Test strategy file path (if empty, uses the built-in default)
 - **`dontforgetest.includeTestPerspectiveTable`**: Whether to generate and save a test perspective table before test generation (Default: true)
 - **`dontforgetest.perspectiveReportDir`**: Output directory for generated perspective tables (Default: `docs/test-perspectives`)
@@ -56,6 +57,31 @@ Search `dontforgetest.*` in VS Code / Cursor Settings.
   - `extension`: the extension runs `testCommand` locally and collects stdout/stderr/exitCode into a report
   - `cursorAgent`: `cursor-agent` runs tests and the extension extracts stdout/stderr/exitCode from the marked output
   - If `cursorAgent` refuses to run or returns an empty result, the extension performs an **automatic fallback** and runs the tests itself (a warning is logged)
+
+> **Note (model names)**: The model name for `dontforgetest.defaultModel` must be one of the names listed by Cursor CLI **`/model`**.
+>
+> Example (as of 2025-12-25):
+>
+> ```
+> composer-1
+> auto
+> sonnet-4.5
+> sonnet-4.5-thinking
+> opus-4.5
+> opus-4.5-thinking
+> gemini-3-pro
+> gemini-3-flash
+> gpt-5.2
+> gpt-5.1
+> gpt-5.2-high
+> gpt-5.1-high
+> gpt-5.1-codex
+> gpt-5.1-codex-high
+> gpt-5.1-codex-max
+> gpt-5.1-codex-max-high
+> opus-4.1
+> grok
+> ```
 
 ## About the test strategy file
 
