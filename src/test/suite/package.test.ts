@@ -4,10 +4,10 @@ import * as path from 'path';
 
 /**
  * Validates semantic version format (MAJOR.MINOR.PATCH)
- * @param version Version string to validate
+ * @param version Value to validate (accepts unknown type for flexibility)
  * @returns true if valid semantic version, false otherwise
  */
-function isValidSemanticVersion(version: string): boolean {
+function isValidSemanticVersion(version: unknown): boolean {
   if (typeof version !== 'string' || version.trim() === '') {
     return false;
   }
@@ -47,19 +47,32 @@ suite('package.json and package-lock.json version validation', () => {
   const workspaceRoot = path.resolve(__dirname, '../../..');
 
   suite('Normal cases', () => {
-    // TC-N-01: package.json and package-lock.json exist with version field
-    test('TC-N-01: Version is correctly updated to 0.0.84 in both files', () => {
+    // TC-N-01: package.json and package-lock.json exist with valid version fields that are synchronized
+    test('TC-N-01: Version is valid semantic version and synchronized between both files', () => {
       // Given: package.json and package-lock.json exist with version field
       const packageJson = readPackageJson(workspaceRoot);
       const packageLockJson = readPackageLockJson(workspaceRoot);
 
       // When: Reading version fields from both files
-      const packageVersion = packageJson.version as string;
-      const packageLockVersion = packageLockJson.version as string;
+      const packageVersion = packageJson.version;
+      const packageLockVersion = packageLockJson.version;
 
-      // Then: Version is correctly updated to 0.0.84 in both files
-      assert.strictEqual(packageVersion, '0.0.84', 'package.json version should be 0.0.84');
-      assert.strictEqual(packageLockVersion, '0.0.84', 'package-lock.json version should be 0.0.84');
+      // Then: Both versions are valid semantic versions
+      assert.ok(
+        isValidSemanticVersion(packageVersion),
+        `package.json version "${packageVersion}" should be a valid semantic version`
+      );
+      assert.ok(
+        isValidSemanticVersion(packageLockVersion),
+        `package-lock.json version "${packageLockVersion}" should be a valid semantic version`
+      );
+
+      // Then: Versions are synchronized between both files
+      assert.strictEqual(
+        packageVersion,
+        packageLockVersion,
+        'package.json version should match package-lock.json version'
+      );
     });
 
     // TC-N-02: Both files have valid JSON structure
@@ -106,14 +119,13 @@ suite('package.json and package-lock.json version validation', () => {
     test('TC-E-01: JSON parsing fails or validation error occurs when version is null', () => {
       // Given: package.json with null version (simulated by creating invalid JSON)
       const packageJson = readPackageJson(workspaceRoot);
-      const originalVersion = packageJson.version;
 
       // When: Setting version to null (simulated test)
       // Then: Validation should detect null version
       // Note: Actual package.json doesn't have null version, so we test the validation logic
       const testPackageJson = { ...packageJson, version: null };
       assert.strictEqual(testPackageJson.version, null, 'Null version should be detected');
-      assert.ok(!isValidSemanticVersion(testPackageJson.version as unknown as string), 'Null version should be invalid');
+      assert.ok(!isValidSemanticVersion(testPackageJson.version), 'Null version should be invalid');
     });
 
     // TC-E-02: package.json version is empty string
@@ -125,7 +137,7 @@ suite('package.json and package-lock.json version validation', () => {
       // When: Validating empty version
       // Then: Validation error for empty version
       assert.strictEqual(testPackageJson.version, '', 'Empty version should be detected');
-      assert.ok(!isValidSemanticVersion(testPackageJson.version as string), 'Empty version should be invalid');
+      assert.ok(!isValidSemanticVersion(testPackageJson.version), 'Empty version should be invalid');
     });
 
     // TC-E-03: package.json version field is missing
@@ -138,7 +150,7 @@ suite('package.json and package-lock.json version validation', () => {
       // When: Accessing missing version field
       // Then: Validation error or runtime error
       assert.strictEqual(testPackageJson.version, undefined, 'Missing version should be undefined');
-      assert.ok(!isValidSemanticVersion(testPackageJson.version as unknown as string), 'Missing version should be invalid');
+      assert.ok(!isValidSemanticVersion(testPackageJson.version), 'Missing version should be invalid');
     });
 
     // TC-E-04: package.json version differs from package-lock.json version
@@ -181,10 +193,10 @@ suite('package.json and package-lock.json version validation', () => {
       // When: Validating array/object version
       // Then: Type error or validation error
       assert.ok(Array.isArray(testPackageJsonArray.version), 'Array version should be detected');
-      assert.ok(!isValidSemanticVersion(testPackageJsonArray.version as unknown as string), 'Array version should be invalid');
+      assert.ok(!isValidSemanticVersion(testPackageJsonArray.version), 'Array version should be invalid');
       
       assert.ok(typeof testPackageJsonObject.version === 'object' && !Array.isArray(testPackageJsonObject.version), 'Object version should be detected');
-      assert.ok(!isValidSemanticVersion(testPackageJsonObject.version as unknown as string), 'Object version should be invalid');
+      assert.ok(!isValidSemanticVersion(testPackageJsonObject.version), 'Object version should be invalid');
     });
   });
 
@@ -263,7 +275,7 @@ suite('package.json and package-lock.json version validation', () => {
       // When: Accessing undefined version
       // Then: Error accessing undefined version or validation failure
       assert.strictEqual(testPackageJson.version, undefined, 'Undefined version should be detected');
-      assert.ok(!isValidSemanticVersion(testPackageJson.version as unknown as string), 'Undefined version should be invalid');
+      assert.ok(!isValidSemanticVersion(testPackageJson.version), 'Undefined version should be invalid');
       
       // Verify undefined is different from null or empty string
       assert.notStrictEqual(testPackageJson.version, null, 'Undefined should be different from null');

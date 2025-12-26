@@ -1,6 +1,23 @@
 import { t } from '../../core/l10n';
 
 /**
+ * 観点表ヘッダ検出用キーワード（英語）
+ * 旧形式のテーブルや英語ロケール環境での検出に使用
+ */
+const HEADER_KEYWORDS_EN = ['Case ID', 'Input', 'Expected', 'Notes'] as const;
+
+/**
+ * 観点表ヘッダ検出用キーワード（日本語）
+ * 日本語ロケール環境でのヘッダ検出に使用
+ */
+const HEADER_KEYWORDS_JA = ['ケース', '入力', '前提', '期待', '備考'] as const;
+
+/**
+ * 全ての観点表ヘッダ検出用キーワード
+ */
+const ALL_HEADER_KEYWORDS = [...HEADER_KEYWORDS_EN, ...HEADER_KEYWORDS_JA] as const;
+
+/**
  * マーカーで囲まれた部分を抽出する。
  * 見つからない場合は undefined。
  */
@@ -28,8 +45,8 @@ export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string |
   // - 英語固定の旧ヘッダ（過去互換）
   // - 現在ロケールのヘッダ（新仕様: 実行時言語）
   const legacyHeaderEn = '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |';
-  // 現在ロケールのヘッダは core/artifacts.ts と同じキーを参照する想定だが、
-  // この utils.ts は core に依存させないため、現状は「旧英語ヘッダ」だけは必ず許容し、
+  // 現在ロケールのヘッダは core/artifacts.ts と同じキーを参照する想定。
+  // 後方互換性のため「旧英語ヘッダ」は必ず許容し、
   // それ以外は「5列のヘッダっぽい行」を許容する。
   const isLikelyHeader = (line: string): boolean => {
     const trimmed = line.trim();
@@ -41,17 +58,7 @@ export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string |
     if (pipeCount < 6) {
       return false;
     }
-    return (
-      trimmed.includes('Case ID') ||
-      trimmed.includes('Input') ||
-      trimmed.includes('Expected') ||
-      trimmed.includes('Notes') ||
-      trimmed.includes('ケース') ||
-      trimmed.includes('入力') ||
-      trimmed.includes('前提') ||
-      trimmed.includes('期待') ||
-      trimmed.includes('備考')
-    );
+    return ALL_HEADER_KEYWORDS.some((keyword) => trimmed.includes(keyword));
   };
   const isLikelySeparator = (line: string): boolean => {
     const trimmed = line.trim();
@@ -60,8 +67,8 @@ export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string |
       const pipeCount = (trimmed.match(/\|/g) ?? []).length;
       return pipeCount >= 6;
     }
-    // 新形式: |---|---|---|---|---|
-    return /^\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|$/.test(trimmed);
+    // 新形式: |---|---|...|---| (任意の列数に対応)
+    return /^\|(?:\s*-+\s*\|)+$/.test(trimmed);
   };
 
   const headerIndex = lines.findIndex((l) => isLikelyHeader(l));
