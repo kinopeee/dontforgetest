@@ -60,6 +60,12 @@ npm run watch
 npm test
 ```
 
+ローカルにインストール済みの VS Code を使って実行する場合は、実行ファイルのパスを指定します。
+
+```bash
+DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<VS Code 実行ファイルのパス>" npm test
+```
+
 ### 拡張機能の実行（デバッグ）
 
 1. VS Code / Cursor でこのリポジトリを開く
@@ -73,4 +79,3 @@ npm test
 詳細は [LICENSE](LICENSE) ファイルをご確認ください。
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-

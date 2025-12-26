@@ -64,6 +64,12 @@ npm run watch
 npm test
 ```
 
+To use a locally installed VS Code, set the executable path.
+
+```bash
+DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<path to VS Code executable>" npm test
+```
+
 ### Run extension (debug)
 
 1. Open this repository in VS Code / Cursor
