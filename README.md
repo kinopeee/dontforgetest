@@ -1,87 +1,79 @@
-# テスト生成エージェント（Dontforgetest）
+# Test Generation Agent (Dontforgetest)
 
-Cursor CLI（`cursor-agent`）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する VS Code / Cursor 拡張機能です。
+**Don't forget test!** — One-click, commit-based test generation for VS Code / Cursor.
 
-## 主な機能
+Powered by Cursor CLI (`cursor-agent`), this extension automatically generates test code from commit diffs and selections.
 
-- **QuickPick UI / 操作パネル**でソース/モデルを選択して実行
-- **現在のファイル / 最新コミット差分 / コミット範囲差分 / 未コミット差分（staged/unstaged）**から生成
-- **実行先（Local / Worktree）**を選択（コミット差分系）
-  - **Local**: 現在のワークスペースを直接編集
-  - **Worktree**: 一時worktreeで生成し、**テスト差分だけ**をローカルへ適用（`git apply --check` が通る場合のみ自動適用）
-    - 自動適用できない場合は **パッチ/スナップショット/AI向け指示** を保存して手動マージへ誘導
-- 実行ログを **Output Channel** に集約
-- 観点表/実行レポート（Markdown）を保存（保存先は設定で変更可能）
-- **ステータスバー**に実行中タスク数を表示（クリックでログ表示）
+- Japanese docs: `README.ja.md`, `docs/usage.ja.md`
 
-> **注意（重要）**: `cursor-agent` は **`--force` で実行**されます。  
-> **Local** は実ファイル（現在のワークスペース）へ書き込みます。  
-> **Worktree** は一時worktreeへ書き込み、`git apply --check` が通る場合のみ **テスト差分だけ** をローカルへ適用します（失敗時はパッチ/スナップショット/AI向け指示を保存）。  
-> 必要に応じてブランチを切る／コミットする等の退避手段を用意してから実行してください。
+## Key features
 
-## ドキュメント
+- Run via **QuickPick UI / Control Panel** (choose source + model)
+- Generate from:
+  - Current file
+  - Latest commit diff
+  - Commit range diff
+  - Uncommitted diff (staged / unstaged)
+- Choose execution target (diff-based sources):
+  - **Local**: writes directly into your current workspace
+  - **Worktree**: generates in a temporary worktree and applies **only test diffs** back to local *only when* `git apply --check` passes
+    - If auto-apply fails, it saves **patch / snapshot / AI instructions** to help manual merging
+- Consolidates logs in an **Output Channel**
+- Saves **test perspective tables** and **test execution reports** (Markdown; output directories are configurable)
+- Shows running task count in the **Status Bar** (click to open logs)
 
-- 操作手順: `docs/usage.md`
-- 内蔵デフォルト戦略: `src/core/defaultTestStrategy.ts`（設定が空の場合に使用）
+> **Important**: `cursor-agent` is executed with **`--force`**.  
+> **Local** modifies real files in your workspace.  
+> **Worktree** writes to a temporary worktree and applies only test diffs when safe; otherwise it exports merge artifacts.  
+> Before running, prepare a rollback strategy (create a branch / commit / stash).
 
-## 開発（このリポジトリを開発する場合）
+## Documentation
 
-### セットアップ
+- Docs index: `docs/README.md`
+- Usage: `docs/usage.md`
+- Built-in default strategy: `src/core/defaultTestStrategy.ts` (used when the setting is empty)
+
+## Requirements
+
+- Cursor **2.2+** / VS Code **1.105+**
+- Cursor CLI (`cursor-agent`)
+
+## Development (for contributors)
+
+### Setup
 
 ```bash
 npm install
 ```
 
-### ビルド
+### Build
 
 ```bash
 npm run compile
 ```
 
-### ウォッチモード
+### Watch mode
 
 ```bash
 npm run watch
 ```
 
-### テスト
+### Test
 
 ```bash
 npm test
 ```
 
-### 拡張機能の実行（デバッグ）
+### Run extension (debug)
 
-1. VS Code / Cursor でこのリポジトリを開く
-2. F5（Run Extension）
-3. Extension Development Host のコマンドパレットで `Dontforgetest:` を実行
+1. Open this repository in VS Code / Cursor
+2. Press F5 (Run Extension)
+3. In the Extension Development Host, run commands starting with `Dontforgetest:` from the command palette
 
-## ライセンス
+## License
 
-このプロジェクトは **AGPL-3.0**（GNU Affero General Public License v3.0）ライセンスの下で公開されています。
+This project is licensed under **GPL-3.0** (GNU General Public License v3.0).
 
-### 許可される利用
+See [LICENSE](LICENSE) for details.
 
-- ✅ **商用利用**: 営利目的での使用が可能
-- ✅ **改変**: ソースコードの改変・カスタマイズ
-- ✅ **再配布**: 改変版の再配布
-- ✅ **特許使用**: ライセンス条件下での特許使用
-
-### 義務事項
-
-- ⚠️ **著作権表示義務**: 利用時は必ず著作権表示とライセンス文を含めてください
-- ⚠️ **ソースコード開示義務**: 改変版を配布・ネットワーク経由で提供する場合、ソースコードを公開する必要があります
-- ⚠️ **同一ライセンス継承**: 派生物も同じAGPL-3.0ライセンスで公開する必要があります
-- ⚠️ **変更箇所の明示**: 改変した場合は変更内容を明示する必要があります
-
-### AGPL-3.0の特徴
-
-AGPL-3.0は、**ネットワーク経由でソフトウェアを提供する場合でもソースコード開示義務が発生する**強力なコピーレフトライセンスです。
-
-- 通常のGPL-3.0と異なり、SaaS等のネットワーク経由での利用時もソース開示が必要
-- 商用利用は可能ですが、ソース開示義務があるため企業は慎重に検討する必要があります
-- オープンソースの精神を強く維持し、クローズドソース化を防ぎます
-
-詳細は [LICENSE](LICENSE) ファイルをご確認ください。
-
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)

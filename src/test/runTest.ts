@@ -197,7 +197,7 @@ export async function stageExtensionToTemp(params: {
   // Cursor が「ワークスペース配下から起動された VS Code（拡張機能テスト）」を検知して kill している可能性がある。
   // そのため、拡張機能（ソース/ビルド成果物/リソース）を一時ディレクトリへ退避してからテストを起動する。
   //
-  // テストが参照するファイル（例: src/core/event.ts, media/testgen-view.svg, LICENSE）も含めてコピーする。
+  // テストが参照するファイル（例: src/core/event.ts, media/dontforgetest-view.svg, LICENSE）も含めてコピーする。
   await fs.promises.rm(params.stageExtensionRoot, { recursive: true, force: true });
   await fs.promises.mkdir(params.stageExtensionRoot, { recursive: true });
 

@@ -326,13 +326,13 @@ suite('src/extension.ts', () => {
   suite('Metadata & Resources', () => {
     // Given: 拡張機能がインストールされている
     // When: package.json のメタデータを取得する
-    // Then: ライセンスが AGPL-3.0 であること
+    // Then: ライセンスが GPL-3.0 であること
     test('TC-META-01: ライセンス情報の確認', () => {
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
 
       const packageJSON = ext.packageJSON;
-      assert.strictEqual(packageJSON.license, 'AGPL-3.0', 'ライセンスが AGPL-3.0 ではありません');
+      assert.strictEqual(packageJSON.license, 'GPL-3.0', 'ライセンスが GPL-3.0 ではありません');
     });
 
     // Given: 拡張機能がインストールされている
@@ -1072,21 +1072,21 @@ suite('src/extension.ts', () => {
 
       // Then: Documentation correctly describes testExecutionRunner setting with default value 'extension'
       assert.ok(usageMdContent.includes('dontforgetest.testExecutionRunner'), 'testExecutionRunner setting should be documented');
-      assert.ok(usageMdContent.includes('既定: `extension`'), 'Default value should be documented as extension');
+      assert.ok(usageMdContent.includes('Default: `extension`'), 'Default value should be documented as extension');
       assert.ok(usageMdContent.includes('extension'), 'extension option should be documented');
       assert.ok(usageMdContent.includes('cursorAgent'), 'cursorAgent option should be documented');
-      assert.ok(usageMdContent.includes('自動フォールバック'), 'Fallback behavior should be documented');
+      assert.ok(usageMdContent.includes('automatic fallback'), 'Fallback behavior should be documented');
     });
 
-    // TC-RES-02: testgen-view.svg のレンダリング
-    // Given: media/testgen-view.svg ファイル
+    // TC-RES-02: dontforgetest-view.svg のレンダリング
+    // Given: media/dontforgetest-view.svg ファイル
     // When: ファイル内容を読み込む
     // Then: 有効なSVGであり、更新されたパス（試験管）を含んでいること
-    test('TC-RES-02: testgen-view.svg の内容確認', async () => {
+    test('TC-RES-02: dontforgetest-view.svg の内容確認', async () => {
       const ext = vscode.extensions.getExtension('local.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
-
-      const svgUri = vscode.Uri.file(path.join(ext.extensionPath, 'media', 'testgen-view.svg'));
+ 
+      const svgUri = vscode.Uri.file(path.join(ext.extensionPath, 'media', 'dontforgetest-view.svg'));
       const svgContent = (await vscode.workspace.fs.readFile(svgUri)).toString();
 
       assert.ok(svgContent.includes('<svg'), 'SVGタグが含まれていること');

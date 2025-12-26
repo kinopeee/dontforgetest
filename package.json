@@ -3,10 +3,10 @@
   "publisher": "local",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.82",
+  "version": "0.0.83",
   "icon": "media/icon.png",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.105.0"
   },
   "categories": [
     "Other"
@@ -20,7 +20,7 @@
         {
           "id": "dontforgetest",
           "title": "%viewsContainers.activitybar.title%",
-          "icon": "media/testgen-view.svg"
+          "icon": "media/dontforgetest-view.svg"
         }
       ]
     },
@@ -226,7 +226,7 @@
     "ai"
   ],
   "author": "",
-  "license": "AGPL-3.0",
+  "license": "GPL-3.0",
   "repository": {
     "type": "git",
     "url": ""

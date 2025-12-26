@@ -1,137 +1,135 @@
-# 操作手順（Dontforgetest）
+# Usage (Dontforgetest)
 
-このドキュメントは、VS Code / Cursor 上で「テスト生成エージェント」拡張機能を使うための操作手順です。
+This document explains how to use the **Test Generation Agent** extension in VS Code / Cursor.
 
-## 前提条件
+- Japanese docs: `usage.ja.md`
 
-- **ワークスペースをフォルダとして開いている**（単一ファイルだけ開いている状態は不可）
-- **`cursor-agent` が実行できる**（PATHに入っている、または設定でパス指定）
-- コミット差分系を使う場合は **Gitリポジトリである** こと
+## Prerequisites
 
-> **注意（重要）**: 本拡張は `cursor-agent` を **`--force` で実行**するため、生成結果は**実ファイルに書き込まれます**。  
-> 実行前にブランチを切る／コミットするなど、必ず退避手段を用意してください。  
-> ※コミット差分系は **Worktree（隔離）** を選べます（生成は一時worktree、ローカルへはテスト差分のみ適用）。
+- You opened a workspace as a **folder** (single-file window is not supported)
+- Cursor **2.2+** / VS Code **1.105+**
+- `cursor-agent` is executable (available in PATH, or configured via settings)
+- For diff-based sources, your workspace must be a **Git repository**
 
-## インストール
+> **Important**: this extension runs `cursor-agent` with **`--force`**, and generated output may be written to real files.  
+> Before running, prepare a rollback strategy (create a branch / commit / stash).  
+> For diff-based sources, you can choose **Worktree (isolated)** which generates in a temporary worktree and applies only test diffs back to local when safe.
 
-### VSIX からインストール（配布/手動）
+## Installation
 
-1. VS Code / Cursor を開く
-2. コマンドパレットを開く（macOS: Cmd+Shift+P）
-3. **`Extensions: Install from VSIX...`** を実行
-4. `.vsix` ファイルを選択
-5. 必要に応じて再読み込み（Reload）
+### Install from VSIX (manual / distribution)
 
-### 開発版として試す（このリポジトリを開発する場合）
+1. Open VS Code / Cursor
+2. Open the command palette (macOS: Cmd+Shift+P)
+3. Run **`Extensions: Install from VSIX...`**
+4. Select the `.vsix` file
+5. Reload if necessary
 
-1. 依存関係をインストール: `npm install`
-2. ビルド: `npm run compile`
-3. VS Codeでこのリポジトリを開き **F5**（Run Extension）
-4. Extension Development Host でコマンドを実行して動作確認
+### Try as a development build (when developing this repo)
 
-## 設定
+1. Install dependencies: `npm install`
+2. Build: `npm run compile`
+3. Open this repository in VS Code and press **F5** (Run Extension)
+4. Verify behavior in the Extension Development Host
 
-VS Code / Cursor の設定（Settings）で `dontforgetest.*` を検索します。
+## Settings
 
-- **`dontforgetest.cursorAgentPath`**: `cursor-agent` の実行パス（未指定なら PATH から解決）
-- **`dontforgetest.defaultModel`**: `cursor-agent --model` に渡すモデル（空なら自動）
-- **`dontforgetest.testStrategyPath`**: テスト戦略ファイルのパス（空なら内蔵デフォルトを使用）
-- **`dontforgetest.includeTestPerspectiveTable`**: テスト生成前にテスト観点表を生成して保存するか（既定: true）
-- **`dontforgetest.perspectiveReportDir`**: 観点表（自動生成）の保存先（既定: `docs/test-perspectives`）
-- **`dontforgetest.testCommand`**: 生成後に実行するテストコマンド（既定: `npm test`、空ならスキップ）
-- **`dontforgetest.testExecutionReportDir`**: テスト実行レポート（自動生成）の保存先（既定: `docs/test-execution-reports`）
-- **`dontforgetest.testExecutionRunner`**: テスト実行の担当者（既定: `extension`）
-  - `extension`: 拡張機能がローカルで `testCommand` を実行し、stdout/stderr/exitCode を収集してレポート化
-  - `cursorAgent`: `cursor-agent` に実行させ、マーカー付きの結果から stdout/stderr/exitCode を抽出してレポート化
-  - `cursorAgent` が実行拒否/空結果になる場合は、拡張機能側で **自動フォールバック**して実行します（警告ログが出ます）
+Search `dontforgetest.*` in VS Code / Cursor Settings.
 
-### テスト戦略ファイルについて
+- **`dontforgetest.cursorAgentPath`**: Path to `cursor-agent` (if empty, resolves from PATH)
+- **`dontforgetest.defaultModel`**: Model passed to `cursor-agent --model` (if empty, auto)
+- **`dontforgetest.testStrategyPath`**: Test strategy file path (if empty, uses the built-in default)
+- **`dontforgetest.includeTestPerspectiveTable`**: Whether to generate and save a test perspective table before test generation (Default: true)
+- **`dontforgetest.perspectiveReportDir`**: Output directory for generated perspective tables (Default: `docs/test-perspectives`)
+- **`dontforgetest.testCommand`**: Test command to run after generation (Default: `npm test`, empty to skip)
+- **`dontforgetest.testExecutionReportDir`**: Output directory for test execution reports (Default: `docs/test-execution-reports`)
+- **`dontforgetest.testExecutionRunner`**: Who runs the tests (Default: `extension`)
+  - `extension`: the extension runs `testCommand` locally and collects stdout/stderr/exitCode into a report
+  - `cursorAgent`: `cursor-agent` runs tests and the extension extracts stdout/stderr/exitCode from the marked output
+  - If `cursorAgent` refuses to run or returns an empty result, the extension performs an **automatic fallback** and runs the tests itself (a warning is logged)
 
-テスト戦略ファイルは、テスト生成時のルール（観点表の形式、Given/When/Thenコメントの必須化など）を定義します。
+## About the test strategy file
 
-- **設定が空の場合**: 拡張機能に内蔵されたデフォルト戦略（英語版）が自動的に使用されます
-- **カスタマイズしたい場合**: 任意の `.md` ファイルを作成し、`dontforgetest.testStrategyPath` にパスを指定してください
+The test strategy file defines the rules for generation (e.g., perspective table format, requiring Given/When/Then comments).
 
-#### 内蔵デフォルト戦略の特徴
+- If the setting is empty: the extension uses the built-in default strategy automatically
+- To customize: create any `.md` file and set its path in `dontforgetest.testStrategyPath`
 
-- 言語: 英語（`answerLanguage`, `commentLanguage`, `perspectiveTableLanguage` すべて英語）
-- ソースコード: `src/core/defaultTestStrategy.ts` に定義
+### Example of a custom strategy file
 
-#### カスタム戦略ファイルの例
-
-日本語で出力したい場合は、ファイル先頭に以下のような設定コメントを記述します：
+To output in Japanese, add a config comment at the top:
 
 ```markdown
 <!-- dontforgetest-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->
 
-## テスト戦略ルール
+## Test strategy rules
 
-（ここに独自のルールを記述）
+(Write your rules here)
 ```
 
-## 基本操作（QuickPick推奨）
+## Basic usage (QuickPick recommended)
 
-### 1) 生成を開始
+### 1) Start generation
 
-1. コマンドパレット → **`Dontforgetest: テスト生成（QuickPick）`**
-2. **実行ソース**を選択
-   - **現在のファイル**
-   - **最新コミット差分**
-   - **コミット範囲差分**
-   - **未コミット差分**
-3. （最新コミット差分 / コミット範囲差分の場合）**実行先**を選択
-   - **Local**: 現在のワークスペースを直接編集
-   - **Worktree**: 一時worktreeで生成し、テスト差分だけをローカルへ適用（自動適用不可なら手動マージ）
-4. **モデル**を選択
-   - 設定の `defaultModel` を使用
-   - モデル名を入力して上書き
-5. 実行開始
-   - **Output Channel** に進捗ログが出ます
-   - **ステータスバー**に「実行中」が表示されます（クリックでログ表示）
+1. Command palette → **`Dontforgetest: Generate Tests (QuickPick)`**
+2. Select a **source**
+   - Current file
+   - Latest commit diff
+   - Commit range diff
+   - Uncommitted diff
+3. (For latest commit diff / commit range diff) select an **execution target**
+   - **Local**: edits your current workspace directly
+   - **Worktree**: generates in a temporary worktree and applies only test diffs back to local (manual merge if auto-apply is not possible)
+4. Select a **model**
+   - Use `defaultModel` setting
+   - Override by entering a model name
+5. Start
+   - Progress is shown in the **Output Channel**
+   - The status bar shows running tasks (click to open logs)
 
-### 2) 結果確認（観点表/実行レポート）
+### 2) Review outputs (perspective table / execution report)
 
-- 観点表: コマンドパレット → **`Dontforgetest: 最新の観点表を開く`**
-- 実行レポート: コマンドパレット → **`Dontforgetest: 最新の実行レポートを開く`**
-- 手動マージ支援（自動適用に失敗した場合）: コマンドパレット → **`Dontforgetest: 手動マージ支援を開く（最新）`**
+- Perspective table: Command palette → **`Dontforgetest: Open Latest Perspective Table`**
+- Execution report: Command palette → **`Dontforgetest: Open Latest Execution Report`**
+- Manual merge assistance (when auto-apply fails): Command palette → **`Dontforgetest: Open Manual Merge Assistance (Latest)`**
 
-## 個別コマンドの使い分け
+## When to use which command
 
-- **`Dontforgetest: テスト生成（QuickPick）`**
-  - ソース/実行先（必要な場合）/モデルを選んで実行（推奨）
-- **`Dontforgetest: パネルを開く`**
-  - サイドバーの操作パネルを開く（Local / Worktree の選択はこちらが分かりやすい）
-- **`Dontforgetest: 最新コミット差分からテスト生成`**
-  - `HEAD` の差分を対象に生成
-  - まだコミットが無い場合はエラー
-- **`Dontforgetest: コミット範囲差分からテスト生成`**
-  - 入力例: `main..HEAD`, `HEAD~3..HEAD`
-- **`Dontforgetest: 未コミット差分からテスト生成`**
-  - `staged` / `unstaged` / `両方` を選択
-- **`Dontforgetest: 出力ログを表示`**
-  - Output Channel を開く
+- **`Dontforgetest: Generate Tests (QuickPick)`**
+  - Select source / target (if needed) / model and run (recommended)
+- **`Dontforgetest: Open Panel`**
+  - Opens the side panel (often easiest to choose Local / Worktree)
+- **`Dontforgetest: Generate from Latest Commit Diff`**
+  - Generates for the diff of `HEAD`
+  - Errors if there is no commit yet
+- **`Dontforgetest: Generate from Commit Range Diff`**
+  - Examples: `main..HEAD`, `HEAD~3..HEAD`
+- **`Dontforgetest: Generate from Uncommitted Diff`**
+  - Select `staged` / `unstaged` / `both`
+- **`Dontforgetest: Show Output Logs`**
+  - Opens the Output Channel
 
-## トラブルシュート
+## Troubleshooting
 
-### `cursor-agent が見つかりません`
+### `cursor-agent not found`
 
-- `cursor-agent` をインストール/セットアップする
-- `dontforgetest.cursorAgentPath` にフルパスを設定する
+- Install / set up `cursor-agent`
+- Set `dontforgetest.cursorAgentPath` to the full path
 
-### テスト戦略ファイルが読み込めない
+### Test strategy file cannot be loaded
 
-- 指定したファイルが存在しない場合、内蔵デフォルト戦略が自動的に使用されます
-- カスタム戦略を使いたい場合は、`dontforgetest.testStrategyPath` に正しいパスを設定してください
+- If the specified file does not exist, the built-in default strategy is used automatically
+- If you want to use a custom strategy, ensure `dontforgetest.testStrategyPath` is correct
 
-### `Git の HEAD が解決できません`
+### `Cannot resolve Git HEAD`
 
-- リポジトリにコミットが存在するか確認（初回コミット前は不可）
+- Ensure the repository has at least one commit
 
-### 差分が大きい
+### Diff is too large
 
-- プロンプトに埋め込む差分は一定サイズで **切り詰め**ます（truncated表示あり）
+- The diff embedded into prompts is **truncated** beyond a certain size (a "truncated" marker is shown)
 
-## 参考
+## Reference
 
-- 内蔵デフォルト戦略: `src/core/defaultTestStrategy.ts`
+- Built-in default strategy: `src/core/defaultTestStrategy.ts`
 
