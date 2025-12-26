@@ -38,7 +38,9 @@ The \`dontforgetest-config\` comment at the top of this file controls output lan
 5. If you discover missing cases later, update the table and add the corresponding tests.
 6. For minor test fixes (message adjustments, small expected value changes) without new branches, table updates are optional.
 7. Expected Results MUST be observable and verifiable (e.g., call counts, saved artifacts, emitted events). Avoid "no crash" only.
+8. Expected Results MUST name the observable target (function/event/file/path) and how it is verified (args/counts/existence).
 8. Avoid tests with no concrete assertions (e.g., \`assert.ok(true)\`); every case must assert at least one specific outcome.
+9. Ensure 1 case = 1 branch + 1 expected result. Do not combine multiple branches into one case.
 9. Do not swallow failures in tests (e.g., try/catch that ignores errors). If unavoidable, record the reason and an alternative verification in \`Notes\`.
 10. For external dependencies, document mock verification points (call args, counts, output paths) in \`Expected Result\`.
 11. Split major branches into separate cases (e.g., worktree/local/skip/cancel/cleanup failure).
