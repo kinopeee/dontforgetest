@@ -336,9 +336,12 @@ async function runDetachedVscodeExtensionTests(options: {
     console.log(`[dontforgetest] VS Code tests launcher: open (-n -W) appPath=${appPath}`);
 
     await new Promise<void>((resolve, reject) => {
+      // NOTE:
+      // macOS では `open -a <appPath>` が LaunchServices 側の解釈により失敗する場合がある（kLSNoExecutableErr 等）。
+      // `open <appPath>`（アプリバンドルへのパスを直接渡す）に統一し、起動の安定性を優先する。
       const cmd = childProcess.spawn(
         'open',
-        ['-n', '-W', '-a', appPath, '--args', ...allArgs],
+        ['-n', '-W', appPath, '--args', ...allArgs],
         {
           // open には env を渡せるが、起動されたGUIアプリ側には伝播しない可能性が高い
           env: fullEnv,
