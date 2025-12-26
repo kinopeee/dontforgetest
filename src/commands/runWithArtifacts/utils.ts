@@ -18,6 +18,17 @@ const HEADER_KEYWORDS_JA = ['ケース', '入力', '前提', '期待', '備考']
 const ALL_HEADER_KEYWORDS = [...HEADER_KEYWORDS_EN, ...HEADER_KEYWORDS_JA] as const;
 
 /**
+ * 観点表（5列固定）の区切り行。
+ * NOTE: このファイルは core/artifacts.ts に依存させないため、ここで定義する。
+ */
+const PERSPECTIVE_TABLE_SEPARATOR = '|---|---|---|---|---|';
+
+/**
+ * 5列テーブルのパイプ数（先頭/末尾を含めて「|」が6個）
+ */
+const PERSPECTIVE_TABLE_PIPE_COUNT = 6;
+
+/**
  * マーカーで囲まれた部分を抽出する。
  * 見つからない場合は undefined。
  */
@@ -53,9 +64,9 @@ export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string |
     if (trimmed === legacyHeaderEn) {
       return true;
     }
-    // 5列（= 先頭/末尾含めてパイプが6個以上）で、かつヘッダらしい語が含まれる
+    // 5列（= 先頭/末尾含めてパイプが6個）で、かつヘッダらしい語が含まれる
     const pipeCount = (trimmed.match(/\|/g) ?? []).length;
-    if (pipeCount < 6) {
+    if (pipeCount !== PERSPECTIVE_TABLE_PIPE_COUNT) {
       return false;
     }
     return ALL_HEADER_KEYWORDS.some((keyword) => trimmed.includes(keyword));
@@ -65,10 +76,14 @@ export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string |
     // 旧形式の長いダッシュ行も許容
     if (trimmed.startsWith('|--------|')) {
       const pipeCount = (trimmed.match(/\|/g) ?? []).length;
-      return pipeCount >= 6;
+      return pipeCount === PERSPECTIVE_TABLE_PIPE_COUNT;
     }
-    // 新形式: |---|---|...|---| (任意の列数に対応)
-    return /^\|(?:\s*-+\s*\|)+$/.test(trimmed);
+    // 新形式: |---|---|...|---| だが、観点表は5列固定のため列数も一致していること
+    if (!/^\|(?:\s*-+\s*\|)+$/.test(trimmed)) {
+      return false;
+    }
+    const pipeCount = (trimmed.match(/\|/g) ?? []).length;
+    return pipeCount === PERSPECTIVE_TABLE_PIPE_COUNT;
   };
 
   const headerIndex = lines.findIndex((l) => isLikelyHeader(l));
@@ -95,7 +110,7 @@ export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string |
   // - ヘッダは実行時言語（VS Code の表示言語）に合わせる
   // - 区切り行は Markdown として成立すれば良いので短い形へ正規化する
   const normalizedHeader = t('artifact.perspectiveTable.tableHeader');
-  const normalizedSeparator = '|---|---|---|---|---|';
+  const normalizedSeparator = PERSPECTIVE_TABLE_SEPARATOR;
   const all = [normalizedHeader, normalizedSeparator, ...body].join('\n');
   return `${all}\n`;
 }

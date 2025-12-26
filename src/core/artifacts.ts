@@ -63,8 +63,8 @@ export function getPerspectiveTableSeparator(): string {
  * 互換性のために残す定数（推奨: getPerspectiveTableHeader / getPerspectiveTableSeparator を使用）。
  *
  * NOTE:
- * - t() は VS Code の表示言語に追従するため、定数値も実行言語により変わる。
- * - テストではこの挙動を前提にする（固定値として扱わない）。
+ * - これらの定数は、モジュールロード時に一度だけ初期化されます。
+ * - 実行時の言語変更には追従しないため、動的な翻訳が必要な場合はゲッター関数を使用してください。
  */
 export const PERSPECTIVE_TABLE_HEADER = getPerspectiveTableHeader();
 export const PERSPECTIVE_TABLE_SEPARATOR = getPerspectiveTableSeparator();

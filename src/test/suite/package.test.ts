@@ -3,24 +3,24 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Validates semantic version format (MAJOR.MINOR.PATCH)
- * @param version Value to validate (accepts unknown type for flexibility)
- * @returns true if valid semantic version, false otherwise
+ * セマンティックバージョン形式（MAJOR.MINOR.PATCH）を検証します
+ * @param version 検証対象の値（柔軟性のためunknown型を受け入れます）
+ * @returns 有効なセマンティックバージョンの場合true、それ以外はfalse
  */
 function isValidSemanticVersion(version: unknown): boolean {
   if (typeof version !== 'string' || version.trim() === '') {
     return false;
   }
-  // Basic semantic version regex: MAJOR.MINOR.PATCH (with optional pre-release and build metadata)
+  // セマンティックバージョン正規表現: MAJOR.MINOR.PATCH（オプションでプレリリースとビルドメタデータをサポート）
   const semverRegex = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
   return semverRegex.test(version.trim());
 }
 
 /**
- * Reads and parses package.json
- * @param workspaceRoot Workspace root directory
- * @returns Parsed package.json object
- * @throws Error if file cannot be read or parsed
+ * package.json を読み込み・パースします
+ * @param workspaceRoot ワークスペースルートディレクトリ
+ * @returns パース済み package.json オブジェクト
+ * @throws ファイルが読み込めない、またはパースできない場合
  */
 function readPackageJson(workspaceRoot: string): Record<string, unknown> {
   const packageJsonPath = path.join(workspaceRoot, 'package.json');
@@ -29,10 +29,10 @@ function readPackageJson(workspaceRoot: string): Record<string, unknown> {
 }
 
 /**
- * Reads and parses package-lock.json
- * @param workspaceRoot Workspace root directory
- * @returns Parsed package-lock.json object
- * @throws Error if file cannot be read or parsed
+ * package-lock.json を読み込み・パースします
+ * @param workspaceRoot ワークスペースルートディレクトリ
+ * @returns パース済み package-lock.json オブジェクト
+ * @throws ファイルが読み込めない、またはパースできない場合
  */
 function readPackageLockJson(workspaceRoot: string): Record<string, unknown> {
   const packageLockJsonPath = path.join(workspaceRoot, 'package-lock.json');
@@ -151,6 +151,10 @@ suite('package.json and package-lock.json version validation', () => {
       // Then: Validation error or runtime error
       assert.strictEqual(testPackageJson.version, undefined, 'Missing version should be undefined');
       assert.ok(!isValidSemanticVersion(testPackageJson.version), 'Missing version should be invalid');
+
+      // Then: undefined は null/空文字列と異なること
+      assert.notStrictEqual(testPackageJson.version, null, 'Undefined should be different from null');
+      assert.notStrictEqual(testPackageJson.version, '', 'Undefined should be different from empty string');
     });
 
     // TC-E-04: package.json version differs from package-lock.json version
@@ -265,21 +269,5 @@ suite('package.json and package-lock.json version validation', () => {
       }
     });
 
-    // TC-B-06: package.json version is undefined (field removed)
-    test('TC-B-06: Error accessing undefined version or validation failure', () => {
-      // Given: package.json with undefined version (simulated)
-      const packageJson = readPackageJson(workspaceRoot);
-      const testPackageJson = { ...packageJson };
-      delete testPackageJson.version;
-
-      // When: Accessing undefined version
-      // Then: Error accessing undefined version or validation failure
-      assert.strictEqual(testPackageJson.version, undefined, 'Undefined version should be detected');
-      assert.ok(!isValidSemanticVersion(testPackageJson.version), 'Undefined version should be invalid');
-      
-      // Verify undefined is different from null or empty string
-      assert.notStrictEqual(testPackageJson.version, null, 'Undefined should be different from null');
-      assert.notStrictEqual(testPackageJson.version, '', 'Undefined should be different from empty string');
-    });
   });
 });
