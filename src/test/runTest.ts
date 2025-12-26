@@ -176,27 +176,44 @@ export async function stageExtensionToTemp(params: {
   await fs.promises.rm(params.stageExtensionRoot, { recursive: true, force: true });
   await fs.promises.mkdir(params.stageExtensionRoot, { recursive: true });
 
-  const copyEntries: Array<{ src: string; dest: string }> = [
+  type CopyEntry = { src: string; dest: string };
+
+  // NOTE:
+  // - 必須ファイルが欠けている場合、ここで即座に失敗させる（後続の拡張機能テストが「なぜ落ちたか」分かりづらくなるため）
+  // - 任意ファイル（ローカライズ関連など）は、存在しない場合（ENOENT）のみスキップする
+  const requiredCopyEntries: CopyEntry[] = [
     { src: path.join(params.sourceExtensionRoot, 'package.json'), dest: path.join(params.stageExtensionRoot, 'package.json') },
-    { src: path.join(params.sourceExtensionRoot, 'package-lock.json'), dest: path.join(params.stageExtensionRoot, 'package-lock.json') },
     { src: path.join(params.sourceExtensionRoot, 'LICENSE'), dest: path.join(params.stageExtensionRoot, 'LICENSE') },
-    // package.json のローカライズ（%key% -> package.nls*.json）
-    { src: path.join(params.sourceExtensionRoot, 'package.nls.json'), dest: path.join(params.stageExtensionRoot, 'package.nls.json') },
-    { src: path.join(params.sourceExtensionRoot, 'package.nls.ja.json'), dest: path.join(params.stageExtensionRoot, 'package.nls.ja.json') },
-    // runtime ローカライズ（vscode.l10n.t 用）
-    { src: path.join(params.sourceExtensionRoot, 'l10n'), dest: path.join(params.stageExtensionRoot, 'l10n') },
     { src: path.join(params.sourceExtensionRoot, 'out'), dest: path.join(params.stageExtensionRoot, 'out') },
     { src: path.join(params.sourceExtensionRoot, 'src'), dest: path.join(params.stageExtensionRoot, 'src') },
     { src: path.join(params.sourceExtensionRoot, 'docs'), dest: path.join(params.stageExtensionRoot, 'docs') },
     { src: path.join(params.sourceExtensionRoot, 'media'), dest: path.join(params.stageExtensionRoot, 'media') },
   ];
 
-  for (const entry of copyEntries) {
+  const optionalCopyEntries: CopyEntry[] = [
+    // package-lock.json は拡張機能本体の実行に必須ではないため、無い場合はスキップしてよい（テスト用の最小構成対応）
+    { src: path.join(params.sourceExtensionRoot, 'package-lock.json'), dest: path.join(params.stageExtensionRoot, 'package-lock.json') },
+    // package.json のローカライズ（%key% -> package.nls*.json）
+    { src: path.join(params.sourceExtensionRoot, 'package.nls.json'), dest: path.join(params.stageExtensionRoot, 'package.nls.json') },
+    { src: path.join(params.sourceExtensionRoot, 'package.nls.ja.json'), dest: path.join(params.stageExtensionRoot, 'package.nls.ja.json') },
+    // runtime ローカライズ（vscode.l10n.t 用）
+    { src: path.join(params.sourceExtensionRoot, 'l10n'), dest: path.join(params.stageExtensionRoot, 'l10n') },
+  ];
+
+  // 必須ファイルは事前に存在確認し、欠落があれば cp ループに入る前に ENOENT を投げる（部分的コピーを避ける）
+  for (const entry of requiredCopyEntries) {
+    await fs.promises.access(entry.src);
+  }
+
+  for (const entry of requiredCopyEntries) {
+    await fs.promises.cp(entry.src, entry.dest, { recursive: true, force: true });
+  }
+
+  for (const entry of optionalCopyEntries) {
     try {
       await fs.promises.cp(entry.src, entry.dest, { recursive: true, force: true });
     } catch (e) {
-      // テストでは sourceExtensionRoot を最小構成で生成するケースがあるため、
-      // 任意ファイル（package.nls / l10n 等）が無い場合はスキップする。
+      // 任意ファイル（package-lock / package.nls / l10n 等）が無い場合はスキップする。
       const err = e as NodeJS.ErrnoException;
       if (err.code === 'ENOENT') {
         continue;

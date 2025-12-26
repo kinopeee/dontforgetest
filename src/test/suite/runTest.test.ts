@@ -1471,21 +1471,56 @@ suite('test/runTest.ts', () => {
       assert.ok(!(await fs.promises.access(path.join(stageDir, 'package-lock.json')).then(() => true).catch(() => false)), 'package-lock.json is not copied (missing in source)');
     });
 
+    // TC-REQ-E-01: package.json does not exist in sourceExtensionRoot
+    // Given: package.json is missing but other required files exist
+    // When: stageExtensionToTemp is called
+    // Then: 必須ファイル欠落として ENOENT が投げられる（サイレントに成功しない）
+    test('TC-REQ-E-01: package.json does not exist in sourceExtensionRoot', async () => {
+      // Given: package.json は作らないが、他の必須ファイル/ディレクトリは用意する
+      await fs.promises.writeFile(path.join(sourceDir, 'LICENSE'), 'MIT');
+      await fs.promises.mkdir(path.join(sourceDir, 'out'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'src'), { recursive: true });
+      await fs.promises.mkdir(path.join(sourceDir, 'docs'), { recursive: true });
+      await fs.promises.writeFile(
+        path.join(sourceDir, 'docs', 'usage.md'),
+        'dontforgetest.testExecutionRunner\n既定: `extension`\n- extension\n- cursorAgent\n自動フォールバック\n',
+      );
+      await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
+
+      // When / Then
+      await assert.rejects(
+        async () => {
+          await stageExtensionToTemp({
+            sourceExtensionRoot: sourceDir,
+            stageExtensionRoot: stageDir,
+          });
+        },
+        (err: NodeJS.ErrnoException) => err.code === 'ENOENT',
+        'Should throw ENOENT when required package.json is missing',
+      );
+    });
+
     // TC-E-02: package-lock.json exists but sourceExtensionRoot path is invalid
     // Given: sourceExtensionRoot path is invalid (does not exist)
     // When: stageExtensionToTemp is called
-    // Then: 関数は成功するが、コピーはすべてスキップされる（ENOENT は無視される）
+    // Then: 必須ファイルが存在しないため ENOENT が投げられる
     test('TC-E-02: package-lock.json exists but sourceExtensionRoot path is invalid', async () => {
       // Given: sourceExtensionRoot path is invalid (does not exist)
       const invalidPath = path.join(tempDir, 'nonexistent-source');
 
-      // When: stageExtensionToTemp is called
-      await stageExtensionToTemp({
-        sourceExtensionRoot: invalidPath,
-        stageExtensionRoot: stageDir,
-      });
+      // When / Then: stageExtensionToTemp is called
+      await assert.rejects(
+        async () => {
+          await stageExtensionToTemp({
+            sourceExtensionRoot: invalidPath,
+            stageExtensionRoot: stageDir,
+          });
+        },
+        (err: NodeJS.ErrnoException) => err.code === 'ENOENT',
+        'Should throw ENOENT when sourceExtensionRoot does not exist',
+      );
 
-      // Then: 関数は成功するが、ステージングディレクトリにはファイルがない
+      // Then: 途中で失敗するため、ステージングディレクトリにはコピー済みファイルがない
       const files = await fs.promises.readdir(stageDir).catch(() => []);
       assert.strictEqual(files.length, 0, 'No files are copied when source is invalid');
     });
@@ -1744,34 +1779,44 @@ suite('test/runTest.ts', () => {
       await fs.promises.mkdir(path.join(sourceDir, 'media'), { recursive: true });
       await fs.promises.writeFile(path.join(sourceDir, 'package-lock.json'), '{"name": "test"}');
 
-      // When: stageExtensionToTemp is called
-      await stageExtensionToTemp({
-        sourceExtensionRoot: sourceDir,
-        stageExtensionRoot: stageDir,
-      });
+      // When / Then: stageExtensionToTemp is called
+      await assert.rejects(
+        async () => {
+          await stageExtensionToTemp({
+            sourceExtensionRoot: sourceDir,
+            stageExtensionRoot: stageDir,
+          });
+        },
+        (err: NodeJS.ErrnoException) => err.code === 'ENOENT',
+        'Should throw ENOENT when required docs directory is missing',
+      );
 
-      // Then: 関数は成功し、docs 以外のファイルはコピーされる（docs はスキップ）
-      assert.ok(await fs.promises.access(path.join(stageDir, 'package.json')).then(() => true).catch(() => false), 'package.json is copied');
-      assert.ok(await fs.promises.access(path.join(stageDir, 'package-lock.json')).then(() => true).catch(() => false), 'package-lock.json is copied');
-      // docs ディレクトリはスキップされる
-      assert.ok(!(await fs.promises.access(path.join(stageDir, 'docs')).then(() => true).catch(() => false)), 'docs is not copied (missing in source)');
+      // Then: 途中で失敗するため、ステージングディレクトリにはコピー済みファイルがない
+      const files = await fs.promises.readdir(stageDir).catch(() => []);
+      assert.strictEqual(files.length, 0, 'No files are copied when required docs is missing');
     });
 
     // TC-STAGE-B-02: docs directory exists but sourceExtensionRoot path is invalid
     // Given: sourceExtensionRoot path is invalid (does not exist)
     // When: stageExtensionToTemp is called
-    // Then: 関数は成功するが、コピーはすべてスキップされる（ENOENT は無視される）
+    // Then: 必須ファイルが存在しないため ENOENT が投げられる
     test('TC-STAGE-B-02: docs directory exists but sourceExtensionRoot path is invalid', async () => {
       // Given: sourceExtensionRoot path is invalid (does not exist)
       const invalidPath = path.join(tempDir, 'nonexistent-source');
 
-      // When: stageExtensionToTemp is called
-      await stageExtensionToTemp({
-        sourceExtensionRoot: invalidPath,
-        stageExtensionRoot: stageDir,
-      });
+      // When / Then: stageExtensionToTemp is called
+      await assert.rejects(
+        async () => {
+          await stageExtensionToTemp({
+            sourceExtensionRoot: invalidPath,
+            stageExtensionRoot: stageDir,
+          });
+        },
+        (err: NodeJS.ErrnoException) => err.code === 'ENOENT',
+        'Should throw ENOENT when sourceExtensionRoot does not exist',
+      );
 
-      // Then: 関数は成功するが、ステージングディレクトリにはファイルがない
+      // Then: 途中で失敗するため、ステージングディレクトリにはファイルがない
       const files = await fs.promises.readdir(stageDir).catch(() => []);
       assert.strictEqual(files.length, 0, 'No files are copied when source is invalid');
     });
