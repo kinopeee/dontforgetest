@@ -3,7 +3,7 @@
   "publisher": "local",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.88",
+  "version": "0.0.89",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.105.0"
