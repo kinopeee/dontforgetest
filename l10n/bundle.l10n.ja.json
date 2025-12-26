@@ -62,6 +62,7 @@
     "controlPanel.commitRangeHint": "指定した範囲のコミットを対象",
     "controlPanel.localHint": "直接編集",
     "controlPanel.worktreeHint": "隔離→差分適用",
+    "controlPanel.worktreeNote": "※テスト自動実行はスキップされます",
     "artifact.perspectiveTable.title": "テスト観点表（自動生成）",
     "artifact.perspectiveTable.generatedAt": "生成日時",
     "artifact.perspectiveTable.target": "対象",
