@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { extractBetweenMarkers, coerceLegacyPerspectiveMarkdownTable, truncateText } from '../../../../commands/runWithArtifacts/utils';
+import { PERSPECTIVE_TABLE_HEADER } from '../../../../core/artifacts';
 
 suite('commands/runWithArtifacts/utils.ts', () => {
   // TC-B-26: extractBetweenMarkers called with text containing begin marker but no end marker
@@ -45,7 +46,7 @@ suite('commands/runWithArtifacts/utils.ts', () => {
   // TC-B-29: coerceLegacyPerspectiveMarkdownTable called with markdown having header but no separator
   test('TC-B-29: coerceLegacyPerspectiveMarkdownTable returns undefined when separator is missing', () => {
     // Given: Markdown having header but no separator
-    const markdown = '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |\n| Some | Table |';
+    const markdown = `${PERSPECTIVE_TABLE_HEADER}\n| Some | Table |`;
 
     // When: coerceLegacyPerspectiveMarkdownTable is called
     const result = coerceLegacyPerspectiveMarkdownTable(markdown);

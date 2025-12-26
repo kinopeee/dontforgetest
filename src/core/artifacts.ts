@@ -42,10 +42,32 @@ export interface TestExecutionJsonV1 {
   stderr: string;
 }
 
-export const PERSPECTIVE_TABLE_HEADER =
-  '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |';
-export const PERSPECTIVE_TABLE_SEPARATOR =
-  '|--------|----------------------|---------------------------------------|-----------------|-------|';
+/**
+ * 観点表（Markdownテーブル）のヘッダ行を取得する。
+ * VS Code の表示言語に追従する（= 実行時言語で表示される）。
+ */
+export function getPerspectiveTableHeader(): string {
+  return t('artifact.perspectiveTable.tableHeader');
+}
+
+/**
+ * 観点表（Markdownテーブル）の区切り行を取得する。
+ * - Markdown上、ダッシュ数は重要ではないため固定の短い形を採用する
+ * - ロケールに依存せず同一の形にする
+ */
+export function getPerspectiveTableSeparator(): string {
+  return '|---|---|---|---|---|';
+}
+
+/**
+ * 互換性のために残す定数（推奨: getPerspectiveTableHeader / getPerspectiveTableSeparator を使用）。
+ *
+ * NOTE:
+ * - t() は VS Code の表示言語に追従するため、定数値も実行言語により変わる。
+ * - テストではこの挙動を前提にする（固定値として扱わない）。
+ */
+export const PERSPECTIVE_TABLE_HEADER = getPerspectiveTableHeader();
+export const PERSPECTIVE_TABLE_SEPARATOR = getPerspectiveTableSeparator();
 
 export type ParsePerspectiveJsonResult =
   | { ok: true; value: PerspectiveJsonV1 }
@@ -299,7 +321,7 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
  * - パイプ（|）は `\\|` にエスケープする
  */
 export function renderPerspectiveMarkdownTable(cases: PerspectiveCase[]): string {
-  const rows: string[] = [PERSPECTIVE_TABLE_HEADER, PERSPECTIVE_TABLE_SEPARATOR];
+  const rows: string[] = [getPerspectiveTableHeader(), getPerspectiveTableSeparator()];
   for (const c of cases) {
     rows.push(
       `| ${normalizeTableCell(c.caseId)} | ${normalizeTableCell(c.inputPrecondition)} | ${normalizeTableCell(c.perspective)} | ${normalizeTableCell(c.expectedResult)} | ${normalizeTableCell(c.notes)} |`,

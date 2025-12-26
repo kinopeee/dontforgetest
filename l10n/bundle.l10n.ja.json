@@ -67,6 +67,7 @@
     "artifact.perspectiveTable.target": "対象",
     "artifact.perspectiveTable.targetFiles": "対象ファイル",
     "artifact.perspectiveTable.empty": "(観点表の生成結果が空でした)",
+    "artifact.perspectiveTable.tableHeader": "| ケースID | 入力 / 前提条件 | 観点（同値 / 境界） | 期待結果 | 備考 |",
     "artifact.executionReport.title": "テスト実行レポート（自動生成）",
     "artifact.executionReport.executionInfo": "実行情報",
     "artifact.executionReport.generatedAt": "生成日時",

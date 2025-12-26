@@ -1,3 +1,5 @@
+import { t } from '../../core/l10n';
+
 /**
  * マーカーで囲まれた部分を抽出する。
  * 見つからない場合は undefined。
@@ -22,16 +24,53 @@ export function extractBetweenMarkers(text: string, begin: string, end: string):
  */
 export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string | undefined {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
-  const header = '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |';
-  const separator = '|--------|----------------------|---------------------------------------|-----------------|-------|';
+  // 旧形式は英語固定のヘッダ/区切り行を想定していたが、実行時言語に合わせた出力（日本語等）も許容する。
+  // - 英語固定の旧ヘッダ（過去互換）
+  // - 現在ロケールのヘッダ（新仕様: 実行時言語）
+  const legacyHeaderEn = '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |';
+  // 現在ロケールのヘッダは core/artifacts.ts と同じキーを参照する想定だが、
+  // この utils.ts は core に依存させないため、現状は「旧英語ヘッダ」だけは必ず許容し、
+  // それ以外は「5列のヘッダっぽい行」を許容する。
+  const isLikelyHeader = (line: string): boolean => {
+    const trimmed = line.trim();
+    if (trimmed === legacyHeaderEn) {
+      return true;
+    }
+    // 5列（= 先頭/末尾含めてパイプが6個以上）で、かつヘッダらしい語が含まれる
+    const pipeCount = (trimmed.match(/\|/g) ?? []).length;
+    if (pipeCount < 6) {
+      return false;
+    }
+    return (
+      trimmed.includes('Case ID') ||
+      trimmed.includes('Input') ||
+      trimmed.includes('Expected') ||
+      trimmed.includes('Notes') ||
+      trimmed.includes('ケース') ||
+      trimmed.includes('入力') ||
+      trimmed.includes('前提') ||
+      trimmed.includes('期待') ||
+      trimmed.includes('備考')
+    );
+  };
+  const isLikelySeparator = (line: string): boolean => {
+    const trimmed = line.trim();
+    // 旧形式の長いダッシュ行も許容
+    if (trimmed.startsWith('|--------|')) {
+      const pipeCount = (trimmed.match(/\|/g) ?? []).length;
+      return pipeCount >= 6;
+    }
+    // 新形式: |---|---|---|---|---|
+    return /^\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|\s*-+\s*\|$/.test(trimmed);
+  };
 
-  const headerIndex = lines.findIndex((l) => l.trim() === header);
+  const headerIndex = lines.findIndex((l) => isLikelyHeader(l));
   if (headerIndex === -1) {
     return undefined;
   }
   // 区切り行が続かない場合は不正とみなす
   const sepLine = lines[headerIndex + 1]?.trim() ?? '';
-  if (sepLine !== separator) {
+  if (!isLikelySeparator(sepLine)) {
     return undefined;
   }
 
@@ -45,7 +84,12 @@ export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string |
   }
 
   // 本文が空でも、ヘッダだけの表として返す（パーサ互換を維持）
-  const all = [header, separator, ...body].join('\n');
+  // NOTE:
+  // - ヘッダは実行時言語（VS Code の表示言語）に合わせる
+  // - 区切り行は Markdown として成立すれば良いので短い形へ正規化する
+  const normalizedHeader = t('artifact.perspectiveTable.tableHeader');
+  const normalizedSeparator = '|---|---|---|---|---|';
+  const all = [normalizedHeader, normalizedSeparator, ...body].join('\n');
   return `${all}\n`;
 }
 

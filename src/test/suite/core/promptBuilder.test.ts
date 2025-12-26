@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as vscode from 'vscode';
 import { buildTestGenPrompt, buildTestPerspectivePrompt, parseLanguageConfig } from '../../../core/promptBuilder';
+import { getArtifactLocale } from '../../../core/l10n';
 
 /**
  * テスト用の一時戦略ファイルを作成するヘルパー
@@ -140,7 +141,7 @@ suite('core/promptBuilder.ts', () => {
         assert.ok(result.prompt.includes('## ツール使用制約（必須）'), 'ツール使用制約セクションが含まれている');
         assert.strictEqual(result.languages.answerLanguage, 'ja');
         assert.strictEqual(result.languages.commentLanguage, 'ja');
-        assert.strictEqual(result.languages.perspectiveTableLanguage, 'ja');
+        assert.strictEqual(result.languages.perspectiveTableLanguage, getArtifactLocale());
       } finally {
         cleanupTempFile(testStrategyPath);
       }
@@ -546,7 +547,7 @@ suite('core/promptBuilder.ts', () => {
       assert.ok(result.prompt.includes('MANDATORY'), '内蔵デフォルト戦略の内容が含まれている');
       assert.strictEqual(result.languages.answerLanguage, 'en', '英語の言語設定が返される');
       assert.strictEqual(result.languages.commentLanguage, 'en', '英語の言語設定が返される');
-      assert.strictEqual(result.languages.perspectiveTableLanguage, 'en', '英語の言語設定が返される');
+      assert.strictEqual(result.languages.perspectiveTableLanguage, getArtifactLocale(), '実行時言語が返される');
     });
 
     // Given: testStrategyPath が空白文字のみ

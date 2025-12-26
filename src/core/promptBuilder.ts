@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { DEFAULT_TEST_STRATEGY, DEFAULT_LANGUAGE_CONFIG } from './defaultTestStrategy';
+import { getArtifactLocale } from './l10n';
 
 export interface TestGenLanguageConfig {
   answerLanguage: string;
@@ -34,6 +35,8 @@ export interface BuildPerspectivePromptOptions extends BuildPromptOptions {
  */
 export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{ prompt: string; languages: TestGenLanguageConfig }> {
   const { strategyText, languages } = await readStrategyAndLanguages(options.workspaceRoot, options.testStrategyPath);
+  // 観点表だけは「実行時の表示言語」に合わせて出力させたい（観点表ファイルの表示言語と一致させるため）
+  languages.perspectiveTableLanguage = getArtifactLocale();
 
   const targetsText = options.targetPaths
     .map((p) => `- ${p}`)
@@ -156,6 +159,8 @@ export async function buildTestPerspectivePrompt(
   options: BuildPerspectivePromptOptions,
 ): Promise<{ prompt: string; languages: TestGenLanguageConfig }> {
   const { strategyText, languages } = await readStrategyAndLanguages(options.workspaceRoot, options.testStrategyPath);
+  // 観点表だけは「実行時の表示言語」に合わせて出力させたい（観点表ファイルの表示言語と一致させるため）
+  languages.perspectiveTableLanguage = getArtifactLocale();
 
   // 観点表は「表（Markdown）」として最終保存されるが、cursor-agent からは揺れを避けるため JSON を返させる。
   // 保存時に拡張機能側で列固定の Markdown 表へ整形する。
