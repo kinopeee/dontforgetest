@@ -21,7 +21,7 @@ import { appendEventToOutput } from '../../ui/outputChannel';
 import { handleTestGenEventForStatusBar } from '../../ui/statusBar';
 import { handleTestGenEventForProgressView, emitPhaseEvent } from '../../ui/progressTreeView';
 import { cleanupUnexpectedPerspectiveFiles } from './cleanupStep';
-import { applyWorktreeTestChanges } from './worktreeApplyStep';
+import { applyWorktreeTestChanges, type WorktreeApplyResult } from './worktreeApplyStep';
 import { runTestCommandViaCursorAgent } from './testExecutionStep';
 import { runPerspectiveTableStep } from './perspectiveStep';
 import type { RunWithArtifactsOptions, WorktreeOps } from '../runWithArtifacts';
@@ -301,8 +301,10 @@ export class TestGenerationSession {
   }
 
   private async runTestExecution(genExit: number | null): Promise<void> {
+    let worktreeApplyResult: WorktreeApplyResult | undefined;
+    let testWorkspaceRoot = this.runWorkspaceRoot;
     if (this.runLocation === 'worktree' && this.worktreeDir && this.options.extensionContext) {
-      await applyWorktreeTestChanges({
+      worktreeApplyResult = await applyWorktreeTestChanges({
         generationTaskId: this.options.generationTaskId,
         genExit,
         localWorkspaceRoot: this.localWorkspaceRoot,
@@ -310,18 +312,23 @@ export class TestGenerationSession {
         extensionContext: this.options.extensionContext,
         preTestCheckCommand: this.settings.preTestCheckCommand,
       });
+      if (worktreeApplyResult.applied) {
+        testWorkspaceRoot = this.localWorkspaceRoot;
+      }
     }
 
     handleTestGenEventForProgressView(
       emitPhaseEvent(this.options.generationTaskId, 'running-tests', t('progressTreeView.phase.runningTests')),
     );
 
-    const shouldSkipTestExecution = this.runLocation === 'worktree' || this.settings.testCommand.trim().length === 0;
+    const shouldSkipTestExecution =
+      this.settings.testCommand.trim().length === 0 ||
+      (this.runLocation === 'worktree' && !worktreeApplyResult?.applied);
     if (shouldSkipTestExecution) {
       const msg =
-        this.runLocation === 'worktree'
-          ? t('testExecution.skip.worktreeMvp')
-          : t('testExecution.skip.emptyCommand');
+        this.settings.testCommand.trim().length === 0
+          ? t('testExecution.skip.emptyCommand')
+          : t('testExecution.skip.worktreeMvp');
       const ev = emitLogEvent(`${this.options.generationTaskId}-test`, 'warn', msg);
       handleTestGenEventForStatusBar({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
       this.captureEvent({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
@@ -333,7 +340,7 @@ export class TestGenerationSession {
       this.captureEvent(completedEv);
       const skippedResult: TestExecutionResult = {
         command: this.settings.testCommand,
-        cwd: this.runWorkspaceRoot,
+        cwd: testWorkspaceRoot,
         exitCode: null,
         signal: null,
         durationMs: 0,
@@ -359,7 +366,7 @@ export class TestGenerationSession {
     }
 
     const testTaskId = `${this.options.generationTaskId}-test`;
-    const willLaunchVsCode = await this.looksLikeVsCodeLaunchingTestCommand(this.runWorkspaceRoot, this.settings.testCommand);
+    const willLaunchVsCode = await this.looksLikeVsCodeLaunchingTestCommand(testWorkspaceRoot, this.settings.testCommand);
 
     if (willLaunchVsCode && this.settings.testExecutionRunner === 'extension') {
       const warn = emitLogEvent(
@@ -396,7 +403,7 @@ export class TestGenerationSession {
       const result = await runTestCommandViaCursorAgent({
         provider: this.options.provider,
         taskId: `${testTaskId}-agent`,
-        workspaceRoot: this.runWorkspaceRoot,
+        workspaceRoot: testWorkspaceRoot,
         cursorAgentCommand: this.options.cursorAgentCommand,
         model: this.options.model,
         testCommand: this.settings.testCommand,
@@ -438,7 +445,7 @@ export class TestGenerationSession {
         appendEventToOutput(warn);
         this.captureEvent(warn);
 
-        const fallbackResult = await runTestCommand({ command: this.settings.testCommand, cwd: this.runWorkspaceRoot });
+        const fallbackResult = await runTestCommand({ command: this.settings.testCommand, cwd: testWorkspaceRoot });
 
         const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: fallbackResult.exitCode, timestampMs: nowMs() };
         handleTestGenEventForStatusBar(completed);
@@ -491,7 +498,7 @@ export class TestGenerationSession {
     appendEventToOutput(started);
     this.captureEvent(started);
 
-    const result = await runTestCommand({ command: this.settings.testCommand, cwd: this.runWorkspaceRoot });
+    const result = await runTestCommand({ command: this.settings.testCommand, cwd: testWorkspaceRoot });
 
     const testCompletedMsg = t(
       'testExecution.completed',
