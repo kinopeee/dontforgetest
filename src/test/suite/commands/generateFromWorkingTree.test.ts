@@ -207,7 +207,7 @@ suite('commands/generateFromWorkingTree.ts', () => {
       '--- a/src/foo.ts',
       '+++ b/src/foo.ts',
       '@@ -0,0 +1 @@',
-      '+console.log(\"hi\");',
+      '+console.log("hi");',
     ].join('\n');
     let runCalled = false;
     let receivedPrompt = '';

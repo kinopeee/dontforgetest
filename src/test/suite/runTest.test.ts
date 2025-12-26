@@ -2884,7 +2884,7 @@ suite('test/runTest.ts', () => {
     });
 
     // TC-B-19: buildDirectSpawnCommand shell
-    test('TC-B-19: buildDirectSpawnCommand は shell 指定でクォートする', () => {
+    test('TC-B-19: buildDirectSpawnCommand は shell 指定でもクォートしない', () => {
       // Given: useXvfb=false, shell=true
       const result = buildDirectSpawnCommand({
         useXvfb: false,
@@ -2893,8 +2893,8 @@ suite('test/runTest.ts', () => {
         shell: true,
       });
 
-      // When/Then: クォートされる
-      assert.strictEqual(result.command, '"/tmp/code"', 'shell ではクォートされる');
+      // When/Then: 手動クォートは行わない（spawn/shell 側に委ねる）
+      assert.strictEqual(result.command, '/tmp/code', 'shell でもクォートしない');
     });
 
     // TC-N-30: resolveVscodeExecutablePath env override
@@ -3291,31 +3291,37 @@ suite('test/runTest.ts', () => {
       const nowBase = Date.now();
       let nowTick = 0;
       const launchCalls: Array<{ launcher: string | undefined; testResultFilePath: string }> = [];
+      const vscodeTestRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-vscode-test-unit-'));
       type RunDetachedOptions = Parameters<typeof runDetachedVscodeExtensionTestsWithDeps>[0];
       const fakeRunDetached = async (options: RunDetachedOptions) => {
         launchCalls.push({ launcher: options.launcher, testResultFilePath: options.testResultFilePath });
         await fs.promises.writeFile(options.testResultFilePath, JSON.stringify({ failures: 0, passes: 1 }), 'utf8');
       };
 
-      // When: runMainWithDeps を呼ぶ
-      const exitCode = await runMainWithDeps({
-        env: {
-          ...process.env,
-          DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '10',
-          DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
-          DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '1',
-          DONTFORGETEST_VSCODE_TEST_LAUNCHER: 'direct',
-        },
-        platform: 'darwin',
-        pid: process.pid,
-        now: () => nowBase + nowTick++,
-        stageExtensionToTemp: async () => {},
-        runDetachedVscodeExtensionTests: fakeRunDetached,
-      });
+      try {
+        // When: runMainWithDeps を呼ぶ
+        const exitCode = await runMainWithDeps({
+          env: {
+            ...process.env,
+            DONTFORGETEST_VSCODE_TEST_ROOT: vscodeTestRoot,
+            DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '100',
+            DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
+            DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '1',
+            DONTFORGETEST_VSCODE_TEST_LAUNCHER: 'direct',
+          },
+          platform: 'darwin',
+          pid: process.pid,
+          now: () => nowBase + nowTick++,
+          stageExtensionToTemp: async () => {},
+          runDetachedVscodeExtensionTests: fakeRunDetached,
+        });
 
-      // Then: 成功で null を返す
-      assert.strictEqual(exitCode, null, '成功時は null');
-      assert.strictEqual(launchCalls[0]?.launcher, 'direct', '固定 launcher が渡される');
+        // Then: 成功で null を返す
+        assert.strictEqual(exitCode, null, '成功時は null');
+        assert.strictEqual(launchCalls[0]?.launcher, 'direct', '固定 launcher が渡される');
+      } finally {
+        await fs.promises.rm(vscodeTestRoot, { recursive: true, force: true });
+      }
     });
 
     // TC-E-13: runMainWithDeps explicit failure
@@ -3323,28 +3329,34 @@ suite('test/runTest.ts', () => {
       // Given: failures>0 の結果ファイル
       const nowBase = Date.now();
       let nowTick = 0;
+      const vscodeTestRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-vscode-test-unit-'));
       type RunDetachedOptions = Parameters<typeof runDetachedVscodeExtensionTestsWithDeps>[0];
       const fakeRunDetached = async (options: RunDetachedOptions) => {
         await fs.promises.writeFile(options.testResultFilePath, JSON.stringify({ failures: 1, passes: 0 }), 'utf8');
       };
 
-      // When: runMainWithDeps を呼ぶ
-      const exitCode = await runMainWithDeps({
-        env: {
-          ...process.env,
-          DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '10',
-          DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
-          DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '1',
-        },
-        platform: 'darwin',
-        pid: process.pid,
-        now: () => nowBase + nowTick++,
-        stageExtensionToTemp: async () => {},
-        runDetachedVscodeExtensionTests: fakeRunDetached,
-      });
+      try {
+        // When: runMainWithDeps を呼ぶ
+        const exitCode = await runMainWithDeps({
+          env: {
+            ...process.env,
+            DONTFORGETEST_VSCODE_TEST_ROOT: vscodeTestRoot,
+            DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '100',
+            DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
+            DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '1',
+          },
+          platform: 'darwin',
+          pid: process.pid,
+          now: () => nowBase + nowTick++,
+          stageExtensionToTemp: async () => {},
+          runDetachedVscodeExtensionTests: fakeRunDetached,
+        });
 
-      // Then: 失敗で 1 を返す
-      assert.strictEqual(exitCode, 1, '失敗時は 1');
+        // Then: 失敗で 1 を返す
+        assert.strictEqual(exitCode, 1, '失敗時は 1');
+      } finally {
+        await fs.promises.rm(vscodeTestRoot, { recursive: true, force: true });
+      }
     });
 
     // TC-E-14: runMainWithDeps invalid JSON
@@ -3352,28 +3364,34 @@ suite('test/runTest.ts', () => {
       // Given: JSON 形式が不正な結果ファイル
       const nowBase = Date.now();
       let nowTick = 0;
+      const vscodeTestRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-vscode-test-unit-'));
       type RunDetachedOptions = Parameters<typeof runDetachedVscodeExtensionTestsWithDeps>[0];
       const fakeRunDetached = async (options: RunDetachedOptions) => {
         await fs.promises.writeFile(options.testResultFilePath, '{invalid}', 'utf8');
       };
 
-      // When: runMainWithDeps を呼ぶ
-      const exitCode = await runMainWithDeps({
-        env: {
-          ...process.env,
-          DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '10',
-          DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
-          DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '1',
-        },
-        platform: 'darwin',
-        pid: process.pid,
-        now: () => nowBase + nowTick++,
-        stageExtensionToTemp: async () => {},
-        runDetachedVscodeExtensionTests: fakeRunDetached,
-      });
+      try {
+        // When: runMainWithDeps を呼ぶ
+        const exitCode = await runMainWithDeps({
+          env: {
+            ...process.env,
+            DONTFORGETEST_VSCODE_TEST_ROOT: vscodeTestRoot,
+            DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '100',
+            DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
+            DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '1',
+          },
+          platform: 'darwin',
+          pid: process.pid,
+          now: () => nowBase + nowTick++,
+          stageExtensionToTemp: async () => {},
+          runDetachedVscodeExtensionTests: fakeRunDetached,
+        });
 
-      // Then: 失敗で 1 を返す
-      assert.strictEqual(exitCode, 1, '失敗時は 1');
+        // Then: 失敗で 1 を返す
+        assert.strictEqual(exitCode, 1, '失敗時は 1');
+      } finally {
+        await fs.promises.rm(vscodeTestRoot, { recursive: true, force: true });
+      }
     });
 
     // TC-N-29: runMainWithDeps retry path
@@ -3383,6 +3401,7 @@ suite('test/runTest.ts', () => {
       let nowTick = 0;
       let callCount = 0;
       const launchers: Array<string | undefined> = [];
+      const vscodeTestRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-vscode-test-unit-'));
       type RunDetachedOptions = Parameters<typeof runDetachedVscodeExtensionTestsWithDeps>[0];
       const fakeRunDetached = async (options: RunDetachedOptions) => {
         callCount += 1;
@@ -3394,25 +3413,30 @@ suite('test/runTest.ts', () => {
         await fs.promises.writeFile(options.testResultFilePath, JSON.stringify({ failures: 0, passes: 1 }), 'utf8');
       };
 
-      // When: runMainWithDeps を呼ぶ
-      const exitCode = await runMainWithDeps({
-        env: {
-          ...process.env,
-          DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '0',
-          DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
-          DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '2',
-        },
-        platform: 'linux',
-        pid: process.pid,
-        now: () => nowBase + nowTick++,
-        stageExtensionToTemp: async () => {},
-        runDetachedVscodeExtensionTests: fakeRunDetached,
-      });
+      try {
+        // When: runMainWithDeps を呼ぶ
+        const exitCode = await runMainWithDeps({
+          env: {
+            ...process.env,
+            DONTFORGETEST_VSCODE_TEST_ROOT: vscodeTestRoot,
+            DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '5',
+            DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
+            DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '2',
+          },
+          platform: 'linux',
+          pid: process.pid,
+          now: () => nowBase + nowTick++,
+          stageExtensionToTemp: async () => {},
+          runDetachedVscodeExtensionTests: fakeRunDetached,
+        });
 
-      // Then: 再試行後に成功する
-      assert.strictEqual(exitCode, null, '成功時は null');
-      assert.strictEqual(callCount, 2, '2回実行される');
-      assert.deepStrictEqual(launchers, ['direct', 'open'], 'launcher が切り替わる');
+        // Then: 再試行後に成功する
+        assert.strictEqual(exitCode, null, '成功時は null');
+        assert.strictEqual(callCount, 2, '2回実行される');
+        assert.deepStrictEqual(launchers, ['direct', 'open'], 'launcher が切り替わる');
+      } finally {
+        await fs.promises.rm(vscodeTestRoot, { recursive: true, force: true });
+      }
     });
 
     // TC-E-17: runMainWithDeps explicit failure throw path
@@ -3420,47 +3444,19 @@ suite('test/runTest.ts', () => {
       // Given: failures>0 の結果ファイル
       const nowBase = Date.now();
       let nowTick = 0;
+      const vscodeTestRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-vscode-test-unit-'));
       type RunDetachedOptions = Parameters<typeof runDetachedVscodeExtensionTestsWithDeps>[0];
       const fakeRunDetached = async (options: RunDetachedOptions) => {
         await fs.promises.writeFile(options.testResultFilePath, JSON.stringify({ failures: 2, passes: 0 }), 'utf8');
       };
 
-      // When: runMainWithDeps を呼ぶ
-      const exitCode = await runMainWithDeps({
-        env: {
-          ...process.env,
-          DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '0',
-          DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
-          DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '1',
-        },
-        platform: 'linux',
-        pid: process.pid,
-        now: () => nowBase + nowTick++,
-        stageExtensionToTemp: async () => {},
-        runDetachedVscodeExtensionTests: fakeRunDetached,
-      });
-
-      // Then: 失敗で 1 を返す
-      assert.strictEqual(exitCode, 1, '失敗時は 1');
-    });
-
-    // TC-E-18: main exit branch
-    test('TC-E-18: main は exitCode が数値の場合に exit を呼ぶ', async () => {
-      // Given: exitCode が 1 になる runMainWithDeps
-      const nowBase = Date.now();
-      let nowTick = 0;
-      const exitCalls: number[] = [];
-      type RunDetachedOptions = Parameters<typeof runDetachedVscodeExtensionTestsWithDeps>[0];
-      const fakeRunDetached = async (options: RunDetachedOptions) => {
-        await fs.promises.writeFile(options.testResultFilePath, JSON.stringify({ failures: 1, passes: 0 }), 'utf8');
-      };
-
-      // When: main を呼ぶ
-      await main(
-        {
+      try {
+        // When: runMainWithDeps を呼ぶ
+        const exitCode = await runMainWithDeps({
           env: {
             ...process.env,
-            DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '0',
+            DONTFORGETEST_VSCODE_TEST_ROOT: vscodeTestRoot,
+            DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '5',
             DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
             DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '1',
           },
@@ -3469,14 +3465,54 @@ suite('test/runTest.ts', () => {
           now: () => nowBase + nowTick++,
           stageExtensionToTemp: async () => {},
           runDetachedVscodeExtensionTests: fakeRunDetached,
-        },
-        (code: number) => {
-          exitCalls.push(code);
-        },
-      );
+        });
 
-      // Then: exit が呼ばれる
-      assert.deepStrictEqual(exitCalls, [1], 'exit(1) が呼ばれる');
+        // Then: 失敗で 1 を返す
+        assert.strictEqual(exitCode, 1, '失敗時は 1');
+      } finally {
+        await fs.promises.rm(vscodeTestRoot, { recursive: true, force: true });
+      }
+    });
+
+    // TC-E-18: main exit branch
+    test('TC-E-18: main は exitCode が数値の場合に exit を呼ぶ', async () => {
+      // Given: exitCode が 1 になる runMainWithDeps
+      const nowBase = Date.now();
+      let nowTick = 0;
+      const exitCalls: number[] = [];
+      const vscodeTestRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-vscode-test-unit-'));
+      type RunDetachedOptions = Parameters<typeof runDetachedVscodeExtensionTestsWithDeps>[0];
+      const fakeRunDetached = async (options: RunDetachedOptions) => {
+        await fs.promises.writeFile(options.testResultFilePath, JSON.stringify({ failures: 1, passes: 0 }), 'utf8');
+      };
+
+      try {
+        // When: main を呼ぶ
+        await main(
+          {
+            env: {
+              ...process.env,
+              DONTFORGETEST_VSCODE_TEST_ROOT: vscodeTestRoot,
+              DONTFORGETEST_TEST_RESULT_WAIT_TIMEOUT_MS: '5',
+              DONTFORGETEST_TEST_RESULT_WAIT_INTERVAL_MS: '1',
+              DONTFORGETEST_VSCODE_TEST_MAX_ATTEMPTS: '1',
+            },
+            platform: 'linux',
+            pid: process.pid,
+            now: () => nowBase + nowTick++,
+            stageExtensionToTemp: async () => {},
+            runDetachedVscodeExtensionTests: fakeRunDetached,
+          },
+          (code: number) => {
+            exitCalls.push(code);
+          },
+        );
+
+        // Then: exit が呼ばれる
+        assert.deepStrictEqual(exitCalls, [1], 'exit(1) が呼ばれる');
+      } finally {
+        await fs.promises.rm(vscodeTestRoot, { recursive: true, force: true });
+      }
     });
   });
 });

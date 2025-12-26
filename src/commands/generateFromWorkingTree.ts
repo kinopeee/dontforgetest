@@ -6,6 +6,9 @@ import { analyzeGitUnifiedDiff, extractChangedPaths, getWorkingTreeDiff, type Wo
 import { type AgentProvider } from '../providers/provider';
 import { runWithArtifacts } from './runWithArtifacts';
 
+/** プロンプトに含める差分テキストの最大文字数 */
+const MAX_DIFF_CHARS_FOR_PROMPT = 20_000;
+
 export interface GenerateFromWorkingTreeDeps {
   ensurePreflight?: () => Promise<PreflightOk | undefined>;
   getWorkingTreeDiff?: (repoRoot: string, mode: WorkingTreeDiffMode) => Promise<string>;
@@ -83,7 +86,7 @@ export async function generateTestFromWorkingTree(
     testStrategyPath,
   });
 
-  const diffForPrompt = truncateText(diffText, 20_000);
+  const diffForPrompt = truncateText(diffText, MAX_DIFF_CHARS_FOR_PROMPT);
   const finalPrompt = [
     prompt,
     '',

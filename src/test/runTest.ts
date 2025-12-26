@@ -127,6 +127,10 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 async function waitForFile(params: { filePath: string; timeoutMs: number; intervalMs: number }): Promise<boolean> {
+  // timeout=0 は「待たない」を意味する（テスト・呼び出し側での境界値扱いを安定させる）
+  if (params.timeoutMs <= 0) {
+    return await fileExists(params.filePath);
+  }
   const start = Date.now();
   while (Date.now() - start <= params.timeoutMs) {
     if (await fileExists(params.filePath)) {
@@ -288,7 +292,8 @@ function buildDirectSpawnCommand(params: {
     };
   }
   return {
-    command: params.shell ? `"${params.vscodeExecutablePath}"` : params.vscodeExecutablePath,
+    // shell=true の場合も手動でクォートしない（OS/シェルごとのクォート解釈差を避け、spawn 側に委ねる）
+    command: params.vscodeExecutablePath,
     args: params.allArgs,
   };
 }
@@ -764,7 +769,14 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
     // CI 環境（GitHub Actions 等）でテストを実行することを推奨。
     // Cursor 側のプロセス検知（VS Code起動）に巻き込まれにくくするため、
     // VS Code本体/ユーザーデータ/ワークスペース等は tmp 配下へ隔離して起動する。
-    const vscodeTestRoot = path.join(os.tmpdir(), 'dontforgetest-vscode-test');
+    // NOTE:
+    // テスト実行用のルートディレクトリは環境変数で上書き可能にする。
+    // VS Code拡張機能テスト（Extension Host）内で runMainWithDeps を単体テストする場合、
+    // 外側のテストランナーが使っている同一パスを触ってしまうと、キャッシュ削除などで相互干渉が起きうるため。
+    const vscodeTestRoot = (() => {
+      const envRoot = deps.env.DONTFORGETEST_VSCODE_TEST_ROOT?.trim();
+      return envRoot && envRoot.length > 0 ? envRoot : path.join(os.tmpdir(), 'dontforgetest-vscode-test');
+    })();
     // NOTE:
     // VS Code 本体のダウンロード/展開キャッシュはテストセッション間でも共有する。
     // 毎回削除すると初回実行が大幅に遅くなるため、通常は保持して速度を優先する。

@@ -62,7 +62,6 @@ function buildStatusBarText(count: number): string {
 function _buildBaseTooltip(count: number): string {
   return t('statusBar.tooltip', count);
 }
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const buildBaseTooltip = _buildBaseTooltip;
 
 suite('src/ui/statusBar.ts', () => {
