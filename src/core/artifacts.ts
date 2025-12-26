@@ -67,14 +67,14 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
   }
 
   const unfenced = stripCodeFence(trimmed);
-  const t = unfenced.trim();
+  const trimmedUnfenced = unfenced.trim();
 
   // 入力が JSON 配列から始まる場合は、内側の `{...}` を拾わずに全体をパースして型検証する。
   // 例: `[{"version":1}]` は JSON だが object ではないため json-not-object とする。
-  if (t.startsWith('[')) {
+  if (trimmedUnfenced.startsWith('[')) {
     let parsed: unknown;
     try {
-      parsed = JSON.parse(t);
+      parsed = JSON.parse(trimmedUnfenced);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return { ok: false, error: `invalid-json: ${msg}` };
@@ -125,13 +125,19 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
   } else {
     // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
     // 例: [] / "..." / null / true / false は JSON として成立し、object でないため json-not-object を返したい。
-    if (t.startsWith('{')) {
+    if (trimmedUnfenced.startsWith('{')) {
       // `{` はあるが閉じ `}` がない等のケースは、従来どおり no-json-object 扱いとする。
       return { ok: false, error: 'no-json-object' };
     }
-    if (t.startsWith('[') || t.startsWith('"') || t === 'null' || t === 'true' || t === 'false') {
+    if (
+      trimmedUnfenced.startsWith('[') ||
+      trimmedUnfenced.startsWith('"') ||
+      trimmedUnfenced === 'null' ||
+      trimmedUnfenced === 'true' ||
+      trimmedUnfenced === 'false'
+    ) {
       try {
-        parsed = JSON.parse(t);
+        parsed = JSON.parse(trimmedUnfenced);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return { ok: false, error: `invalid-json: ${msg}` };
@@ -186,14 +192,14 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
   }
 
   const unfenced = stripCodeFence(trimmed);
-  const t = unfenced.trim();
+  const trimmedUnfenced = unfenced.trim();
 
   // 入力が JSON 配列から始まる場合は、内側の `{...}` を拾わずに全体をパースして型検証する。
   // 例: `[{"version":1}]` は JSON だが object ではないため json-not-object とする。
-  if (t.startsWith('[')) {
+  if (trimmedUnfenced.startsWith('[')) {
     let parsed: unknown;
     try {
-      parsed = JSON.parse(t);
+      parsed = JSON.parse(trimmedUnfenced);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return { ok: false, error: `invalid-json: ${msg}` };
@@ -238,12 +244,18 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
     }
   } else {
     // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
-    if (t.startsWith('{')) {
+    if (trimmedUnfenced.startsWith('{')) {
       return { ok: false, error: 'no-json-object' };
     }
-    if (t.startsWith('[') || t.startsWith('"') || t === 'null' || t === 'true' || t === 'false') {
+    if (
+      trimmedUnfenced.startsWith('[') ||
+      trimmedUnfenced.startsWith('"') ||
+      trimmedUnfenced === 'null' ||
+      trimmedUnfenced === 'true' ||
+      trimmedUnfenced === 'false'
+    ) {
       try {
-        parsed = JSON.parse(t);
+        parsed = JSON.parse(trimmedUnfenced);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return { ok: false, error: `invalid-json: ${msg}` };
@@ -870,22 +882,22 @@ function normalizeTableCell(value: string): string {
 }
 
 function stripCodeFence(text: string): string {
-  const t = text.trim();
-  if (!t.startsWith('```')) {
-    return t;
+  const trimmedText = text.trim();
+  if (!trimmedText.startsWith('```')) {
+    return trimmedText;
   }
-  const firstNewline = t.indexOf('\n');
+  const firstNewline = trimmedText.indexOf('\n');
   if (firstNewline === -1) {
-    return t;
+    return trimmedText;
   }
-  const lastFence = t.lastIndexOf('```');
+  const lastFence = trimmedText.lastIndexOf('```');
   if (lastFence <= 0 || lastFence === 0) {
-    return t;
+    return trimmedText;
   }
   if (lastFence <= firstNewline) {
-    return t;
+    return trimmedText;
   }
-  return t.slice(firstNewline + 1, lastFence).trim();
+  return trimmedText.slice(firstNewline + 1, lastFence).trim();
 }
 
 function extractJsonObject(text: string): string | undefined {

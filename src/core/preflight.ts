@@ -48,16 +48,18 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
 
   const agentAvailable = await canSpawnCommand(cursorAgentCommand, ['--version'], workspaceRoot);
   if (!agentAvailable) {
+    const openSettingsLabel = t('cursorAgent.openSettings');
+    const openDocsLabel = t('cursorAgent.openDocs');
     const picked = await vscode.window.showErrorMessage(
       t('cursorAgent.notFound', cursorAgentCommand),
-      t('cursorAgent.openSettings'),
-      t('cursorAgent.openDocs'),
+      openSettingsLabel,
+      openDocsLabel,
     );
-    if (picked === t('cursorAgent.openSettings')) {
+    if (picked === openSettingsLabel) {
       await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.cursorAgentPath');
     }
-    if (picked === t('cursorAgent.openDocs')) {
-      await vscode.env.openExternal(vscode.Uri.parse('https://cursor.com/ja/docs/cli/overview'));
+    if (picked === openDocsLabel) {
+      await vscode.env.openExternal(vscode.Uri.parse('https://cursor.com/docs/cli/overview'));
     }
     return undefined;
   }

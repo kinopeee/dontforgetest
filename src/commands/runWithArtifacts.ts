@@ -277,7 +277,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
     // キャンセルチェック（観点表生成後）
     if (checkCancelled()) {
-      appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', t('Task was cancelled.')));
+      appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', t('task.cancelled')));
       handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
       return;
     }
@@ -345,7 +345,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
 
     // キャンセルチェック（生成後）
     if (checkCancelled()) {
-      appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', t('Task was cancelled.')));
+      appendEventToOutput(emitLogEvent(options.generationTaskId, 'warn', t('task.cancelled')));
       handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: null, timestampMs: nowMs() });
       return;
     }
@@ -520,7 +520,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
           result: { ...fallbackResult, extensionLog: testExecutionLogLines.join('\n') },
         });
         appendEventToOutput(
-          emitLogEvent(testTaskId, 'info', t('Saved test execution report: {0}', saved.relativePath ?? saved.absolutePath)),
+          emitLogEvent(testTaskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)),
         );
         // 進捗TreeView完了イベント
         handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: fallbackResult.exitCode, timestampMs: nowMs() });
@@ -541,7 +541,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
         timestamp,
         result: { ...result, extensionLog: testExecutionLogLines.join('\n') },
       });
-      appendEventToOutput(emitLogEvent(testTaskId, 'info', t('Saved test execution report: {0}', saved.relativePath ?? saved.absolutePath)));
+      appendEventToOutput(emitLogEvent(testTaskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)));
       // 進捗TreeView完了イベント
       handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
       return;
@@ -590,7 +590,7 @@ export async function runWithArtifacts(options: RunWithArtifactsOptions): Promis
       result: { ...result, extensionLog: testExecutionLogLines.join('\n') },
     });
 
-    appendEventToOutput(emitLogEvent(testTaskId, 'info', t('Saved test execution report: {0}', saved.relativePath ?? saved.absolutePath)));
+    appendEventToOutput(emitLogEvent(testTaskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)));
     // 進捗TreeView完了イベント
     handleTestGenEventForProgressView({ type: 'completed', taskId: options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
   } finally {
