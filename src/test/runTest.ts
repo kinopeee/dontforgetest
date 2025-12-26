@@ -474,8 +474,18 @@ async function main() {
       await fs.promises.mkdir(path.dirname(testResultFilePath), { recursive: true });
       await fs.promises.rm(testResultFilePath, { force: true });
 
-      const launcher: VscodeTestLauncher =
-        pinnedLauncher ?? (attemptIndex === 0 ? defaultLauncher : defaultLauncher === 'open' ? 'direct' : 'open');
+      const launcher: VscodeTestLauncher = (() => {
+        if (pinnedLauncher) {
+          return pinnedLauncher;
+        }
+        if (process.platform === 'darwin') {
+          // NOTE:
+          // macOS では direct(spawn) 起動が SIGABRT で落ちるケースがある（AppKit の _RegisterApplication 等）。
+          // 安定性優先で、未指定の場合は open 起動に固定する。
+          return 'open';
+        }
+        return attemptIndex === 0 ? defaultLauncher : defaultLauncher === 'open' ? 'direct' : 'open';
+      })();
 
       const locale = normalizeLocale(process.env.DONTFORGETEST_VSCODE_TEST_LOCALE);
       // VS Code 本体の表示言語を強制するための設定。
