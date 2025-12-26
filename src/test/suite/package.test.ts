@@ -3,6 +3,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
+ * 値が「存在する string」であることをアサートします（null/undefined/非stringは失敗）。
+ * @param value 検証対象の値
+ * @param message 失敗時メッセージ
+ */
+function assertIsDefinedString(value: unknown, message: string): asserts value is string {
+  assert.ok(value != null && typeof value === 'string', message);
+}
+
+/**
  * セマンティックバージョン形式（MAJOR.MINOR.PATCH）を検証します
  * @param version 検証対象の値（柔軟性のためunknown型を受け入れます）
  * @returns 有効なセマンティックバージョンの場合true、それ以外はfalse
@@ -94,8 +103,10 @@ suite('package.json and package-lock.json version validation', () => {
       const packageLockJson = readPackageLockJson(workspaceRoot);
 
       // When: Reading version fields from both files
-      const packageVersion = packageJson.version as string;
-      const packageLockVersion = packageLockJson.version as string;
+      const packageVersion = packageJson.version;
+      const packageLockVersion = packageLockJson.version;
+      assertIsDefinedString(packageVersion, 'package.json version should exist and be a string');
+      assertIsDefinedString(packageLockVersion, 'package-lock.json root version should exist and be a string');
 
       // Then: package.json version matches package-lock.json root version
       assert.strictEqual(packageVersion, packageLockVersion, 'package.json version should match package-lock.json root version');
@@ -110,10 +121,12 @@ suite('package.json and package-lock.json version validation', () => {
       const packageLockPackagesVersionValue = packageLockPackagesVersion?.version as string | undefined;
 
       // When: Reading version fields from both files
-      const packageVersion = packageJson.version as string;
+      const packageVersion = packageJson.version;
+      assertIsDefinedString(packageVersion, 'package.json version should exist and be a string');
 
       // Then: package.json version matches package-lock.json packages[''].version
       assert.ok(packageLockPackagesVersionValue !== undefined, 'packages[""].version should exist');
+      assertIsDefinedString(packageLockPackagesVersionValue, 'packages[""].version should exist and be a string');
       assert.strictEqual(packageVersion, packageLockPackagesVersionValue, 'package.json version should match package-lock.json packages[""].version');
     });
 
@@ -198,17 +211,18 @@ suite('package.json and package-lock.json version validation', () => {
     test('TC-E-05: Version mismatch detected within package-lock.json', () => {
       // Given: packages[''].version を root と異なる値に差し替える（擬似）
       const packageLockJson = readPackageLockJson(workspaceRoot);
-      const rootVersion = packageLockJson.version as string;
+      const rootVersion = packageLockJson.version;
+      assertIsDefinedString(rootVersion, 'package-lock.json root version should exist and be a string for this test');
       const packages = packageLockJson.packages as Record<string, unknown> | undefined;
       const rootPackageVersion = packages?.[''] as Record<string, unknown> | undefined;
 
       // When: root と packages[''].version を比較する
       // Then: 不一致が検出できる
-      if (rootPackageVersion) {
-        const mismatchedVersion = `${rootVersion}-mismatch`;
-        const testPackages = { ...packages, '': { ...rootPackageVersion, version: mismatchedVersion } };
-        assert.notStrictEqual(rootVersion, (testPackages[''] as Record<string, unknown>).version, 'Version mismatch within package-lock.json should be detected');
-      }
+      assert.ok(packages !== undefined, 'Expected "packages" to exist in package-lock.json for this test');
+      assert.ok(rootPackageVersion !== undefined, 'Expected packages[""] to exist in package-lock.json for this test');
+      const mismatchedVersion = `${rootVersion}-mismatch`;
+      const testPackages = { ...packages, '': { ...rootPackageVersion, version: mismatchedVersion } };
+      assert.notStrictEqual(rootVersion, (testPackages[''] as Record<string, unknown>).version, 'Version mismatch within package-lock.json should be detected');
     });
 
     // TC-E-06: package.json version is invalid format
