@@ -37,17 +37,33 @@ The \`dontforgetest-config\` comment at the top of this file controls output lan
 4. If a boundary value is not applicable, document the reason in \`Notes\` and omit it.
 5. If you discover missing cases later, update the table and add the corresponding tests.
 6. For minor test fixes (message adjustments, small expected value changes) without new branches, table updates are optional.
+7. Expected Results MUST be observable and verifiable (e.g., call counts, saved artifacts, emitted events). Avoid "no crash" only.
+8. Avoid tests with no concrete assertions (e.g., \`assert.ok(true)\`); every case must assert at least one specific outcome.
+9. Do not swallow failures in tests (e.g., try/catch that ignores errors). If unavoidable, record the reason and an alternative verification in \`Notes\`.
+10. For external dependencies, document mock verification points (call args, counts, output paths) in \`Expected Result\`.
+11. Split major branches into separate cases (e.g., worktree/local/skip/cancel/cleanup failure).
+
+### Example (Rule 8)
+
+\`\`\`typescript
+// BAD (Rule 8 violation)
+assert.ok(true, 'Should work');
+
+// GOOD
+assert.strictEqual(callCount, 1);
+assert.ok(fs.existsSync(reportPath));
+\`\`\`
 
 ### Template
 
 | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
 |---------|----------------------|--------------------------------------|-----------------|-------|
-| TC-N-01 | Valid input A | Equivalence – normal | Returns expected value | - |
-| TC-E-01 | null input | Boundary – null | Throws ValidationError | - |
-| TC-E-02 | empty string | Boundary – empty | Throws ValidationError | - |
-| TC-B-01 | value = 0 | Boundary – zero | Handles zero correctly | - |
-| TC-B-02 | value = MAX_INT | Boundary – max | Handles max correctly | - |
-| TC-B-03 | value = MAX_INT + 1 | Boundary – overflow | Throws RangeError | - |
+| TC-N-01 | Valid input A | Equivalence – normal | Returns expected value; saves report file | Verify saved artifact path |
+| TC-E-01 | null input | Boundary – null | Throws ValidationError with message | Verify type and message |
+| TC-E-02 | empty string | Boundary – empty | Emits validation error event | Verify event payload |
+| TC-B-01 | value = 0 | Boundary – zero | Dependency receives value=0 exactly once | Verify call count and args |
+| TC-B-02 | value = MAX_INT | Boundary – max | Handles max correctly; no overflow | Verify result and no error |
+| TC-B-03 | value = MAX_INT + 1 | Boundary – overflow | Throws RangeError with message | Verify type and message |
 
 ---
 
