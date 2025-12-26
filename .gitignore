@@ -10,6 +10,7 @@ dist
 docs/test-execution-reports/
 docs/test-perspectives/
 coverage/
+.nyc_output/
 
 # 所定フロー外の副産物（cursor-agent がルート直下に生成してしまうことがある）
 /test_perspectives*.md
