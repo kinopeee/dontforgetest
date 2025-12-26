@@ -47,41 +47,44 @@ suite('package.json and package-lock.json version validation', () => {
   const workspaceRoot = path.resolve(__dirname, '../../..');
 
   suite('Normal cases', () => {
-    // TC-N-01: package.json version field is '0.0.89'
-    test('TC-N-01: package.json version field is 0.0.89', () => {
-      // Given: package.json exists with version field updated to 0.0.89
+    // TC-N-01: package.json の version が存在し、セマンティックバージョン形式である
+    test('TC-N-01: package.json version is a valid semantic version', () => {
+      // Given: package.json が存在し version フィールドを持つ
       const packageJson = readPackageJson(workspaceRoot);
 
-      // When: Reading version field from package.json
-      const packageVersion = packageJson.version as string;
+      // When: package.json の version を取得する
+      const packageVersion = packageJson.version;
 
-      // Then: package.json version field is '0.0.89'
-      assert.strictEqual(packageVersion, '0.0.89', 'package.json version should be 0.0.89');
+      // Then: version はセマンティックバージョン形式である
+      assert.ok(isValidSemanticVersion(packageVersion), 'package.json version should be a valid semantic version');
     });
 
-    // TC-N-02: package-lock.json root version field is '0.0.89'
-    test('TC-N-02: package-lock.json root version field is 0.0.89', () => {
-      // Given: package-lock.json exists with version field updated to 0.0.89
+    // TC-N-02: package-lock.json のルート version が存在し、セマンティックバージョン形式である
+    test('TC-N-02: package-lock.json root version is a valid semantic version', () => {
+      // Given: package-lock.json が存在し version フィールドを持つ
       const packageLockJson = readPackageLockJson(workspaceRoot);
 
-      // When: Reading root version field from package-lock.json
-      const packageLockVersion = packageLockJson.version as string;
+      // When: package-lock.json のルート version を取得する
+      const packageLockVersion = packageLockJson.version;
 
-      // Then: package-lock.json root version field is '0.0.89'
-      assert.strictEqual(packageLockVersion, '0.0.89', 'package-lock.json root version should be 0.0.89');
+      // Then: ルート version はセマンティックバージョン形式である
+      assert.ok(isValidSemanticVersion(packageLockVersion), 'package-lock.json root version should be a valid semantic version');
     });
 
-    // TC-N-03: package-lock.json packages[''].version field is '0.0.89'
-    test('TC-N-03: package-lock.json packages[""].version field is 0.0.89', () => {
-      // Given: package-lock.json exists with packages[''].version field updated to 0.0.89
+    // TC-N-03: package-lock.json の packages[''].version が存在し、セマンティックバージョン形式である
+    test('TC-N-03: package-lock.json packages[""].version is a valid semantic version', () => {
+      // Given: package-lock.json が存在し packages[''] が存在する
       const packageLockJson = readPackageLockJson(workspaceRoot);
       const packageLockPackagesVersion = (packageLockJson.packages as Record<string, unknown>)?.[''] as Record<string, unknown> | undefined;
       const packageLockPackagesVersionValue = packageLockPackagesVersion?.version as string | undefined;
 
-      // When: Reading packages[''].version field from package-lock.json
-      // Then: package-lock.json packages[''].version field is '0.0.89'
+      // When: packages[''].version を取得する
+      // Then: packages[''].version が存在し、セマンティックバージョン形式である
       assert.ok(packageLockPackagesVersionValue !== undefined, 'packages[""].version should exist');
-      assert.strictEqual(packageLockPackagesVersionValue, '0.0.89', 'package-lock.json packages[""].version should be 0.0.89');
+      assert.ok(
+        isValidSemanticVersion(packageLockPackagesVersionValue),
+        'package-lock.json packages[""].version should be a valid semantic version',
+      );
     });
 
     // TC-N-04: package.json version matches package-lock.json root version
@@ -114,26 +117,14 @@ suite('package.json and package-lock.json version validation', () => {
       assert.strictEqual(packageVersion, packageLockPackagesVersionValue, 'package.json version should match package-lock.json packages[""].version');
     });
 
-    // TC-N-06: package.json version follows semantic version format
-    test('TC-N-06: package.json version follows semantic version format', () => {
-      // Given: package.json exists with version field
-      const packageJson = readPackageJson(workspaceRoot);
-
-      // When: Reading version field from package.json
-      const packageVersion = packageJson.version;
-
-      // Then: package.json version follows semantic version format
-      assert.ok(isValidSemanticVersion(packageVersion), 'package.json version should follow semantic version format');
-    });
-
-    // TC-N-07: Both files are valid JSON format
-    test('TC-N-07: Both files are valid JSON format', () => {
-      // Given: package.json and package-lock.json files exist
+    // TC-N-06: package.json / package-lock.json が JSON としてパース可能である
+    test('TC-N-06: Both files are valid JSON format', () => {
+      // Given: package.json と package-lock.json が存在する
       const packageJsonPath = path.join(workspaceRoot, 'package.json');
       const packageLockJsonPath = path.join(workspaceRoot, 'package-lock.json');
 
-      // When: Reading and parsing both files
-      // Then: Both files are valid JSON format (no exception thrown)
+      // When: 両方を読み込み JSON.parse する
+      // Then: 例外が発生しない（JSONとして妥当）
       assert.doesNotThrow(() => {
         const packageContent = fs.readFileSync(packageJsonPath, 'utf8');
         JSON.parse(packageContent);
@@ -189,31 +180,33 @@ suite('package.json and package-lock.json version validation', () => {
       assert.notStrictEqual(testPackageJson.version, '', 'Undefined should be different from empty string');
     });
 
-    // TC-E-04: package.json version is '0.0.89' but package-lock.json version is '0.0.88' (simulated)
+    // TC-E-04: package.json と package-lock.json の version が不一致（擬似）
     test('TC-E-04: Version mismatch detected between package.json and package-lock.json', () => {
-      // Given: package.json version is '0.0.89' and package-lock.json version is '0.0.88' (simulated)
+      // Given: package.json の version と異なる値を package-lock.json 側に与える（擬似）
       const packageJson = readPackageJson(workspaceRoot);
       const packageLockJson = readPackageLockJson(workspaceRoot);
       const packageVersion = packageJson.version as string;
-      const testPackageLockJson = { ...packageLockJson, version: '0.0.88' };
+      const mismatchedVersion = `${packageVersion}-mismatch`;
+      const testPackageLockJson = { ...packageLockJson, version: mismatchedVersion };
 
-      // When: Comparing versions
-      // Then: Version mismatch is detected
+      // When: バージョンを比較する
+      // Then: 不一致が検出できる
       assert.notStrictEqual(packageVersion, testPackageLockJson.version, 'Version mismatch should be detected');
     });
 
-    // TC-E-05: package-lock.json root version is '0.0.89' but packages[''].version is '0.0.88' (simulated)
+    // TC-E-05: package-lock.json の root と packages[''].version が不一致（擬似）
     test('TC-E-05: Version mismatch detected within package-lock.json', () => {
-      // Given: package-lock.json root version is '0.0.89' and packages[''].version is '0.0.88' (simulated)
+      // Given: packages[''].version を root と異なる値に差し替える（擬似）
       const packageLockJson = readPackageLockJson(workspaceRoot);
       const rootVersion = packageLockJson.version as string;
       const packages = packageLockJson.packages as Record<string, unknown> | undefined;
       const rootPackageVersion = packages?.[''] as Record<string, unknown> | undefined;
 
-      // When: Comparing root version with packages[''].version
-      // Then: Version mismatch within package-lock.json is detected
+      // When: root と packages[''].version を比較する
+      // Then: 不一致が検出できる
       if (rootPackageVersion) {
-        const testPackages = { ...packages, '': { ...rootPackageVersion, version: '0.0.88' } };
+        const mismatchedVersion = `${rootVersion}-mismatch`;
+        const testPackages = { ...packages, '': { ...rootPackageVersion, version: mismatchedVersion } };
         assert.notStrictEqual(rootVersion, (testPackages[''] as Record<string, unknown>).version, 'Version mismatch within package-lock.json should be detected');
       }
     });
