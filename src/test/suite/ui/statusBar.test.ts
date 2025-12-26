@@ -849,8 +849,7 @@ suite('src/ui/statusBar.ts', () => {
   // Given: statusBar initialized with single running task
   // When: update() is called
   // Then: Tooltip contains "Dontforgetest", "実行中: 1", task info, "クリックで出力ログを表示"
-  // FIXME: このテストはモック状態の問題で不安定。後日調査する。
-  test.skip('TC-V-03: statusBar.tooltip format verification with single task', () => {
+  test('TC-V-03: statusBar.tooltip format verification with single task', () => {
     // Given: statusBar initialized with single running task
     initializeTestGenStatusBar(context);
     assert.ok(mockStatusBar, 'Status bar is created');
@@ -866,18 +865,33 @@ suite('src/ui/statusBar.ts', () => {
     // When: update() is called (via handleTestGenEventForStatusBar)
     // Then: Tooltip contains "Dontforgetest", "実行中: 1", task info, "クリックで出力ログを表示"
     const tooltip = mockStatusBar?.tooltip ?? '';
-    // tooltipが空または未設定の場合のデバッグ
     assert.notStrictEqual(tooltip, '', `Tooltip should not be empty. mockStatusBar.tooltip=${mockStatusBar?.tooltip}`);
-    assert.ok(tooltip.includes('Dontforgetest'), `Tooltip contains title. Got: ${tooltip}`);
-    assert.ok(
-      tooltip.includes('Running: 1') || tooltip.includes('実行中: 1'),
-      `Tooltip contains running count: got "${tooltip}"`
-    );
-    assert.ok(tooltip.includes('task-1: test-label'), `Tooltip contains task info. Got: ${tooltip}`);
-    assert.ok(
-      tooltip.includes('Click to show output log') || tooltip.includes('クリックで出力ログを表示'),
-      `Tooltip contains click instruction: got "${tooltip}"`
-    );
+
+    // ローカライズ（vscode.l10n.t）のロード状況により、文言がキーのまま返ることがある。
+    // そのため、このテストでは「直書き文言」ではなく t() ベースで期待値を構築して検証する。
+    const baseTooltip = buildBaseTooltip(1);
+    const baseLines = baseTooltip.split('\n');
+    const titleLine = baseLines[0] ?? '';
+    const runningLine = baseLines.length >= 3 ? baseLines[2] : undefined;
+    const clickLine = baseLines.length >= 5 ? baseLines[baseLines.length - 1] : undefined;
+
+    assert.ok(titleLine !== '', 'base tooltip should have title line');
+    assert.ok(tooltip.includes(titleLine), `Tooltip contains title. Got: ${tooltip}`);
+
+    // タスクの詳細行（挿入される行）を検証
+    const taskLine = '- task-1: test-label';
+    assert.ok(tooltip.includes(taskLine), `Tooltip contains task info. Got: ${tooltip}`);
+
+    // baseTooltip が複数行の場合のみ、見出し→タスク→クリック案内の順序も確認する
+    if (runningLine && clickLine) {
+      const idxRunning = tooltip.indexOf(runningLine);
+      const idxTask = tooltip.indexOf(taskLine);
+      const idxClick = tooltip.lastIndexOf(clickLine);
+      assert.ok(idxRunning >= 0, `Tooltip contains running line: "${runningLine}". Got: ${tooltip}`);
+      assert.ok(idxClick >= 0, `Tooltip contains click instruction: "${clickLine}". Got: ${tooltip}`);
+      assert.ok(idxTask > idxRunning, `Task line should appear after running line. Got: ${tooltip}`);
+      assert.ok(idxClick > idxTask, `Click instruction should appear after task line. Got: ${tooltip}`);
+    }
   });
 
   // TC-V-04: statusBar.tooltip format verification with multiple tasks
