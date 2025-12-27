@@ -103,9 +103,23 @@ To output in Japanese, add a config comment at the top:
 (Write your rules here)
 ```
 
-## Basic usage (QuickPick recommended)
+## Basic usage
 
-### 1) Start generation
+### 1) Run from the panel (GUI)
+
+Run from the side panel (**`Dontforgetest: Open Panel`**).
+
+1. Choose the **commit range** (when using commit range diff)
+2. Choose the **generation target**
+   - You can select **Local / Worktree**
+   - For **uncommitted diffs, only Local is available** (Worktree cannot be selected)
+3. Click **Generate Tests**
+   - You can track progress in **Progress**
+4. After completion, open outputs from **Output**
+   - Click **Perspective table** / **Execution report** to open the latest one
+   - If applying back to **Local** failed in Worktree, you can open the **instruction prompt file** via **Manual merge**
+
+### 2) Run via QuickPick (Command Palette)
 
 1. Command palette → **`Dontforgetest: Generate Tests (QuickPick)`**
 2. Select a **source**
@@ -123,7 +137,7 @@ To output in Japanese, add a config comment at the top:
    - Progress is shown in the **Output Channel**
    - The status bar shows running tasks (click to open logs)
 
-### 2) Review outputs (perspective table / execution report)
+### 3) Review outputs (perspective table / execution report)
 
 - Perspective table: Command palette → **`Dontforgetest: Open Latest Perspective Table`**
 - Execution report: Command palette → **`Dontforgetest: Open Latest Execution Report`**
@@ -132,7 +146,7 @@ To output in Japanese, add a config comment at the top:
 ## When to use which command
 
 - **`Dontforgetest: Generate Tests (QuickPick)`**
-  - Select source / target (if needed) / model and run (recommended)
+  - Select source / target (if needed) / model and run
 - **`Dontforgetest: Open Panel`**
   - Opens the side panel (often easiest to choose Local / Worktree)
 - **`Dontforgetest: Generate from Latest Commit Diff`**
