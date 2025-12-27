@@ -1,6 +1,6 @@
 {
   "name": "dontforgetest",
-  "publisher": "local",
+  "publisher": "kinopeee",
   "displayName": "%displayName%",
   "description": "%description%",
   "version": "0.0.92",
@@ -13,7 +13,6 @@
   ],
   "main": "./out/extension.js",
   "l10n": "./l10n",
-  "activationEvents": [],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -201,7 +200,7 @@
     "coverage:runTest": "c8 -r text -r lcov npm run test:runTest",
     "test:ja": "DONTFORGETEST_VSCODE_TEST_LOCALE=ja npm test",
     "test:en": "DONTFORGETEST_VSCODE_TEST_LOCALE=en npm test",
-    "package:vsix": "npm run compile && VERSION=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce package --out \"dontforgetest-$VERSION.vsix\" --allow-missing-repository --no-rewrite-relative-links",
+    "package:vsix": "npm run compile && node ./scripts/packageVsix.cjs",
     "vsix:install": "code --install-extension \"$(ls -t dontforgetest-*.vsix | head -1)\" --force",
     "vsix:build": "npm run package:vsix",
     "vsix:build-install": "npm run package:vsix && npm run vsix:install",
@@ -230,10 +229,14 @@
     "cursor",
     "ai"
   ],
-  "author": "",
-  "license": "GPL-3.0",
+  "author": "Kinopee",
+  "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": ""
-  }
+    "url": "https://github.com/kinopeee/dontforgetest.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kinopeee/dontforgetest/issues"
+  },
+  "homepage": "https://github.com/kinopeee/dontforgetest#readme"
 }

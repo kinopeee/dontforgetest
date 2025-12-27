@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { initializeProgressTreeView, _resetForTesting as resetProgressTreeView } from '../../ui/progressTreeView';
 import { initializeOutputTreeView } from '../../ui/outputTreeView';
+import { createMockExtensionContext } from './testUtils/vscodeMocks';
 
 suite('src/extension.ts', () => {
   suite('Extension Activation', () => {
@@ -11,7 +12,7 @@ suite('src/extension.ts', () => {
     // When: Getting extension by ID
     // Then: Extension object exists
     test('TC-EXT-01: Extension existence check', () => {
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
     });
 
@@ -20,7 +21,7 @@ suite('src/extension.ts', () => {
     // Then: Extension becomes active
     test('TC-N-01: Extension activated with all changes applied', async () => {
       // Given: Extension is available
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       // When: Calling activate()
@@ -30,6 +31,25 @@ suite('src/extension.ts', () => {
 
       // Then: Extension is active without import errors
       assert.ok(ext.isActive, 'Extension should be active');
+    });
+
+    // TC-E-01: Old extension ID lookup fails
+    // Given: Extension ID 'local.dontforgetest'
+    // When: Looking up extension
+    // Then: Returns undefined
+    test('TC-E-01: Old extension ID "local.dontforgetest" is not found', function () {
+      // NOTE: ローカル環境では、アップグレード検証や手動インストールの都合で旧IDが一時的に共存している場合がある。
+      // その場合にCI前提の前提条件でテストが落ちないよう、存在するならスキップする。
+
+      // When: Looking up extension by old ID
+      const ext = vscode.extensions.getExtension('local.dontforgetest');
+
+      if (ext) {
+        this.skip();
+      }
+
+      // Then: Returns undefined
+      assert.strictEqual(ext, undefined, 'Old extension ID should not be found');
     });
   });
 
@@ -64,7 +84,7 @@ suite('src/extension.ts', () => {
     // Then: Command list does not contain 'dontforgetest.generateTestFromFile'
     test('TC-N-03: Command list does not contain deleted command', async () => {
       // Given: Extension is activated
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       if (!ext.isActive) {
@@ -86,7 +106,7 @@ suite('src/extension.ts', () => {
     // Then: Command execution fails with "command not found" error
     test('TC-E-01: Deleted command execution fails', async () => {
       // Given: Extension is activated
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       if (!ext.isActive) {
@@ -113,7 +133,7 @@ suite('src/extension.ts', () => {
     // Then: package.json does not contain 'dontforgetest.generateTestFromFile' command definition
     test('TC-E-04: package.json does not contain deleted command definition', () => {
       // Given: Extension package.json
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const packageJSON = ext.packageJSON;
@@ -136,7 +156,7 @@ suite('src/extension.ts', () => {
     // Then: At least one command is registered (boundary: not empty)
     test('TC-B-01: Command list is not empty', async () => {
       // Given: Extension is activated
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       if (!ext.isActive) {
@@ -159,7 +179,7 @@ suite('src/extension.ts', () => {
     // Then: Multiple commands are registered (boundary: more than one)
     test('TC-B-02: Multiple commands are registered', async () => {
       // Given: Extension is activated
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       if (!ext.isActive) {
@@ -182,7 +202,7 @@ suite('src/extension.ts', () => {
     // Then: All expected commands are present (boundary: maximum number)
     test('TC-B-03: All expected commands are registered (boundary: max)', async () => {
       // Given: Extension is activated
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       if (!ext.isActive) {
@@ -266,7 +286,7 @@ suite('src/extension.ts', () => {
 
     // TC-N-06: package.json validation
     test('TC-N-06: Package metadata check (Name/DisplayName)', () => {
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
       const pkg = ext.packageJSON;
       assert.strictEqual(pkg.name, 'dontforgetest');
@@ -281,7 +301,7 @@ suite('src/extension.ts', () => {
     // Then: Comment contains updated example labels (generateFromCommit, generateFromWorkingTree)
     test('TC-N-06: Event.ts comment contains updated example labels', async () => {
       // Given: Extension is available
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       // When: Reading event.ts file content
@@ -304,7 +324,7 @@ suite('src/extension.ts', () => {
     // Then: Comment does not contain old 'generateFromFile' text
     test('TC-B-10: Event.ts comment does not contain old generateFromFile text', async () => {
       // Given: Extension is available
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       // When: Reading event.ts file content
@@ -326,20 +346,20 @@ suite('src/extension.ts', () => {
   suite('Metadata & Resources', () => {
     // Given: 拡張機能がインストールされている
     // When: package.json のメタデータを取得する
-    // Then: ライセンスが GPL-3.0 であること
+    // Then: ライセンスが GPL-3.0-only であること
     test('TC-META-01: ライセンス情報の確認', () => {
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
 
       const packageJSON = ext.packageJSON;
-      assert.strictEqual(packageJSON.license, 'GPL-3.0', 'ライセンスが GPL-3.0 ではありません');
+      assert.strictEqual(packageJSON.license, 'GPL-3.0-only', 'ライセンスが GPL-3.0-only ではありません');
     });
 
     // Given: 拡張機能がインストールされている
     // When: LICENSE ファイルの存在を確認する
     // Then: ファイルが存在すること
     test('TC-META-02: ライセンスファイルの存在確認', async () => {
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
 
       const licenseUri = vscode.Uri.file(path.join(ext.extensionPath, 'LICENSE'));
@@ -355,7 +375,7 @@ suite('src/extension.ts', () => {
     // When: バージョンを確認する
     // Then: セマンティックバージョニング形式（x.y.z）であること
     test('TC-RES-01: パッケージバージョンの形式確認', () => {
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
 
       const packageJSON = ext.packageJSON;
@@ -376,7 +396,7 @@ suite('src/extension.ts', () => {
     // Then: Version field is valid semantic version format
     test('TC-PKG-01: package.json version field is valid semantic version', () => {
       // Given: package.json file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const packageJsonPath = path.join(ext.extensionPath, 'package.json');
@@ -398,7 +418,7 @@ suite('src/extension.ts', () => {
     // Then: Version fields are synchronized
     test('TC-PKG-02: package-lock.json version field matches package.json version', () => {
       // Given: package.json and package-lock.json files exist
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const packageJsonPath = path.join(ext.extensionPath, 'package.json');
@@ -429,7 +449,7 @@ suite('src/extension.ts', () => {
     // Then: File read operation throws error or returns null
     test('TC-PKG-03: package.json file does not exist', () => {
       // Given: Non-existent file path
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const nonExistentPath = path.join(ext.extensionPath, 'non-existent-package.json');
@@ -447,7 +467,7 @@ suite('src/extension.ts', () => {
     // Then: File read operation throws error or returns null
     test('TC-PKG-04: package-lock.json file does not exist', () => {
       // Given: Non-existent file path
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const nonExistentPath = path.join(ext.extensionPath, 'non-existent-package-lock.json');
@@ -525,7 +545,7 @@ suite('src/extension.ts', () => {
     // Then: Both files are updated to version 0.0.72 and versions are synchronized
     test('TC-N-01: package.json and package-lock.json exist with valid version fields', () => {
       // Given: package.json and package-lock.json files exist
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const packageJsonPath = path.join(ext.extensionPath, 'package.json');
@@ -561,7 +581,7 @@ suite('src/extension.ts', () => {
     // Then: package.json version is updated to 0.0.72 and maintains valid semver format (x.y.z)
     test('TC-N-02: package.json version field exists and is valid semver string', () => {
       // Given: package.json file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const packageJsonPath = path.join(ext.extensionPath, 'package.json');
@@ -583,7 +603,7 @@ suite('src/extension.ts', () => {
     // Then: Both package-lock.json root version and packages[""] version are updated to 0.0.72
     test('TC-N-03: package-lock.json root version and packages[""] version exist', () => {
       // Given: package-lock.json file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const packageLockJsonPath = path.join(ext.extensionPath, 'package-lock.json');
@@ -613,7 +633,7 @@ suite('src/extension.ts', () => {
     // Then: Trailing whitespace is removed, file formatting is consistent
     test('TC-N-04: extension.test.ts file exists with trailing whitespace', () => {
       // Given: extension.test.ts file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const extensionTestPath = path.join(ext.extensionPath, 'src', 'test', 'suite', 'extension.test.ts');
@@ -642,7 +662,7 @@ suite('src/extension.ts', () => {
     // Then: File changes are applied correctly without breaking functionality
     test('TC-N-05: progressTreeView.ts file exists', () => {
       // Given: progressTreeView.ts file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const progressTreeViewPath = path.join(ext.extensionPath, 'src', 'ui', 'progressTreeView.ts');
@@ -908,7 +928,7 @@ suite('src/extension.ts', () => {
     // Then: File not found error is thrown
     test('TC-B-05: package.json file does not exist', () => {
       // Given: Non-existent file path
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const nonExistentPath = path.join(ext.extensionPath, 'non-existent-package.json');
@@ -926,7 +946,7 @@ suite('src/extension.ts', () => {
     // Then: File not found error is thrown or package-lock.json is created
     test('TC-B-06: package-lock.json file does not exist', () => {
       // Given: Non-existent file path
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const nonExistentPath = path.join(ext.extensionPath, 'non-existent-package-lock.json');
@@ -994,7 +1014,7 @@ suite('src/extension.ts', () => {
     // Then: package.json version が semver であり、package-lock.json の root version と一致する
     test('TC-VERSION-N-01: package-lock.json root version matches package.json version', () => {
       // Given: package.json と package-lock.json が存在する
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const packageJsonPath = path.join(ext.extensionPath, 'package.json');
@@ -1027,7 +1047,7 @@ suite('src/extension.ts', () => {
     // Then: packages[""].version が package.json version と一致する
     test('TC-VERSION-N-02: package-lock.json version matches package.json version', () => {
       // Given: package.json と package-lock.json が存在する
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const packageJsonPath = path.join(ext.extensionPath, 'package.json');
@@ -1061,7 +1081,7 @@ suite('src/extension.ts', () => {
     // Then: Documentation correctly describes testExecutionRunner setting with default value 'extension'
     test('TC-DOC-N-01: docs/usage.md contains testExecutionRunner setting documentation', () => {
       // Given: docs/usage.md file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const usageMdPath = path.join(ext.extensionPath, 'docs', 'usage.md');
@@ -1083,7 +1103,7 @@ suite('src/extension.ts', () => {
     // When: ファイル内容を読み込む
     // Then: 有効なSVGであり、更新されたパス（試験管）を含んでいること
     test('TC-RES-02: dontforgetest-view.svg の内容確認', async () => {
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
  
       const svgUri = vscode.Uri.file(path.join(ext.extensionPath, 'media', 'dontforgetest-view.svg'));
@@ -1105,6 +1125,109 @@ suite('src/extension.ts', () => {
       );
       assert.ok(svgContent.includes('d="M7.5 16h9"'), '液体の線が含まれていること');
     });
+
+    // TC-N-03: .vscodeignore check
+    // Given: .vscodeignore file exists
+    // When: Reading .vscodeignore content
+    // Then: It contains .claude/, coverage/, and *.vsix
+    test('TC-N-03: .vscodeignore contains excluded patterns', async () => {
+      // Given: .vscodeignore file path
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      const vscodeIgnorePath = path.join(ext.extensionPath, '.vscodeignore');
+
+      // When: Reading file
+      const content = fs.readFileSync(vscodeIgnorePath, 'utf8');
+
+      // Then: Patterns exist
+      // NOTE: ここではパッケージング結果（実際に除外されるか）までは検証せず、設定の退行防止としてパターンの存在のみ確認する。
+      assert.ok(content.includes('.claude/**'), '.claude/** should be ignored');
+      assert.ok(content.includes('coverage/**'), 'coverage/** should be ignored');
+      assert.ok(content.includes('*.vsix'), '*.vsix should be ignored');
+    });
+
+    // TC-N-04: package.json metadata check (Repository/Bugs/Homepage)
+    // Given: package.json
+    // When: Checking metadata fields
+    // Then: repository, bugs, and homepage are correctly set
+    test('TC-N-04: package.json contains repository, bugs, and homepage URLs', () => {
+      // Given: Extension package.json
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
+      assert.ok(ext, 'Extension not found');
+      const pkg = ext.packageJSON;
+
+      // When & Then: Checking metadata fields
+      assert.strictEqual(pkg.repository?.url, 'https://github.com/kinopeee/dontforgetest.git', 'Repository URL mismatch');
+      assert.strictEqual(pkg.bugs?.url, 'https://github.com/kinopeee/dontforgetest/issues', 'Bugs URL mismatch');
+      assert.strictEqual(pkg.homepage, 'https://github.com/kinopeee/dontforgetest#readme', 'Homepage URL mismatch');
+    });
+
+    // NOTE:
+    // ここからの TC-META-B-01 ～ TC-META-B-05 は「実際の拡張機能の package.json（ext.packageJSON）」を検証するテストではない。
+    // モック（`const pkg = { ... }`）を使い、package.json 由来の“データ構造”が境界値でも破綻しない（扱える）ことを確認するための構造的な境界値テスト。
+
+    // TC-META-B-01: Empty publisher check (構造的検証 / モックデータ使用)
+    // Given: package.json with empty publisher
+    // When: Checking publisher field
+    // Then: Field is empty string
+    test('TC-META-B-01: package.json publisher can be empty in data structure', () => {
+      // Given: Mock package.json data with empty publisher
+      const pkg = { publisher: "" };
+      
+      // When & Then: Field is empty string
+      assert.strictEqual(pkg.publisher, "", 'Publisher should be empty string');
+    });
+
+    // TC-META-B-02: Missing license check (構造的検証 / モックデータ使用)
+    // Given: package.json with missing license
+    // When: Checking license field
+    // Then: Field is undefined
+    test('TC-META-B-02: package.json license can be missing in data structure', () => {
+      // Given: Mock package.json data without license
+      const pkg: { license?: string } = {};
+      
+      // When & Then: Field is undefined
+      assert.strictEqual(pkg.license, undefined, 'License should be undefined');
+    });
+
+    // TC-META-B-03: Version 0.0.0 check (構造的検証 / モックデータ使用)
+    // Given: package.json with version 0.0.0
+    // When: Checking version field
+    // Then: Version is 0.0.0
+    test('TC-META-B-03: package.json version 0.0.0 is valid semver', () => {
+      // Given: Mock package.json data with version 0.0.0
+      const pkg = { version: "0.0.0" };
+      const semverPattern = /^\d+\.\d+\.\d+$/;
+      
+      // When & Then: Version matches semver pattern
+      assert.ok(semverPattern.test(pkg.version), '0.0.0 should be valid semver');
+      assert.strictEqual(pkg.version, "0.0.0", 'Version should be 0.0.0');
+    });
+
+    // TC-META-B-04: 1-char author check (構造的検証 / モックデータ使用)
+    // Given: author field with 1 character
+    // When: Checking author field
+    // Then: author is 1 character
+    test('TC-META-B-04: package.json author field can be 1 character', () => {
+      // Given: Mock package.json data with 1-char author
+      const pkg = { author: "A" };
+      
+      // When & Then: author is 1 character
+      assert.strictEqual(pkg.author, "A", 'Author should be "A"');
+    });
+
+    // TC-META-B-05: Long description check (構造的検証 / モックデータ使用)
+    // Given: description field with very long string
+    // When: Checking description length
+    // Then: length matches the long string
+    test('TC-META-B-05: package.json description can be very long', () => {
+      // Given: Mock package.json data with long description
+      const longDescription = "A".repeat(1000);
+      const pkg = { description: longDescription };
+      
+      // When & Then: length matches
+      assert.strictEqual(pkg.description.length, 1000, 'Description should have length 1000');
+    });
   });
 
   suite('File Formatting', () => {
@@ -1114,7 +1237,7 @@ suite('src/extension.ts', () => {
     // Then: All trailing whitespace is removed, code formatting is consistent
     test('TC-FMT-01: extension.test.ts contains trailing whitespace on multiple lines', () => {
       // Given: extension.test.ts file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const extensionTestPath = path.join(ext.extensionPath, 'src', 'test', 'suite', 'extension.test.ts');
@@ -1140,7 +1263,7 @@ suite('src/extension.ts', () => {
     // Then: Line spacing is normalized, file is properly formatted
     test('TC-FMT-02: extension.test.ts has inconsistent line spacing', () => {
       // Given: extension.test.ts file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const extensionTestPath = path.join(ext.extensionPath, 'src', 'test', 'suite', 'extension.test.ts');
@@ -1171,7 +1294,7 @@ suite('src/extension.ts', () => {
     // Then: Empty file is handled gracefully or error is thrown
     test('TC-FMT-03: extension.test.ts file is empty', () => {
       // Given: extension.test.ts file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const extensionTestPath = path.join(ext.extensionPath, 'src', 'test', 'suite', 'extension.test.ts');
@@ -1192,7 +1315,7 @@ suite('src/extension.ts', () => {
     // Then: File changes are applied correctly, functionality remains intact
     test('TC-PROG-01: progressTreeView.ts file exists and is modified', () => {
       // Given: progressTreeView.ts file exists
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const progressTreeViewPath = path.join(ext.extensionPath, 'src', 'ui', 'progressTreeView.ts');
@@ -1215,7 +1338,7 @@ suite('src/extension.ts', () => {
     // Then: File not found error is thrown or file is created
     test('TC-PROG-02: progressTreeView.ts file does not exist', () => {
       // Given: Non-existent file path
-      const ext = vscode.extensions.getExtension('local.dontforgetest');
+      const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
 
       const nonExistentPath = path.join(ext.extensionPath, 'src', 'ui', 'non-existent-progressTreeView.ts');
@@ -1326,6 +1449,20 @@ suite('src/extension.ts', () => {
 
       // Then: OutputTreeView initialized successfully
       assert.ok(context.subscriptions.length > initialSubscriptionCount, 'Subscriptions are registered');
+    });
+  });
+
+  suite('Mock Verification', () => {
+    // TC-N-05: createMockExtensionContext extension ID check
+    // Given: createMockExtensionContext is called
+    // When: Checking returned context.extension.id
+    // Then: ID matches 'kinopeee.dontforgetest.test'
+    test('TC-N-05: createMockExtensionContext returns correct extension ID', () => {
+      // Given: Mock context
+      const context = createMockExtensionContext();
+
+      // When & Then: ID matches 'kinopeee.dontforgetest.test'
+      assert.strictEqual(context.extension.id, 'kinopeee.dontforgetest.test');
     });
   });
 });

@@ -181,7 +181,7 @@ export function createMockExtensionContext(options?: MockExtensionContextOptions
 
   const extensionExports: unknown = {};
   const extension: vscode.Extension<unknown> = {
-    id: 'local.dontforgetest.test',
+    id: 'kinopeee.dontforgetest.test',
     extensionUri,
     extensionPath,
     isActive: false,

@@ -2,6 +2,7 @@
 .vscode-test/**
 node_modules/**
 .cursor/**
+.claude/**
 src/**
 .gitignore
 .yarnrc
@@ -14,6 +15,10 @@ out/test/**
 docs/test-*.md
 docs/test-execution-reports/**
 docs/test-perspectives/**
+# coverage は成果物ではないためパッケージに含めない
+coverage/**
+# ローカル生成のVSIXはパッケージに含めない
+*.vsix
 # ローカライズリソースは拡張機能の動作に必須のため、他の除外ルールが増えても必ずパッケージに含める
 l10n/**
 !l10n/**
