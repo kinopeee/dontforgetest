@@ -67,6 +67,7 @@ suite('core/testRunner.ts', () => {
     assert.ok(result.stdout.includes('truncated'), 'Stdout should include the truncated marker');
     assert.ok(result.stdout.length < largeSize, 'Stdout should be smaller than the original output size');
     assert.ok(result.stdout.length > 0, 'Stdout should not be empty');
+    assert.strictEqual(result.stdoutTruncated, true, 'stdoutTruncated should be true');
   });
 
   // TC-TRUNNER-N-01
@@ -90,7 +91,7 @@ suite('core/testRunner.ts', () => {
     const result = await runTestCommand({ command, cwd });
 
     // Then: Non-zero exit (or errorMessage) and executionRunner is "extension"
-    // NOTE: shell=true の場合、コマンド未発見は spawn error ではなく exitCode=127 等で表現されることがある。
+    // NOTE: With shell=true, "command not found" may surface as exitCode=127 rather than a spawn error.
     assert.ok(
       result.exitCode !== 0 || (typeof result.errorMessage === 'string' && result.errorMessage.trim().length > 0),
       'Should fail or set errorMessage',
@@ -131,6 +132,7 @@ suite('core/testRunner.ts', () => {
     assert.strictEqual(result.exitCode, 0);
     assert.ok(!result.stdout.includes('... (stdout truncated)'), 'stdout must not include truncation marker');
     assert.strictEqual(result.stdout.length, maxCaptureBytes, 'stdout length should be exactly maxCaptureBytes');
+    assert.strictEqual(result.stdoutTruncated, false, 'stdoutTruncated should be false');
     assert.strictEqual(result.executionRunner, 'extension');
   });
 
@@ -147,7 +149,59 @@ suite('core/testRunner.ts', () => {
     assert.strictEqual(result.exitCode, 0);
     assert.ok(result.stdout.includes('... (stdout truncated)'), 'stdout must include truncation marker');
     assert.ok(result.stdout.length <= maxCaptureBytes + '... (stdout truncated)'.length + 10, 'stdout should be capped');
+    assert.strictEqual(result.stdoutTruncated, true, 'stdoutTruncated should be true');
     assert.strictEqual(result.executionRunner, 'extension');
+  });
+
+  test('TC-RUNNER-TRUNC-B-FALSE-01: runTestCommand returns stdoutTruncated=false and stderrTruncated=false and does not append truncation markers', async () => {
+    // Given: A command that writes small outputs to both stdout and stderr
+    const command = nodeEval(`process.stdout.write('ok'); process.stderr.write('warn');`);
+
+    // When: runTestCommand is called
+    const result = await runTestCommand({ command, cwd });
+
+    // Then: No truncation markers exist and both flags are false
+    assert.strictEqual(result.exitCode, 0);
+    assert.strictEqual(result.stdout, 'ok');
+    assert.strictEqual(result.stderr, 'warn');
+    assert.ok(!result.stdout.includes('... (stdout truncated)'), 'stdout must not include truncation marker');
+    assert.ok(!result.stderr.includes('... (stderr truncated)'), 'stderr must not include truncation marker');
+    assert.strictEqual(result.stdoutTruncated, false);
+    assert.strictEqual(result.stderrTruncated, false);
+  });
+
+  test('TC-RUNNER-TRUNC-N-01: runTestCommand includes stdoutTruncated/stderrTruncated booleans in the result', async function () {
+    this.timeout(20000);
+    // Given: A command that produces very large stdout and small stderr
+    const largeSize = 6 * 1024 * 1024;
+    const command = nodeEval(`process.stdout.write('a'.repeat(${largeSize})); process.stderr.write('e');`);
+
+    // When: runTestCommand is called
+    const result = await runTestCommand({ command, cwd });
+
+    // Then: stdout is truncated, stderr is not truncated, and flags reflect it
+    assert.strictEqual(result.exitCode, 0);
+    assert.strictEqual(result.stderrTruncated, false);
+    assert.strictEqual(result.stdoutTruncated, true);
+    assert.ok(result.stdout.includes('... (stdout truncated)'), 'stdout must include truncation marker');
+    assert.ok(!result.stderr.includes('... (stderr truncated)'), 'stderr must not include truncation marker');
+  });
+
+  test('TC-RUNNER-TRUNC-B-TRUE-01: runTestCommand appends truncation markers and sets both truncation flags when both streams exceed max', async function () {
+    this.timeout(25000);
+    // Given: A command that produces very large stdout and stderr
+    const largeSize = 6 * 1024 * 1024;
+    const command = nodeEval(`process.stdout.write('a'.repeat(${largeSize})); process.stderr.write('b'.repeat(${largeSize}));`);
+
+    // When: runTestCommand is called
+    const result = await runTestCommand({ command, cwd });
+
+    // Then: Both streams are truncated and both flags are true
+    assert.strictEqual(result.exitCode, 0);
+    assert.strictEqual(result.stdoutTruncated, true);
+    assert.strictEqual(result.stderrTruncated, true);
+    assert.ok(result.stdout.includes('... (stdout truncated)'), 'stdout must include truncation marker');
+    assert.ok(result.stderr.includes('... (stderr truncated)'), 'stderr must include truncation marker');
   });
 
   test('TC-TRUN-ENV-N-01: merges options.env into process.env and options.env takes precedence', async () => {

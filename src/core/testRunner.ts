@@ -81,6 +81,8 @@ export async function runTestCommand(options: RunTestCommandOptions): Promise<Te
         durationMs,
         stdout: stdoutTruncated ? `${stdout}\n... (stdout truncated)` : stdout,
         stderr: stderrTruncated ? `${stderr}\n... (stderr truncated)` : stderr,
+        stdoutTruncated,
+        stderrTruncated,
         errorMessage: err.message,
         executionRunner: 'extension',
       });
@@ -96,6 +98,8 @@ export async function runTestCommand(options: RunTestCommandOptions): Promise<Te
         durationMs,
         stdout: stdoutTruncated ? `${stdout}\n... (stdout truncated)` : stdout,
         stderr: stderrTruncated ? `${stderr}\n... (stderr truncated)` : stderr,
+        stdoutTruncated,
+        stderrTruncated,
         executionRunner: 'extension',
       });
     });

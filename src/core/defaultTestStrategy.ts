@@ -93,6 +93,12 @@ assert.ok(fs.existsSync(reportPath));
 - [ ] External dependency failures (API, DB, messaging) if applicable
 - [ ] Exception types AND error messages
 
+### Localization Assertions (t(...))
+
+1. Avoid strict string equality for localized output unless the literal is intentionally fixed.
+2. Prefer checks that the localized value is non-empty and does not equal the raw key.
+3. Ensure placeholders are resolved (e.g., no "{0}" or "\${...}" remains).
+
 ---
 
 ## 3. Given / When / Then Comments
@@ -181,6 +187,7 @@ Before completing a test task, verify:
 - [ ] Given/When/Then comments on every test
 - [ ] Exception types AND messages are verified
 - [ ] Boundary values are covered (0, min, max, ±1, empty, null)
+- [ ] Localized strings avoid strict matching unless required; no raw key/placeholder leaks
 - [ ] Test execution command is documented
 - [ ] Coverage is reviewed
 

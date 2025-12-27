@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import { TestGenerationSession, __test__ } from '../../../../commands/runWithArtifacts/testGenerationSession';
 
 suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
@@ -117,7 +118,11 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       run: () => ({ taskId: 'dummy-task', dispose: () => {} }),
     };
 
-    const createSession = (workspaceRoot: string, settingsOverride?: Record<string, unknown>) => {
+    const createSession = (
+      workspaceRoot: string,
+      settingsOverride?: Record<string, unknown>,
+      extensionContextOverride?: unknown,
+    ) => {
       return new TestGenerationSession({
         provider: dummyProvider,
         workspaceRoot,
@@ -137,6 +142,7 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
           enablePreTestCheck: false,
           ...(settingsOverride ?? {}),
         },
+        extensionContext: extensionContextOverride as import('vscode').ExtensionContext,
       });
     };
 
@@ -148,20 +154,36 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       return filePath;
     };
 
-    test('TC-TGS-ENV-N-01: buildTestResultEnv sets DONTFORGETEST_TEST_RESULT_FILE to <workspace>/.vscode-test/test-result.json', () => {
+    test('TC-SES-TRP-N-01: resolveTestResultFilePath(testWorkspaceRoot) returns <root>/.vscode-test/test-result.json', () => {
       // Given: A session and a workspace root
       const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
       workspaceRoots.push(workspaceRoot);
       const session = createSession(workspaceRoot);
 
-      // When: buildTestResultEnv is called
-      const buildTestResultEnv = (session as unknown as { buildTestResultEnv: (root: string) => NodeJS.ProcessEnv }).buildTestResultEnv.bind(
+      // When: resolveTestResultFilePath is called
+      const resolveTestResultFilePath = (session as unknown as { resolveTestResultFilePath: (root: string) => string })
+        .resolveTestResultFilePath.bind(session);
+      const filePath = resolveTestResultFilePath(workspaceRoot);
+
+      // Then: It matches path.join(...) for the workspace root
+      assert.strictEqual(filePath, path.join(workspaceRoot, '.vscode-test', 'test-result.json'));
+    });
+
+    test('TC-SES-ENV-N-01: buildTestResultEnv(testResultFilePath) sets DONTFORGETEST_TEST_RESULT_FILE to the provided file path', () => {
+      // Given: A session and a resolved test result file path
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const session = createSession(workspaceRoot);
+      const testResultFilePath = path.join(workspaceRoot, '.vscode-test', 'test-result.json');
+
+      // When: buildTestResultEnv is called with a file path
+      const buildTestResultEnv = (session as unknown as { buildTestResultEnv: (filePath: string) => NodeJS.ProcessEnv }).buildTestResultEnv.bind(
         session,
       );
-      const env = buildTestResultEnv(workspaceRoot);
+      const env = buildTestResultEnv(testResultFilePath);
 
-      // Then: It points to the workspace-local test-result.json path
-      assert.strictEqual(env.DONTFORGETEST_TEST_RESULT_FILE, path.join(workspaceRoot, '.vscode-test', 'test-result.json'));
+      // Then: It uses the given file path verbatim
+      assert.strictEqual(env.DONTFORGETEST_TEST_RESULT_FILE, testResultFilePath);
     });
 
     test('TC-TGS-READ-E-01: readTestResultFile returns undefined when test-result.json does not exist', async () => {
@@ -360,14 +382,18 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       assert.strictEqual(enriched, original);
     });
 
-    test('TC-TGS-N-01: runTestExecution passes enriched result (with testResult) to saveTestExecutionReport', async () => {
+    test('TC-SES-ATTACH-N-01: runTestExecution passes enriched result (with testResult + testResultPath + extensionVersion) to saveTestExecutionReport', async () => {
       // Given: A session with stubbed runTestCommand and saveTestExecutionReport, and a fresh test-result.json
       const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
       workspaceRoots.push(workspaceRoot);
       fs.writeFileSync(path.join(workspaceRoot, 'package.json'), JSON.stringify({ scripts: { test: 'echo ok' } }), 'utf8');
       ensureTestResultFile(workspaceRoot, JSON.stringify({ timestamp: Date.now(), failures: 0, tests: [], failedTests: [] }));
 
-      const session = createSession(workspaceRoot);
+      const session = createSession(
+        workspaceRoot,
+        undefined,
+        { extension: { packageJSON: { version: ' 1.2.3 ' } } } as unknown,
+      );
 
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
@@ -402,9 +428,11 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
         const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
         await runTestExecution(0);
 
-        // Then: saveTestExecutionReport receives a result that includes testResult
+        // Then: saveTestExecutionReport receives a result that includes testResult + metadata
         assert.ok(captured, 'Expected saveTestExecutionReport to be called');
         assert.ok(captured?.testResult, 'Expected testResult to be attached');
+        assert.strictEqual(captured?.testResultPath, path.join(workspaceRoot, '.vscode-test', 'test-result.json'));
+        assert.strictEqual(captured?.extensionVersion, '1.2.3');
         assert.ok(capturedEnv, 'Expected env to be passed to runTestCommand');
         assert.strictEqual(capturedEnv?.DONTFORGETEST_TEST_RESULT_FILE, path.join(workspaceRoot, '.vscode-test', 'test-result.json'));
       } finally {
@@ -413,7 +441,7 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       }
     });
 
-    test('TC-TGS-A-01: runTestExecution does not attach stale test-result.json to saveTestExecutionReport', async () => {
+    test('TC-SES-ATTACH-E-01: runTestExecution does not attach stale test-result.json but still passes testResultPath + extensionVersion', async () => {
       // Given: A stale test-result.json (timestamp/mtime are old)
       const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
       workspaceRoots.push(workspaceRoot);
@@ -421,7 +449,11 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       const filePath = ensureTestResultFile(workspaceRoot, JSON.stringify({ timestamp: 0, failures: 0, tests: [], failedTests: [] }));
       fs.utimesSync(filePath, new Date(0), new Date(0));
 
-      const session = createSession(workspaceRoot);
+      const session = createSession(
+        workspaceRoot,
+        undefined,
+        { extension: { packageJSON: { version: ' 1.2.3 ' } } } as unknown,
+      );
 
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
@@ -456,14 +488,234 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
         const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
         await runTestExecution(0);
 
-        // Then: saveTestExecutionReport receives a result without testResult
+        // Then: saveTestExecutionReport receives a result without testResult but with testResultPath + extensionVersion
         assert.ok(captured, 'Expected saveTestExecutionReport to be called');
         assert.strictEqual(captured?.testResult, undefined);
+        assert.strictEqual(captured?.testResultPath, path.join(workspaceRoot, '.vscode-test', 'test-result.json'));
+        assert.strictEqual(captured?.extensionVersion, '1.2.3');
         assert.ok(capturedEnv, 'Expected env to be passed to runTestCommand');
         assert.strictEqual(capturedEnv?.DONTFORGETEST_TEST_RESULT_FILE, path.join(workspaceRoot, '.vscode-test', 'test-result.json'));
       } finally {
         artifacts.saveTestExecutionReport = originalSave;
         testRunner.runTestCommand = originalRun;
+      }
+    });
+
+    test('TC-SES-EXTVER-N-01: resolveExtensionVersion prefers extensionContext version and trims whitespace', () => {
+      // Given: A session with a context-provided version and a self extension version also available
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+
+      const originalGetExtension = vscode.extensions.getExtension;
+      (vscode.extensions as unknown as { getExtension: typeof vscode.extensions.getExtension }).getExtension = (() => {
+        return { packageJSON: { version: '0.0.103' } } as unknown as vscode.Extension<unknown>;
+      }) as typeof vscode.extensions.getExtension;
+
+      const session = createSession(
+        workspaceRoot,
+        undefined,
+        { extension: { packageJSON: { version: ' 1.2.3 ' } } } as unknown,
+      );
+
+      try {
+        // When: resolveExtensionVersion is called
+        const resolveExtensionVersion = (session as unknown as { resolveExtensionVersion: () => string | undefined }).resolveExtensionVersion.bind(
+          session,
+        );
+        const resolved = resolveExtensionVersion();
+
+        // Then: It prefers the context version and trims it
+        assert.strictEqual(resolved, '1.2.3');
+      } finally {
+        (vscode.extensions as unknown as { getExtension: typeof originalGetExtension }).getExtension = originalGetExtension;
+      }
+    });
+
+    test('TC-SES-EXTVER-B-EMPTY-01: resolveExtensionVersion ignores empty context version and falls back to self extension version', async () => {
+      // Given: A session with empty context version and a stubbed vscode.extensions.getExtension
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      fs.writeFileSync(path.join(workspaceRoot, 'package.json'), JSON.stringify({ scripts: { test: 'echo ok' } }), 'utf8');
+
+      const originalGetExtension = vscode.extensions.getExtension;
+      (vscode.extensions as unknown as { getExtension: typeof vscode.extensions.getExtension }).getExtension = (() => {
+        return { packageJSON: { version: '0.0.103' } } as unknown as vscode.Extension<unknown>;
+      }) as typeof vscode.extensions.getExtension;
+
+      const session = createSession(
+        workspaceRoot,
+        undefined,
+        { extension: { packageJSON: { version: '' } } } as unknown,
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+
+      const originalSave = artifacts.saveTestExecutionReport;
+      const originalRun = testRunner.runTestCommand;
+
+      let captured: import('../../../../core/artifacts').TestExecutionResult | undefined;
+      artifacts.saveTestExecutionReport = (async (params: { result: import('../../../../core/artifacts').TestExecutionResult }) => {
+        captured = params.result;
+        return { absolutePath: '/tmp/report.md' };
+      }) as unknown as typeof artifacts.saveTestExecutionReport;
+      testRunner.runTestCommand = (async () => {
+        return { command: 'npm test', cwd: workspaceRoot, exitCode: 0, signal: null, durationMs: 1, stdout: '', stderr: '' };
+      }) as unknown as typeof testRunner.runTestCommand;
+
+      try {
+        // When: runTestExecution is called
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
+        await runTestExecution(0);
+
+        // Then: The saved result uses the self version (fallback)
+        assert.ok(captured);
+        assert.strictEqual(captured?.extensionVersion, '0.0.103');
+      } finally {
+        artifacts.saveTestExecutionReport = originalSave;
+        testRunner.runTestCommand = originalRun;
+        (vscode.extensions as unknown as { getExtension: typeof originalGetExtension }).getExtension = originalGetExtension;
+      }
+    });
+
+    test('TC-SES-EXTVER-B-WS-01: resolveExtensionVersion ignores whitespace-only context version and falls back to self extension version', async () => {
+      // Given: A session with whitespace-only context version and a stubbed vscode.extensions.getExtension
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      fs.writeFileSync(path.join(workspaceRoot, 'package.json'), JSON.stringify({ scripts: { test: 'echo ok' } }), 'utf8');
+
+      const originalGetExtension = vscode.extensions.getExtension;
+      (vscode.extensions as unknown as { getExtension: typeof vscode.extensions.getExtension }).getExtension = (() => {
+        return { packageJSON: { version: '0.0.103' } } as unknown as vscode.Extension<unknown>;
+      }) as typeof vscode.extensions.getExtension;
+
+      const session = createSession(
+        workspaceRoot,
+        undefined,
+        { extension: { packageJSON: { version: ' ' } } } as unknown,
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+
+      const originalSave = artifacts.saveTestExecutionReport;
+      const originalRun = testRunner.runTestCommand;
+
+      let captured: import('../../../../core/artifacts').TestExecutionResult | undefined;
+      artifacts.saveTestExecutionReport = (async (params: { result: import('../../../../core/artifacts').TestExecutionResult }) => {
+        captured = params.result;
+        return { absolutePath: '/tmp/report.md' };
+      }) as unknown as typeof artifacts.saveTestExecutionReport;
+      testRunner.runTestCommand = (async () => {
+        return { command: 'npm test', cwd: workspaceRoot, exitCode: 0, signal: null, durationMs: 1, stdout: '', stderr: '' };
+      }) as unknown as typeof testRunner.runTestCommand;
+
+      try {
+        // When: runTestExecution is called
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
+        await runTestExecution(0);
+
+        // Then: The saved result uses the self version (fallback)
+        assert.ok(captured);
+        assert.strictEqual(captured?.extensionVersion, '0.0.103');
+      } finally {
+        artifacts.saveTestExecutionReport = originalSave;
+        testRunner.runTestCommand = originalRun;
+        (vscode.extensions as unknown as { getExtension: typeof originalGetExtension }).getExtension = originalGetExtension;
+      }
+    });
+
+    test('TC-SES-EXTVER-N-02: resolveExtensionVersion uses self extension version when extensionContext is undefined', async () => {
+      // Given: A session with no extensionContext and a stubbed vscode.extensions.getExtension
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      fs.writeFileSync(path.join(workspaceRoot, 'package.json'), JSON.stringify({ scripts: { test: 'echo ok' } }), 'utf8');
+
+      const originalGetExtension = vscode.extensions.getExtension;
+      (vscode.extensions as unknown as { getExtension: typeof vscode.extensions.getExtension }).getExtension = (() => {
+        return { packageJSON: { version: '0.0.103' } } as unknown as vscode.Extension<unknown>;
+      }) as typeof vscode.extensions.getExtension;
+
+      const session = createSession(workspaceRoot, undefined, undefined);
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+
+      const originalSave = artifacts.saveTestExecutionReport;
+      const originalRun = testRunner.runTestCommand;
+
+      let captured: import('../../../../core/artifacts').TestExecutionResult | undefined;
+      artifacts.saveTestExecutionReport = (async (params: { result: import('../../../../core/artifacts').TestExecutionResult }) => {
+        captured = params.result;
+        return { absolutePath: '/tmp/report.md' };
+      }) as unknown as typeof artifacts.saveTestExecutionReport;
+      testRunner.runTestCommand = (async () => {
+        return { command: 'npm test', cwd: workspaceRoot, exitCode: 0, signal: null, durationMs: 1, stdout: '', stderr: '' };
+      }) as unknown as typeof testRunner.runTestCommand;
+
+      try {
+        // When: runTestExecution is called
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
+        await runTestExecution(0);
+
+        // Then: The saved result uses the self version
+        assert.ok(captured);
+        assert.strictEqual(captured?.extensionVersion, '0.0.103');
+      } finally {
+        artifacts.saveTestExecutionReport = originalSave;
+        testRunner.runTestCommand = originalRun;
+        (vscode.extensions as unknown as { getExtension: typeof originalGetExtension }).getExtension = originalGetExtension;
+      }
+    });
+
+    test('TC-SES-EXTVER-B-NULL-01: resolveExtensionVersion returns undefined when extensionContext is null and self extension is unavailable', async () => {
+      // Given: A session with null extensionContext and vscode.extensions.getExtension returning undefined
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      fs.writeFileSync(path.join(workspaceRoot, 'package.json'), JSON.stringify({ scripts: { test: 'echo ok' } }), 'utf8');
+
+      const originalGetExtension = vscode.extensions.getExtension;
+      (vscode.extensions as unknown as { getExtension: typeof vscode.extensions.getExtension }).getExtension = (() => {
+        return undefined;
+      }) as typeof vscode.extensions.getExtension;
+
+      const session = createSession(workspaceRoot, undefined, null);
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+
+      const originalSave = artifacts.saveTestExecutionReport;
+      const originalRun = testRunner.runTestCommand;
+
+      let captured: import('../../../../core/artifacts').TestExecutionResult | undefined;
+      artifacts.saveTestExecutionReport = (async (params: { result: import('../../../../core/artifacts').TestExecutionResult }) => {
+        captured = params.result;
+        return { absolutePath: '/tmp/report.md' };
+      }) as unknown as typeof artifacts.saveTestExecutionReport;
+      testRunner.runTestCommand = (async () => {
+        return { command: 'npm test', cwd: workspaceRoot, exitCode: 0, signal: null, durationMs: 1, stdout: '', stderr: '' };
+      }) as unknown as typeof testRunner.runTestCommand;
+
+      try {
+        // When: runTestExecution is called
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
+        await runTestExecution(0);
+
+        // Then: The saved result has extensionVersion undefined
+        assert.ok(captured);
+        assert.strictEqual(captured?.extensionVersion, undefined);
+      } finally {
+        artifacts.saveTestExecutionReport = originalSave;
+        testRunner.runTestCommand = originalRun;
+        (vscode.extensions as unknown as { getExtension: typeof originalGetExtension }).getExtension = originalGetExtension;
       }
     });
 

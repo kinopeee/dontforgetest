@@ -508,6 +508,10 @@ export interface TestExecutionResult {
   durationMs: number;
   stdout: string;
   stderr: string;
+  /** 収集時にstdoutが切り詰められた場合は true */
+  stdoutTruncated?: boolean;
+  /** 収集時にstderrが切り詰められた場合は true */
+  stderrTruncated?: boolean;
   errorMessage?: string;
   /**
    * テスト実行の担当者。
@@ -532,6 +536,10 @@ export interface TestExecutionResult {
    * test-result.json から抽出した構造化テスト結果（取得できた場合のみ）。
    */
   testResult?: TestResultFile;
+  /** test-result.json の参照パス（読み取りを試みた場所） */
+  testResultPath?: string;
+  /** レポート生成時の拡張機能バージョン */
+  extensionVersion?: string;
 }
 
 /**
@@ -751,6 +759,9 @@ export function buildTestExecutionArtifactMarkdown(params: {
     params.model && params.model.trim().length > 0
       ? `- ${t('artifact.executionReport.model')}: ${params.model}`
       : `- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`;
+  const executionRunnerLine = `- ${t('artifact.executionReport.executionRunner')}: ${resolveExecutionRunnerLabel(params.result.executionRunner)}`;
+  const extensionVersionLine = `- ${t('artifact.executionReport.extensionVersion')}: ${resolveOptionalLabel(params.result.extensionVersion)}`;
+  const testResultPathLine = `- ${t('artifact.executionReport.testResultPath')}: ${formatTestResultPathLabel(params.result.testResultPath)}`;
 
   // stdoutをパースしてテスト結果を抽出
   const testResult = parseMochaOutput(params.result.stdout);
@@ -779,16 +790,25 @@ export function buildTestExecutionArtifactMarkdown(params: {
       : '';
 
   // 折りたたみ式の詳細ログセクション
-  const stdoutContent = truncate(stripAnsi(params.result.stdout), 200_000);
-  const stderrContent = truncate(stripAnsi(params.result.stderr), 200_000);
+  const maxLogChars = 200_000;
+  const stdoutRaw = stripAnsi(params.result.stdout);
+  const stderrRaw = stripAnsi(params.result.stderr);
+  const stdoutReportTruncated = stdoutRaw.length > maxLogChars;
+  const stderrReportTruncated = stderrRaw.length > maxLogChars;
+  const stdoutContent = truncate(stdoutRaw, maxLogChars);
+  const stderrContent = truncate(stderrRaw, maxLogChars);
   const extensionLog = (params.result.extensionLog ?? '').trim();
-  const extensionLogContent = truncate(stripAnsi(extensionLog.length > 0 ? extensionLog : ''), 200_000);
+  const extensionLogContent = truncate(stripAnsi(extensionLog.length > 0 ? extensionLog : ''), maxLogChars);
   const stdoutCollapsible = buildCollapsibleSection('stdout', stdoutContent);
   const stderrCollapsible = buildCollapsibleSection('stderr', stderrContent);
   const extensionLogCollapsible = buildCollapsibleSection(
     t('artifact.executionReport.extensionLog'),
     extensionLogContent,
   );
+  const truncationLines = [
+    buildTruncationLine(t('artifact.executionReport.truncation.stdout'), params.result.stdoutTruncated, stdoutReportTruncated),
+    buildTruncationLine(t('artifact.executionReport.truncation.stderr'), params.result.stderrTruncated, stderrReportTruncated),
+  ].join('\n');
 
   const sections: string[] = [
     `# ${t('artifact.executionReport.title')}`,
@@ -797,11 +817,14 @@ export function buildTestExecutionArtifactMarkdown(params: {
     `- ${t('artifact.executionReport.generatedAt')}: ${tsLocal}`,
     `- ${t('artifact.executionReport.generationTarget')}: ${params.generationLabel}`,
     modelLine,
+    extensionVersionLine,
     `- ${t('artifact.executionReport.executionCommand')}: \`${params.result.command}\``,
     statusLine,
     skipReasonLine,
     errMsg,
+    executionRunnerLine,
     envLines,
+    testResultPathLine,
     '',
     `- ${t('artifact.executionReport.targetFiles')}:`,
     targets.length > 0 ? targets : `- ${t('artifact.none')}`,
@@ -811,6 +834,7 @@ export function buildTestExecutionArtifactMarkdown(params: {
     detailsSection,
     `## ${t('artifact.executionReport.detailedLogs')}`,
     '',
+    truncationLines,
     stdoutCollapsible,
     stderrCollapsible,
     extensionLogCollapsible,
@@ -1067,6 +1091,44 @@ function resolveExecutionEnvironmentSourceLabel(source: ExecutionEnvironmentSour
     return t('artifact.executionReport.envSource.local');
   }
   return t('artifact.executionReport.envSource.unknown');
+}
+
+function resolveExecutionRunnerLabel(runner: TestExecutionRunner | undefined): string {
+  if (runner === 'extension') {
+    return t('artifact.executionReport.executionRunner.extension');
+  }
+  if (runner === 'cursorAgent') {
+    return t('artifact.executionReport.executionRunner.cursorAgent');
+  }
+  return t('artifact.executionReport.unknown');
+}
+
+function resolveOptionalLabel(value: string | undefined): string {
+  return getStrictStringOrUndefined(value) ?? t('artifact.executionReport.unknown');
+}
+
+function formatTestResultPathLabel(value: string | undefined): string {
+  const resolved = getStrictStringOrUndefined(value);
+  if (!resolved) {
+    return t('artifact.executionReport.unknown');
+  }
+  return `\`${resolved}\``;
+}
+
+function resolveTruncationStatusLabel(truncated: boolean | undefined): string {
+  if (truncated === true) {
+    return t('artifact.executionReport.truncation.truncated');
+  }
+  if (truncated === false) {
+    return t('artifact.executionReport.truncation.notTruncated');
+  }
+  return t('artifact.executionReport.unknown');
+}
+
+function buildTruncationLine(label: string, captureTruncated: boolean | undefined, reportTruncated: boolean): string {
+  const captureLabel = resolveTruncationStatusLabel(captureTruncated);
+  const reportLabel = resolveTruncationStatusLabel(reportTruncated);
+  return `- ${label}: ${t('artifact.executionReport.truncation.capture')}=${captureLabel}, ${t('artifact.executionReport.truncation.report')}=${reportLabel}`;
 }
 
 /**

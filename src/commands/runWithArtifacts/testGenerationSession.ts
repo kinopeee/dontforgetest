@@ -360,6 +360,7 @@ export class TestGenerationSession {
       emitPhaseEvent(this.options.generationTaskId, 'running-tests', t('progressTreeView.phase.runningTests')),
     );
 
+    const extensionVersion = this.resolveExtensionVersion();
     const trimmedTestCommand = this.settings.testCommand.trim();
     const isTestCommandEmpty = trimmedTestCommand.length === 0;
     const isWorktreeMode = this.runLocation === 'worktree';
@@ -394,6 +395,7 @@ export class TestGenerationSession {
         skipped: true,
         skipReason: msg,
         extensionLog: this.testExecutionLogLines.join('\n'),
+        extensionVersion,
       };
       const saved = await saveTestExecutionReport({
         workspaceRoot: this.localWorkspaceRoot,
@@ -411,7 +413,8 @@ export class TestGenerationSession {
     }
 
     const testTaskId = `${this.options.generationTaskId}-test`;
-    const testResultEnv = this.buildTestResultEnv(testWorkspaceRoot);
+    const testResultPath = this.resolveTestResultFilePath(testWorkspaceRoot);
+    const testResultEnv = this.buildTestResultEnv(testResultPath);
     const willLaunchVsCode = await this.looksLikeVsCodeLaunchingTestCommand(testWorkspaceRoot, this.settings.testCommand);
 
     if (willLaunchVsCode && this.settings.testExecutionRunner === 'extension') {
@@ -461,6 +464,7 @@ export class TestGenerationSession {
           this.captureEvent(event);
         },
       });
+      const resultWithPath = { ...result, testResultPath, extensionVersion };
 
       const stderrLower = result.stderr.toLowerCase();
       const toolExecutionRejected =
@@ -494,8 +498,9 @@ export class TestGenerationSession {
 
         const fallbackStartedAt = nowMs();
         const fallbackResult = await runTestCommand({ command: this.settings.testCommand, cwd: testWorkspaceRoot, env: testResultEnv });
+        const fallbackWithPath = { ...fallbackResult, testResultPath, extensionVersion };
         const enrichedFallbackResult = await this.attachTestResult({
-          result: fallbackResult,
+          result: fallbackWithPath,
           testWorkspaceRoot,
           startedAtMs: fallbackStartedAt,
         });
@@ -521,7 +526,7 @@ export class TestGenerationSession {
         return;
       }
 
-      const enrichedResult = await this.attachTestResult({ result, testWorkspaceRoot, startedAtMs: testStartedAt });
+      const enrichedResult = await this.attachTestResult({ result: resultWithPath, testWorkspaceRoot, startedAtMs: testStartedAt });
       const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: result.exitCode, timestampMs: nowMs() };
       handleTestGenEventForStatusBar(completed);
       appendEventToOutput(completed);
@@ -554,7 +559,8 @@ export class TestGenerationSession {
 
     const testStartedAt = nowMs();
     const result = await runTestCommand({ command: this.settings.testCommand, cwd: testWorkspaceRoot, env: testResultEnv });
-    const enrichedResult = await this.attachTestResult({ result, testWorkspaceRoot, startedAtMs: testStartedAt });
+    const resultWithPath = { ...result, testResultPath, extensionVersion };
+    const enrichedResult = await this.attachTestResult({ result: resultWithPath, testWorkspaceRoot, startedAtMs: testStartedAt });
 
     const testCompletedMsg = t(
       'testExecution.completed',
@@ -602,12 +608,27 @@ export class TestGenerationSession {
     taskManager.unregister(this.options.generationTaskId);
   }
 
-  private buildTestResultEnv(testWorkspaceRoot: string): NodeJS.ProcessEnv {
-    const testResultFilePath = path.join(testWorkspaceRoot, '.vscode-test', 'test-result.json');
+  private buildTestResultEnv(testResultFilePath: string): NodeJS.ProcessEnv {
     return {
       // テスト結果ファイルの出力先をワークスペース内に固定する
       DONTFORGETEST_TEST_RESULT_FILE: testResultFilePath,
     };
+  }
+
+  private resolveTestResultFilePath(testWorkspaceRoot: string): string {
+    return path.join(testWorkspaceRoot, '.vscode-test', 'test-result.json');
+  }
+
+  private resolveExtensionVersion(): string | undefined {
+    const fromContext = this.options.extensionContext?.extension?.packageJSON?.version;
+    if (typeof fromContext === 'string' && fromContext.trim().length > 0) {
+      return fromContext.trim();
+    }
+    const fromSelf = vscode.extensions.getExtension('kinopeee.dontforgetest')?.packageJSON?.version;
+    if (typeof fromSelf === 'string' && fromSelf.trim().length > 0) {
+      return fromSelf.trim();
+    }
+    return undefined;
   }
 
   private async attachTestResult(params: {
@@ -623,7 +644,7 @@ export class TestGenerationSession {
   }
 
   private async readTestResultFile(testWorkspaceRoot: string, startedAtMs: number): Promise<TestResultFile | undefined> {
-    const testResultPath = path.join(testWorkspaceRoot, '.vscode-test', 'test-result.json');
+    const testResultPath = this.resolveTestResultFilePath(testWorkspaceRoot);
     const freshnessGraceMs = 1000;
     try {
       const stat = await fs.promises.stat(testResultPath);

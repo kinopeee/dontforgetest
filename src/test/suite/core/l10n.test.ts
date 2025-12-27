@@ -112,6 +112,108 @@ suite('l10n key consistency', () => {
     assertNonEmptyL10nValue(bundleJa, 'artifact.executionReport.unknown');
   });
 
+  test('TC-L10N-N-11: bundle.l10n.json defines execution report runner/truncation keys with non-empty values', () => {
+    // Given: The English bundle file
+    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
+
+    // When: Validating added keys
+    const keys = [
+      'artifact.executionReport.executionRunner',
+      'artifact.executionReport.executionRunner.extension',
+      'artifact.executionReport.executionRunner.cursorAgent',
+      'artifact.executionReport.extensionVersion',
+      'artifact.executionReport.testResultPath',
+      'artifact.executionReport.truncation.stdout',
+      'artifact.executionReport.truncation.stderr',
+      'artifact.executionReport.truncation.capture',
+      'artifact.executionReport.truncation.report',
+      'artifact.executionReport.truncation.truncated',
+      'artifact.executionReport.truncation.notTruncated',
+    ];
+
+    // Then: All values are non-empty
+    for (const key of keys) {
+      assertNonEmptyL10nValue(bundleEn, key);
+    }
+  });
+
+  test('TC-L10N-N-12: bundle.l10n.ja.json defines execution report runner/truncation keys with non-empty values', () => {
+    // Given: The Japanese bundle file
+    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
+
+    // When: Validating added keys
+    const keys = [
+      'artifact.executionReport.executionRunner',
+      'artifact.executionReport.executionRunner.extension',
+      'artifact.executionReport.executionRunner.cursorAgent',
+      'artifact.executionReport.extensionVersion',
+      'artifact.executionReport.testResultPath',
+      'artifact.executionReport.truncation.stdout',
+      'artifact.executionReport.truncation.stderr',
+      'artifact.executionReport.truncation.capture',
+      'artifact.executionReport.truncation.report',
+      'artifact.executionReport.truncation.truncated',
+      'artifact.executionReport.truncation.notTruncated',
+    ];
+
+    // Then: All values are non-empty
+    for (const key of keys) {
+      assertNonEmptyL10nValue(bundleJa, key);
+    }
+  });
+
+  test('TC-L10N-EXEC-NEWKEYS-N-01: t("artifact.executionReport.executionRunner") returns a non-empty label and is not the raw key', () => {
+    // Given: Added l10n key and both bundles on disk
+    const key = 'artifact.executionReport.executionRunner';
+    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
+    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
+    assertNonEmptyL10nValue(bundleEn, key);
+    assertNonEmptyL10nValue(bundleJa, key);
+
+    // When: Resolving the key via t()
+    const actual = t(key);
+
+    // Then: It is non-empty and not a raw-key fallback, and does not leak unresolved placeholders
+    assert.ok(actual.trim().length > 0, 'Expected a non-empty localized label');
+    assert.notStrictEqual(actual, key, 'Expected a localized label instead of raw key');
+    assert.ok(actual === bundleEn[key] || actual === bundleJa[key], 'Expected t(key) to resolve to either en or ja bundle value');
+    assert.ok(!actual.includes('{0}'), 'Expected no unresolved {0} placeholder');
+    assert.ok(!actual.includes('${'), 'Expected no unresolved ${...} placeholder');
+  });
+
+  test('TC-L10N-EXEC-NEWKEYS-N-02: both en/ja bundles define a non-empty label for artifact.executionReport.executionRunner (no raw-key fallback)', () => {
+    // Given: Added l10n key and both bundles on disk
+    const key = 'artifact.executionReport.executionRunner';
+    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
+    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
+
+    // When: Reading the bundle values directly
+    const enValue = bundleEn[key];
+    const jaValue = bundleJa[key];
+
+    // Then: Both are non-empty and not equal to the raw key
+    assert.ok(typeof enValue === 'string' && enValue.trim().length > 0, 'Expected non-empty en label');
+    assert.ok(typeof jaValue === 'string' && jaValue.trim().length > 0, 'Expected non-empty ja label');
+    assert.notStrictEqual(enValue, key, 'Expected en label to not equal the raw key');
+    assert.notStrictEqual(jaValue, key, 'Expected ja label to not equal the raw key');
+  });
+
+  test('TC-L10N-EXEC-NEWKEYS-E-01: t(missing key) falls back to returning the key and differs from the new key label', () => {
+    // Given: A missing key under the same namespace and the new key
+    const missingKey = 'artifact.executionReport.executionRunner.__missing__';
+    const existingKey = 'artifact.executionReport.executionRunner';
+
+    // When: Resolving both
+    const missingValue = t(missingKey);
+    const existingValue = t(existingKey);
+
+    // Then: Missing key falls back to the key itself, and it is distinguishable from the existing key value
+    assert.strictEqual(missingValue, missingKey);
+    assert.ok(existingValue.trim().length > 0);
+    assert.notStrictEqual(existingValue, existingKey);
+    assert.notStrictEqual(existingValue, missingValue);
+  });
+
   test('TC-L10N-E-01: bundle.l10n.json and bundle.l10n.ja.json have identical key sets', () => {
     // Given: Both English and Japanese bundles exist
     const bundleEnContent = fs.readFileSync(bundleEnPath, 'utf8');

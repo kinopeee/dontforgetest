@@ -18,6 +18,7 @@ import {
   PERSPECTIVE_TABLE_HEADER,
   PERSPECTIVE_TABLE_SEPARATOR,
   type PerspectiveCase,
+  type TestExecutionResult,
   type TestResultFile,
 } from '../../../core/artifacts';
 import { stripAnsi } from '../../../core/testResultParser';
@@ -479,6 +480,266 @@ suite('core/artifacts.ts', () => {
 
       // Then: (auto) と表示されること
       assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`), 'modelが空白のみの場合は (auto) と表示されること');
+    });
+
+    suite('execution report (runner / version / testResultPath / truncation)', () => {
+      const baseResult = (): TestExecutionResult => ({
+        command: 'cmd',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 10,
+        stdout: '',
+        stderr: '',
+      });
+
+      const buildMd = (overrides: Partial<TestExecutionResult>): string => {
+        return buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: [],
+          result: { ...baseResult(), ...overrides },
+        });
+      };
+
+      const buildTruncationLine = (streamLabelKey: string, captureStatusKey: string, reportStatusKey: string): string => {
+        return `- ${t(streamLabelKey)}: ${t('artifact.executionReport.truncation.capture')}=${t(captureStatusKey)}, ${t('artifact.executionReport.truncation.report')}=${t(reportStatusKey)}`;
+      };
+
+      test('TC-ART-RUNNER-N-EXT-01: executionRunner=extension is rendered as the localized extension label', () => {
+        // Given: A result with executionRunner=extension
+        const md = buildMd({ executionRunner: 'extension' });
+
+        // When: Rendering the execution report markdown
+        // Then: The executionRunner line uses the extension label
+        assert.ok(
+          md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.executionRunner.extension')}`),
+          'Expected executionRunner line to show the extension label',
+        );
+      });
+
+      test('TC-ART-RUNNER-N-CA-01: executionRunner=cursorAgent is rendered as the localized cursorAgent label', () => {
+        // Given: A result with executionRunner=cursorAgent
+        const md = buildMd({ executionRunner: 'cursorAgent' });
+
+        // When: Rendering the execution report markdown
+        // Then: The executionRunner line uses the cursorAgent label
+        assert.ok(
+          md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.executionRunner.cursorAgent')}`),
+          'Expected executionRunner line to show the cursorAgent label',
+        );
+      });
+
+      test('TC-ART-RUNNER-B-UNDEF-01: executionRunner=undefined is rendered as unknown', () => {
+        // Given: A result with executionRunner undefined (boundary)
+        const md = buildMd({ executionRunner: undefined });
+
+        // When: Rendering the execution report markdown
+        // Then: The executionRunner line uses unknown
+        assert.ok(
+          md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.unknown')}`),
+          'Expected executionRunner line to show unknown',
+        );
+      });
+
+      test('TC-ART-EXTVER-N-01: extensionVersion is rendered when provided', () => {
+        // Given: A result with extensionVersion
+        const md = buildMd({ extensionVersion: '0.0.103' });
+
+        // When: Rendering the execution report markdown
+        // Then: The extensionVersion line includes the provided version
+        assert.ok(
+          md.includes(`- ${t('artifact.executionReport.extensionVersion')}: 0.0.103`),
+          'Expected extensionVersion to be rendered',
+        );
+      });
+
+      test('TC-ART-EXTVER-B-EMPTY-01: extensionVersion="" is rendered as unknown', () => {
+        // Given: A result with extensionVersion empty string (boundary)
+        const md = buildMd({ extensionVersion: '' });
+
+        // When: Rendering the execution report markdown
+        // Then: The extensionVersion line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-EXTVER-B-WS-01: extensionVersion=" " is rendered as unknown', () => {
+        // Given: A result with extensionVersion whitespace-only (boundary)
+        const md = buildMd({ extensionVersion: ' ' });
+
+        // When: Rendering the execution report markdown
+        // Then: The extensionVersion line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-EXTVER-B-UNDEF-01: extensionVersion=undefined is rendered as unknown', () => {
+        // Given: A result with extensionVersion undefined (boundary)
+        const md = buildMd({ extensionVersion: undefined });
+
+        // When: Rendering the execution report markdown
+        // Then: The extensionVersion line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-EXTVER-B-NULL-01: extensionVersion=null (injected) is rendered as unknown', () => {
+        // Given: A result with extensionVersion injected as null (boundary)
+        const md = buildMd({ extensionVersion: null as unknown as string | undefined });
+
+        // When: Rendering the execution report markdown
+        // Then: The extensionVersion line uses unknown (robust against unexpected null)
+        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-TRP-N-01: testResultPath is rendered as a code-formatted path when provided', () => {
+        // Given: A result with testResultPath
+        const testResultPath = '/tmp/.vscode-test/test-result.json';
+        const md = buildMd({ testResultPath });
+
+        // When: Rendering the execution report markdown
+        // Then: The testResultPath line includes the code-formatted path
+        assert.ok(
+          md.includes(`- ${t('artifact.executionReport.testResultPath')}: \`${testResultPath}\``),
+          'Expected testResultPath to be rendered with backticks',
+        );
+      });
+
+      test('TC-ART-TRP-B-EMPTY-01: testResultPath="" is rendered as unknown', () => {
+        // Given: A result with testResultPath empty string (boundary)
+        const md = buildMd({ testResultPath: '' });
+
+        // When: Rendering the execution report markdown
+        // Then: The testResultPath line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-TRP-B-WS-01: testResultPath=" " is rendered as unknown', () => {
+        // Given: A result with testResultPath whitespace-only (boundary)
+        const md = buildMd({ testResultPath: ' ' });
+
+        // When: Rendering the execution report markdown
+        // Then: The testResultPath line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-TRP-B-UNDEF-01: testResultPath=undefined is rendered as unknown', () => {
+        // Given: A result with testResultPath undefined (boundary)
+        const md = buildMd({ testResultPath: undefined });
+
+        // When: Rendering the execution report markdown
+        // Then: The testResultPath line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-TRP-B-NULL-01: testResultPath=null (injected) is rendered as unknown', () => {
+        // Given: A result with testResultPath injected as null (boundary)
+        const md = buildMd({ testResultPath: null as unknown as string | undefined });
+
+        // When: Rendering the execution report markdown
+        // Then: The testResultPath line uses unknown (robust against unexpected null)
+        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-TRUNC-STDOUT-B-ZERO-01: stdout="" and stdoutTruncated=false yields capture=not truncated, report=not truncated', () => {
+        // Given: Empty stdout with stdoutTruncated=false (boundary: 0)
+        const md = buildMd({ stdout: '', stdoutTruncated: false, stderr: '', stderrTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: The stdout truncation line shows capture=not truncated and report=not truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stdout',
+          'artifact.executionReport.truncation.notTruncated',
+          'artifact.executionReport.truncation.notTruncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDOUT-B-MAX-01: stdout length==200000 yields report=not truncated', () => {
+        // Given: stdout length exactly at the report cap (boundary: max)
+        const maxLogChars = 200_000;
+        const md = buildMd({ stdout: 'a'.repeat(maxLogChars), stdoutTruncated: false, stderr: '', stderrTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: report is not truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stdout',
+          'artifact.executionReport.truncation.notTruncated',
+          'artifact.executionReport.truncation.notTruncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDOUT-B-MAXP1-01: stdout length==200001 yields report=truncated', () => {
+        // Given: stdout length just above the report cap (boundary: max+1)
+        const maxLogChars = 200_000;
+        const md = buildMd({ stdout: 'a'.repeat(maxLogChars + 1), stdoutTruncated: false, stderr: '', stderrTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: report is truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stdout',
+          'artifact.executionReport.truncation.notTruncated',
+          'artifact.executionReport.truncation.truncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDOUT-N-CAPTRUE-01: stdoutTruncated=true yields capture=truncated while report can be not truncated', () => {
+        // Given: capture truncation flagged true and short stdout (equivalence)
+        const md = buildMd({ stdout: 'out', stdoutTruncated: true, stderr: '', stderrTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: capture is truncated and report is not truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stdout',
+          'artifact.executionReport.truncation.truncated',
+          'artifact.executionReport.truncation.notTruncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDOUT-B-CAPUNDEF-01: stdoutTruncated=undefined yields capture=unknown while report can be not truncated', () => {
+        // Given: capture truncation flag is undefined (boundary) and short stdout
+        const md = buildMd({ stdout: 'out', stdoutTruncated: undefined, stderr: '', stderrTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: capture is unknown and report is not truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stdout',
+          'artifact.executionReport.unknown',
+          'artifact.executionReport.truncation.notTruncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDERR-B-MINUS1-01: stderr length==199999 yields report=not truncated', () => {
+        // Given: stderr length one below the report cap (boundary: max-1)
+        const maxLogChars = 200_000;
+        const md = buildMd({ stderr: 'a'.repeat(maxLogChars - 1), stderrTruncated: false, stdout: '', stdoutTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: report is not truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stderr',
+          'artifact.executionReport.truncation.notTruncated',
+          'artifact.executionReport.truncation.notTruncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDERR-B-MAXP1-01: stderr length==200001 and stderrTruncated=true yields capture=truncated, report=truncated', () => {
+        // Given: stderr is long enough to be report-truncated and capture flag is true (boundary: max+1)
+        const maxLogChars = 200_000;
+        const md = buildMd({ stderr: 'a'.repeat(maxLogChars + 1), stderrTruncated: true, stdout: '', stdoutTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: capture is truncated and report is truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stderr',
+          'artifact.executionReport.truncation.truncated',
+          'artifact.executionReport.truncation.truncated',
+        );
+        assert.ok(md.includes(expected));
+      });
     });
 
   // TC-ART-09: 実行レポートMarkdown生成（エラー）
@@ -7179,12 +7440,13 @@ suite('core/artifacts.ts', () => {
         assert.ok(!md.includes(`- ${t('artifact.executionReport.failureCode')}:`));
       });
 
-      test('TC-L10N-N-01: renders Japanese failure details labels when locale is ja', function () {
-        // Given: Running under Japanese VS Code locale
-        const isJa = (vscode.env.language ?? '').startsWith('ja');
-        if (!isJa) {
-          this.skip();
-        }
+      test('TC-L10N-N-01: renders localized failure details labels according to current VS Code locale', () => {
+        // Given: Failure details keys we expect to be localized (en fallback / ja bundle)
+        const keys = [
+          'artifact.executionReport.failureDetails',
+          'artifact.executionReport.failureMessage',
+          'artifact.executionReport.stackTrace',
+        ] as const;
 
         // When: buildTestExecutionArtifactMarkdown is called with failures
         const md = buildTestExecutionArtifactMarkdown({
@@ -7203,40 +7465,12 @@ suite('core/artifacts.ts', () => {
           },
         });
 
-        // Then: Localized labels are Japanese (not raw keys)
-        assert.ok(md.includes('失敗詳細'));
-        assert.ok(md.includes('メッセージ'));
-        assert.ok(md.includes('スタックトレース'));
-      });
-
-      test('TC-L10N-N-02: renders English failure details labels when locale is en', function () {
-        // Given: Running under English VS Code locale
-        const isEn = !(vscode.env.language ?? '').startsWith('ja');
-        if (!isEn) {
-          this.skip();
+        // Then: Localized labels are included and do not fall back to raw keys
+        for (const key of keys) {
+          const label = t(key);
+          assert.notStrictEqual(label, key, `Expected localized label for key: ${key}`);
+          assert.ok(md.includes(label), `Expected markdown to include localized label: ${label}`);
         }
-
-        // When: buildTestExecutionArtifactMarkdown is called with failures
-        const md = buildTestExecutionArtifactMarkdown({
-          generatedAtMs: Date.now(),
-          generationLabel: 'Label',
-          targetPaths: ['x.ts'],
-          result: {
-            command: 'cmd',
-            cwd: '/tmp',
-            exitCode: 1,
-            signal: null,
-            durationMs: 10,
-            stdout: '',
-            stderr: '',
-            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', stack: 's' }] },
-          },
-        });
-
-        // Then: Localized labels are English
-        assert.ok(md.includes('Failure Details'));
-        assert.ok(md.includes('Message'));
-        assert.ok(md.includes('Stack Trace'));
       });
 
       test('TC-L10N-KEYS-N-01: l10n bundles include failure detail keys for both en and ja', () => {
