@@ -3,6 +3,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+// リポジトリルート探索時の最大親ディレクトリ遡り回数
+// NOTE: 通常のプロジェクト構造（out/test/suite/... など）で十分な深さを確保しつつ、
+//       無限ループや過剰な探索を避けるための上限。
 const MAX_PARENT_TRAVERSAL_DEPTH = 12;
 
 function resolveRepoRootFromHere(startDir: string): string {
@@ -48,6 +51,25 @@ function walkTsFiles(dir: string, acc: string[]): void {
 
 suite('docs / repository hygiene', () => {
   const repoRoot = resolveRepoRootFromHere(__dirname);
+  const tempDirs: string[] = [];
+
+  const createTempDir = (prefix: string): string => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    tempDirs.push(dir);
+    return dir;
+  };
+
+  teardown(() => {
+    // テスト実行を繰り返しても /tmp にゴミが残らないよう、作成した一時ディレクトリを必ず削除する。
+    for (const dir of tempDirs) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // すでに削除されている場合や権限問題などは、テストの本質と無関係なため握りつぶす。
+      }
+    }
+    tempDirs.length = 0;
+  });
 
   test('TC-N-01: 削除した .claude/commands/generate-tests.md への参照が src/ に残っていない', () => {
     // Given: リポジトリルートと src/ ディレクトリ
@@ -75,7 +97,7 @@ suite('docs / repository hygiene', () => {
 
   test('TC-E-01: resolveRepoRootFromHere が条件を満たさないディレクトリでは Error を投げる', () => {
     // Given: package.json も src/ も存在しない一時ディレクトリ
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-nonrepo-'));
+    const tempDir = createTempDir('dontforgetest-nonrepo-');
 
     // When/Then: 例外（型とメッセージ）を検証する
     assert.throws(
@@ -92,7 +114,7 @@ suite('docs / repository hygiene', () => {
 
   test('TC-B-01: walkTsFiles は空ディレクトリで空配列のまま', () => {
     // Given: 空の一時ディレクトリ
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-empty-'));
+    const tempDir = createTempDir('dontforgetest-empty-');
     const files: string[] = [];
 
     // When: walkTsFiles を呼ぶ
@@ -104,7 +126,7 @@ suite('docs / repository hygiene', () => {
 
   test('TC-B-02: walkTsFiles は node_modules/out を除外して .ts のみ収集する', () => {
     // Given: .ts/.txt と除外ディレクトリを含む構造
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-walk-'));
+    const tempDir = createTempDir('dontforgetest-walk-');
     const srcDir = path.join(tempDir, 'src');
     fs.mkdirSync(srcDir, { recursive: true });
     fs.mkdirSync(path.join(srcDir, 'node_modules'), { recursive: true });
@@ -155,7 +177,7 @@ suite('docs / repository hygiene', () => {
 
   test('TC-E-03: 削除パス参照が見つかった場合は referenced が 1 件以上になる', () => {
     // Given: needle を含む .ts が存在する擬似 src/ ディレクトリ
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-docref-'));
+    const tempDir = createTempDir('dontforgetest-docref-');
     const srcRoot = path.join(tempDir, 'src');
     fs.mkdirSync(srcRoot, { recursive: true });
     const needle = '.claude/commands/generate-tests.md';
