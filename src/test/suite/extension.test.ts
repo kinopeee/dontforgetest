@@ -1162,7 +1162,11 @@ suite('src/extension.ts', () => {
       assert.strictEqual(pkg.homepage, 'https://github.com/kinopeee/dontforgetest#readme', 'Homepage URL mismatch');
     });
 
-    // TC-META-B-01: Empty publisher check
+    // NOTE:
+    // ここからの TC-META-B-01 ～ TC-META-B-05 は「実際の拡張機能の package.json（ext.packageJSON）」を検証するテストではない。
+    // モック（`const pkg = { ... }`）を使い、package.json 由来の“データ構造”が境界値でも破綻しない（扱える）ことを確認するための構造的な境界値テスト。
+
+    // TC-META-B-01: Empty publisher check (構造的検証 / モックデータ使用)
     // Given: package.json with empty publisher
     // When: Checking publisher field
     // Then: Field is empty string
@@ -1174,7 +1178,7 @@ suite('src/extension.ts', () => {
       assert.strictEqual(pkg.publisher, "", 'Publisher should be empty string');
     });
 
-    // TC-META-B-02: Missing license check
+    // TC-META-B-02: Missing license check (構造的検証 / モックデータ使用)
     // Given: package.json with missing license
     // When: Checking license field
     // Then: Field is undefined
@@ -1186,7 +1190,7 @@ suite('src/extension.ts', () => {
       assert.strictEqual(pkg.license, undefined, 'License should be undefined');
     });
 
-    // TC-META-B-03: Version 0.0.0 check
+    // TC-META-B-03: Version 0.0.0 check (構造的検証 / モックデータ使用)
     // Given: package.json with version 0.0.0
     // When: Checking version field
     // Then: Version is 0.0.0
@@ -1200,7 +1204,7 @@ suite('src/extension.ts', () => {
       assert.strictEqual(pkg.version, "0.0.0", 'Version should be 0.0.0');
     });
 
-    // TC-META-B-04: 1-char author check
+    // TC-META-B-04: 1-char author check (構造的検証 / モックデータ使用)
     // Given: author field with 1 character
     // When: Checking author field
     // Then: author is 1 character
@@ -1212,7 +1216,7 @@ suite('src/extension.ts', () => {
       assert.strictEqual(pkg.author, "A", 'Author should be "A"');
     });
 
-    // TC-META-B-05: Long description check
+    // TC-META-B-05: Long description check (構造的検証 / モックデータ使用)
     // Given: description field with very long string
     // When: Checking description length
     // Then: length matches the long string
