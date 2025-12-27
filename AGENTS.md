@@ -119,6 +119,41 @@ npm run vsix:build:bump
 - **ランタイムエラー**: Extension Development HostのDevToolsでデバッグ
 - **コマンドが見つからない**: `package.json` のコマンドIDと実装を照合
 
+## ブランチ運用規約
+
+### ルール
+
+- **mainブランチでの直接作業禁止**: mainブランチにいる場合は、必ず更新用ブランチを切ってから作業を開始する
+- **ブランチ名は更新内容に合わせる**: 作業内容が明確にわかる命名にする
+
+### ブランチ命名規則
+
+```
+<prefix>/<簡潔な説明>
+```
+
+| prefix | 用途 |
+|--------|------|
+| feat | 新機能 |
+| fix | バグ修正 |
+| refactor | リファクタリング |
+| docs | ドキュメント |
+| test | テスト |
+| chore | 雑務・設定 |
+
+### 例
+
+```bash
+# 新機能追加
+feat/add-commit-range-command
+
+# バグ修正
+fix/git-diff-parsing-error
+
+# ドキュメント更新
+docs/update-usage-guide
+```
+
 ## コミットメッセージ規約
 
 Conventional Commits準拠。日本語で記述。
