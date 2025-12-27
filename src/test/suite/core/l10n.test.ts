@@ -17,6 +17,14 @@ suite('l10n key consistency', () => {
   const bundleEnPath = path.join(projectRoot, 'l10n/bundle.l10n.json');
   const bundleJaPath = path.join(projectRoot, 'l10n/bundle.l10n.ja.json');
 
+  let bundleEn: Record<string, unknown>;
+  let bundleJa: Record<string, unknown>;
+
+  suiteSetup(() => {
+    bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
+    bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
+  });
+
   function assertNonEmptyL10nValue(bundle: Record<string, unknown>, key: string): void {
     const value = bundle[key];
     assert.ok(typeof value === 'string' && value.trim().length > 0, `Expected non-empty value for ${key}`);
@@ -24,8 +32,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-01: bundle.l10n.json defines artifact.executionReport.envSource with non-empty value', () => {
     // Given: The English bundle file
-    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
-
     // When: Looking up the key
     // Then: The value exists and is not empty/whitespace
     assertNonEmptyL10nValue(bundleEn, 'artifact.executionReport.envSource');
@@ -33,8 +39,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-02: bundle.l10n.json defines artifact.executionReport.envSource.execution with non-empty value', () => {
     // Given: The English bundle file
-    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
-
     // When: Looking up the key
     // Then: The value exists and is not empty/whitespace
     assertNonEmptyL10nValue(bundleEn, 'artifact.executionReport.envSource.execution');
@@ -42,8 +46,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-03: bundle.l10n.json defines artifact.executionReport.envSource.local with non-empty value', () => {
     // Given: The English bundle file
-    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
-
     // When: Looking up the key
     // Then: The value exists and is not empty/whitespace
     assertNonEmptyL10nValue(bundleEn, 'artifact.executionReport.envSource.local');
@@ -51,8 +53,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-04: bundle.l10n.json defines artifact.executionReport.envSource.unknown with non-empty value', () => {
     // Given: The English bundle file
-    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
-
     // When: Looking up the key
     // Then: The value exists and is not empty/whitespace
     assertNonEmptyL10nValue(bundleEn, 'artifact.executionReport.envSource.unknown');
@@ -60,8 +60,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-05: bundle.l10n.json defines artifact.executionReport.unknown with non-empty value', () => {
     // Given: The English bundle file
-    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
-
     // When: Looking up the key
     // Then: The value exists and is not empty/whitespace
     assertNonEmptyL10nValue(bundleEn, 'artifact.executionReport.unknown');
@@ -69,8 +67,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-06: bundle.l10n.ja.json defines artifact.executionReport.envSource with non-empty value', () => {
     // Given: The Japanese bundle file
-    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
-
     // When: Looking up the key
     // Then: The value exists and is not empty/whitespace
     assertNonEmptyL10nValue(bundleJa, 'artifact.executionReport.envSource');
@@ -78,8 +74,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-07: bundle.l10n.ja.json defines artifact.executionReport.envSource.execution with non-empty value', () => {
     // Given: The Japanese bundle file
-    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
-
     // When: Looking up the key
     // Then: The value exists and is not empty/whitespace
     assertNonEmptyL10nValue(bundleJa, 'artifact.executionReport.envSource.execution');
@@ -87,8 +81,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-08: bundle.l10n.ja.json defines artifact.executionReport.envSource.local with non-empty value', () => {
     // Given: The Japanese bundle file
-    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
-
     // When: Looking up the key
     // Then: The value exists and is not empty/whitespace
     assertNonEmptyL10nValue(bundleJa, 'artifact.executionReport.envSource.local');
@@ -96,8 +88,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-09: bundle.l10n.ja.json defines artifact.executionReport.envSource.unknown with non-empty value', () => {
     // Given: The Japanese bundle file
-    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
-
     // When: Looking up the key
     // Then: The value exists and is not empty/whitespace
     assertNonEmptyL10nValue(bundleJa, 'artifact.executionReport.envSource.unknown');
@@ -105,8 +95,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-10: bundle.l10n.ja.json defines artifact.executionReport.unknown with non-empty value', () => {
     // Given: The Japanese bundle file
-    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
-
     // When: Looking up the key
     // Then: The value exists and is not empty/whitespace
     assertNonEmptyL10nValue(bundleJa, 'artifact.executionReport.unknown');
@@ -114,8 +102,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-11: bundle.l10n.json defines execution report runner/truncation keys with non-empty values', () => {
     // Given: The English bundle file
-    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
-
     // When: Validating added keys
     const keys = [
       'artifact.executionReport.executionRunner',
@@ -139,8 +125,6 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-N-12: bundle.l10n.ja.json defines execution report runner/truncation keys with non-empty values', () => {
     // Given: The Japanese bundle file
-    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
-
     // When: Validating added keys
     const keys = [
       'artifact.executionReport.executionRunner',
@@ -165,8 +149,6 @@ suite('l10n key consistency', () => {
   test('TC-L10N-EXEC-NEWKEYS-N-01: t("artifact.executionReport.executionRunner") returns a non-empty label and is not the raw key', () => {
     // Given: Added l10n key and both bundles on disk
     const key = 'artifact.executionReport.executionRunner';
-    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
-    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
     assertNonEmptyL10nValue(bundleEn, key);
     assertNonEmptyL10nValue(bundleJa, key);
 
@@ -184,8 +166,6 @@ suite('l10n key consistency', () => {
   test('TC-L10N-EXEC-NEWKEYS-N-02: both en/ja bundles define a non-empty label for artifact.executionReport.executionRunner (no raw-key fallback)', () => {
     // Given: Added l10n key and both bundles on disk
     const key = 'artifact.executionReport.executionRunner';
-    const bundleEn = JSON.parse(fs.readFileSync(bundleEnPath, 'utf8')) as Record<string, unknown>;
-    const bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
 
     // When: Reading the bundle values directly
     const enValue = bundleEn[key];
@@ -216,14 +196,12 @@ suite('l10n key consistency', () => {
 
   test('TC-L10N-E-01: bundle.l10n.json and bundle.l10n.ja.json have identical key sets', () => {
     // Given: Both English and Japanese bundles exist
-    const bundleEnContent = fs.readFileSync(bundleEnPath, 'utf8');
-    const bundleJaContent = fs.readFileSync(bundleJaPath, 'utf8');
-    const bundleEn = JSON.parse(bundleEnContent) as Record<string, string>;
-    const bundleJa = JSON.parse(bundleJaContent) as Record<string, string>;
+    const bundleEnForKeySet = bundleEn as Record<string, string>;
+    const bundleJaForKeySet = bundleJa as Record<string, string>;
 
     // When: Comparing key sets
-    const keysEn = new Set(Object.keys(bundleEn));
-    const keysJa = new Set(Object.keys(bundleJa));
+    const keysEn = new Set(Object.keys(bundleEnForKeySet));
+    const keysJa = new Set(Object.keys(bundleJaForKeySet));
 
     const onlyInEn: string[] = [];
     const onlyInJa: string[] = [];
