@@ -22,6 +22,19 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 - Saves **test perspective tables** and **test execution reports** (Markdown; output directories are configurable)
 - Shows running task count in the **Status Bar** (click to open logs)
 
+## Screenshots
+
+> Place screenshots under `docs/images/` (see `docs/images/README.md`).  
+> Use `width` to limit display size (note: **this does not reduce the actual file size**).
+
+### Test execution report
+
+![Test execution report](docs/images/fig1.png)
+
+### Test perspective table
+
+![Test perspective table](docs/images/fig2.png)
+
 > **Important**: `cursor-agent` is executed with **`--force`**.  
 > **Local** modifies real files in your workspace.  
 > **Worktree** writes to a temporary worktree and applies only test diffs when safe; otherwise it exports merge artifacts.  
