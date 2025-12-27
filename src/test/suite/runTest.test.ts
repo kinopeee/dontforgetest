@@ -2364,6 +2364,25 @@ suite('test/runTest.ts', () => {
       assert.strictEqual(result, undefined, '空白のみは undefined');
     });
 
+    // TC-RESFILE-E-01: resolveTestResultFilePathOverride traversal
+    test('TC-RESFILE-E-01: resolveTestResultFilePathOverride は baseDir 外を指す相対パスで Error を投げる', () => {
+      // Given: baseDir 外へ抜ける相対パス
+      const baseDir = path.join(os.tmpdir(), 'dontforgetest-base');
+      const input = `..${path.sep}outside${path.sep}test-result.json`;
+
+      // When/Then: 例外（型とメッセージ）を検証する
+      assert.throws(
+        () => resolveTestResultFilePathOverride(input, baseDir),
+        (err: unknown) => {
+          assert.ok(err instanceof Error, 'Error が投げられること');
+          assert.ok(err.message.includes('許可された範囲外'), 'メッセージに範囲外である旨が含まれること');
+          assert.ok(err.message.includes('baseDir='), 'メッセージに baseDir 情報が含まれること');
+          return true;
+        },
+        'baseDir 外を指す相対パスでは Error を投げる',
+      );
+    });
+
     // TC-N-06: sleepMs(0) resolves
     test('TC-N-06: sleepMs(0) はエラーなく解決する', async () => {
       // Given: 0ms
