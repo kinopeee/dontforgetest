@@ -796,6 +796,157 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 4 |`), 'Total count is shown');
   });
 
+  // TC-RESOLVE-ENV-N-01: buildTestExecutionArtifactMarkdown prefers env from testResult when provided
+  test('TC-REPORT-ENV-N-01: buildTestExecutionArtifactMarkdown uses execution environment from testResult when provided', () => {
+    // Given: A structured testResult that includes execution environment fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: The execution info section uses values from testResult
+    assert.ok(md.includes('OS: testos (testarch)'), 'OS/arch uses testResult values');
+    assert.ok(md.includes('Node.js: v0.0.0-test'), 'Node.js version uses testResult value');
+    assert.ok(md.includes('VS Code: 9.9.9-test'), 'VS Code version uses testResult value');
+  });
+
+  // TC-RESOLVE-ENV-N-02: buildTestExecutionArtifactMarkdown falls back to local environment when testResult is missing
+  test('TC-RESOLVE-ENV-N-02: buildTestExecutionArtifactMarkdown falls back to local environment when testResult is undefined', () => {
+    // Given: No structured testResult (only raw execution result)
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: undefined,
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: The execution info section uses local process/vscode values
+    // NOTE: process.platform/process.arch/process.version are not reliably stub-able in Node; assert against runtime values.
+    assert.ok(md.includes(`OS: ${process.platform} (${process.arch})`), 'OS/arch falls back to local process values');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back to local process value');
+    assert.ok(md.includes(`VS Code: ${vscode.version}`), 'VS Code version falls back to vscode.version');
+  });
+
+  // TC-RESOLVE-ENV-B-NULL-01: null fields are treated as missing and fall back
+  test('TC-RESOLVE-ENV-B-NULL-01: buildTestExecutionArtifactMarkdown falls back per-field when env fields are null', () => {
+    // Given: A testResult with a mix of null and non-null env fields (JSON-originated)
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: {
+          platform: null as unknown as string,
+          arch: 'testarch',
+          nodeVersion: null as unknown as string,
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: null fields fall back; non-null fields are used
+    assert.ok(md.includes(`OS: ${process.platform} (testarch)`), 'Platform falls back but arch is preserved');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back when null');
+    assert.ok(md.includes('VS Code: 9.9.9-test'), 'VS Code version uses provided non-null value');
+  });
+
+  // TC-RESOLVE-ENV-B-EMPTY-01: empty strings are not nullish and should be used as-is
+  test('TC-RESOLVE-ENV-B-EMPTY-01: buildTestExecutionArtifactMarkdown uses empty string values (no fallback)', () => {
+    // Given: A testResult that uses empty strings for env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: {
+          platform: '',
+          arch: '',
+          nodeVersion: '',
+          vscodeVersion: '',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Empty strings are used (because ?? does not treat '' as nullish)
+    assert.ok(md.includes('OS:  ()'), 'OS line uses empty strings (platform/arch)');
+    assert.ok(md.includes('Node.js: '), 'Node.js line exists even when value is empty');
+    assert.ok(md.includes('VS Code: '), 'VS Code line exists even when value is empty');
+  });
+
+  // TC-ARTIFACT-MD-E-01: invalid types should not crash and should fall back
+  test('TC-ARTIFACT-MD-E-01: buildTestExecutionArtifactMarkdown falls back when env fields have invalid runtime types', () => {
+    // Given: A testResult with invalid runtime types for env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: {
+          platform: 123 as unknown as string,
+          arch: true as unknown as string,
+          nodeVersion: {} as unknown as string,
+          vscodeVersion: [] as unknown as string,
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: The report is generated and falls back to local values (no exception)
+    assert.ok(md.includes(`OS: ${process.platform} (${process.arch})`), 'Falls back for OS/arch');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Falls back for Node.js version');
+    assert.ok(md.includes(`VS Code: ${vscode.version}`), 'Falls back for VS Code version');
+  });
+
   // TC-REPORT-N-04: TestExecutionResult with parsed=false
   test('TC-REPORT-N-04: buildTestExecutionArtifactMarkdown generates report with summary table showing "-" for all counts when parsed=false', () => {
     // Given: TestExecutionResult with unparseable stdout (parsed=false)
@@ -5027,6 +5178,163 @@ suite('core/artifacts.ts', () => {
     });
 
     suite('parseTestResultFile', () => {
+      test('TC-PARSE-ENV-N-01: parses env fields when platform/arch/nodeVersion/vscodeVersion are strings', () => {
+        // Given: A JSON payload that contains env fields as strings
+        const raw = JSON.stringify({
+          platform: 'darwin',
+          arch: 'arm64',
+          nodeVersion: 'v1.2.3',
+          vscodeVersion: '1.2.3',
+          failures: 1,
+          passes: 2,
+          timestamp: 123,
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and preserves the env field values
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, 123);
+        assert.strictEqual(result.value.platform, 'darwin');
+        assert.strictEqual(result.value.arch, 'arm64');
+        assert.strictEqual(result.value.nodeVersion, 'v1.2.3');
+        assert.strictEqual(result.value.vscodeVersion, '1.2.3');
+        assert.strictEqual(result.value.failures, 1);
+        assert.strictEqual(result.value.passes, 2);
+      });
+
+      test('TC-PARSE-ENV-N-02: missing env fields are parsed as undefined while vscodeVersion is preserved', () => {
+        // Given: A JSON payload where platform/arch/nodeVersion are missing, and only vscodeVersion is present
+        const raw = JSON.stringify({ vscodeVersion: '1.2.3' });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and missing fields become undefined
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.platform, undefined);
+        assert.strictEqual(result.value.arch, undefined);
+        assert.strictEqual(result.value.nodeVersion, undefined);
+        assert.strictEqual(result.value.vscodeVersion, '1.2.3');
+      });
+
+      test('TC-PARSE-ENV-B-UNDEFINED-01: omitted env fields are treated as undefined', () => {
+        // Given: A JSON payload with no env properties (omitted)
+        const raw = JSON.stringify({ failures: 0, passes: 0 });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and env fields are undefined
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.platform, undefined);
+        assert.strictEqual(result.value.arch, undefined);
+        assert.strictEqual(result.value.nodeVersion, undefined);
+        assert.strictEqual(result.value.vscodeVersion, undefined);
+      });
+
+      test('TC-PARSE-ENV-B-NULL-01: null env fields are converted to undefined', () => {
+        // Given: A JSON payload where env fields are explicitly null
+        const raw = JSON.stringify({ platform: null, arch: null, nodeVersion: null, vscodeVersion: null });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and env fields become undefined (getStringOrUndefined behavior)
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.platform, undefined);
+        assert.strictEqual(result.value.arch, undefined);
+        assert.strictEqual(result.value.nodeVersion, undefined);
+        assert.strictEqual(result.value.vscodeVersion, undefined);
+      });
+
+      test('TC-PARSE-ENV-B-EMPTY-01: empty string env fields are preserved as empty strings', () => {
+        // Given: A JSON payload where env fields are empty strings
+        const raw = JSON.stringify({ platform: '', arch: '', nodeVersion: '', vscodeVersion: '' });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and preserves empty strings (typeof === "string")
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.platform, '');
+        assert.strictEqual(result.value.arch, '');
+        assert.strictEqual(result.value.nodeVersion, '');
+        assert.strictEqual(result.value.vscodeVersion, '');
+      });
+
+      test('TC-PARSE-ENV-E-01: invalid types for env fields are converted to undefined (without failing the whole parse)', () => {
+        // Given: A JSON payload where env fields have invalid types
+        const raw = JSON.stringify({ platform: 123, arch: true, nodeVersion: {}, vscodeVersion: [] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and env fields become undefined
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.platform, undefined);
+        assert.strictEqual(result.value.arch, undefined);
+        assert.strictEqual(result.value.nodeVersion, undefined);
+        assert.strictEqual(result.value.vscodeVersion, undefined);
+      });
+
+      test('TC-PARSE-RAW-E-01: returns ok=false with error matching JSON.parse error message (invalid JSON)', () => {
+        // Given: A raw string that cannot be parsed as JSON
+        const raw = '{';
+        let expectedError = 'invalid-json: (unknown)';
+        try {
+          JSON.parse(raw);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          expectedError = `invalid-json: ${msg}`;
+        }
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It fails and preserves the underlying JSON.parse error message
+        assert.deepStrictEqual(result, { ok: false, error: expectedError });
+      });
+
+      test('TC-PARSE-RAW-B-EMPTY-01: returns ok=false with error="empty" when raw is empty string', () => {
+        // Given: Empty input
+        const raw = '';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It fails with the stable error code "empty"
+        assert.deepStrictEqual(result, { ok: false, error: 'empty' });
+      });
+
+      test('TC-PARSE-RAW-B-NULL-01: throws TypeError when raw is null (current behavior)', () => {
+        // Given: A non-string input forced through the type system
+        const raw = null as unknown as string;
+
+        // When: parseTestResultFile is called with a null value
+        // Then: It throws TypeError because it calls raw.trim() (this is the current behavior)
+        assert.throws(() => parseTestResultFile(raw), TypeError);
+      });
+
       test('TC-ART-PTRF-E-01: returns ok=false with error="empty" when raw is empty/whitespace', () => {
         // Given: Empty input
         const raw = '   \n\t';
@@ -5057,6 +5365,9 @@ suite('core/artifacts.ts', () => {
         // Given: A test-result.json-like JSON payload with main numeric fields and arrays
         const raw = JSON.stringify({
           timestamp: 123,
+          platform: 'darwin',
+          arch: 'arm64',
+          nodeVersion: 'v1.2.3',
           vscodeVersion: '1.2.3',
           failures: 1,
           passes: 2,
@@ -5076,6 +5387,9 @@ suite('core/artifacts.ts', () => {
           return;
         }
         assert.strictEqual(result.value.timestamp, 123);
+        assert.strictEqual(result.value.platform, 'darwin');
+        assert.strictEqual(result.value.arch, 'arm64');
+        assert.strictEqual(result.value.nodeVersion, 'v1.2.3');
         assert.strictEqual(result.value.vscodeVersion, '1.2.3');
         assert.strictEqual(result.value.failures, 1);
         assert.strictEqual(result.value.passes, 2);

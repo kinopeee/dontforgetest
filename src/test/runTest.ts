@@ -19,6 +19,9 @@ export interface TestCaseInfo {
 
 export interface TestResultFile {
   timestamp?: number;
+  platform?: string;
+  arch?: string;
+  nodeVersion?: string;
   vscodeVersion?: string;
   failures?: number;
   passes?: number;

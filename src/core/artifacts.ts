@@ -64,6 +64,9 @@ export interface FailedTestInfo {
 
 export interface TestResultFile {
   timestamp?: number;
+  platform?: string;
+  arch?: string;
+  nodeVersion?: string;
   vscodeVersion?: string;
   failures?: number;
   passes?: number;
@@ -408,10 +411,17 @@ export function parseTestResultFile(raw: string): ParseTestResultFileResult {
     });
   }
 
-  const vscodeVersion = getStringOrUndefined(rec.vscodeVersion);
+  // 環境情報フィールドは厳密な文字列型のみを受理（数値・真偽値は undefined にフォールバック）
+  const vscodeVersion = getStrictStringOrUndefined(rec.vscodeVersion);
+  const platform = getStrictStringOrUndefined(rec.platform);
+  const arch = getStrictStringOrUndefined(rec.arch);
+  const nodeVersion = getStrictStringOrUndefined(rec.nodeVersion);
 
   const result: TestResultFile = {
     timestamp: getNumberOrUndefined(rec.timestamp),
+    platform,
+    arch,
+    nodeVersion,
     vscodeVersion,
     failures: getNumberOrUndefined(rec.failures),
     passes: getNumberOrUndefined(rec.passes),
@@ -740,10 +750,11 @@ export function buildTestExecutionArtifactMarkdown(params: {
   const detailsSection = buildTestDetailsSection(testResult);
 
   // 実行情報
+  const executionEnv = resolveExecutionEnvironment(params.result.testResult);
   const envLines = [
-    `- OS: ${process.platform} (${process.arch})`,
-    `- Node.js: ${process.version}`,
-    `- VS Code: ${vscode.version}`,
+    `- OS: ${executionEnv.platform} (${executionEnv.arch})`,
+    `- Node.js: ${executionEnv.nodeVersion}`,
+    `- VS Code: ${executionEnv.vscodeVersion}`,
   ].join('\n');
   const errMsg = params.result.errorMessage
     ? `- ${t('artifact.executionReport.spawnError')}: ${params.result.errorMessage}`
@@ -978,6 +989,30 @@ function buildFailureDetailsSection(testResult: TestResultFile | undefined): str
   return lines.join('\n');
 }
 
+type ExecutionEnvironment = {
+  platform: string;
+  arch: string;
+  nodeVersion: string;
+  vscodeVersion: string;
+};
+
+/**
+ * 実行環境情報を取得する。
+ * - test-result.json の情報を優先し、無い場合はローカル情報へフォールバックする
+ */
+function resolveExecutionEnvironment(testResult: TestResultFile | undefined): ExecutionEnvironment {
+  // 型チェック付きのフォールバック（nullish合体演算子だけでは不正な型を検出できないため）
+  const getStringOrFallback = (value: unknown, fallback: string): string =>
+    typeof value === 'string' ? value : fallback;
+
+  return {
+    platform: getStringOrFallback(testResult?.platform, process.platform),
+    arch: getStringOrFallback(testResult?.arch, process.arch),
+    nodeVersion: getStringOrFallback(testResult?.nodeVersion, process.version),
+    vscodeVersion: getStringOrFallback(testResult?.vscodeVersion, vscode.version),
+  };
+}
+
 /**
  * テスト詳細表のMarkdownを生成する。
  */
@@ -1113,6 +1148,14 @@ function getStringOrNull(value: unknown): string | null {
 function getStringOrUndefined(value: unknown): string | undefined {
   const s = getStringOrEmpty(value);
   return s.length > 0 ? s : undefined;
+}
+
+/**
+ * 厳密な文字列抽出。typeof === 'string' のみを受理し、空文字も保持する。
+ * 数値や真偽値など他の型は undefined として扱う。
+ */
+function getStrictStringOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
 }
 
 function getNumberOrNull(value: unknown): number | null {

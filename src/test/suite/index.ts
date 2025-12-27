@@ -32,6 +32,10 @@ export interface TestCaseInfo {
 
 export interface TestResultFile {
   timestamp: number;
+  /** 実行環境情報（テスト実行側で取得） */
+  platform?: string;
+  arch?: string;
+  nodeVersion?: string;
   vscodeVersion: string;
   failures: number;
   passes: number;
@@ -143,6 +147,9 @@ function writeTestResultFileSafely(params: {
     const total = params.tests.length;
     const result: TestResultFile = {
       timestamp: Date.now(),
+      platform: process.platform,
+      arch: process.arch,
+      nodeVersion: process.version,
       vscodeVersion: vscode.version,
       failures: params.failures,
       passes,
