@@ -5,6 +5,7 @@ import { type TestExecutionResult } from './artifacts';
 export interface RunTestCommandOptions {
   command: string;
   cwd: string;
+  env?: NodeJS.ProcessEnv;
 }
 
 /**
@@ -16,6 +17,7 @@ export interface RunTestCommandOptions {
 export async function runTestCommand(options: RunTestCommandOptions): Promise<TestExecutionResult> {
   const startedAt = nowMs();
   const maxCaptureBytes = 5 * 1024 * 1024;
+  const env = options.env ? { ...process.env, ...options.env } : process.env;
 
   let stdout = '';
   let stderr = '';
@@ -47,7 +49,7 @@ export async function runTestCommand(options: RunTestCommandOptions): Promise<Te
 
     const child = spawn(options.command, {
       cwd: options.cwd,
-      env: process.env,
+      env,
       shell: true,
       stdio: 'pipe',
     });
@@ -91,4 +93,3 @@ export async function runTestCommand(options: RunTestCommandOptions): Promise<Te
     });
   });
 }
-

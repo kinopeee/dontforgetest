@@ -113,6 +113,14 @@ function normalizeLocale(value: string | undefined): string {
   return v.length > 0 ? v : DEFAULT_VSCODE_TEST_LOCALE;
 }
 
+function resolveTestResultFilePathOverride(envValue: string | undefined, baseDir: string): string | undefined {
+  const raw = envValue?.trim();
+  if (!raw) {
+    return undefined;
+  }
+  return path.isAbsolute(raw) ? raw : path.join(baseDir, raw);
+}
+
 function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -523,6 +531,8 @@ export async function stageExtensionToTemp(params: {
     { src: path.join(params.sourceExtensionRoot, 'package.nls.ja.json'), dest: path.join(params.stageExtensionRoot, 'package.nls.ja.json') },
     // runtime ローカライズ（vscode.l10n.t 用）
     { src: path.join(params.sourceExtensionRoot, 'l10n'), dest: path.join(params.stageExtensionRoot, 'l10n') },
+    // パッケージング除外設定（テストでの検証用）
+    { src: path.join(params.sourceExtensionRoot, '.vscodeignore'), dest: path.join(params.stageExtensionRoot, '.vscodeignore') },
   ];
 
   // 必須ファイルは事前に存在確認し、欠落があれば cp ループに入る前に ENOENT を投げる（部分的コピーを避ける）
@@ -753,6 +763,10 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
   try {
     // 拡張機能のパス
     const sourceExtensionRoot = path.resolve(__dirname, '../../');
+    const testResultFilePathOverride = resolveTestResultFilePathOverride(
+      deps.env.DONTFORGETEST_TEST_RESULT_FILE,
+      sourceExtensionRoot,
+    );
 
     // VS Code拡張機能テストは別プロセス（Electron/Extension Host）を起動する。
     // 実行中のIDE（Cursor/VS Code）と user-data / extensions が衝突すると不安定になり得るため、
@@ -827,7 +841,7 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
       const testWorkspace = path.join(runtimeRoot, 'workspace', runId);
       // open 起動でも確実に参照できるよう、ワークスペース直下に結果ファイルを置く
       // （suite 側は workspaceRoot を優先して .vscode-test/test-result.json に書く）
-      const testResultFilePath = path.join(testWorkspace, '.vscode-test', 'test-result.json');
+      const testResultFilePath = testResultFilePathOverride ?? path.join(testWorkspace, '.vscode-test', 'test-result.json');
 
       lastUserDataDir = userDataDir;
       lastTestResultFilePath = testResultFilePath;
@@ -960,6 +974,7 @@ export const __test__ = {
   selectLauncher,
   normalizeLauncher,
   normalizeLocale,
+  resolveTestResultFilePathOverride,
   sleepMs,
   fileExists,
   waitForFile,

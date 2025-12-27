@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import {
@@ -12,10 +13,12 @@ import {
   parseMochaOutput,
   parsePerspectiveJsonV1,
   parseTestExecutionJsonV1,
+  parseTestResultFile,
   renderPerspectiveMarkdownTable,
   PERSPECTIVE_TABLE_HEADER,
   PERSPECTIVE_TABLE_SEPARATOR,
   type PerspectiveCase,
+  type TestResultFile,
 } from '../../../core/artifacts';
 import { stripAnsi } from '../../../core/testResultParser';
 import { t } from '../../../core/l10n';
@@ -650,6 +653,50 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes(`| ${t('artifact.executionReport.suite')} | ${t('artifact.executionReport.testName')} | ${t('artifact.executionReport.result')} |`), 'Details table header is present');
     assert.ok(md.includes('test case 1'), 'Test case 1 is in details');
     assert.ok(md.includes('test case 2'), 'Test case 2 is in details');
+  });
+
+  // TC-REPORT-N-05: TestExecutionResult with failedTests details
+  test('TC-REPORT-N-05: buildTestExecutionArtifactMarkdown includes failure details section when failedTests are present', () => {
+    // Given: testResult.failedTests を含む TestExecutionResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 1,
+        signal: null,
+        durationMs: 1000,
+        stdout: '  1) Suite A Test A\n  ✖',
+        stderr: '',
+        testResult: {
+          failedTests: [
+            {
+              title: 'Test A',
+              fullTitle: 'Suite A Test A',
+              error: 'Assertion failed',
+              expected: 'expected-value',
+              actual: 'actual-value',
+              stack: 'Error: Assertion failed\n  at line',
+            },
+          ],
+        },
+      },
+    });
+
+    // Then: 失敗詳細セクションと主要フィールドが含まれること
+    assert.ok(md.includes(`## ${t('artifact.executionReport.failureDetails')}`), 'Failure details section is present');
+    assert.ok(md.includes('Suite A Test A'), 'Failure title is present');
+    assert.ok(
+      md.includes(`${t('artifact.executionReport.failureMessage')}: Assertion failed`),
+      'Failure message is present',
+    );
+    assert.ok(md.includes(t('artifact.executionReport.expected')), 'Expected label is present');
+    assert.ok(md.includes('expected-value'), 'Expected value is present');
+    assert.ok(md.includes(t('artifact.executionReport.actual')), 'Actual label is present');
+    assert.ok(md.includes('actual-value'), 'Actual value is present');
+    assert.ok(md.includes(t('artifact.executionReport.stackTrace')), 'Stack trace label is present');
   });
 
   // TC-REPORT-N-03: TestExecutionResult with empty test cases array
@@ -4470,6 +4517,974 @@ suite('core/artifacts.ts', () => {
         return;
       }
       assert.strictEqual(result.value.stderr, '');
+    });
+
+    suite('parseTestResultFile', () => {
+      test('TC-ART-PTRF-E-01: returns ok=false with error="empty" when raw is empty/whitespace', () => {
+        // Given: Empty input
+        const raw = '   \n\t';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It returns the stable error code "empty"
+        assert.deepStrictEqual(result, { ok: false, error: 'empty' });
+      });
+
+      test('TC-ART-PTRF-E-02: returns ok=false with error starting "invalid-json:" when JSON.parse fails', () => {
+        // Given: Invalid JSON
+        const raw = '{ invalid';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It returns invalid-json prefix (message body can vary)
+        assert.strictEqual(result.ok, false);
+        if (result.ok) {
+          return;
+        }
+        assert.ok(result.error.startsWith('invalid-json:'), 'Expected invalid-json prefix');
+      });
+
+      test('TC-ART-PTRF-N-01: returns ok=true and extracts numeric fields and arrays when payload has the expected shape', () => {
+        // Given: A test-result.json-like JSON payload with main numeric fields and arrays
+        const raw = JSON.stringify({
+          timestamp: 123,
+          vscodeVersion: '1.2.3',
+          failures: 1,
+          passes: 2,
+          pending: 3,
+          total: 6,
+          durationMs: 456,
+          tests: [{ suite: 'Suite', title: 'T', fullTitle: 'Suite T', state: 'passed', durationMs: 10 }],
+          failedTests: [{ title: 'T', fullTitle: 'Suite T', error: 'boom' }],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It returns ok=true and the observable fields are extracted
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, 123);
+        assert.strictEqual(result.value.vscodeVersion, '1.2.3');
+        assert.strictEqual(result.value.failures, 1);
+        assert.strictEqual(result.value.passes, 2);
+        assert.strictEqual(result.value.pending, 3);
+        assert.strictEqual(result.value.total, 6);
+        assert.strictEqual(result.value.durationMs, 456);
+        assert.strictEqual(result.value.tests?.length, 1);
+        assert.strictEqual(result.value.failedTests?.length, 1);
+      });
+
+      test('TC-ART-PTRF-N-02: extracts tests[] and normalizes state to passed/failed/pending or undefined', () => {
+        // Given: tests[] includes valid states and an unknown state
+        const raw = JSON.stringify({
+          tests: [
+            { suite: 'S', title: 'A', fullTitle: 'S A', state: 'passed', durationMs: 0 },
+            { suite: 'S', title: 'B', fullTitle: 'S B', state: 'failed', durationMs: 12 },
+            { suite: 'S', title: 'C', fullTitle: 'S C', state: 'pending', durationMs: '1' },
+            { suite: 'S', title: 'D', fullTitle: 'S D', state: 'unknown', durationMs: '2' },
+          ],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: tests[] is present and state is normalized (unknown -> undefined)
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests?.length, 4);
+        assert.strictEqual(result.value.tests?.[0]?.suite, 'S');
+        assert.strictEqual(result.value.tests?.[0]?.title, 'A');
+        assert.strictEqual(result.value.tests?.[0]?.fullTitle, 'S A');
+        assert.strictEqual(result.value.tests?.[0]?.state, 'passed');
+        assert.strictEqual(result.value.tests?.[0]?.durationMs, 0);
+        assert.strictEqual(result.value.tests?.[1]?.state, 'failed');
+        assert.strictEqual(result.value.tests?.[2]?.state, 'pending');
+        assert.strictEqual(result.value.tests?.[3]?.state, undefined);
+      });
+
+      test('TC-ART-PTRF-N-03: extracts failedTests[] and ensures title/fullTitle/error are always strings', () => {
+        // Given: failedTests[] with missing required string fields
+        const raw = JSON.stringify({
+          failedTests: [
+            {
+              title: null,
+              fullTitle: undefined,
+              error: null,
+              stack: 'STACK',
+              code: 'ERR_ASSERTION',
+              expected: 'expected',
+              actual: 'actual',
+            },
+          ],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Required string fields are present as strings (possibly empty), optionals are strings when present
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.failedTests?.length, 1);
+        assert.strictEqual(result.value.failedTests?.[0]?.title, '');
+        assert.strictEqual(result.value.failedTests?.[0]?.fullTitle, '');
+        assert.strictEqual(result.value.failedTests?.[0]?.error, '');
+        assert.strictEqual(result.value.failedTests?.[0]?.stack, 'STACK');
+        assert.strictEqual(result.value.failedTests?.[0]?.code, 'ERR_ASSERTION');
+        assert.strictEqual(result.value.failedTests?.[0]?.expected, 'expected');
+        assert.strictEqual(result.value.failedTests?.[0]?.actual, 'actual');
+      });
+
+      test('TC-ART-PTRF-B-01: converts numeric string "0" to number 0 (zero boundary)', () => {
+        // Given: Numeric fields represented as string "0"
+        const raw = JSON.stringify({ timestamp: '0', failures: '0', passes: '0', pending: '0', total: '0', durationMs: '0' });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Parsed values are numbers equal to 0 (not undefined)
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, 0);
+        assert.strictEqual(result.value.failures, 0);
+        assert.strictEqual(result.value.passes, 0);
+        assert.strictEqual(result.value.pending, 0);
+        assert.strictEqual(result.value.total, 0);
+        assert.strictEqual(result.value.durationMs, 0);
+      });
+
+      test('TC-ART-PTRF-B-02: treats tests:[] and failedTests:[] as undefined (empty array boundary)', () => {
+        // Given: Explicit empty arrays
+        const raw = JSON.stringify({ tests: [], failedTests: [] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: tests/failedTests are omitted (undefined) because length is 0
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests, undefined);
+        assert.strictEqual(result.value.failedTests, undefined);
+      });
+
+      test('TC-ART-PTRF-B-03: sets tests[].state to undefined for unsupported enum values', () => {
+        // Given: An unsupported state value
+        const raw = JSON.stringify({ tests: [{ state: 'unknown' }] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: state is normalized to undefined (and no exception is thrown)
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests?.length, 1);
+        assert.strictEqual(result.value.tests?.[0]?.state, undefined);
+      });
+
+      test('TC-ART-PTRF-E-03: returns ok=false with error="json-not-object" for non-object JSON (null/array/string/number)', () => {
+        // Given: Non-object JSON inputs
+        const raws = ['null', '[]', '"x"', '123'];
+
+        // When/Then: parseTestResultFile rejects them with json-not-object
+        for (const raw of raws) {
+          const result = parseTestResultFile(raw);
+          assert.deepStrictEqual(result, { ok: false, error: 'json-not-object' });
+        }
+      });
+
+      test('TC-TRF-B-01: returns ok=false with error="empty" when raw is whitespace-only', () => {
+        // Given: Whitespace-only input (should be checked after trim())
+        const raw = ' \n \t ';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Returns an "empty" parse error
+        assert.deepStrictEqual(result, { ok: false, error: 'empty' });
+      });
+
+      test('TC-TRF-E-01: returns ok=false with error starting "invalid-json:" when raw is invalid JSON', () => {
+        // Given: Invalid JSON input
+        const raw = '{ invalid';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Error type is stable by prefix (message body can vary)
+        assert.strictEqual(result.ok, false);
+        if (result.ok) {
+          return;
+        }
+        assert.ok(result.error.startsWith('invalid-json:'), 'Expected error to start with "invalid-json:"');
+      });
+
+      test('TC-TRF-E-02: returns ok=false with error="json-not-object" when raw JSON is null', () => {
+        // Given: JSON that is not an object (null boundary)
+        const raw = 'null';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Reject non-object JSON
+        assert.deepStrictEqual(result, { ok: false, error: 'json-not-object' });
+      });
+
+      test('TC-TRF-N-01: parses full test-result.json shape and preserves key fields', () => {
+        // Given: A full-shaped test-result.json payload
+        const raw = JSON.stringify({
+          timestamp: 123,
+          vscodeVersion: '1.2.3',
+          failures: 1,
+          passes: 2,
+          pending: 3,
+          total: 6,
+          durationMs: 456,
+          tests: [
+            { suite: 'Suite A', title: 'Test 1', fullTitle: 'Suite A Test 1', state: 'passed', durationMs: 0 },
+            { suite: 'Suite B', title: 'Test 2', fullTitle: 'Suite B Test 2', state: 'failed', durationMs: 12 },
+          ],
+          failedTests: [
+            {
+              title: 'Test 2',
+              fullTitle: 'Suite B Test 2',
+              error: 'AssertionError: boom',
+              stack: 'STACK',
+              code: 'ERR_ASSERTION',
+              expected: 'expected',
+              actual: 'actual',
+            },
+          ],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Returns ok=true with expected structured fields
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, 123);
+        assert.strictEqual(result.value.vscodeVersion, '1.2.3');
+        assert.strictEqual(result.value.failures, 1);
+        assert.strictEqual(result.value.passes, 2);
+        assert.strictEqual(result.value.pending, 3);
+        assert.strictEqual(result.value.total, 6);
+        assert.strictEqual(result.value.durationMs, 456);
+        assert.strictEqual(result.value.tests?.length, 2);
+        assert.strictEqual(result.value.tests?.[0]?.state, 'passed');
+        assert.strictEqual(result.value.tests?.[0]?.durationMs, 0);
+        assert.strictEqual(result.value.failedTests?.length, 1);
+        assert.strictEqual(result.value.failedTests?.[0]?.code, 'ERR_ASSERTION');
+      });
+
+      test('TC-TRF-N-02: accepts "{}" and returns ok=true with all optional fields undefined', () => {
+        // Given: Minimal JSON object with missing fields
+        const raw = '{}';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: ok=true and missing fields become undefined (not defaults)
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, undefined);
+        assert.strictEqual(result.value.vscodeVersion, undefined);
+        assert.strictEqual(result.value.failures, undefined);
+        assert.strictEqual(result.value.passes, undefined);
+        assert.strictEqual(result.value.pending, undefined);
+        assert.strictEqual(result.value.total, undefined);
+        assert.strictEqual(result.value.durationMs, undefined);
+        assert.strictEqual(result.value.tests, undefined);
+        assert.strictEqual(result.value.failedTests, undefined);
+      });
+
+      test('TC-TRF-N-03: treats non-array tests as absent and returns tests=undefined', () => {
+        // Given: tests is not an array
+        const raw = JSON.stringify({ tests: null });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: ok=true with tests undefined (empty array is not returned)
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests, undefined);
+      });
+
+      test('TC-TRF-N-04: skips non-object entries inside tests array', () => {
+        // Given: tests array with mixed element types
+        const raw = JSON.stringify({ tests: [1, null, 'x', {}] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: ok=true and only object entries are kept
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests?.length, 1);
+      });
+
+      test('TC-TRF-B-02: parses numeric fields as 0 from both numbers and numeric strings', () => {
+        // Given: Numeric fields set to 0 via string/number forms
+        const raw = JSON.stringify({
+          timestamp: '0',
+          failures: 0,
+          passes: '0',
+          pending: 0,
+          total: '0',
+          durationMs: 0,
+          tests: [{ durationMs: '0' }],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: 0 is preserved (not converted to undefined)
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, 0);
+        assert.strictEqual(result.value.failures, 0);
+        assert.strictEqual(result.value.passes, 0);
+        assert.strictEqual(result.value.pending, 0);
+        assert.strictEqual(result.value.total, 0);
+        assert.strictEqual(result.value.durationMs, 0);
+        assert.strictEqual(result.value.tests?.[0]?.durationMs, 0);
+      });
+
+      test('TC-TRF-B-03: preserves negative numbers (e.g. -1) as-is', () => {
+        // Given: Negative numeric fields
+        const raw = JSON.stringify({ failures: '-1', durationMs: -1 });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Negative values remain finite numbers
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.failures, -1);
+        assert.strictEqual(result.value.durationMs, -1);
+      });
+
+      test('TC-TRF-B-04: parses MAX_SAFE_INTEGER from number and numeric string', () => {
+        // Given: Boundary values around MAX_SAFE_INTEGER
+        const raw = JSON.stringify({
+          timestamp: Number.MAX_SAFE_INTEGER,
+          total: String(Number.MAX_SAFE_INTEGER),
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Values are preserved as finite numbers
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, Number.MAX_SAFE_INTEGER);
+        assert.strictEqual(result.value.total, Number.MAX_SAFE_INTEGER);
+      });
+
+      test('TC-TRF-A-01: treats non-finite numeric strings (e.g. "Infinity") as undefined', () => {
+        // Given: Non-finite values represented as strings in JSON
+        const raw = JSON.stringify({ durationMs: 'Infinity', failures: 'NaN' });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Non-finite values are rejected and become undefined
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.durationMs, undefined);
+        assert.strictEqual(result.value.failures, undefined);
+      });
+
+      test('TC-TRF-B-05: normalizes tests[].state to undefined for out-of-enum values', () => {
+        // Given: tests[].state is not one of passed/failed/pending
+        const raw = JSON.stringify({ tests: [{ state: 'skipped' }, { state: 0 }, { state: null }] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: State is normalized to undefined
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests?.length, 3);
+        assert.strictEqual(result.value.tests?.[0]?.state, undefined);
+        assert.strictEqual(result.value.tests?.[1]?.state, undefined);
+        assert.strictEqual(result.value.tests?.[2]?.state, undefined);
+      });
+
+      test('TC-TRF-N-05: fills missing/null failedTests string fields with empty strings', () => {
+        // Given: failedTests entries with missing required strings
+        const raw = JSON.stringify({ failedTests: [{ title: null, fullTitle: undefined, error: null }] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: title/fullTitle/error are empty strings (not undefined)
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.failedTests?.length, 1);
+        assert.strictEqual(result.value.failedTests?.[0]?.title, '');
+        assert.strictEqual(result.value.failedTests?.[0]?.fullTitle, '');
+        assert.strictEqual(result.value.failedTests?.[0]?.error, '');
+      });
+    });
+
+    suite('buildTestExecutionArtifactMarkdown (failure details section)', () => {
+      test('TC-ART-FAILSEC-N-01: includes "Failure Details" section with message/code/expected/actual/stack blocks when failedTests exist', () => {
+        // Given: A test execution result with one failedTests entry containing all detail fields
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: {
+              failedTests: [
+                {
+                  title: 'A',
+                  fullTitle: 'Suite A',
+                  error: 'boom',
+                  code: 'ERR_ASSERTION',
+                  expected: 'expected',
+                  actual: 'actual',
+                  stack: 'STACK',
+                },
+              ],
+            },
+          },
+        });
+
+        // When/Then: Failure details section and each labeled block are present
+        assert.ok(md.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+        assert.ok(md.includes('### 1.'));
+        assert.ok(md.includes(`${t('artifact.executionReport.failureMessage')}: boom`));
+        assert.ok(md.includes(`${t('artifact.executionReport.failureCode')}: ERR_ASSERTION`));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.expected')}:`));
+        assert.ok(md.includes('```text'));
+        assert.ok(md.includes('expected'));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.actual')}:`));
+        assert.ok(md.includes('actual'));
+        assert.ok(md.includes(t('artifact.executionReport.stackTrace')));
+      });
+
+      test('TC-ART-FAILSEC-N-02: falls back fullTitle -> title -> "(unknown)" and normalizes whitespace/newlines in heading', () => {
+        // Given: fullTitle is empty and title contains newlines/extra spaces
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'Title\n  With  Spaces', fullTitle: '', error: 'e' }] },
+          },
+        });
+
+        // When/Then: Heading uses title and is normalized to a single line
+        assert.ok(md.includes('### 1. Title With Spaces'));
+      });
+
+      test('TC-ART-FAILSEC-B-01: omits failure details section when testResult is undefined or failedTests is empty', () => {
+        // Given: No structured failures
+        const md1 = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 0,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+          },
+        });
+        const md2 = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 0,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [] },
+          },
+        });
+
+        // When/Then: The failure details header is not present
+        assert.ok(!md1.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+        assert.ok(!md2.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+      });
+
+      test('TC-ART-FAILSEC-B-02: does not truncate at 19999/20000 chars, but truncates at 20001 chars (max+1)', () => {
+        // Given: Three payloads around the truncation threshold
+        const expected19999 = 'a'.repeat(19_999);
+        const expected20000 = 'a'.repeat(20_000);
+        const expected20001 = 'a'.repeat(20_001);
+
+        const render = (expected: string): string =>
+          buildTestExecutionArtifactMarkdown({
+            generatedAtMs: Date.now(),
+            generationLabel: 'Label',
+            targetPaths: ['x.ts'],
+            result: {
+              command: 'cmd',
+              cwd: '/tmp',
+              exitCode: 1,
+              signal: null,
+              durationMs: 10,
+              stdout: '',
+              stderr: '',
+              testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', expected }] },
+            },
+          });
+
+        // When: Rendering failure details
+        const md19999 = render(expected19999);
+        const md20000 = render(expected20000);
+        const md20001 = render(expected20001);
+
+        // Then: Only max+1 is truncated
+        assert.ok(!md19999.includes('(truncated:'), 'Expected no truncation at 19999');
+        assert.ok(!md20000.includes('(truncated:'), 'Expected no truncation at 20000');
+        assert.ok(md20001.includes('... (truncated: 20001 chars -> 20000 chars)'), 'Expected truncation at 20001');
+      });
+
+      test('TC-ART-FAILSEC-B-03: omits empty/whitespace-only fields (message/code/expected/actual/stack)', () => {
+        // Given: A failedTests entry with whitespace-only fields
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: {
+              failedTests: [
+                {
+                  title: 'A',
+                  fullTitle: 'A',
+                  error: '   ',
+                  code: '',
+                  expected: '  ',
+                  actual: '',
+                  stack: ' \n ',
+                },
+              ],
+            },
+          },
+        });
+
+        // When/Then: Only the section + heading are present, but field labels are omitted
+        assert.ok(md.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+        assert.ok(md.includes('### 1. A'));
+        assert.ok(!md.includes(`- ${t('artifact.executionReport.failureMessage')}:`), 'Message line should be omitted');
+        assert.ok(!md.includes(`- ${t('artifact.executionReport.failureCode')}:`), 'Code line should be omitted');
+        assert.ok(!md.includes(`- ${t('artifact.executionReport.expected')}:`), 'Expected line should be omitted');
+        assert.ok(!md.includes(`- ${t('artifact.executionReport.actual')}:`), 'Actual line should be omitted');
+        assert.ok(!md.includes(`<summary>${t('artifact.executionReport.stackTrace')}</summary>`), 'Stack trace should be omitted');
+      });
+
+      test('TC-REP-N-01: renders failure details when result.testResult.failedTests is present', () => {
+        // Given: A test execution result with structured failedTests
+        const testResult: TestResultFile = {
+          failedTests: [
+            {
+              title: 'Test A',
+              fullTitle: 'Suite Test A',
+              error: 'boom',
+              stack: 'STACK TRACE',
+              code: 'ERR_ASSERTION',
+              expected: 'expected-value',
+              actual: 'actual-value',
+            },
+          ],
+        };
+
+        // When: buildTestExecutionArtifactMarkdown is called
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult,
+          },
+        });
+
+        // Then: Failure details section is included with labels and contents
+        assert.ok(md.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.failureMessage')}: boom`));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.failureCode')}: ERR_ASSERTION`));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.expected')}:`));
+        assert.ok(md.includes('```text'));
+        assert.ok(md.includes('expected-value'));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.actual')}:`));
+        assert.ok(md.includes('actual-value'));
+        assert.ok(md.includes(`<summary>${t('artifact.executionReport.stackTrace')}${t('artifact.executionReport.clickToExpand')}</summary>`));
+      });
+
+      test('TC-REP-N-02: does not render failure details section when testResult is missing/empty', () => {
+        // Given: A test execution result without structured failures
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 0,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [] },
+          },
+        });
+
+        // When/Then: Failure details section is omitted
+        assert.ok(!md.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+      });
+
+      test('TC-REP-N-03: renders multiple failures with numbered headings', () => {
+        // Given: Two failed test entries
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: {
+              failedTests: [
+                { title: 'A', fullTitle: 'Suite A', error: 'e1' },
+                { title: 'B', fullTitle: 'Suite B', error: 'e2' },
+              ],
+            },
+          },
+        });
+
+        // When/Then: Both are numbered
+        assert.ok(md.includes('### 1. Suite A'));
+        assert.ok(md.includes('### 2. Suite B'));
+      });
+
+      test('TC-REP-B-01: falls back to "(unknown)" when both fullTitle and title are empty', () => {
+        // Given: Missing/empty titles
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: '', fullTitle: '', error: 'e' }] },
+          },
+        });
+
+        // Then: "(unknown)" is used in the heading
+        assert.ok(md.includes('### 1. (unknown)'));
+      });
+
+      test('TC-REP-B-02: normalizes ANSI/newlines/spaces in failure message', () => {
+        // Given: A message with ANSI and newlines/spaces
+        const message = `\u001b[31mError:\u001b[0m line1\n\n   line2`;
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: message }] },
+          },
+        });
+
+        // Then: ANSI is stripped and message is single-line
+        assert.ok(!md.includes('\u001b[31m'), 'ANSI should be stripped');
+        assert.ok(md.includes(`${t('artifact.executionReport.failureMessage')}: Error: line1 line2`));
+      });
+
+      test('TC-REP-B-03: normalizes CRLF in expected/actual and renders as fenced code blocks', () => {
+        // Given: CRLF multiline details
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: {
+              failedTests: [
+                {
+                  title: 'A',
+                  fullTitle: 'A',
+                  error: 'e',
+                  expected: 'line1\r\nline2\r\n\r\nline3',
+                  actual: 'a1\r\na2',
+                },
+              ],
+            },
+          },
+        });
+
+        // Then: CRLF is normalized to LF inside fences
+        assert.ok(md.includes('```text\nline1\nline2\n\nline3\n```'));
+        assert.ok(md.includes('```text\na1\na2\n```'));
+      });
+
+      test('TC-REP-B-04: does not truncate when expected length is exactly 20000', () => {
+        // Given: expected length exactly at the max threshold
+        const expected = 'a'.repeat(20_000);
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', expected }] },
+          },
+        });
+
+        // Then: No "(truncated:" marker exists
+        assert.ok(!md.includes('(truncated:'), 'Expected content should not be truncated at exactly 20000 chars');
+      });
+
+      test('TC-REP-B-05: truncates when expected length is 20001 (max+1) and includes marker', () => {
+        // Given: expected length just above the max threshold
+        const expected = 'a'.repeat(20_001);
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', expected }] },
+          },
+        });
+
+        // Then: Truncation marker is included with the correct max
+        assert.ok(md.includes('... (truncated: 20001 chars -> 20000 chars)'), 'Expected truncation marker for max+1');
+      });
+
+      test('TC-REP-A-01: omits Code line when code is empty/whitespace-only', () => {
+        // Given: Empty/whitespace-only "code"
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', code: '   ' }] },
+          },
+        });
+
+        // Then: Code label does not appear
+        assert.ok(!md.includes(`- ${t('artifact.executionReport.failureCode')}:`));
+      });
+
+      test('TC-L10N-N-01: renders Japanese failure details labels when locale is ja', function () {
+        // Given: Running under Japanese VS Code locale
+        const isJa = (vscode.env.language ?? '').startsWith('ja');
+        if (!isJa) {
+          this.skip();
+        }
+
+        // When: buildTestExecutionArtifactMarkdown is called with failures
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', stack: 's' }] },
+          },
+        });
+
+        // Then: Localized labels are Japanese (not raw keys)
+        assert.ok(md.includes('失敗詳細'));
+        assert.ok(md.includes('メッセージ'));
+        assert.ok(md.includes('スタックトレース'));
+      });
+
+      test('TC-L10N-N-02: renders English failure details labels when locale is en', function () {
+        // Given: Running under English VS Code locale
+        const isEn = !(vscode.env.language ?? '').startsWith('ja');
+        if (!isEn) {
+          this.skip();
+        }
+
+        // When: buildTestExecutionArtifactMarkdown is called with failures
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', stack: 's' }] },
+          },
+        });
+
+        // Then: Localized labels are English
+        assert.ok(md.includes('Failure Details'));
+        assert.ok(md.includes('Message'));
+        assert.ok(md.includes('Stack Trace'));
+      });
+
+      test('TC-L10N-KEYS-N-01: l10n bundles include failure detail keys for both en and ja', () => {
+        // Given: The repository root and both l10n bundles
+        const repoRoot = path.resolve(__dirname, '../../../..');
+        const enPath = path.join(repoRoot, 'l10n', 'bundle.l10n.json');
+        const jaPath = path.join(repoRoot, 'l10n', 'bundle.l10n.ja.json');
+        const bundleEn = JSON.parse(fs.readFileSync(enPath, 'utf8')) as Record<string, unknown>;
+        const bundleJa = JSON.parse(fs.readFileSync(jaPath, 'utf8')) as Record<string, unknown>;
+
+        const keys = [
+          'artifact.executionReport.failureDetails',
+          'artifact.executionReport.failureMessage',
+          'artifact.executionReport.failureCode',
+          'artifact.executionReport.expected',
+          'artifact.executionReport.actual',
+          'artifact.executionReport.stackTrace',
+        ];
+
+        // When/Then: Both bundles contain these keys as strings
+        for (const key of keys) {
+          assert.strictEqual(typeof bundleEn[key], 'string', `Expected en bundle to include key: ${key}`);
+          assert.strictEqual(typeof bundleJa[key], 'string', `Expected ja bundle to include key: ${key}`);
+        }
+      });
+
+      test('TC-L10N-KEY-N-01: l10n bundles include failure details keys (en/ja)', () => {
+        // Given: Both runtime l10n bundles
+        const repoRoot = path.resolve(__dirname, '../../../..');
+        const bundleEn = JSON.parse(fs.readFileSync(path.join(repoRoot, 'l10n', 'bundle.l10n.json'), 'utf8')) as Record<string, unknown>;
+        const bundleJa = JSON.parse(fs.readFileSync(path.join(repoRoot, 'l10n', 'bundle.l10n.ja.json'), 'utf8')) as Record<string, unknown>;
+
+        // When/Then: Each required key exists as a non-empty string in both bundles
+        const keys = [
+          'artifact.executionReport.failureDetails',
+          'artifact.executionReport.failureMessage',
+          'artifact.executionReport.failureCode',
+          'artifact.executionReport.expected',
+          'artifact.executionReport.actual',
+          'artifact.executionReport.stackTrace',
+        ];
+        for (const key of keys) {
+          assert.ok(typeof bundleEn[key] === 'string' && (bundleEn[key] as string).length > 0, `Expected en key: ${key}`);
+          assert.ok(typeof bundleJa[key] === 'string' && (bundleJa[key] as string).length > 0, `Expected ja key: ${key}`);
+        }
+      });
     });
   });
 });

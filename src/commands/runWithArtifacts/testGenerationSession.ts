@@ -8,9 +8,11 @@ import {
   emitLogEvent,
   formatTimestamp,
   getArtifactSettings,
+  parseTestResultFile,
   saveTestExecutionReport,
   type ArtifactSettings,
   type TestExecutionResult,
+  type TestResultFile,
 } from '../../core/artifacts';
 import { taskManager } from '../../core/taskManager';
 import { runTestCommand } from '../../core/testRunner';
@@ -408,6 +410,7 @@ export class TestGenerationSession {
     }
 
     const testTaskId = `${this.options.generationTaskId}-test`;
+    const testResultEnv = this.buildTestResultEnv(testWorkspaceRoot);
     const willLaunchVsCode = await this.looksLikeVsCodeLaunchingTestCommand(testWorkspaceRoot, this.settings.testCommand);
 
     if (willLaunchVsCode && this.settings.testExecutionRunner === 'extension') {
@@ -442,6 +445,7 @@ export class TestGenerationSession {
       appendEventToOutput(started);
       this.captureEvent(started);
 
+      const testStartedAt = nowMs();
       const result = await runTestCommandViaCursorAgent({
         provider: this.options.provider,
         taskId: `${testTaskId}-agent`,
@@ -487,7 +491,13 @@ export class TestGenerationSession {
         appendEventToOutput(warn);
         this.captureEvent(warn);
 
-        const fallbackResult = await runTestCommand({ command: this.settings.testCommand, cwd: testWorkspaceRoot });
+        const fallbackStartedAt = nowMs();
+        const fallbackResult = await runTestCommand({ command: this.settings.testCommand, cwd: testWorkspaceRoot, env: testResultEnv });
+        const enrichedFallbackResult = await this.attachTestResult({
+          result: fallbackResult,
+          testWorkspaceRoot,
+          startedAtMs: fallbackStartedAt,
+        });
 
         const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: fallbackResult.exitCode, timestampMs: nowMs() };
         handleTestGenEventForStatusBar(completed);
@@ -501,7 +511,7 @@ export class TestGenerationSession {
           model: this.options.model,
           reportDir: this.settings.testExecutionReportDir,
           timestamp: this.timestamp,
-          result: { ...fallbackResult, extensionLog: this.testExecutionLogLines.join('\n') },
+          result: { ...enrichedFallbackResult, extensionLog: this.testExecutionLogLines.join('\n') },
         });
         appendEventToOutput(
           emitLogEvent(testTaskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)),
@@ -510,6 +520,7 @@ export class TestGenerationSession {
         return;
       }
 
+      const enrichedResult = await this.attachTestResult({ result, testWorkspaceRoot, startedAtMs: testStartedAt });
       const completed: TestGenEvent = { type: 'completed', taskId: testTaskId, exitCode: result.exitCode, timestampMs: nowMs() };
       handleTestGenEventForStatusBar(completed);
       appendEventToOutput(completed);
@@ -522,7 +533,7 @@ export class TestGenerationSession {
         model: this.options.model,
         reportDir: this.settings.testExecutionReportDir,
         timestamp: this.timestamp,
-        result: { ...result, extensionLog: this.testExecutionLogLines.join('\n') },
+        result: { ...enrichedResult, extensionLog: this.testExecutionLogLines.join('\n') },
       });
       appendEventToOutput(emitLogEvent(testTaskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)));
       handleTestGenEventForProgressView({ type: 'completed', taskId: this.options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
@@ -540,7 +551,9 @@ export class TestGenerationSession {
     appendEventToOutput(started);
     this.captureEvent(started);
 
-    const result = await runTestCommand({ command: this.settings.testCommand, cwd: testWorkspaceRoot });
+    const testStartedAt = nowMs();
+    const result = await runTestCommand({ command: this.settings.testCommand, cwd: testWorkspaceRoot, env: testResultEnv });
+    const enrichedResult = await this.attachTestResult({ result, testWorkspaceRoot, startedAtMs: testStartedAt });
 
     const testCompletedMsg = t(
       'testExecution.completed',
@@ -567,7 +580,7 @@ export class TestGenerationSession {
       model: this.options.model,
       reportDir: this.settings.testExecutionReportDir,
       timestamp: this.timestamp,
-      result: { ...result, extensionLog: this.testExecutionLogLines.join('\n') },
+      result: { ...enrichedResult, extensionLog: this.testExecutionLogLines.join('\n') },
     });
 
     appendEventToOutput(emitLogEvent(testTaskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)));
@@ -586,6 +599,48 @@ export class TestGenerationSession {
     }
 
     taskManager.unregister(this.options.generationTaskId);
+  }
+
+  private buildTestResultEnv(testWorkspaceRoot: string): NodeJS.ProcessEnv {
+    const testResultFilePath = path.join(testWorkspaceRoot, '.vscode-test', 'test-result.json');
+    return {
+      // テスト結果ファイルの出力先をワークスペース内に固定する
+      DONTFORGETEST_TEST_RESULT_FILE: testResultFilePath,
+    };
+  }
+
+  private async attachTestResult(params: {
+    result: TestExecutionResult;
+    testWorkspaceRoot: string;
+    startedAtMs: number;
+  }): Promise<TestExecutionResult> {
+    const testResult = await this.readTestResultFile(params.testWorkspaceRoot, params.startedAtMs);
+    if (!testResult) {
+      return params.result;
+    }
+    return { ...params.result, testResult };
+  }
+
+  private async readTestResultFile(testWorkspaceRoot: string, startedAtMs: number): Promise<TestResultFile | undefined> {
+    const testResultPath = path.join(testWorkspaceRoot, '.vscode-test', 'test-result.json');
+    const freshnessGraceMs = 1000;
+    try {
+      const stat = await fs.promises.stat(testResultPath);
+      const raw = await fs.promises.readFile(testResultPath, 'utf8');
+      const parsed = parseTestResultFile(raw);
+      if (!parsed.ok) {
+        return undefined;
+      }
+      const timestamp = typeof parsed.value.timestamp === 'number' ? parsed.value.timestamp : undefined;
+      const isFreshByMtime = stat.mtimeMs >= startedAtMs - freshnessGraceMs;
+      const isFreshByTimestamp = timestamp !== undefined && timestamp >= startedAtMs - freshnessGraceMs;
+      if (!isFreshByMtime && !isFreshByTimestamp) {
+        return undefined;
+      }
+      return parsed.value;
+    } catch {
+      return undefined;
+    }
   }
 
   private appendPerspectiveToPrompt(basePrompt: string, perspectiveMarkdown: string): string {

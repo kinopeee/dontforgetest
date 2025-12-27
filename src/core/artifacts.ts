@@ -42,6 +42,38 @@ export interface TestExecutionJsonV1 {
   stderr: string;
 }
 
+export type TestCaseState = 'passed' | 'failed' | 'pending';
+
+export interface TestCaseInfo {
+  suite?: string;
+  title?: string;
+  fullTitle?: string;
+  state?: TestCaseState;
+  durationMs?: number;
+}
+
+export interface FailedTestInfo {
+  title: string;
+  fullTitle: string;
+  error: string;
+  stack?: string;
+  code?: string;
+  expected?: string;
+  actual?: string;
+}
+
+export interface TestResultFile {
+  timestamp?: number;
+  vscodeVersion?: string;
+  failures?: number;
+  passes?: number;
+  pending?: number;
+  total?: number;
+  durationMs?: number;
+  tests?: TestCaseInfo[];
+  failedTests?: FailedTestInfo[];
+}
+
 /**
  * 観点表（Markdownテーブル）のヘッダ行を取得する。
  * VS Code の表示言語に追従する（= 実行時言語で表示される）。
@@ -75,6 +107,10 @@ export type ParsePerspectiveJsonResult =
 
 export type ParseTestExecutionJsonResult =
   | { ok: true; value: TestExecutionJsonV1 }
+  | { ok: false; error: string };
+
+export type ParseTestResultFileResult =
+  | { ok: true; value: TestResultFile }
   | { ok: false; error: string };
 
 /**
@@ -316,6 +352,80 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
 }
 
 /**
+ * test-result.json をパースし、実行レポート用の構造化データとして抽出する。
+ */
+export function parseTestResultFile(raw: string): ParseTestResultFileResult {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, error: 'empty' };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: `invalid-json: ${msg}` };
+  }
+
+  const rec = asRecord(parsed);
+  if (!rec) {
+    return { ok: false, error: 'json-not-object' };
+  }
+
+  const testsRaw = Array.isArray(rec.tests) ? rec.tests : [];
+  const tests: TestCaseInfo[] = [];
+  for (const item of testsRaw) {
+    const itemRec = asRecord(item);
+    if (!itemRec) {
+      continue;
+    }
+    const state = normalizeTestCaseState(itemRec.state);
+    tests.push({
+      suite: getStringOrUndefined(itemRec.suite),
+      title: getStringOrUndefined(itemRec.title),
+      fullTitle: getStringOrUndefined(itemRec.fullTitle),
+      state,
+      durationMs: getNumberOrUndefined(itemRec.durationMs),
+    });
+  }
+
+  const failedTestsRaw = Array.isArray(rec.failedTests) ? rec.failedTests : [];
+  const failedTests: FailedTestInfo[] = [];
+  for (const item of failedTestsRaw) {
+    const itemRec = asRecord(item);
+    if (!itemRec) {
+      continue;
+    }
+    failedTests.push({
+      title: getStringOrEmpty(itemRec.title),
+      fullTitle: getStringOrEmpty(itemRec.fullTitle),
+      error: getStringOrEmpty(itemRec.error),
+      stack: getStringOrUndefined(itemRec.stack),
+      code: getStringOrUndefined(itemRec.code),
+      expected: getStringOrUndefined(itemRec.expected),
+      actual: getStringOrUndefined(itemRec.actual),
+    });
+  }
+
+  const vscodeVersion = getStringOrUndefined(rec.vscodeVersion);
+
+  const result: TestResultFile = {
+    timestamp: getNumberOrUndefined(rec.timestamp),
+    vscodeVersion,
+    failures: getNumberOrUndefined(rec.failures),
+    passes: getNumberOrUndefined(rec.passes),
+    pending: getNumberOrUndefined(rec.pending),
+    total: getNumberOrUndefined(rec.total),
+    durationMs: getNumberOrUndefined(rec.durationMs),
+    tests: tests.length > 0 ? tests : undefined,
+    failedTests: failedTests.length > 0 ? failedTests : undefined,
+  };
+
+  return { ok: true, value: result };
+}
+
+/**
  * 観点表ケース配列を、列固定のMarkdown表へレンダリングする。
  * - セル内改行は表パーサ互換性のためスペースへ潰す
  * - パイプ（|）は `\\|` にエスケープする
@@ -399,6 +509,10 @@ export interface TestExecutionResult {
    * - 例: cursor-agent の長文レポート、WRITE イベント、警告ログなど
    */
   extensionLog?: string;
+  /**
+   * test-result.json から抽出した構造化テスト結果（取得できた場合のみ）。
+   */
+  testResult?: TestResultFile;
 }
 
 /**
@@ -622,6 +736,7 @@ export function buildTestExecutionArtifactMarkdown(params: {
   // stdoutをパースしてテスト結果を抽出
   const testResult = parseMochaOutput(params.result.stdout);
   const summarySection = buildTestSummarySection(params.result.exitCode, params.result.durationMs, testResult);
+  const failureDetailsSection = buildFailureDetailsSection(params.result.testResult);
   const detailsSection = buildTestDetailsSection(testResult);
 
   // 実行情報
@@ -670,6 +785,7 @@ export function buildTestExecutionArtifactMarkdown(params: {
     targets.length > 0 ? targets : `- ${t('artifact.none')}`,
     '',
     summarySection,
+    failureDetailsSection,
     detailsSection,
     `## ${t('artifact.executionReport.detailedLogs')}`,
     '',
@@ -790,6 +906,70 @@ function buildTestSummarySection(exitCode: number | null, durationMs: number, te
 }
 
 /**
+ * test-result.json に含まれる失敗詳細をレポートへ整形する。
+ */
+function buildFailureDetailsSection(testResult: TestResultFile | undefined): string {
+  const failedTests = testResult?.failedTests;
+  if (!failedTests || failedTests.length === 0) {
+    return '';
+  }
+
+  const maxDetailChars = 20_000;
+  const lines: string[] = [
+    `## ${t('artifact.executionReport.failureDetails')}`,
+    '',
+  ];
+
+  let index = 1;
+  for (const entry of failedTests) {
+    const title = normalizeInlineText(entry.fullTitle || entry.title || '(unknown)');
+    lines.push(`### ${index}. ${title}`);
+
+    const message = normalizeInlineText(entry.error ?? '');
+    if (message.length > 0) {
+      lines.push(`- ${t('artifact.executionReport.failureMessage')}: ${message}`);
+    }
+
+    const code = normalizeInlineText(entry.code ?? '');
+    if (code.length > 0) {
+      lines.push(`- ${t('artifact.executionReport.failureCode')}: ${code}`);
+    }
+
+    const expected = normalizeMultilineText(entry.expected ?? '');
+    if (expected.length > 0) {
+      lines.push(`- ${t('artifact.executionReport.expected')}:`);
+      lines.push('```text');
+      lines.push(truncate(expected, maxDetailChars));
+      lines.push('```');
+    }
+
+    const actual = normalizeMultilineText(entry.actual ?? '');
+    if (actual.length > 0) {
+      lines.push(`- ${t('artifact.executionReport.actual')}:`);
+      lines.push('```text');
+      lines.push(truncate(actual, maxDetailChars));
+      lines.push('```');
+    }
+
+    const stack = normalizeMultilineText(entry.stack ?? '');
+    if (stack.length > 0) {
+      const stackSection = buildCollapsibleSection(
+        t('artifact.executionReport.stackTrace'),
+        truncate(stack, maxDetailChars),
+      );
+      if (stackSection) {
+        lines.push(stackSection.trimEnd());
+      }
+    }
+
+    lines.push('');
+    index += 1;
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * テスト詳細表のMarkdownを生成する。
  */
 function buildTestDetailsSection(testResult: ParsedTestResult): string {
@@ -866,6 +1046,11 @@ function getStringOrNull(value: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
+function getStringOrUndefined(value: unknown): string | undefined {
+  const s = getStringOrEmpty(value);
+  return s.length > 0 ? s : undefined;
+}
+
 function getNumberOrNull(value: unknown): number | null {
   if (value === null || value === undefined) {
     return null;
@@ -882,6 +1067,11 @@ function getNumberOrNull(value: unknown): number | null {
   return null;
 }
 
+function getNumberOrUndefined(value: unknown): number | undefined {
+  const n = getNumberOrNull(value);
+  return n === null ? undefined : n;
+}
+
 function getNonNegativeNumberOrDefault(value: unknown, defaultValue: number): number {
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
     return value;
@@ -895,12 +1085,27 @@ function getNonNegativeNumberOrDefault(value: unknown, defaultValue: number): nu
   return defaultValue;
 }
 
+function normalizeTestCaseState(value: unknown): TestCaseState | undefined {
+  if (value === 'passed' || value === 'failed' || value === 'pending') {
+    return value;
+  }
+  return undefined;
+}
+
 function normalizeTableCell(value: string): string {
   // Markdown表セルを壊しやすい文字（改行、パイプ）を正規化する
   const withoutCrlf = value.replace(/\r\n/g, '\n');
   const withoutLf = withoutCrlf.replace(/\n+/g, ' ');
   const collapsedSpaces = withoutLf.replace(/\s+/g, ' ').trim();
   return collapsedSpaces.replace(/\|/g, '\\|');
+}
+
+function normalizeInlineText(value: string): string {
+  return stripAnsi(value).replace(/\r\n/g, '\n').replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeMultilineText(value: string): string {
+  return stripAnsi(value).replace(/\r\n/g, '\n').trim();
 }
 
 function stripCodeFence(text: string): string {

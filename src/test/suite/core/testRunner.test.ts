@@ -57,4 +57,44 @@ suite('core/testRunner.ts', () => {
     assert.ok(result.stdout.length < largeSize, '出力サイズが元のサイズより小さいこと（制限されていること）');
     assert.ok(result.stdout.length > 0, '出力が空でないこと');
   });
+
+  test('TC-TRUN-ENV-N-01: merges options.env into process.env and options.env takes precedence', async () => {
+    // Given: A base env value and an overriding env value passed via options.env
+    const key = 'DONTFORGETEST_TEST_RUNNER_ENV_MERGE';
+    const original = process.env[key];
+    process.env[key] = 'base';
+
+    const command = `node -e "process.stdout.write(process.env.${key} || '')"`;
+
+    try {
+      // When: runTestCommand is called with env override
+      const result = await runTestCommand({ command, cwd, env: { [key]: 'override' } });
+
+      // Then: The spawned process sees the overridden value
+      assert.strictEqual(result.exitCode, 0);
+      assert.strictEqual(result.stdout, 'override');
+    } finally {
+      process.env[key] = original;
+    }
+  });
+
+  test('TC-TRUN-ENV-B-01: passes process.env as-is when options.env is omitted', async () => {
+    // Given: A process.env value and no options.env
+    const key = 'DONTFORGETEST_TEST_RUNNER_ENV_NO_OVERRIDE';
+    const original = process.env[key];
+    process.env[key] = 'value';
+
+    const command = `node -e "process.stdout.write(process.env.${key} || '')"`;
+
+    try {
+      // When: runTestCommand is called without env
+      const result = await runTestCommand({ command, cwd });
+
+      // Then: The spawned process sees the value from process.env
+      assert.strictEqual(result.exitCode, 0);
+      assert.strictEqual(result.stdout, 'value');
+    } finally {
+      process.env[key] = original;
+    }
+  });
 });

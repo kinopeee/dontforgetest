@@ -11,6 +11,10 @@ export interface FailedTestInfo {
   title: string;
   fullTitle: string;
   error: string;
+  stack?: string;
+  code?: string;
+  expected?: string;
+  actual?: string;
 }
 
 export interface TestCaseInfo {
@@ -38,6 +42,59 @@ export interface TestResultFile {
   /** テストケースごとの結果 */
   tests: TestCaseInfo[];
   failedTests?: FailedTestInfo[];
+}
+
+function normalizeErrorMessage(err: unknown): string {
+  if (!err) {
+    return '';
+  }
+  const rec = typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : undefined;
+  const message = rec?.message;
+  if (typeof message === 'string') {
+    return message;
+  }
+  return String(err);
+}
+
+function normalizeErrorCode(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
+}
+
+function normalizeErrorDetail(value: unknown): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function extractErrorField(err: unknown, field: string): unknown {
+  if (!err || typeof err !== 'object') {
+    return undefined;
+  }
+  return (err as Record<string, unknown>)[field];
 }
 
 export function resolveSuiteFromFullTitle(fullTitle: string, title: string): string {
@@ -270,7 +327,11 @@ export function run(): Promise<void> {
           failedTests.push({
             title: test.title,
             fullTitle: test.fullTitle(),
-            error: err.message || String(err),
+            error: normalizeErrorMessage(err),
+            stack: typeof err.stack === 'string' ? err.stack : undefined,
+            code: normalizeErrorCode(extractErrorField(err, 'code')),
+            expected: normalizeErrorDetail(extractErrorField(err, 'expected')),
+            actual: normalizeErrorDetail(extractErrorField(err, 'actual')),
           });
         });
 
@@ -295,3 +356,17 @@ export function run(): Promise<void> {
       });
   });
 }
+
+/**
+ * Test-only exports for unit testing internal helpers.
+ * Do not use from production code.
+ */
+export const __test__ = {
+  normalizeErrorMessage,
+  normalizeErrorCode,
+  normalizeErrorDetail,
+  extractErrorField,
+  writeTestResultFileSafely,
+  resolveTestResultFilePathFromArgv,
+  resolveTestResultFilePath,
+};
