@@ -4,6 +4,9 @@ import { runTestCommand } from '../../../core/testRunner';
 suite('core/testRunner.ts', () => {
   const cwd = process.cwd();
   const maxCaptureBytes = 5 * 1024 * 1024;
+  const nodeExecutable = process.execPath.includes(' ') ? `"${process.execPath}"` : process.execPath;
+  const quoteDouble = (value: string): string => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  const nodeEval = (code: string): string => `${nodeExecutable} -e ${quoteDouble(code)}`;
 
   // TC-RUN-01
   test('TC-RUN-01: runs a successful command and captures stdout/stderr', async () => {
@@ -48,7 +51,7 @@ suite('core/testRunner.ts', () => {
     this.timeout(10000);
     // Given: A command that prints ~6MB (over the 5MB cap)
     const largeSize = 6 * 1024 * 1024;
-    const command = `node -e "console.log('a'.repeat(${largeSize}))"`;
+    const command = nodeEval(`console.log('a'.repeat(${largeSize}))`);
 
     // When: runTestCommand is called
     const result = await runTestCommand({ command, cwd });
@@ -79,15 +82,19 @@ suite('core/testRunner.ts', () => {
     // When: runTestCommand is called
     const result = await runTestCommand({ command, cwd });
 
-    // Then: errorMessage is set and executionRunner is "extension"
-    assert.ok(typeof result.errorMessage === 'string' && result.errorMessage.trim().length > 0, 'errorMessage should be set');
+    // Then: Non-zero exit (or errorMessage) and executionRunner is "extension"
+    // NOTE: shell=true の場合、コマンド未発見は spawn error ではなく exitCode=127 等で表現されることがある。
+    assert.ok(
+      result.exitCode !== 0 || (typeof result.errorMessage === 'string' && result.errorMessage.trim().length > 0),
+      'Should fail or set errorMessage',
+    );
     assert.strictEqual(result.executionRunner, 'extension', 'executionRunner should remain extension');
   });
 
   // TC-TRUN-B-00
   test('TC-TRUN-B-00: runTestCommand returns exitCode=0 and empty stdout/stderr when the command produces no output', async () => {
     // Given: A command that exits successfully without writing stdout/stderr
-    const command = `node -e "process.exit(0)"`;
+    const command = nodeEval('process.exit(0)');
 
     // When: runTestCommand is called
     const result = await runTestCommand({ command, cwd });
@@ -103,7 +110,7 @@ suite('core/testRunner.ts', () => {
   test('TC-TRUN-B-MAX: runTestCommand does not truncate stdout when stdout length == maxCaptureBytes', async function () {
     this.timeout(15000);
     // Given: A command that writes exactly maxCaptureBytes to stdout (no newline)
-    const command = `node -e "process.stdout.write('a'.repeat(${maxCaptureBytes}))"`;
+    const command = nodeEval(`process.stdout.write('a'.repeat(${maxCaptureBytes}))`);
 
     // When: runTestCommand is called
     const result = await runTestCommand({ command, cwd });
@@ -119,7 +126,7 @@ suite('core/testRunner.ts', () => {
   test('TC-TRUN-B-MAXP1: runTestCommand truncates stdout when stdout length > maxCaptureBytes', async function () {
     this.timeout(15000);
     // Given: A command that writes maxCaptureBytes+1 to stdout (no newline)
-    const command = `node -e "process.stdout.write('a'.repeat(${maxCaptureBytes + 1}))"`;
+    const command = nodeEval(`process.stdout.write('a'.repeat(${maxCaptureBytes + 1}))`);
 
     // When: runTestCommand is called
     const result = await runTestCommand({ command, cwd });
@@ -137,7 +144,7 @@ suite('core/testRunner.ts', () => {
     const original = process.env[key];
     process.env[key] = 'base';
 
-    const command = `node -e "process.stdout.write(process.env.${key} || '')"`;
+    const command = nodeEval(`process.stdout.write(process.env[${JSON.stringify(key)}] || '')`);
 
     try {
       // When: runTestCommand is called with env override
@@ -157,7 +164,7 @@ suite('core/testRunner.ts', () => {
     const original = process.env[key];
     process.env[key] = 'value';
 
-    const command = `node -e "process.stdout.write(process.env.${key} || '')"`;
+    const command = nodeEval(`process.stdout.write(process.env[${JSON.stringify(key)}] || '')`);
 
     try {
       // When: runTestCommand is called without env
