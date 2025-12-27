@@ -2985,6 +2985,243 @@ suite('test/runTest.ts', () => {
       assert.strictEqual(result, downloadedPath, 'download したパスが返る');
     });
 
+    // TC-B-20: resolveVscodeExecutablePath trims envPath
+    test('TC-B-20: resolveVscodeExecutablePath は envPath の前後空白を除去して扱う', async () => {
+      // Given: 前後に空白を含む envPath
+      const trimmedPath = '/tmp/vscode';
+      const envPath = `  ${trimmedPath}  `;
+      let seenPath = '';
+
+      // When: resolveVscodeExecutablePath を呼ぶ
+      const result = await resolveVscodeExecutablePath({
+        envPath,
+        download: async () => {
+          throw new Error('should not download');
+        },
+        version: 'stable',
+        cachePath: '/tmp/cache',
+        extensionDevelopmentPath: '/tmp/ext',
+        exists: async (filePath) => {
+          seenPath = filePath;
+          return filePath === trimmedPath;
+        },
+      });
+
+      // Then: trim 済みパスが返る
+      assert.strictEqual(seenPath, trimmedPath, 'exists は trim 済みパスで呼ばれる');
+      assert.strictEqual(result, trimmedPath, 'trim 済みパスが返る');
+    });
+
+    // TC-B-01: resolveVscodeExecutablePath with envPath containing only leading whitespace
+    test('TC-B-01: resolveVscodeExecutablePath trims leading whitespace from envPath', async () => {
+      // Given: envPath with only leading whitespace
+      const trimmedPath = '/tmp/vscode';
+      const envPath = `  ${trimmedPath}`;
+      let seenPath = '';
+
+      // When: resolveVscodeExecutablePath is called
+      const result = await resolveVscodeExecutablePath({
+        envPath,
+        download: async () => {
+          throw new Error('should not download');
+        },
+        version: 'stable',
+        cachePath: '/tmp/cache',
+        extensionDevelopmentPath: '/tmp/ext',
+        exists: async (filePath) => {
+          seenPath = filePath;
+          return filePath === trimmedPath;
+        },
+      });
+
+      // Then: exists function receives trimmed path without leading whitespace; returns trimmed path
+      assert.strictEqual(seenPath, trimmedPath, 'exists receives trimmed path without leading whitespace');
+      assert.strictEqual(result, trimmedPath, 'returns trimmed path');
+    });
+
+    // TC-B-02: resolveVscodeExecutablePath with envPath containing only trailing whitespace
+    test('TC-B-02: resolveVscodeExecutablePath trims trailing whitespace from envPath', async () => {
+      // Given: envPath with only trailing whitespace
+      const trimmedPath = '/tmp/vscode';
+      const envPath = `${trimmedPath}  `;
+      let seenPath = '';
+
+      // When: resolveVscodeExecutablePath is called
+      const result = await resolveVscodeExecutablePath({
+        envPath,
+        download: async () => {
+          throw new Error('should not download');
+        },
+        version: 'stable',
+        cachePath: '/tmp/cache',
+        extensionDevelopmentPath: '/tmp/ext',
+        exists: async (filePath) => {
+          seenPath = filePath;
+          return filePath === trimmedPath;
+        },
+      });
+
+      // Then: exists function receives trimmed path without trailing whitespace; returns trimmed path
+      assert.strictEqual(seenPath, trimmedPath, 'exists receives trimmed path without trailing whitespace');
+      assert.strictEqual(result, trimmedPath, 'returns trimmed path');
+    });
+
+    // TC-B-03: resolveVscodeExecutablePath with envPath containing no whitespace
+    test('TC-B-03: resolveVscodeExecutablePath does not modify path without whitespace', async () => {
+      // Given: envPath with no whitespace
+      const originalPath = '/tmp/vscode';
+      let seenPath = '';
+
+      // When: resolveVscodeExecutablePath is called
+      const result = await resolveVscodeExecutablePath({
+        envPath: originalPath,
+        download: async () => {
+          throw new Error('should not download');
+        },
+        version: 'stable',
+        cachePath: '/tmp/cache',
+        extensionDevelopmentPath: '/tmp/ext',
+        exists: async (filePath) => {
+          seenPath = filePath;
+          return filePath === originalPath;
+        },
+      });
+
+      // Then: exists function receives original path unchanged; returns original path
+      assert.strictEqual(seenPath, originalPath, 'exists receives original path unchanged');
+      assert.strictEqual(result, originalPath, 'returns original path');
+    });
+
+    // TC-B-04: resolveVscodeExecutablePath with envPath as empty string
+    test('TC-B-04: resolveVscodeExecutablePath with empty string envPath triggers download', async () => {
+      // Given: envPath as empty string
+      const downloadedPath = '/tmp/vscode';
+      let downloadCalled = false;
+
+      // When: resolveVscodeExecutablePath is called
+      const result = await resolveVscodeExecutablePath({
+        envPath: '',
+        download: async () => {
+          downloadCalled = true;
+          return downloadedPath;
+        },
+        version: 'stable',
+        cachePath: '/tmp/cache',
+        extensionDevelopmentPath: '/tmp/ext',
+        exists: async () => {
+          throw new Error('should not call exists');
+        },
+      });
+
+      // Then: download function is called instead of exists check; returns downloaded path
+      assert.ok(downloadCalled, 'download function is called');
+      assert.strictEqual(result, downloadedPath, 'returns downloaded path');
+    });
+
+    // TC-B-05: resolveVscodeExecutablePath with envPath as null
+    test('TC-B-05: resolveVscodeExecutablePath with null envPath triggers download', async () => {
+      // Given: envPath as null
+      const downloadedPath = '/tmp/vscode';
+      let downloadCalled = false;
+
+      // When: resolveVscodeExecutablePath is called
+      const result = await resolveVscodeExecutablePath({
+        envPath: null as unknown as undefined,
+        download: async () => {
+          downloadCalled = true;
+          return downloadedPath;
+        },
+        version: 'stable',
+        cachePath: '/tmp/cache',
+        extensionDevelopmentPath: '/tmp/ext',
+        exists: async () => {
+          throw new Error('should not call exists');
+        },
+      });
+
+      // Then: download function is called instead of exists check; returns downloaded path
+      assert.ok(downloadCalled, 'download function is called');
+      assert.strictEqual(result, downloadedPath, 'returns downloaded path');
+    });
+
+    // TC-B-06: resolveVscodeExecutablePath with envPath as undefined
+    test('TC-B-06: resolveVscodeExecutablePath with undefined envPath triggers download', async () => {
+      // Given: envPath as undefined
+      const downloadedPath = '/tmp/vscode';
+      let downloadCalled = false;
+
+      // When: resolveVscodeExecutablePath is called
+      const result = await resolveVscodeExecutablePath({
+        envPath: undefined,
+        download: async () => {
+          downloadCalled = true;
+          return downloadedPath;
+        },
+        version: 'stable',
+        cachePath: '/tmp/cache',
+        extensionDevelopmentPath: '/tmp/ext',
+        exists: async () => {
+          throw new Error('should not call exists');
+        },
+      });
+
+      // Then: download function is called instead of exists check; returns downloaded path
+      assert.ok(downloadCalled, 'download function is called');
+      assert.strictEqual(result, downloadedPath, 'returns downloaded path');
+    });
+
+    // TC-B-07: resolveVscodeExecutablePath with envPath containing only whitespace characters
+    test('TC-B-07: resolveVscodeExecutablePath with whitespace-only envPath triggers download', async () => {
+      // Given: envPath containing only whitespace characters
+      const downloadedPath = '/tmp/vscode';
+      let downloadCalled = false;
+
+      // When: resolveVscodeExecutablePath is called
+      const result = await resolveVscodeExecutablePath({
+        envPath: '   ',
+        download: async () => {
+          downloadCalled = true;
+          return downloadedPath;
+        },
+        version: 'stable',
+        cachePath: '/tmp/cache',
+        extensionDevelopmentPath: '/tmp/ext',
+        exists: async () => {
+          throw new Error('should not call exists');
+        },
+      });
+
+      // Then: download function is called instead of exists check; returns downloaded path
+      assert.ok(downloadCalled, 'download function is called');
+      assert.strictEqual(result, downloadedPath, 'returns downloaded path');
+    });
+
+    // TC-E-03: resolveVscodeExecutablePath with trimmed envPath that does not exist
+    test('TC-E-03: resolveVscodeExecutablePath throws error when trimmed envPath does not exist', async () => {
+      // Given: trimmed envPath that does not exist
+      const trimmedPath = '/tmp/missing-vscode';
+      const envPath = `  ${trimmedPath}  `;
+
+      // When/Then: Throws Error with message containing trimmed path
+      await assert.rejects(
+        async () => {
+          await resolveVscodeExecutablePath({
+            envPath,
+            download: async () => '/tmp/unused',
+            version: 'stable',
+            cachePath: '/tmp/cache',
+            extensionDevelopmentPath: '/tmp/ext',
+            exists: async () => false,
+          });
+        },
+        (err: Error) => {
+          assert.ok(err.message.includes(trimmedPath), 'error message uses trimmed path');
+          assert.ok(err.message.includes('DONTFORGETEST_VSCODE_EXECUTABLE_PATH'), 'error message includes env var name');
+          return true;
+        },
+      );
+    });
+
     // TC-N-23: runDirectLauncher success
     test('TC-N-23: runDirectLauncher は exit 0 で解決する', async () => {
       // Given: 成功する spawn
@@ -3283,6 +3520,271 @@ suite('test/runTest.ts', () => {
       // Then: xvfb-run が呼ばれる
       assert.strictEqual(spawnCalls[0]?.command, 'xvfb-run', 'xvfb-run を使う');
       assert.ok(spawnCalls[0]?.args.includes('/tmp/code'), '実行パスが含まれる');
+    });
+
+    // TC-N-32: runDetachedVscodeExtensionTestsWithDeps direct launcher without xvfb
+    test('TC-N-32: runDetachedVscodeExtensionTestsWithDeps は direct 起動で xvfb-run を使わない', async () => {
+      // Given: Linux + xvfb-run を使わない設定
+      const spawnCalls: Array<{ command: string; args: string[] }> = [];
+      const fakeSpawn = (command: string, args: string[]) => {
+        const child = new EventEmitter() as NodeJS.EventEmitter & {
+          stdout?: EventEmitter;
+          stderr?: EventEmitter;
+        };
+        spawnCalls.push({ command, args });
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        setTimeout(() => child.emit('exit', 0, null), 0);
+        return child as unknown as ReturnType<typeof childProcess.spawn>;
+      };
+      const deps = {
+        downloadAndUnzipVSCode: async () => '/tmp/code',
+        spawn: fakeSpawn as unknown as typeof childProcess.spawn,
+        platform: 'linux' as NodeJS.Platform,
+        env: {},
+        shouldUseXvfb: () => false,
+      };
+
+      // When: runDetachedVscodeExtensionTestsWithDeps を呼ぶ
+      await runDetachedVscodeExtensionTestsWithDeps(
+        {
+          extensionDevelopmentPath: '/tmp/ext',
+          extensionTestsPath: '/tmp/tests',
+          launchArgs: ['--arg1'],
+          extensionTestsEnv: {},
+          version: 'stable',
+          testResultFilePath: '/tmp/result.json',
+          cachePath: '/tmp/cache',
+          launcher: 'direct',
+        },
+        deps,
+      );
+
+      // Then: xvfb-run を使わずに実行する
+      assert.strictEqual(spawnCalls[0]?.command, '/tmp/code', '直接実行パスが使われる');
+      assert.ok(spawnCalls[0]?.args.includes('--arg1'), '起動引数が含まれる');
+    });
+
+    // TC-N-05: runDetachedVscodeExtensionTestsWithDeps direct launcher, darwin platform, shouldUseXvfb=false
+    test('TC-N-05: runDetachedVscodeExtensionTestsWithDeps uses direct spawn on darwin without xvfb-run', async () => {
+      // Given: darwin platform + shouldUseXvfb returns false
+      const spawnCalls: Array<{ command: string; args: string[] }> = [];
+      const fakeSpawn = (command: string, args: string[]) => {
+        const child = new EventEmitter() as NodeJS.EventEmitter & {
+          stdout?: EventEmitter;
+          stderr?: EventEmitter;
+        };
+        spawnCalls.push({ command, args });
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        setTimeout(() => child.emit('exit', 0, null), 0);
+        return child as unknown as ReturnType<typeof childProcess.spawn>;
+      };
+      const deps = {
+        downloadAndUnzipVSCode: async () => '/tmp/code',
+        spawn: fakeSpawn as unknown as typeof childProcess.spawn,
+        platform: 'darwin' as NodeJS.Platform,
+        env: {},
+        shouldUseXvfb: () => false,
+      };
+
+      // When: runDetachedVscodeExtensionTestsWithDeps is called
+      await runDetachedVscodeExtensionTestsWithDeps(
+        {
+          extensionDevelopmentPath: '/tmp/ext',
+          extensionTestsPath: '/tmp/tests',
+          launchArgs: ['--arg1'],
+          extensionTestsEnv: {},
+          version: 'stable',
+          testResultFilePath: '/tmp/result.json',
+          cachePath: '/tmp/cache',
+          launcher: 'direct',
+        },
+        deps,
+      );
+
+      // Then: spawn is called with vscodeExecutablePath as command directly without xvfb-run wrapper
+      assert.strictEqual(spawnCalls[0]?.command, '/tmp/code', 'direct spawn command is used');
+      assert.ok(spawnCalls[0]?.args.includes('--arg1'), 'launch args are included');
+    });
+
+    // TC-N-06: runDetachedVscodeExtensionTestsWithDeps direct launcher, win32 platform, shouldUseXvfb=false
+    test('TC-N-06: runDetachedVscodeExtensionTestsWithDeps uses direct spawn on win32 without xvfb-run', async () => {
+      // Given: win32 platform + shouldUseXvfb returns false
+      const spawnCalls: Array<{ command: string; args: string[] }> = [];
+      const fakeSpawn = (command: string, args: string[]) => {
+        const child = new EventEmitter() as NodeJS.EventEmitter & {
+          stdout?: EventEmitter;
+          stderr?: EventEmitter;
+        };
+        spawnCalls.push({ command, args });
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        setTimeout(() => child.emit('exit', 0, null), 0);
+        return child as unknown as ReturnType<typeof childProcess.spawn>;
+      };
+      const deps = {
+        downloadAndUnzipVSCode: async () => 'C:\\tmp\\code.exe',
+        spawn: fakeSpawn as unknown as typeof childProcess.spawn,
+        platform: 'win32' as NodeJS.Platform,
+        env: {},
+        shouldUseXvfb: () => false,
+      };
+
+      // When: runDetachedVscodeExtensionTestsWithDeps is called
+      await runDetachedVscodeExtensionTestsWithDeps(
+        {
+          extensionDevelopmentPath: 'C:\\tmp\\ext',
+          extensionTestsPath: 'C:\\tmp\\tests',
+          launchArgs: ['--arg1'],
+          extensionTestsEnv: {},
+          version: 'stable',
+          testResultFilePath: 'C:\\tmp\\result.json',
+          cachePath: 'C:\\tmp\\cache',
+          launcher: 'direct',
+        },
+        deps,
+      );
+
+      // Then: spawn is called with vscodeExecutablePath as command directly without xvfb-run wrapper
+      assert.strictEqual(spawnCalls[0]?.command, 'C:\\tmp\\code.exe', 'direct spawn command is used');
+      assert.ok(spawnCalls[0]?.args.includes('--arg1'), 'launch args are included');
+    });
+
+    // TC-B-08: runDetachedVscodeExtensionTestsWithDeps direct launcher, shouldUseXvfb=false, allArgs is empty array
+    test('TC-B-08: runDetachedVscodeExtensionTestsWithDeps handles empty launchArgs correctly', async () => {
+      // Given: direct launcher + shouldUseXvfb returns false + empty launchArgs
+      const spawnCalls: Array<{ command: string; args: string[] }> = [];
+      const fakeSpawn = (command: string, args: string[]) => {
+        const child = new EventEmitter() as NodeJS.EventEmitter & {
+          stdout?: EventEmitter;
+          stderr?: EventEmitter;
+        };
+        spawnCalls.push({ command, args });
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        setTimeout(() => child.emit('exit', 0, null), 0);
+        return child as unknown as ReturnType<typeof childProcess.spawn>;
+      };
+      const deps = {
+        downloadAndUnzipVSCode: async () => '/tmp/code',
+        spawn: fakeSpawn as unknown as typeof childProcess.spawn,
+        platform: 'linux' as NodeJS.Platform,
+        env: {},
+        shouldUseXvfb: () => false,
+      };
+
+      // When: runDetachedVscodeExtensionTestsWithDeps is called with empty launchArgs
+      await runDetachedVscodeExtensionTestsWithDeps(
+        {
+          extensionDevelopmentPath: '/tmp/ext',
+          extensionTestsPath: '/tmp/tests',
+          launchArgs: [],
+          extensionTestsEnv: {},
+          version: 'stable',
+          testResultFilePath: '/tmp/result.json',
+          cachePath: '/tmp/cache',
+          launcher: 'direct',
+        },
+        deps,
+      );
+
+      // Then: spawn is called with vscodeExecutablePath as command and empty args array (base args still present)
+      assert.strictEqual(spawnCalls[0]?.command, '/tmp/code', 'direct spawn command is used');
+      assert.ok(Array.isArray(spawnCalls[0]?.args), 'args is an array');
+      assert.ok(spawnCalls[0]?.args.length > 0, 'base args are still present');
+    });
+
+    // TC-B-09: runDetachedVscodeExtensionTestsWithDeps direct launcher, shouldUseXvfb=false, allArgs contains maximum number of arguments
+    test('TC-B-09: runDetachedVscodeExtensionTestsWithDeps handles large number of arguments correctly', async () => {
+      // Given: direct launcher + shouldUseXvfb returns false + maximum number of arguments
+      const spawnCalls: Array<{ command: string; args: string[] }> = [];
+      const fakeSpawn = (command: string, args: string[]) => {
+        const child = new EventEmitter() as NodeJS.EventEmitter & {
+          stdout?: EventEmitter;
+          stderr?: EventEmitter;
+        };
+        spawnCalls.push({ command, args });
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        setTimeout(() => child.emit('exit', 0, null), 0);
+        return child as unknown as ReturnType<typeof childProcess.spawn>;
+      };
+      const deps = {
+        downloadAndUnzipVSCode: async () => '/tmp/code',
+        spawn: fakeSpawn as unknown as typeof childProcess.spawn,
+        platform: 'linux' as NodeJS.Platform,
+        env: {},
+        shouldUseXvfb: () => false,
+      };
+      const maxArgs = Array.from({ length: 100 }, (_, i) => `--arg${i}`);
+
+      // When: runDetachedVscodeExtensionTestsWithDeps is called with maximum number of arguments
+      await runDetachedVscodeExtensionTestsWithDeps(
+        {
+          extensionDevelopmentPath: '/tmp/ext',
+          extensionTestsPath: '/tmp/tests',
+          launchArgs: maxArgs,
+          extensionTestsEnv: {},
+          version: 'stable',
+          testResultFilePath: '/tmp/result.json',
+          cachePath: '/tmp/cache',
+          launcher: 'direct',
+        },
+        deps,
+      );
+
+      // Then: spawn is called with vscodeExecutablePath as command and all args passed correctly
+      assert.strictEqual(spawnCalls[0]?.command, '/tmp/code', 'direct spawn command is used');
+      assert.ok(spawnCalls[0]?.args.includes('--arg0'), 'first arg is included');
+      assert.ok(spawnCalls[0]?.args.includes('--arg99'), 'last arg is included');
+      assert.ok(spawnCalls[0]?.args.length >= maxArgs.length, 'all args are passed');
+    });
+
+    // TC-E-04: runDetachedVscodeExtensionTestsWithDeps direct launcher, shouldUseXvfb=false, spawn fails
+    test('TC-E-04: runDetachedVscodeExtensionTestsWithDeps propagates spawn error without xvfb-run wrapper', async () => {
+      // Given: direct launcher + shouldUseXvfb returns false + spawn fails
+      const spawnError = new Error('spawn failed');
+      const fakeSpawn = () => {
+        const child = new EventEmitter() as NodeJS.EventEmitter & {
+          stdout?: EventEmitter;
+          stderr?: EventEmitter;
+        };
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        setTimeout(() => child.emit('error', spawnError), 0);
+        return child as unknown as ReturnType<typeof childProcess.spawn>;
+      };
+      const deps = {
+        downloadAndUnzipVSCode: async () => '/tmp/code',
+        spawn: fakeSpawn as unknown as typeof childProcess.spawn,
+        platform: 'linux' as NodeJS.Platform,
+        env: {},
+        shouldUseXvfb: () => false,
+      };
+
+      // When/Then: runDirectLauncher rejects with spawn error; error propagates to caller
+      await assert.rejects(
+        async () => {
+          await runDetachedVscodeExtensionTestsWithDeps(
+            {
+              extensionDevelopmentPath: '/tmp/ext',
+              extensionTestsPath: '/tmp/tests',
+              launchArgs: ['--arg1'],
+              extensionTestsEnv: {},
+              version: 'stable',
+              testResultFilePath: '/tmp/result.json',
+              cachePath: '/tmp/cache',
+              launcher: 'direct',
+            },
+            deps,
+          );
+        },
+        (err: Error) => {
+          assert.strictEqual(err, spawnError, 'spawn error is propagated');
+          return true;
+        },
+      );
     });
 
     // TC-N-28: runMainWithDeps success path
