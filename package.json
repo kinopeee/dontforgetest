@@ -3,7 +3,7 @@
   "publisher": "kinopeee",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.100",
+  "version": "0.0.101",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.105.0"
