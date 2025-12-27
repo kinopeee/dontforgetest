@@ -1162,11 +1162,11 @@ suite('src/extension.ts', () => {
       assert.strictEqual(pkg.homepage, 'https://github.com/kinopeee/dontforgetest#readme', 'Homepage URL mismatch');
     });
 
-    // TC-B-01: Empty publisher check
+    // TC-META-B-01: Empty publisher check
     // Given: package.json with empty publisher
     // When: Checking publisher field
     // Then: Field is empty string
-    test('TC-B-01: package.json publisher can be empty in data structure', () => {
+    test('TC-META-B-01: package.json publisher can be empty in data structure', () => {
       // Given: Mock package.json data with empty publisher
       const pkg = { publisher: "" };
       
@@ -1174,11 +1174,11 @@ suite('src/extension.ts', () => {
       assert.strictEqual(pkg.publisher, "", 'Publisher should be empty string');
     });
 
-    // TC-B-02: Missing license check
+    // TC-META-B-02: Missing license check
     // Given: package.json with missing license
     // When: Checking license field
     // Then: Field is undefined
-    test('TC-B-02: package.json license can be missing in data structure', () => {
+    test('TC-META-B-02: package.json license can be missing in data structure', () => {
       // Given: Mock package.json data without license
       const pkg: { license?: string } = {};
       
@@ -1186,11 +1186,11 @@ suite('src/extension.ts', () => {
       assert.strictEqual(pkg.license, undefined, 'License should be undefined');
     });
 
-    // TC-B-03: Version 0.0.0 check
+    // TC-META-B-03: Version 0.0.0 check
     // Given: package.json with version 0.0.0
     // When: Checking version field
     // Then: Version is 0.0.0
-    test('TC-B-03: package.json version 0.0.0 is valid semver', () => {
+    test('TC-META-B-03: package.json version 0.0.0 is valid semver', () => {
       // Given: Mock package.json data with version 0.0.0
       const pkg = { version: "0.0.0" };
       const semverPattern = /^\d+\.\d+\.\d+$/;
@@ -1200,11 +1200,11 @@ suite('src/extension.ts', () => {
       assert.strictEqual(pkg.version, "0.0.0", 'Version should be 0.0.0');
     });
 
-    // TC-B-04: 1-char author check
+    // TC-META-B-04: 1-char author check
     // Given: author field with 1 character
     // When: Checking author field
     // Then: author is 1 character
-    test('TC-B-04: package.json author field can be 1 character', () => {
+    test('TC-META-B-04: package.json author field can be 1 character', () => {
       // Given: Mock package.json data with 1-char author
       const pkg = { author: "A" };
       
@@ -1212,11 +1212,11 @@ suite('src/extension.ts', () => {
       assert.strictEqual(pkg.author, "A", 'Author should be "A"');
     });
 
-    // TC-B-05: Long description check
+    // TC-META-B-05: Long description check
     // Given: description field with very long string
     // When: Checking description length
     // Then: length matches the long string
-    test('TC-B-05: package.json description can be very long', () => {
+    test('TC-META-B-05: package.json description can be very long', () => {
       // Given: Mock package.json data with long description
       const longDescription = "A".repeat(1000);
       const pkg = { description: longDescription };
