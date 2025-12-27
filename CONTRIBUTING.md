@@ -28,9 +28,9 @@ npm run lint
 npm test
 ```
 
-## Testing / implementation rules
+## 実装/テストの方針
 
-This repository has specific rules for tests and generated artifacts. Please read `AGENTS.md`.
+このリポジトリにはテストや生成物に関するルールがあります。`AGENTS.md` を参照してください。
 
 ## PR guidelines (recommended)
 
