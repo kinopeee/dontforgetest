@@ -498,6 +498,8 @@ export interface SavedArtifact {
   relativePath?: string;
 }
 
+export type TestExecutionRunner = 'extension' | 'cursorAgent' | 'unknown';
+
 export interface TestExecutionResult {
   command: string;
   cwd: string;
@@ -507,6 +509,13 @@ export interface TestExecutionResult {
   stdout: string;
   stderr: string;
   errorMessage?: string;
+  /**
+   * テスト実行の担当者。
+   * - extension: 拡張機能で実行
+   * - cursorAgent: cursor-agent で実行
+   * - unknown: 不明/未設定
+   */
+  executionRunner?: TestExecutionRunner;
   /**
    * 実行が「意図的にスキップ」された場合に true。
    * - 例: testCommand が空のため実行しない
@@ -750,11 +759,13 @@ export function buildTestExecutionArtifactMarkdown(params: {
   const detailsSection = buildTestDetailsSection(testResult);
 
   // 実行情報
-  const executionEnv = resolveExecutionEnvironment(params.result.testResult);
+  const executionEnv = resolveExecutionEnvironment(params.result);
+  const envSourceLabel = resolveExecutionEnvironmentSourceLabel(executionEnv.source);
   const envLines = [
     `- OS: ${executionEnv.platform} (${executionEnv.arch})`,
     `- Node.js: ${executionEnv.nodeVersion}`,
     `- VS Code: ${executionEnv.vscodeVersion}`,
+    `- ${t('artifact.executionReport.envSource')}: ${envSourceLabel}`,
   ].join('\n');
   const errMsg = params.result.errorMessage
     ? `- ${t('artifact.executionReport.spawnError')}: ${params.result.errorMessage}`
@@ -989,28 +1000,73 @@ function buildFailureDetailsSection(testResult: TestResultFile | undefined): str
   return lines.join('\n');
 }
 
+type ExecutionEnvironmentSource = 'execution' | 'local' | 'unknown';
+
 type ExecutionEnvironment = {
   platform: string;
   arch: string;
   nodeVersion: string;
   vscodeVersion: string;
+  source: ExecutionEnvironmentSource;
 };
 
 /**
  * 実行環境情報を取得する。
- * - test-result.json の情報を優先し、無い場合はローカル情報へフォールバックする
+ * - test-result.json の値を優先する
+ * - 拡張機能実行のみローカル値へフォールバックする
+ * - それ以外は unknown として扱う
  */
-function resolveExecutionEnvironment(testResult: TestResultFile | undefined): ExecutionEnvironment {
-  // 型チェック付きのフォールバック（nullish合体演算子だけでは不正な型を検出できないため）
-  const getStringOrFallback = (value: unknown, fallback: string): string =>
-    typeof value === 'string' ? value : fallback;
+function resolveExecutionEnvironment(result: TestExecutionResult): ExecutionEnvironment {
+  const unknownLabel = t('artifact.executionReport.unknown');
+  const testResult = result.testResult;
+
+  const platform = getStrictStringOrUndefined(testResult?.platform);
+  const arch = getStrictStringOrUndefined(testResult?.arch);
+  const nodeVersion = getStrictStringOrUndefined(testResult?.nodeVersion);
+  const vscodeVersion = getStrictStringOrUndefined(testResult?.vscodeVersion);
+
+  const hasAny = [platform, arch, nodeVersion, vscodeVersion].some((value) => value !== undefined);
+  const hasAll = [platform, arch, nodeVersion, vscodeVersion].every((value) => value !== undefined);
+  const canUseLocalFallback = result.executionRunner === 'extension';
+
+  const resolveValue = (value: string | undefined, fallback: string): string => {
+    if (value !== undefined) {
+      return value;
+    }
+    if (canUseLocalFallback) {
+      return fallback;
+    }
+    return unknownLabel;
+  };
+
+  let source: ExecutionEnvironmentSource;
+  if (hasAll) {
+    source = 'execution';
+  } else if (hasAny) {
+    source = canUseLocalFallback ? 'local' : 'execution';
+  } else if (canUseLocalFallback) {
+    source = 'local';
+  } else {
+    source = 'unknown';
+  }
 
   return {
-    platform: getStringOrFallback(testResult?.platform, process.platform),
-    arch: getStringOrFallback(testResult?.arch, process.arch),
-    nodeVersion: getStringOrFallback(testResult?.nodeVersion, process.version),
-    vscodeVersion: getStringOrFallback(testResult?.vscodeVersion, vscode.version),
+    platform: resolveValue(platform, process.platform),
+    arch: resolveValue(arch, process.arch),
+    nodeVersion: resolveValue(nodeVersion, process.version),
+    vscodeVersion: resolveValue(vscodeVersion, vscode.version),
+    source,
   };
+}
+
+function resolveExecutionEnvironmentSourceLabel(source: ExecutionEnvironmentSource): string {
+  if (source === 'execution') {
+    return t('artifact.executionReport.envSource.execution');
+  }
+  if (source === 'local') {
+    return t('artifact.executionReport.envSource.local');
+  }
+  return t('artifact.executionReport.envSource.unknown');
 }
 
 /**
@@ -1151,11 +1207,15 @@ function getStringOrUndefined(value: unknown): string | undefined {
 }
 
 /**
- * 厳密な文字列抽出。typeof === 'string' のみを受理し、空文字も保持する。
+ * 厳密な文字列抽出。typeof === 'string' のみを受理し、空文字/空白のみは undefined とする。
  * 数値や真偽値など他の型は undefined として扱う。
  */
 function getStrictStringOrUndefined(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function getNumberOrNull(value: unknown): number | null {

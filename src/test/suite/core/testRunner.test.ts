@@ -3,59 +3,132 @@ import { runTestCommand } from '../../../core/testRunner';
 
 suite('core/testRunner.ts', () => {
   const cwd = process.cwd();
+  const maxCaptureBytes = 5 * 1024 * 1024;
 
-  // TC-RUN-01: 正常なコマンド実行
-  test('TC-RUN-01: 正常なコマンドが実行され、標準出力が取得できる', async () => {
-    // Given: echo コマンド（OSに応じてクオートを調整）
+  // TC-RUN-01
+  test('TC-RUN-01: runs a successful command and captures stdout/stderr', async () => {
+    // Given: An echo command (quote adjusted by OS)
     const command = process.platform === 'win32' ? 'echo hello world' : 'echo "hello world"';
 
-    // When: runTestCommand を呼び出す
+    // When: runTestCommand is called
     const result = await runTestCommand({ command, cwd });
 
-    // Then: 正常終了し、標準出力に "hello world" が含まれること
-    assert.strictEqual(result.exitCode, 0, 'Exit code は 0 であるべき');
-    assert.ok(result.stdout.includes('hello world'), 'Stdout に出力が含まれていること');
-    assert.strictEqual(result.stderr.trim(), '', 'Stderr は空であるべき');
+    // Then: Exit code is 0, stdout contains "hello world", stderr is empty
+    assert.strictEqual(result.exitCode, 0, 'Exit code should be 0');
+    assert.ok(result.stdout.includes('hello world'), 'Stdout should include the expected output');
+    assert.strictEqual(result.stderr.trim(), '', 'Stderr should be empty');
   });
 
-  // TC-RUN-02: 無効なコマンド実行
-  test('TC-RUN-02: 存在しないコマンド実行時にエラーまたは非0終了コードとなる', async () => {
-    // Given: 存在しないコマンド
+  // TC-RUN-02
+  test('TC-RUN-02: returns an error message or non-zero exit code for an invalid command', async () => {
+    // Given: A command that does not exist
     const command = 'invalid_command_that_does_not_exist_12345';
 
-    // When: runTestCommand を呼び出す
+    // When: runTestCommand is called
     const result = await runTestCommand({ command, cwd });
 
-    // Then: 終了コードが非0、またはエラーメッセージが設定されること
-    assert.ok(result.exitCode !== 0 || result.errorMessage !== undefined, '失敗するかエラーメッセージが返されるべき');
+    // Then: Either exitCode is non-zero or errorMessage is provided
+    assert.ok(result.exitCode !== 0 || result.errorMessage !== undefined, 'Should fail or return an errorMessage');
   });
 
-  // TC-RUN-03: 失敗するコマンド実行 (exit code != 0)
-  test('TC-RUN-03: コマンドが失敗した場合、終了コード 1 が返される', async () => {
-    // Given: exit 1 を返すコマンド
+  // TC-RUN-03
+  test('TC-RUN-03: returns exitCode=1 for a command that exits with code 1', async () => {
+    // Given: A command that exits with 1
     const command = process.platform === 'win32' ? 'cmd /c exit 1' : 'exit 1';
 
-    // When: runTestCommand を呼び出す
+    // When: runTestCommand is called
     const result = await runTestCommand({ command, cwd });
 
-    // Then: exitCode が 1 であること
-    assert.strictEqual(result.exitCode, 1, 'Exit code は 1 であるべき');
+    // Then: exitCode is 1
+    assert.strictEqual(result.exitCode, 1, 'Exit code should be 1');
   });
 
-  // TC-RUN-04: 大量出力の切り詰め
-  test('TC-RUN-04: 大量出力時に出力が切り詰められる', async function() {
-    this.timeout(10000); 
-    // Given: 大量出力を生成するコマンド (5MB制限を超える6MB)
+  // TC-RUN-04
+  test('TC-RUN-04: truncates very large stdout output', async function () {
+    this.timeout(10000);
+    // Given: A command that prints ~6MB (over the 5MB cap)
     const largeSize = 6 * 1024 * 1024;
     const command = `node -e "console.log('a'.repeat(${largeSize}))"`;
 
-    // When: runTestCommand を呼び出す
+    // When: runTestCommand is called
     const result = await runTestCommand({ command, cwd });
 
-    // Then: 出力が切り詰められていること
-    assert.ok(result.stdout.includes('truncated'), '出力に truncated メッセージが含まれること');
-    assert.ok(result.stdout.length < largeSize, '出力サイズが元のサイズより小さいこと（制限されていること）');
-    assert.ok(result.stdout.length > 0, '出力が空でないこと');
+    // Then: The output is truncated and still non-empty
+    assert.ok(result.stdout.includes('truncated'), 'Stdout should include the truncated marker');
+    assert.ok(result.stdout.length < largeSize, 'Stdout should be smaller than the original output size');
+    assert.ok(result.stdout.length > 0, 'Stdout should not be empty');
+  });
+
+  // TC-TRUNNER-N-01
+  test('TC-TRUNNER-N-01: runTestCommand sets executionRunner="extension" on success', async () => {
+    // Given: A successful command and a failing command (exit code != 0)
+    const okCommand = process.platform === 'win32' ? 'echo ok' : 'echo "ok"';
+
+    // When: runTestCommand is called
+    const ok = await runTestCommand({ command: okCommand, cwd });
+
+    // Then: executionRunner is "extension"
+    assert.strictEqual(ok.executionRunner, 'extension');
+  });
+
+  // TC-TRUNNER-E-01
+  test('TC-TRUNNER-E-01: runTestCommand sets errorMessage and keeps executionRunner="extension" on spawn/exec error', async () => {
+    // Given: A command that does not exist (spawn/exec error)
+    const command = 'invalid_command_that_does_not_exist_12345';
+
+    // When: runTestCommand is called
+    const result = await runTestCommand({ command, cwd });
+
+    // Then: errorMessage is set and executionRunner is "extension"
+    assert.ok(typeof result.errorMessage === 'string' && result.errorMessage.trim().length > 0, 'errorMessage should be set');
+    assert.strictEqual(result.executionRunner, 'extension', 'executionRunner should remain extension');
+  });
+
+  // TC-TRUN-B-00
+  test('TC-TRUN-B-00: runTestCommand returns exitCode=0 and empty stdout/stderr when the command produces no output', async () => {
+    // Given: A command that exits successfully without writing stdout/stderr
+    const command = `node -e "process.exit(0)"`;
+
+    // When: runTestCommand is called
+    const result = await runTestCommand({ command, cwd });
+
+    // Then: stdout/stderr are empty (or whitespace-only) and executionRunner is extension
+    assert.strictEqual(result.exitCode, 0);
+    assert.ok((result.stdout ?? '').trim().length === 0, 'stdout should be empty');
+    assert.ok((result.stderr ?? '').trim().length === 0, 'stderr should be empty');
+    assert.strictEqual(result.executionRunner, 'extension');
+  });
+
+  // TC-TRUN-B-MAX
+  test('TC-TRUN-B-MAX: runTestCommand does not truncate stdout when stdout length == maxCaptureBytes', async function () {
+    this.timeout(15000);
+    // Given: A command that writes exactly maxCaptureBytes to stdout (no newline)
+    const command = `node -e "process.stdout.write('a'.repeat(${maxCaptureBytes}))"`;
+
+    // When: runTestCommand is called
+    const result = await runTestCommand({ command, cwd });
+
+    // Then: It is not truncated and executionRunner is extension
+    assert.strictEqual(result.exitCode, 0);
+    assert.ok(!result.stdout.includes('... (stdout truncated)'), 'stdout must not include truncation marker');
+    assert.strictEqual(result.stdout.length, maxCaptureBytes, 'stdout length should be exactly maxCaptureBytes');
+    assert.strictEqual(result.executionRunner, 'extension');
+  });
+
+  // TC-TRUN-B-MAXP1
+  test('TC-TRUN-B-MAXP1: runTestCommand truncates stdout when stdout length > maxCaptureBytes', async function () {
+    this.timeout(15000);
+    // Given: A command that writes maxCaptureBytes+1 to stdout (no newline)
+    const command = `node -e "process.stdout.write('a'.repeat(${maxCaptureBytes + 1}))"`;
+
+    // When: runTestCommand is called
+    const result = await runTestCommand({ command, cwd });
+
+    // Then: It is truncated and executionRunner is extension
+    assert.strictEqual(result.exitCode, 0);
+    assert.ok(result.stdout.includes('... (stdout truncated)'), 'stdout must include truncation marker');
+    assert.ok(result.stdout.length <= maxCaptureBytes + '... (stdout truncated)'.length + 10, 'stdout should be capped');
+    assert.strictEqual(result.executionRunner, 'extension');
   });
 
   test('TC-TRUN-ENV-N-01: merges options.env into process.env and options.env takes precedence', async () => {

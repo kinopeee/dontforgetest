@@ -796,9 +796,257 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 4 |`), 'Total count is shown');
   });
 
-  // TC-RESOLVE-ENV-N-01: buildTestExecutionArtifactMarkdown prefers env from testResult when provided
-  test('TC-REPORT-ENV-N-01: buildTestExecutionArtifactMarkdown uses execution environment from testResult when provided', () => {
-    // Given: A structured testResult that includes execution environment fields
+  test('TC-EXECENV-N-01: buildTestExecutionArtifactMarkdown uses envSource=execution when executionRunner="cursorAgent" and all env fields are present', () => {
+    // Given: A cursorAgent result with all env fields present in testResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'darwin',
+          arch: 'arm64',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It shows envSource=execution
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`));
+  });
+
+  test('TC-EXECENV-N-02: buildTestExecutionArtifactMarkdown uses envSource=local when executionRunner="extension" and env fields are missing', () => {
+    // Given: An extension-runner result without testResult env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: undefined,
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It shows envSource=local
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`));
+  });
+
+  test('TC-EXECENV-E-01: buildTestExecutionArtifactMarkdown uses envSource=unknown when executionRunner="cursorAgent" and env fields are missing', () => {
+    // Given: A cursorAgent result without testResult env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: undefined,
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It shows envSource=unknown
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`));
+  });
+
+  test('TC-EXECENV-E-02: buildTestExecutionArtifactMarkdown uses envSource=unknown when executionRunner is undefined and env fields are missing', () => {
+    // Given: A backward-compatible result without executionRunner and without env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        testResult: undefined,
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It shows envSource=unknown
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`));
+  });
+
+  test('TC-EXECENV-N-03: buildTestExecutionArtifactMarkdown uses envSource=local and preserves platform when executionRunner="extension" and only platform is provided', () => {
+    // Given: An extension-runner result where only platform is provided in testResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'darwin',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: platform is preserved and envSource=local
+    assert.ok(md.includes(`OS: darwin (${process.arch})`), 'Expected provided platform and local arch fallback');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`));
+  });
+
+  test('TC-EXECENV-E-03: buildTestExecutionArtifactMarkdown uses envSource=execution and unknown-filled missing fields when executionRunner="cursorAgent" and only platform is provided', () => {
+    // Given: A cursorAgent result where only platform is provided in testResult
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'darwin',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: envSource=execution, and missing fields are shown as unknown label
+    assert.ok(md.includes(`OS: darwin (${unknown})`), 'Expected arch to be unknown when not provided');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Expected Node.js version to be unknown when not provided');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'Expected VS Code version to be unknown when not provided');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`));
+  });
+
+  test('TC-EXECENV-B-EMPTY: buildTestExecutionArtifactMarkdown treats empty platform as missing (cursorAgent runner)', () => {
+    // Given: A cursorAgent result where platform is an empty string (boundary)
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: '',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: platform is shown as unknown label (not empty)
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'Expected platform/arch to be unknown when empty/missing');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`));
+  });
+
+  test('TC-EXECENV-B-WS: buildTestExecutionArtifactMarkdown treats whitespace-only platform as missing (cursorAgent runner)', () => {
+    // Given: A cursorAgent result where platform is whitespace-only (boundary)
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: '   ',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: platform is shown as unknown label (not whitespace)
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'Expected platform/arch to be unknown when whitespace-only');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`));
+  });
+
+  test('TC-EXECENV-B-TYPE: buildTestExecutionArtifactMarkdown treats non-string env fields from parseTestResultFile as missing (cursorAgent runner)', () => {
+    // Given: A parsed testResult where env fields are invalid types (number/boolean)
+    const raw = JSON.stringify({
+      timestamp: Date.now(),
+      failures: 0,
+      platform: 123,
+      arch: true,
+      nodeVersion: 456,
+      vscodeVersion: false,
+    });
+    const parsed = parseTestResultFile(raw);
+    assert.ok(parsed.ok, 'Expected parseTestResultFile to succeed for structurally valid JSON');
+
+    // When: Generating markdown with cursorAgent runner
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: parsed.value,
+      },
+    });
+
+    // Then: It uses envSource=unknown and unknown labels for all env fields
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`));
+  });
+
+  // TC-REPORT-ENV-EXT-N-01 (extra)
+  test('TC-REPORT-ENV-EXT-N-01: buildTestExecutionArtifactMarkdown uses execution environment from testResult when provided (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) with all env fields present in testResult
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -811,6 +1059,7 @@ suite('core/artifacts.ts', () => {
         durationMs: 1000,
         stdout: '',
         stderr: '',
+        executionRunner: 'extension',
         testResult: {
           platform: 'testos',
           arch: 'testarch',
@@ -821,15 +1070,19 @@ suite('core/artifacts.ts', () => {
     });
 
     // When: The report markdown is generated
-    // Then: The execution info section uses values from testResult
+    // Then: The execution environment uses testResult values and envSource=execution
     assert.ok(md.includes('OS: testos (testarch)'), 'OS/arch uses testResult values');
     assert.ok(md.includes('Node.js: v0.0.0-test'), 'Node.js version uses testResult value');
     assert.ok(md.includes('VS Code: 9.9.9-test'), 'VS Code version uses testResult value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
   });
 
-  // TC-RESOLVE-ENV-N-02: buildTestExecutionArtifactMarkdown falls back to local environment when testResult is missing
-  test('TC-RESOLVE-ENV-N-02: buildTestExecutionArtifactMarkdown falls back to local environment when testResult is undefined', () => {
-    // Given: No structured testResult (only raw execution result)
+  // TC-REPORT-ENV-N-02
+  test('TC-REPORT-ENV-N-02: buildTestExecutionArtifactMarkdown falls back to local environment when testResult is undefined (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) with testResult undefined
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -843,20 +1096,24 @@ suite('core/artifacts.ts', () => {
         stdout: '',
         stderr: '',
         testResult: undefined,
+        executionRunner: 'extension',
       },
     });
 
     // When: The report markdown is generated
-    // Then: The execution info section uses local process/vscode values
-    // NOTE: process.platform/process.arch/process.version are not reliably stub-able in Node; assert against runtime values.
+    // Then: The execution environment falls back to local values and envSource=local
     assert.ok(md.includes(`OS: ${process.platform} (${process.arch})`), 'OS/arch falls back to local process values');
     assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back to local process value');
     assert.ok(md.includes(`VS Code: ${vscode.version}`), 'VS Code version falls back to vscode.version');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
   });
 
-  // TC-RESOLVE-ENV-B-NULL-01: null fields are treated as missing and fall back
-  test('TC-RESOLVE-ENV-B-NULL-01: buildTestExecutionArtifactMarkdown falls back per-field when env fields are null', () => {
-    // Given: A testResult with a mix of null and non-null env fields (JSON-originated)
+  // TC-REPORT-ENV-B-NULL-01
+  test('TC-REPORT-ENV-B-NULL-01: buildTestExecutionArtifactMarkdown falls back per-field when env fields are null (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) whose testResult has some null env fields
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -875,19 +1132,24 @@ suite('core/artifacts.ts', () => {
           nodeVersion: null as unknown as string,
           vscodeVersion: '9.9.9-test',
         },
+        executionRunner: 'extension',
       },
     });
 
     // When: The report markdown is generated
-    // Then: null fields fall back; non-null fields are used
+    // Then: Null env fields fall back to local values, non-null fields are preserved, and envSource=local
     assert.ok(md.includes(`OS: ${process.platform} (testarch)`), 'Platform falls back but arch is preserved');
     assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back when null');
     assert.ok(md.includes('VS Code: 9.9.9-test'), 'VS Code version uses provided non-null value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
   });
 
-  // TC-RESOLVE-ENV-B-EMPTY-01: empty strings are not nullish and should be used as-is
-  test('TC-RESOLVE-ENV-B-EMPTY-01: buildTestExecutionArtifactMarkdown uses empty string values (no fallback)', () => {
-    // Given: A testResult that uses empty strings for env fields
+  // TC-REPORT-ENV-E-02
+  test('TC-REPORT-ENV-E-02: buildTestExecutionArtifactMarkdown treats empty strings as missing and falls back to local env (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) whose env fields are empty strings
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -906,19 +1168,24 @@ suite('core/artifacts.ts', () => {
           nodeVersion: '',
           vscodeVersion: '',
         },
+        executionRunner: 'extension',
       },
     });
 
     // When: The report markdown is generated
-    // Then: Empty strings are used (because ?? does not treat '' as nullish)
-    assert.ok(md.includes('OS:  ()'), 'OS line uses empty strings (platform/arch)');
-    assert.ok(md.includes('Node.js: '), 'Node.js line exists even when value is empty');
-    assert.ok(md.includes('VS Code: '), 'VS Code line exists even when value is empty');
+    // Then: Empty strings are treated as missing, fall back to local values, and envSource=local
+    assert.ok(md.includes(`OS: ${process.platform} (${process.arch})`), 'OS/arch falls back to local process values');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back to local process value');
+    assert.ok(md.includes(`VS Code: ${vscode.version}`), 'VS Code version falls back to vscode.version');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
   });
 
-  // TC-ARTIFACT-MD-E-01: invalid types should not crash and should fall back
-  test('TC-ARTIFACT-MD-E-01: buildTestExecutionArtifactMarkdown falls back when env fields have invalid runtime types', () => {
-    // Given: A testResult with invalid runtime types for env fields
+  // TC-REPORT-ENV-E-04
+  test('TC-REPORT-ENV-E-04: buildTestExecutionArtifactMarkdown ignores non-string env fields and falls back to local env (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) whose env fields have invalid runtime types
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -937,14 +1204,724 @@ suite('core/artifacts.ts', () => {
           nodeVersion: {} as unknown as string,
           vscodeVersion: [] as unknown as string,
         },
+        executionRunner: 'extension',
       },
     });
 
     // When: The report markdown is generated
-    // Then: The report is generated and falls back to local values (no exception)
+    // Then: It falls back to local values (no exception) and envSource=local
     assert.ok(md.includes(`OS: ${process.platform} (${process.arch})`), 'Falls back for OS/arch');
     assert.ok(md.includes(`Node.js: ${process.version}`), 'Falls back for Node.js version');
     assert.ok(md.includes(`VS Code: ${vscode.version}`), 'Falls back for VS Code version');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
+  });
+
+  // TC-REPORT-ENV-E-01
+  test('TC-REPORT-ENV-E-01: buildTestExecutionArtifactMarkdown uses unknown env when testResult is undefined (cursorAgent runner)', () => {
+    // Given: A TestExecutionResult (cursorAgent runner) with testResult undefined
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: undefined,
+        executionRunner: 'cursorAgent',
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It does NOT use local values, uses unknown labels, and envSource=unknown
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'OS/arch are unknown');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Node.js version is unknown');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'VS Code version is unknown');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`),
+      'Env source is unknown',
+    );
+  });
+
+  // TC-REPORT-ENV-B-UNDEF-RUNNER-01
+  test('TC-REPORT-ENV-B-UNDEF-RUNNER-01: buildTestExecutionArtifactMarkdown uses unknown env when executionRunner is undefined and testResult is undefined', () => {
+    // Given: A TestExecutionResult with executionRunner unset and testResult undefined (backward compatibility)
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: undefined,
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It uses unknown labels and envSource=unknown
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'OS/arch are unknown');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Node.js version is unknown');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'VS Code version is unknown');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`),
+      'Env source is unknown',
+    );
+  });
+
+  // TC-REPORT-ENV-E-02
+  test('TC-REPORT-ENV-E-02: buildTestExecutionArtifactMarkdown uses unknown env when executionRunner="unknown" and testResult is undefined', () => {
+    // Given: A TestExecutionResult (unknown runner) with testResult undefined
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: undefined,
+        executionRunner: 'unknown',
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It uses unknown labels and envSource=unknown
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'OS/arch are unknown');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Node.js version is unknown');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'VS Code version is unknown');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`),
+      'Env source is unknown',
+    );
+  });
+
+  // TC-REPORT-ENV-N-01
+  test('TC-REPORT-ENV-N-01: buildTestExecutionArtifactMarkdown uses execution environment from testResult when all fields are present (cursorAgent runner)', () => {
+    // Given: A TestExecutionResult (cursorAgent runner) with all env fields present in testResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: The execution environment uses testResult values and envSource=execution
+    assert.ok(md.includes('OS: testos (testarch)'), 'OS/arch uses testResult values');
+    assert.ok(md.includes('Node.js: v0.0.0-test'), 'Node.js version uses testResult value');
+    assert.ok(md.includes('VS Code: 9.9.9-test'), 'VS Code version uses testResult value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-B-WS-01
+  test('TC-REPORT-ENV-B-WS-01: buildTestExecutionArtifactMarkdown falls back when env fields are whitespace-only (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) whose env fields are whitespace-only strings
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: ' ',
+          arch: '   ',
+          nodeVersion: '\n',
+          vscodeVersion: '\t',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Whitespace-only strings are treated as missing and envSource=local
+    assert.ok(md.includes(`OS: ${process.platform} (${process.arch})`), 'OS/arch falls back to local process values');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back to local process value');
+    assert.ok(md.includes(`VS Code: ${vscode.version}`), 'VS Code version falls back to vscode.version');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
+  });
+
+  // TC-REPORT-ENV-E-03
+  test('TC-REPORT-ENV-E-03: buildTestExecutionArtifactMarkdown treats whitespace-only env fields as missing and uses unknown env (cursorAgent runner)', () => {
+    // Given: A TestExecutionResult (cursorAgent runner) whose env fields are whitespace-only strings
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: '   ',
+          arch: '\t',
+          nodeVersion: '\n',
+          vscodeVersion: ' ',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It uses unknown labels with envSource=unknown (no local fallback)
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'OS/arch are unknown');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Node.js version is unknown');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'VS Code version is unknown');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`),
+      'Env source is unknown',
+    );
+  });
+
+  // TC-REPORT-ENV-N-04
+  test('TC-REPORT-ENV-N-04: buildTestExecutionArtifactMarkdown preserves provided env fields and uses unknown for missing ones (cursorAgent runner)', () => {
+    // Given: A TestExecutionResult (cursorAgent runner) with only platform set in testResult
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'x',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Provided fields are preserved, missing ones are unknown, and envSource=execution
+    assert.ok(md.includes(`OS: x (${unknown})`), 'Platform is preserved and arch is unknown');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Node.js version is unknown');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'VS Code version is unknown');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-N-03
+  test('TC-REPORT-ENV-N-03: buildTestExecutionArtifactMarkdown preserves provided env fields and fills missing ones from local env (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) with only platform set in testResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'x',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Provided fields are preserved, missing ones fall back to local, and envSource=local
+    assert.ok(md.includes(`OS: x (${process.arch})`), 'Platform is preserved and arch falls back to local');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back to local');
+    assert.ok(md.includes(`VS Code: ${vscode.version}`), 'VS Code version falls back to local');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
+  });
+
+  // TC-REPORT-ENV-N-05
+  test('TC-REPORT-ENV-N-05: buildTestExecutionArtifactMarkdown uses testResult env when executionRunner="unknown" but all env fields are present', () => {
+    // Given: A TestExecutionResult (unknown runner) with a fully-populated testResult env
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'unknown',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It uses the testResult values and envSource=execution
+    assert.ok(md.includes('OS: testos (testarch)'), 'OS/arch uses testResult values');
+    assert.ok(md.includes('Node.js: v0.0.0-test'), 'Node.js version uses testResult value');
+    assert.ok(md.includes('VS Code: 9.9.9-test'), 'VS Code version uses testResult value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-B-01
+  test('TC-REPORT-ENV-B-01: extension runner envSource remains local for both 0 and 1 populated env fields', () => {
+    // Given: Two extension-runner results (0 env fields vs 1 env field)
+    const md0 = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: undefined,
+      },
+    });
+
+    const md1 = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'x',
+        },
+      },
+    });
+
+    // When: Both markdowns are generated
+    // Then: Both are local-sourced, but values differ as expected (local vs mixed)
+    assert.ok(
+      md0.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      '0-field case uses local envSource',
+    );
+    assert.ok(
+      md1.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      '1-field case still uses local envSource',
+    );
+    assert.ok(md0.includes(`OS: ${process.platform} (${process.arch})`), '0-field case uses local OS/arch');
+    assert.ok(md1.includes(`OS: x (${process.arch})`), '1-field case preserves provided platform and falls back for arch');
+  });
+
+  // TC-REPORT-ENV-B-02
+  test('TC-REPORT-ENV-B-02: cursorAgent runner envSource is execution for both 3 and 4 populated env fields, and missing values are unknown-filled', () => {
+    // Given: Two cursorAgent-runner results (4 env fields vs 3 env fields)
+    const md4 = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    const unknown = t('artifact.executionReport.unknown');
+    const md3 = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          // vscodeVersion intentionally missing (3/4 populated)
+        },
+      },
+    });
+
+    // When: Both markdowns are generated
+    // Then: Both are execution-sourced and the 3-field case is unknown-filled for the missing field
+    assert.ok(
+      md4.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      '4-field case uses execution envSource',
+    );
+    assert.ok(
+      md3.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      '3-field case still uses execution envSource',
+    );
+    assert.ok(md3.includes('OS: testos (testarch)'), '3-field case preserves provided OS/arch');
+    assert.ok(md3.includes('Node.js: v0.0.0-test'), '3-field case preserves provided Node.js version');
+    assert.ok(md3.includes(`VS Code: ${unknown}`), '3-field case uses unknown for missing VS Code version');
+  });
+
+  // TC-REPORT-ENV-N-06
+  test('TC-REPORT-ENV-N-06: buildTestExecutionArtifactMarkdown includes envSource line once and keeps execution info line ordering', () => {
+    // Given: A result with all env fields present
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: envSource line exists exactly once and appears after OS/Node.js/VS Code lines
+    const envSourceLabel = t('artifact.executionReport.envSource');
+    const envSourceLinePrefix = `- ${envSourceLabel}: `;
+    assert.strictEqual(md.split(envSourceLinePrefix).length - 1, 1, 'envSource line must appear exactly once');
+
+    const idxOs = md.indexOf('- OS: ');
+    const idxNode = md.indexOf('- Node.js: ');
+    const idxVsCode = md.indexOf('- VS Code: ');
+    const idxSource = md.indexOf(envSourceLinePrefix);
+
+    assert.ok(idxOs >= 0, 'OS line should exist');
+    assert.ok(idxNode >= 0, 'Node.js line should exist');
+    assert.ok(idxVsCode >= 0, 'VS Code line should exist');
+    assert.ok(idxSource >= 0, 'envSource line should exist');
+    assert.ok(idxOs < idxNode, 'OS line should appear before Node.js line');
+    assert.ok(idxNode < idxVsCode, 'Node.js line should appear before VS Code line');
+    assert.ok(idxVsCode < idxSource, 'VS Code line should appear before envSource line');
+  });
+
+  // TC-DURATION-B-00
+  test('TC-DURATION-B-00: buildTestExecutionArtifactMarkdown preserves durationMs=0 and includes a duration row', () => {
+    // Given: A TestExecutionResult with durationMs=0 (boundary)
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It includes the duration row and does not omit the value
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} |`), 'Duration row should exist');
+    assert.ok(md.includes(`${t('artifact.executionReport.seconds')} |`), 'Duration row should include seconds unit');
+  });
+
+  // TC-DURATION-B-MINUS-01
+  test('TC-DURATION-B-MINUS-01: buildTestExecutionArtifactMarkdown does not throw when durationMs is negative', () => {
+    // Given: A TestExecutionResult with durationMs=-1 (invalid but tolerated)
+    const build = () =>
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: -1,
+          stdout: '',
+          stderr: '',
+        },
+      });
+
+    // When: Generating markdown
+    // Then: It does not throw and still includes the duration row
+    assert.doesNotThrow(build, 'Markdown generation should tolerate negative durationMs');
+    const md = build();
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} |`), 'Duration row should exist');
+  });
+
+  // TC-DURATION-B-MAX-01
+  test('TC-DURATION-B-MAX-01: buildTestExecutionArtifactMarkdown does not throw for very large durationMs (MAX_SAFE_INTEGER)', () => {
+    // Given: A TestExecutionResult with a very large durationMs
+    const durationMs = Number.MAX_SAFE_INTEGER;
+    const build = () =>
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs,
+          stdout: '',
+          stderr: '',
+        },
+      });
+
+    // When: Generating markdown
+    // Then: It does not throw and includes the duration row
+    assert.doesNotThrow(build, 'Markdown generation should tolerate large durationMs');
+    const md = build();
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} |`), 'Duration row should exist');
+  });
+
+  // TC-DURATION-B-MAXP1-01
+  test('TC-DURATION-B-MAXP1-01: buildTestExecutionArtifactMarkdown does not throw for durationMs > MAX_SAFE_INTEGER (precision may degrade)', () => {
+    // Given: A TestExecutionResult with durationMs > MAX_SAFE_INTEGER
+    const durationMs = Number.MAX_SAFE_INTEGER + 1;
+    const build = () =>
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs,
+          stdout: '',
+          stderr: '',
+        },
+      });
+
+    // When: Generating markdown
+    // Then: It does not throw and includes the duration row (do not assert exact numeric formatting)
+    assert.doesNotThrow(build, 'Markdown generation should tolerate durationMs > MAX_SAFE_INTEGER');
+    const md = build();
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} |`), 'Duration row should exist');
+  });
+
+  // TC-REPORT-ENV-B-MIN-01
+  test('TC-REPORT-ENV-B-MIN-01: buildTestExecutionArtifactMarkdown preserves 1-char env fields (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) with 1-char env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'a',
+          arch: 'b',
+          nodeVersion: 'v',
+          vscodeVersion: '1',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: 1-char strings are treated as valid and envSource=execution
+    assert.ok(md.includes('OS: a (b)'), 'OS/arch use 1-char values');
+    assert.ok(md.includes('Node.js: v'), 'Node.js uses 1-char value');
+    assert.ok(md.includes('VS Code: 1'), 'VS Code uses 1-char value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-B-MAX-01
+  test('TC-REPORT-ENV-B-MAX-01: buildTestExecutionArtifactMarkdown preserves long env strings (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) with very long env strings
+    const long = 'x'.repeat(10_000);
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: long,
+          arch: long,
+          nodeVersion: long,
+          vscodeVersion: long,
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Long strings are preserved and envSource=execution
+    assert.ok(md.includes(`OS: ${long} (${long})`), 'OS/arch preserve long values');
+    assert.ok(md.includes(`Node.js: ${long}`), 'Node.js preserves long value');
+    assert.ok(md.includes(`VS Code: ${long}`), 'VS Code preserves long value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-B-PLUSMINUS1-01
+  test('TC-REPORT-ENV-B-PLUSMINUS1-01: whitespace-only is treated as missing but 1-char is treated as valid (extension runner)', () => {
+    // Given: Two TestExecutionResults (extension runner) differing only by platform value: " " vs "a"
+    const mdWhitespace = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: ' ',
+          arch: 'b',
+          nodeVersion: 'v',
+          vscodeVersion: '1',
+        },
+      },
+    });
+    const mdOneChar = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'a',
+          arch: 'b',
+          nodeVersion: 'v',
+          vscodeVersion: '1',
+        },
+      },
+    });
+
+    // When: Both reports are generated
+    // Then: " " falls back to local+envSource=local, while "a" is preserved+envSource=execution
+    assert.ok(mdWhitespace.includes(`OS: ${process.platform} (b)`), 'Whitespace platform falls back to local value');
+    assert.ok(
+      mdWhitespace.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Whitespace case uses local envSource',
+    );
+    assert.ok(mdOneChar.includes('OS: a (b)'), '1-char platform is preserved');
+    assert.ok(
+      mdOneChar.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      '1-char case uses execution envSource',
+    );
   });
 
   // TC-REPORT-N-04: TestExecutionResult with parsed=false
@@ -5261,22 +6238,22 @@ suite('core/artifacts.ts', () => {
         assert.strictEqual(result.value.vscodeVersion, undefined);
       });
 
-      test('TC-PARSE-ENV-B-EMPTY-01: empty string env fields are preserved as empty strings', () => {
+      test('TC-PARSE-ENV-B-EMPTY-01: empty string env fields are converted to undefined', () => {
         // Given: A JSON payload where env fields are empty strings
         const raw = JSON.stringify({ platform: '', arch: '', nodeVersion: '', vscodeVersion: '' });
 
         // When: parseTestResultFile is called
         const result = parseTestResultFile(raw);
 
-        // Then: It succeeds and preserves empty strings (typeof === "string")
+        // Then: It succeeds and converts empty strings to undefined
         assert.ok(result.ok);
         if (!result.ok) {
           return;
         }
-        assert.strictEqual(result.value.platform, '');
-        assert.strictEqual(result.value.arch, '');
-        assert.strictEqual(result.value.nodeVersion, '');
-        assert.strictEqual(result.value.vscodeVersion, '');
+        assert.strictEqual(result.value.platform, undefined);
+        assert.strictEqual(result.value.arch, undefined);
+        assert.strictEqual(result.value.nodeVersion, undefined);
+        assert.strictEqual(result.value.vscodeVersion, undefined);
       });
 
       test('TC-PARSE-ENV-E-01: invalid types for env fields are converted to undefined (without failing the whole parse)', () => {

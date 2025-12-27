@@ -13,32 +13,32 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       try {
         await fs.promises.rm(root, { recursive: true, force: true });
       } catch {
-        // クリーンアップエラーは無視
+        // Ignore cleanup errors
       }
     }
     workspaceRoots.length = 0;
   });
 
-  // TC-LL-N-01: out/test/runTest.js を含むコマンドは true
-  test('TC-LL-N-01: out/test/runTest.js を含むコマンドは true を返す', async () => {
-    // Given: 一時ワークスペースと session
+  // TC-LL-N-01: Commands containing out/test/runTest.js return true
+  test('TC-LL-N-01: returns true for commands containing out/test/runTest.js', async () => {
+    // Given: A temporary workspace root
     const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
     workspaceRoots.push(workspaceRoot);
 
-    // When: out/test/runTest.js を含むコマンドを判定
+    // When: Checking a command containing out/test/runTest.js
     const result = await __test__.looksLikeVsCodeLaunchingTestCommand({
       workspaceRoot,
       testCommand: 'node ./out/test/runTest.js',
       readFileUtf8,
     });
 
-    // Then: true が返る
-    assert.strictEqual(result, true, 'out/test/runTest.js を含むコマンドは true になること');
+    // Then: It returns true
+    assert.strictEqual(result, true, 'Expected true for commands containing out/test/runTest.js');
   });
 
-  // TC-LL-N-02: npm test で package.json の test が VS Code 実行系なら true
-  test('TC-LL-N-02: npm test で @vscode/test-electron を含む場合は true を返す', async () => {
-    // Given: package.json に VS Code 実行系の test script
+  // TC-LL-N-02: For "npm test", returns true when package.json test script launches VS Code
+  test('TC-LL-N-02: returns true for "npm test" when package.json test script uses @vscode/test-electron', async () => {
+    // Given: A package.json with a VS Code launching test script
     const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
     workspaceRoots.push(workspaceRoot);
     const pkg = {
@@ -48,66 +48,66 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
     };
     fs.writeFileSync(path.join(workspaceRoot, 'package.json'), JSON.stringify(pkg), 'utf8');
 
-    // When: npm test を判定
+    // When: Checking "npm test"
     const result = await __test__.looksLikeVsCodeLaunchingTestCommand({
       workspaceRoot,
       testCommand: 'npm test',
       readFileUtf8,
     });
 
-    // Then: true が返る
-    assert.strictEqual(result, true, 'npm test で VS Code 実行系なら true になること');
+    // Then: It returns true
+    assert.strictEqual(result, true, 'Expected true when npm test launches VS Code tests');
   });
 
-  // TC-LL-E-01: package.json が無い場合は false
-  test('TC-LL-E-01: package.json が無い場合は false を返す', async () => {
-    // Given: package.json が存在しないワークスペース
+  // TC-LL-E-01: Returns false when package.json is missing
+  test('TC-LL-E-01: returns false when package.json is missing', async () => {
+    // Given: A workspace root without package.json
     const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
     workspaceRoots.push(workspaceRoot);
 
-    // When: npm test を判定
+    // When: Checking "npm test"
     const result = await __test__.looksLikeVsCodeLaunchingTestCommand({
       workspaceRoot,
       testCommand: 'npm test',
       readFileUtf8,
     });
 
-    // Then: false が返る
-    assert.strictEqual(result, false, 'package.json が無い場合は false になること');
+    // Then: It returns false
+    assert.strictEqual(result, false, 'Expected false when package.json is missing');
   });
 
-  // TC-LL-B-01: 空文字コマンドは false
-  test('TC-LL-B-01: 空文字コマンドは false を返す', async () => {
-    // Given: 空のコマンド
+  // TC-LL-B-01: Empty command returns false
+  test('TC-LL-B-01: returns false for an empty command', async () => {
+    // Given: An empty command (boundary)
     const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
     workspaceRoots.push(workspaceRoot);
 
-    // When: 空文字を判定
+    // When: Checking an empty command
     const result = await __test__.looksLikeVsCodeLaunchingTestCommand({
       workspaceRoot,
       testCommand: '',
       readFileUtf8,
     });
 
-    // Then: false が返る
-    assert.strictEqual(result, false, '空文字コマンドは false になること');
+    // Then: It returns false
+    assert.strictEqual(result, false, 'Expected false for an empty command');
   });
 
-  // TC-LL-B-02: npm test 以外のコマンドは false
-  test('TC-LL-B-02: npm test 以外のコマンドは false を返す', async () => {
-    // Given: npm test 以外のコマンド
+  // TC-LL-B-02: Non-"npm test" commands return false
+  test('TC-LL-B-02: returns false for commands other than "npm test"', async () => {
+    // Given: A command that is not "npm test"
     const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
     workspaceRoots.push(workspaceRoot);
 
-    // When: npm run build を判定
+    // When: Checking "npm run build"
     const result = await __test__.looksLikeVsCodeLaunchingTestCommand({
       workspaceRoot,
       testCommand: 'npm run build',
       readFileUtf8,
     });
 
-    // Then: false が返る
-    assert.strictEqual(result, false, 'npm test 以外のコマンドは false になること');
+    // Then: It returns false
+    assert.strictEqual(result, false, 'Expected false for commands other than "npm test"');
   });
 
   suite('readTestResultFile / attachTestResult', () => {
@@ -582,6 +582,155 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       } finally {
         artifacts.saveTestExecutionReport = originalSave;
         testRunner.runTestCommand = originalRun;
+      }
+    });
+
+    // TC-SESSION-SKIP-N-01
+    test('TC-SESSION-SKIP-N-01: runTestExecution creates a skipped result with durationMs=0 and executionRunner="unknown" when testCommand is empty', async () => {
+      // Given: A session where testCommand is empty (intentional skip) and saveTestExecutionReport is stubbed
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const session = createSession(workspaceRoot, { testCommand: '' });
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+      const originalSave = artifacts.saveTestExecutionReport;
+      let captured: import('../../../../core/artifacts').TestExecutionResult | undefined;
+      artifacts.saveTestExecutionReport = (async (params: { result: import('../../../../core/artifacts').TestExecutionResult }) => {
+        captured = params.result;
+        return { absolutePath: '/tmp/report.md' };
+      }) as unknown as typeof artifacts.saveTestExecutionReport;
+
+      try {
+        // When: runTestExecution is called
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
+        await runTestExecution(0);
+
+        // Then: The skipped result has durationMs=0 and executionRunner="unknown"
+        assert.ok(captured, 'Expected saveTestExecutionReport to be called');
+        assert.strictEqual(captured?.skipped, true, 'Expected skipped=true');
+        assert.strictEqual(captured?.durationMs, 0, 'Expected durationMs=0');
+        assert.strictEqual(captured?.executionRunner, 'unknown', 'Expected executionRunner=unknown');
+        assert.strictEqual(captured?.skipReason, l10n.t('testExecution.skip.emptyCommand'), 'Expected skipReason for empty command');
+        assert.ok(typeof captured?.extensionLog === 'string', 'Expected extensionLog to be present');
+
+      } finally {
+        artifacts.saveTestExecutionReport = originalSave;
+      }
+    });
+
+    // TC-SESSION-SKIP-E-01
+    test('TC-SESSION-SKIP-E-01: buildTestExecutionArtifactMarkdown uses envSource=unknown for skipped result (executionRunner="unknown")', async () => {
+      // Given: A skipped result created by runTestExecution (empty testCommand)
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const session = createSession(workspaceRoot, { testCommand: '' });
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+      const originalSave = artifacts.saveTestExecutionReport;
+      let captured: import('../../../../core/artifacts').TestExecutionResult | undefined;
+      artifacts.saveTestExecutionReport = (async (params: { result: import('../../../../core/artifacts').TestExecutionResult }) => {
+        captured = params.result;
+        return { absolutePath: '/tmp/report.md' };
+      }) as unknown as typeof artifacts.saveTestExecutionReport;
+
+      try {
+        // When: runTestExecution is called
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(
+          session,
+        );
+        await runTestExecution(0);
+
+        // Then: The report markdown uses envSource=unknown (no local fallback)
+        assert.ok(captured, 'Expected skipped result to be saved');
+        const md = artifacts.buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: [],
+          result: captured as import('../../../../core/artifacts').TestExecutionResult,
+        });
+        assert.ok(
+          md.includes(`- ${l10n.t('artifact.executionReport.envSource')}: ${l10n.t('artifact.executionReport.envSource.unknown')}`),
+          'Expected envSource label to be unknown',
+        );
+      } finally {
+        artifacts.saveTestExecutionReport = originalSave;
+      }
+    });
+
+    // TC-SESSION-SKIP-N-02
+    test('TC-SESSION-SKIP-N-02: runTestExecution skips with executionRunner="unknown" when runLocation="worktree" and worktree changes are not applied', async () => {
+      // Given: A worktree-mode session where applyWorktreeTestChanges returns applied=false
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      fs.writeFileSync(path.join(workspaceRoot, 'package.json'), JSON.stringify({ scripts: { test: 'echo ok' } }), 'utf8');
+
+      const session = new TestGenerationSession({
+        provider: dummyProvider,
+        workspaceRoot,
+        cursorAgentCommand: 'cursor-agent',
+        testStrategyPath: '',
+        generationLabel: 'Label',
+        targetPaths: [],
+        generationPrompt: '',
+        perspectiveReferenceText: '',
+        model: undefined,
+        generationTaskId: 'task-worktree-skip',
+        runLocation: 'worktree',
+        settingsOverride: {
+          includeTestPerspectiveTable: false,
+          testExecutionRunner: 'extension',
+          testCommand: 'npm test',
+          enablePreTestCheck: false,
+        },
+        // Minimal ExtensionContext stub (only globalStorageUri is potentially accessed downstream)
+        extensionContext: { globalStorageUri: { fsPath: workspaceRoot } } as unknown as import('vscode').ExtensionContext,
+      });
+
+      // Force worktreeDir truthy so runTestExecution enters the worktree apply step block
+      (session as unknown as { worktreeDir?: string }).worktreeDir = path.join(workspaceRoot, '.worktree');
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const worktreeApplyStep = require('../../../../commands/runWithArtifacts/worktreeApplyStep') as typeof import('../../../../commands/runWithArtifacts/worktreeApplyStep');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+      const originalApply = worktreeApplyStep.applyWorktreeTestChanges;
+      const originalSave = artifacts.saveTestExecutionReport;
+
+      let captured: import('../../../../core/artifacts').TestExecutionResult | undefined;
+      worktreeApplyStep.applyWorktreeTestChanges = (async () => {
+        return { applied: false, reason: 'apply-failed' };
+      }) as unknown as typeof worktreeApplyStep.applyWorktreeTestChanges;
+      artifacts.saveTestExecutionReport = (async (params: { result: import('../../../../core/artifacts').TestExecutionResult }) => {
+        captured = params.result;
+        return { absolutePath: '/tmp/report.md' };
+      }) as unknown as typeof artifacts.saveTestExecutionReport;
+
+      try {
+        // When: runTestExecution is called
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(
+          session,
+        );
+        await runTestExecution(0);
+
+        // Then: It saves a skipped result with executionRunner=unknown and the worktree MVP skip reason
+        assert.ok(captured, 'Expected saveTestExecutionReport to be called');
+        assert.strictEqual(captured?.skipped, true);
+        assert.strictEqual(captured?.executionRunner, 'unknown');
+        assert.strictEqual(captured?.skipReason, l10n.t('testExecution.skip.worktreeMvp'));
+      } finally {
+        worktreeApplyStep.applyWorktreeTestChanges = originalApply;
+        artifacts.saveTestExecutionReport = originalSave;
       }
     });
   });

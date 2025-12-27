@@ -390,6 +390,7 @@ export class TestGenerationSession {
         durationMs: 0,
         stdout: '',
         stderr: '',
+        executionRunner: 'unknown',
         skipped: true,
         skipReason: msg,
         extensionLog: this.testExecutionLogLines.join('\n'),

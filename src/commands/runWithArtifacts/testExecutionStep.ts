@@ -104,6 +104,7 @@ export async function runTestCommandViaCursorAgent(params: {
           durationMs: durationMsFinal,
           stdout: parsed.value.stdout,
           stderr: parsed.value.stderr,
+          executionRunner: 'cursorAgent',
         };
       }
       // JSON抽出はできたがパースできない場合は、旧形式へのフォールバックも試す
@@ -125,6 +126,7 @@ export async function runTestCommandViaCursorAgent(params: {
       stdout: '',
       stderr: raw,
       errorMessage: `${prefix}${t('testExecution.extractFailed.noMarkers')}`.trim(),
+      executionRunner: 'cursorAgent',
     };
   }
 
@@ -149,6 +151,6 @@ export async function runTestCommandViaCursorAgent(params: {
     durationMs: Number.isFinite(parsedDurationMs) ? parsedDurationMs : durationMs,
     stdout,
     stderr,
+    executionRunner: 'cursorAgent',
   };
 }
-

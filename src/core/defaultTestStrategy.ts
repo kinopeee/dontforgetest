@@ -44,6 +44,10 @@ The \`dontforgetest-config\` comment at the top of this file controls output lan
 9. Do not swallow failures in tests (e.g., try/catch that ignores errors). If unavoidable, record the reason and an alternative verification in \`Notes\`.
 10. For external dependencies, document mock verification points (call args, counts, output paths) in \`Expected Result\`.
 11. Split major branches into separate cases (e.g., worktree/local/skip/cancel/cleanup failure).
+12. Do not bundle multiple input conditions in a single case. Split by runner type and by missing-field kind (null vs empty vs whitespace) when outcomes differ.
+13. Expected Results must be concrete and observable (exact label text, field values, lines). Avoid vague wording like "as expected" or "correct".
+14. Only include boundary values that are relevant to the diff/behavior being changed. Omit unrelated extremes and explain why in \`Notes\`.
+15. For report artifacts, Expected Results must point to the exact section/label/value to assert (not just "report is generated").
 
 ### Example (Rule 8)
 

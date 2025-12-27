@@ -520,6 +520,136 @@ suite('core/promptBuilder.ts', () => {
       assert.ok(result.prompt.includes('1行で書く'), 'Single line instruction is included');
       assert.ok(result.prompt.includes('改行を含めない'), 'No newlines instruction is included');
     });
+
+    test('TC-PROMPT-N-01: buildTestPerspectivePrompt includes the "Critical Quality Rules (MUST)" section and the 1-branch rule', async () => {
+      // Given: A valid workspace
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('No workspace');
+        return;
+      }
+
+      // When: buildTestPerspectivePrompt is called
+      const result = await buildTestPerspectivePrompt({
+        workspaceRoot,
+        targetLabel: 'Target',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '',
+        referenceText: 'DIFF_SNIPPET_X',
+      });
+
+      // Then: It contains the MUST heading and the concrete rule line
+      assert.ok(result.prompt.includes('## Critical Quality Rules (MUST)'), 'Expected Critical Quality Rules heading');
+      assert.ok(
+        result.prompt.includes('- 1 case = 1 branch. Do not bundle multiple input conditions in a single case.'),
+        'Expected the 1-case-1-branch rule line',
+      );
+    });
+
+    test('TC-PROMPT-N-02: buildTestPerspectivePrompt includes the "Test Strategy Rules (MUST)" heading', async () => {
+      // Given: A valid workspace
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('No workspace');
+        return;
+      }
+
+      // When: buildTestPerspectivePrompt is called
+      const result = await buildTestPerspectivePrompt({
+        workspaceRoot,
+        targetLabel: 'Target',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '',
+        referenceText: 'DIFF_SNIPPET_X',
+      });
+
+      // Then: It contains the updated MUST heading
+      assert.ok(result.prompt.includes('## Test Strategy Rules (MUST)'), 'Expected Test Strategy Rules (MUST) heading');
+    });
+
+    test('TC-PROMPT-E-01: buildTestPerspectivePrompt does not contain the legacy heading "## テスト戦略ルール（参考）"', async () => {
+      // Given: A valid workspace
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('No workspace');
+        return;
+      }
+
+      // When: buildTestPerspectivePrompt is called
+      const result = await buildTestPerspectivePrompt({
+        workspaceRoot,
+        targetLabel: 'Target',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '',
+        referenceText: 'DIFF_SNIPPET_X',
+      });
+
+      // Then: It must not include the old "参考" heading
+      assert.ok(!result.prompt.includes('## テスト戦略ルール（参考）'), 'Legacy heading should not be present');
+    });
+
+    test('TC-PROMPT-B-NULL: buildTestPerspectivePrompt omits the reference section when referenceText is undefined', async () => {
+      // Given: A valid workspace and no referenceText
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('No workspace');
+        return;
+      }
+
+      // When: buildTestPerspectivePrompt is called without referenceText
+      const result = await buildTestPerspectivePrompt({
+        workspaceRoot,
+        targetLabel: 'Target',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '',
+      });
+
+      // Then: It must not include the reference section
+      assert.ok(!result.prompt.includes('## 参考（差分/補足情報）'), 'Reference section should be omitted');
+    });
+
+    test('TC-PROMPT-B-EMPTY: buildTestPerspectivePrompt omits the reference section when referenceText is whitespace-only', async () => {
+      // Given: A valid workspace and referenceText is whitespace-only
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('No workspace');
+        return;
+      }
+
+      // When: buildTestPerspectivePrompt is called with whitespace-only referenceText
+      const result = await buildTestPerspectivePrompt({
+        workspaceRoot,
+        targetLabel: 'Target',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '',
+        referenceText: '   ',
+      });
+
+      // Then: It must not include the reference section
+      assert.ok(!result.prompt.includes('## 参考（差分/補足情報）'), 'Reference section should be omitted');
+    });
+
+    test('TC-PROMPT-N-03: buildTestPerspectivePrompt includes reference section and raw referenceText when provided', async () => {
+      // Given: A valid workspace and a concrete diff snippet
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('No workspace');
+        return;
+      }
+
+      // When: buildTestPerspectivePrompt is called with referenceText
+      const result = await buildTestPerspectivePrompt({
+        workspaceRoot,
+        targetLabel: 'Target',
+        targetPaths: ['src/test.ts'],
+        testStrategyPath: '',
+        referenceText: 'DIFF_SNIPPET_X',
+      });
+
+      // Then: It includes the reference section and the exact reference text
+      assert.ok(result.prompt.includes('## 参考（差分/補足情報）'), 'Reference section should be included');
+      assert.ok(result.prompt.includes('DIFF_SNIPPET_X'), 'Reference text should be included as-is');
+    });
   });
 
   suite('デフォルト戦略フォールバック', () => {
