@@ -42,6 +42,41 @@ export interface TestExecutionJsonV1 {
   stderr: string;
 }
 
+export type TestCaseState = 'passed' | 'failed' | 'pending';
+
+export interface TestCaseInfo {
+  suite?: string;
+  title?: string;
+  fullTitle?: string;
+  state?: TestCaseState;
+  durationMs?: number;
+}
+
+export interface FailedTestInfo {
+  title: string;
+  fullTitle: string;
+  error: string;
+  stack?: string;
+  code?: string;
+  expected?: string;
+  actual?: string;
+}
+
+export interface TestResultFile {
+  timestamp?: number;
+  platform?: string;
+  arch?: string;
+  nodeVersion?: string;
+  vscodeVersion?: string;
+  failures?: number;
+  passes?: number;
+  pending?: number;
+  total?: number;
+  durationMs?: number;
+  tests?: TestCaseInfo[];
+  failedTests?: FailedTestInfo[];
+}
+
 /**
  * 観点表（Markdownテーブル）のヘッダ行を取得する。
  * VS Code の表示言語に追従する（= 実行時言語で表示される）。
@@ -75,6 +110,10 @@ export type ParsePerspectiveJsonResult =
 
 export type ParseTestExecutionJsonResult =
   | { ok: true; value: TestExecutionJsonV1 }
+  | { ok: false; error: string };
+
+export type ParseTestResultFileResult =
+  | { ok: true; value: TestResultFile }
   | { ok: false; error: string };
 
 /**
@@ -316,6 +355,87 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
 }
 
 /**
+ * test-result.json をパースし、実行レポート用の構造化データとして抽出する。
+ */
+export function parseTestResultFile(raw: string): ParseTestResultFileResult {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, error: 'empty' };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: `invalid-json: ${msg}` };
+  }
+
+  const rec = asRecord(parsed);
+  if (!rec) {
+    return { ok: false, error: 'json-not-object' };
+  }
+
+  const testsRaw = Array.isArray(rec.tests) ? rec.tests : [];
+  const tests: TestCaseInfo[] = [];
+  for (const item of testsRaw) {
+    const itemRec = asRecord(item);
+    if (!itemRec) {
+      continue;
+    }
+    const state = normalizeTestCaseState(itemRec.state);
+    tests.push({
+      suite: getStringOrUndefined(itemRec.suite),
+      title: getStringOrUndefined(itemRec.title),
+      fullTitle: getStringOrUndefined(itemRec.fullTitle),
+      state,
+      durationMs: getNumberOrUndefined(itemRec.durationMs),
+    });
+  }
+
+  const failedTestsRaw = Array.isArray(rec.failedTests) ? rec.failedTests : [];
+  const failedTests: FailedTestInfo[] = [];
+  for (const item of failedTestsRaw) {
+    const itemRec = asRecord(item);
+    if (!itemRec) {
+      continue;
+    }
+    failedTests.push({
+      title: getStringOrEmpty(itemRec.title),
+      fullTitle: getStringOrEmpty(itemRec.fullTitle),
+      error: getStringOrEmpty(itemRec.error),
+      stack: getStringOrUndefined(itemRec.stack),
+      code: getStringOrUndefined(itemRec.code),
+      expected: getStringOrUndefined(itemRec.expected),
+      actual: getStringOrUndefined(itemRec.actual),
+    });
+  }
+
+  // 環境情報フィールドは厳密な文字列型のみを受理（数値・真偽値は undefined にフォールバック）
+  const vscodeVersion = getStrictStringOrUndefined(rec.vscodeVersion);
+  const platform = getStrictStringOrUndefined(rec.platform);
+  const arch = getStrictStringOrUndefined(rec.arch);
+  const nodeVersion = getStrictStringOrUndefined(rec.nodeVersion);
+
+  const result: TestResultFile = {
+    timestamp: getNumberOrUndefined(rec.timestamp),
+    platform,
+    arch,
+    nodeVersion,
+    vscodeVersion,
+    failures: getNumberOrUndefined(rec.failures),
+    passes: getNumberOrUndefined(rec.passes),
+    pending: getNumberOrUndefined(rec.pending),
+    total: getNumberOrUndefined(rec.total),
+    durationMs: getNumberOrUndefined(rec.durationMs),
+    tests: tests.length > 0 ? tests : undefined,
+    failedTests: failedTests.length > 0 ? failedTests : undefined,
+  };
+
+  return { ok: true, value: result };
+}
+
+/**
  * 観点表ケース配列を、列固定のMarkdown表へレンダリングする。
  * - セル内改行は表パーサ互換性のためスペースへ潰す
  * - パイプ（|）は `\\|` にエスケープする
@@ -378,6 +498,8 @@ export interface SavedArtifact {
   relativePath?: string;
 }
 
+export type TestExecutionRunner = 'extension' | 'cursorAgent' | 'unknown';
+
 export interface TestExecutionResult {
   command: string;
   cwd: string;
@@ -386,7 +508,18 @@ export interface TestExecutionResult {
   durationMs: number;
   stdout: string;
   stderr: string;
+  /** 収集時にstdoutが切り詰められた場合は true */
+  stdoutTruncated?: boolean;
+  /** 収集時にstderrが切り詰められた場合は true */
+  stderrTruncated?: boolean;
   errorMessage?: string;
+  /**
+   * テスト実行の担当者。
+   * - extension: 拡張機能で実行
+   * - cursorAgent: cursor-agent で実行
+   * - unknown: 不明/未設定
+   */
+  executionRunner?: TestExecutionRunner;
   /**
    * 実行が「意図的にスキップ」された場合に true。
    * - 例: testCommand が空のため実行しない
@@ -399,6 +532,14 @@ export interface TestExecutionResult {
    * - 例: cursor-agent の長文レポート、WRITE イベント、警告ログなど
    */
   extensionLog?: string;
+  /**
+   * test-result.json から抽出した構造化テスト結果（取得できた場合のみ）。
+   */
+  testResult?: TestResultFile;
+  /** test-result.json の参照パス（読み取りを試みた場所） */
+  testResultPath?: string;
+  /** レポート生成時の拡張機能バージョン */
+  extensionVersion?: string;
 }
 
 /**
@@ -618,17 +759,24 @@ export function buildTestExecutionArtifactMarkdown(params: {
     params.model && params.model.trim().length > 0
       ? `- ${t('artifact.executionReport.model')}: ${params.model}`
       : `- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`;
+  const executionRunnerLine = `- ${t('artifact.executionReport.executionRunner')}: ${resolveExecutionRunnerLabel(params.result.executionRunner)}`;
+  const extensionVersionLine = `- ${t('artifact.executionReport.extensionVersion')}: ${resolveOptionalLabel(params.result.extensionVersion)}`;
+  const testResultPathLine = `- ${t('artifact.executionReport.testResultPath')}: ${formatTestResultPathLabel(params.result.testResultPath)}`;
 
   // stdoutをパースしてテスト結果を抽出
   const testResult = parseMochaOutput(params.result.stdout);
-  const summarySection = buildTestSummarySection(params.result.exitCode, params.result.durationMs, testResult);
+  const summarySection = buildTestSummarySection(params.result.exitCode, params.result.durationMs, testResult, params.result.testResult);
+  const failureDetailsSection = buildFailureDetailsSection(params.result.testResult);
   const detailsSection = buildTestDetailsSection(testResult);
 
   // 実行情報
+  const executionEnv = resolveExecutionEnvironment(params.result);
+  const envSourceLabel = resolveExecutionEnvironmentSourceLabel(executionEnv.source);
   const envLines = [
-    `- OS: ${process.platform} (${process.arch})`,
-    `- Node.js: ${process.version}`,
-    `- VS Code: ${vscode.version}`,
+    `- OS: ${executionEnv.platform} (${executionEnv.arch})`,
+    `- Node.js: ${executionEnv.nodeVersion}`,
+    `- VS Code: ${executionEnv.vscodeVersion}`,
+    `- ${t('artifact.executionReport.envSource')}: ${envSourceLabel}`,
   ].join('\n');
   const errMsg = params.result.errorMessage
     ? `- ${t('artifact.executionReport.spawnError')}: ${params.result.errorMessage}`
@@ -642,16 +790,25 @@ export function buildTestExecutionArtifactMarkdown(params: {
       : '';
 
   // 折りたたみ式の詳細ログセクション
-  const stdoutContent = truncate(stripAnsi(params.result.stdout), 200_000);
-  const stderrContent = truncate(stripAnsi(params.result.stderr), 200_000);
+  const maxLogChars = 200_000;
+  const stdoutRaw = stripAnsi(params.result.stdout);
+  const stderrRaw = stripAnsi(params.result.stderr);
+  const stdoutReportTruncated = stdoutRaw.length > maxLogChars;
+  const stderrReportTruncated = stderrRaw.length > maxLogChars;
+  const stdoutContent = truncate(stdoutRaw, maxLogChars);
+  const stderrContent = truncate(stderrRaw, maxLogChars);
   const extensionLog = (params.result.extensionLog ?? '').trim();
-  const extensionLogContent = truncate(stripAnsi(extensionLog.length > 0 ? extensionLog : ''), 200_000);
+  const extensionLogContent = truncate(stripAnsi(extensionLog.length > 0 ? extensionLog : ''), maxLogChars);
   const stdoutCollapsible = buildCollapsibleSection('stdout', stdoutContent);
   const stderrCollapsible = buildCollapsibleSection('stderr', stderrContent);
   const extensionLogCollapsible = buildCollapsibleSection(
     t('artifact.executionReport.extensionLog'),
     extensionLogContent,
   );
+  const truncationLines = [
+    buildTruncationLine(t('artifact.executionReport.truncation.stdout'), params.result.stdoutTruncated, stdoutReportTruncated),
+    buildTruncationLine(t('artifact.executionReport.truncation.stderr'), params.result.stderrTruncated, stderrReportTruncated),
+  ].join('\n');
 
   const sections: string[] = [
     `# ${t('artifact.executionReport.title')}`,
@@ -660,19 +817,24 @@ export function buildTestExecutionArtifactMarkdown(params: {
     `- ${t('artifact.executionReport.generatedAt')}: ${tsLocal}`,
     `- ${t('artifact.executionReport.generationTarget')}: ${params.generationLabel}`,
     modelLine,
+    extensionVersionLine,
     `- ${t('artifact.executionReport.executionCommand')}: \`${params.result.command}\``,
     statusLine,
     skipReasonLine,
     errMsg,
+    executionRunnerLine,
     envLines,
+    testResultPathLine,
     '',
     `- ${t('artifact.executionReport.targetFiles')}:`,
     targets.length > 0 ? targets : `- ${t('artifact.none')}`,
     '',
     summarySection,
+    failureDetailsSection,
     detailsSection,
     `## ${t('artifact.executionReport.detailedLogs')}`,
     '',
+    truncationLines,
     stdoutCollapsible,
     stderrCollapsible,
     extensionLogCollapsible,
@@ -756,12 +918,19 @@ function truncate(text: string, maxChars: number): string {
 /**
  * テスト結果サマリーのMarkdownを生成する。
  */
-function buildTestSummarySection(exitCode: number | null, durationMs: number, testResult: ParsedTestResult): string {
+function buildTestSummarySection(
+  exitCode: number | null,
+  durationMs: number,
+  testResult: ParsedTestResult,
+  structuredResult: TestResultFile | undefined,
+): string {
+  const summary = resolveSummaryCounts(testResult, structuredResult);
+  const hasFailedCount = summary.hasCounts && typeof summary.failed === 'number';
   // 成功判定:
   // 1. exitCode === 0 の場合は成功
-  // 2. exitCode === null でも、テスト結果がパースできて失敗数が0なら成功とみなす
+  // 2. exitCode === null でも、テスト結果が取得できて失敗数が0なら成功とみなす
   //    （VS Code 拡張機能テストでは Extension Host が別プロセスで起動するため exitCode が null になることがある）
-  const isSuccess = exitCode === 0 || (exitCode === null && testResult.parsed && testResult.failed === 0);
+  const isSuccess = exitCode === 0 || (exitCode === null && hasFailedCount && summary.failed === 0);
   const statusEmoji = isSuccess ? '✅' : '❌';
   const statusText = isSuccess ? t('artifact.executionReport.success') : t('artifact.executionReport.failure');
   const durationSec = (durationMs / 1000).toFixed(1);
@@ -773,20 +942,193 @@ function buildTestSummarySection(exitCode: number | null, durationMs: number, te
     '',
   ];
 
-  const passed = testResult.parsed ? String(testResult.passed) : '-';
-  const failed = testResult.parsed ? String(testResult.failed) : '-';
-  const total = testResult.parsed ? String(testResult.passed + testResult.failed) : '-';
+  const passed = summary.hasCounts && typeof summary.passed === 'number' ? String(summary.passed) : '-';
+  const failed = summary.hasCounts && typeof summary.failed === 'number' ? String(summary.failed) : '-';
+  const pending = summary.hasCounts && typeof summary.pending === 'number' ? String(summary.pending) : '-';
+  const total = summary.hasCounts && typeof summary.total === 'number' ? String(summary.total) : '-';
   lines.push(
     `| ${t('artifact.tableHeader.item')} | ${t('artifact.tableHeader.result')} |`,
     '|------|------|',
     `| ${t('artifact.executionReport.passed')} | ${passed} |`,
     `| ${t('artifact.executionReport.failed')} | ${failed} |`,
+    `| ${t('artifact.executionReport.pending')} | ${pending} |`,
     `| ${t('artifact.executionReport.total')} | ${total} |`,
     `| ${t('artifact.executionReport.duration')} | ${durationSec} ${t('artifact.executionReport.seconds')} |`,
     '',
   );
 
   return lines.join('\n');
+}
+
+/**
+ * test-result.json に含まれる失敗詳細をレポートへ整形する。
+ */
+function buildFailureDetailsSection(testResult: TestResultFile | undefined): string {
+  const failedTests = testResult?.failedTests;
+  if (!failedTests || failedTests.length === 0) {
+    return '';
+  }
+
+  const maxDetailChars = 20_000;
+  const lines: string[] = [
+    `## ${t('artifact.executionReport.failureDetails')}`,
+    '',
+  ];
+
+  let index = 1;
+  for (const entry of failedTests) {
+    const title = normalizeInlineText(entry.fullTitle || entry.title || '(unknown)');
+    lines.push(`### ${index}. ${title}`);
+
+    const message = normalizeInlineText(entry.error ?? '');
+    if (message.length > 0) {
+      lines.push(`- ${t('artifact.executionReport.failureMessage')}: ${message}`);
+    }
+
+    const code = normalizeInlineText(entry.code ?? '');
+    if (code.length > 0) {
+      lines.push(`- ${t('artifact.executionReport.failureCode')}: ${code}`);
+    }
+
+    const expected = normalizeMultilineText(entry.expected ?? '');
+    if (expected.length > 0) {
+      lines.push(`- ${t('artifact.executionReport.expected')}:`);
+      lines.push('```text');
+      lines.push(truncate(expected, maxDetailChars));
+      lines.push('```');
+    }
+
+    const actual = normalizeMultilineText(entry.actual ?? '');
+    if (actual.length > 0) {
+      lines.push(`- ${t('artifact.executionReport.actual')}:`);
+      lines.push('```text');
+      lines.push(truncate(actual, maxDetailChars));
+      lines.push('```');
+    }
+
+    const stack = normalizeMultilineText(entry.stack ?? '');
+    if (stack.length > 0) {
+      const stackSection = buildCollapsibleSection(
+        t('artifact.executionReport.stackTrace'),
+        truncate(stack, maxDetailChars),
+      );
+      if (stackSection) {
+        lines.push(stackSection.trimEnd());
+      }
+    }
+
+    lines.push('');
+    index += 1;
+  }
+
+  return lines.join('\n');
+}
+
+type ExecutionEnvironmentSource = 'execution' | 'local' | 'unknown';
+
+type ExecutionEnvironment = {
+  platform: string;
+  arch: string;
+  nodeVersion: string;
+  vscodeVersion: string;
+  source: ExecutionEnvironmentSource;
+};
+
+/**
+ * 実行環境情報を取得する。
+ * - test-result.json の値を優先する
+ * - 拡張機能実行のみローカル値へフォールバックする
+ * - それ以外は unknown として扱う
+ */
+function resolveExecutionEnvironment(result: TestExecutionResult): ExecutionEnvironment {
+  const unknownLabel = t('artifact.executionReport.unknown');
+  const testResult = result.testResult;
+
+  const platform = getStrictStringOrUndefined(testResult?.platform);
+  const arch = getStrictStringOrUndefined(testResult?.arch);
+  const nodeVersion = getStrictStringOrUndefined(testResult?.nodeVersion);
+  const vscodeVersion = getStrictStringOrUndefined(testResult?.vscodeVersion);
+
+  const hasAny = [platform, arch, nodeVersion, vscodeVersion].some((value) => value !== undefined);
+  const hasAll = [platform, arch, nodeVersion, vscodeVersion].every((value) => value !== undefined);
+  const canUseLocalFallback = result.executionRunner === 'extension';
+
+  const resolveValue = (value: string | undefined, fallback: string): string => {
+    if (value !== undefined) {
+      return value;
+    }
+    if (canUseLocalFallback) {
+      return fallback;
+    }
+    return unknownLabel;
+  };
+
+  let source: ExecutionEnvironmentSource;
+  if (hasAll) {
+    source = 'execution';
+  } else if (hasAny) {
+    source = canUseLocalFallback ? 'local' : 'execution';
+  } else if (canUseLocalFallback) {
+    source = 'local';
+  } else {
+    source = 'unknown';
+  }
+
+  return {
+    platform: resolveValue(platform, process.platform),
+    arch: resolveValue(arch, process.arch),
+    nodeVersion: resolveValue(nodeVersion, process.version),
+    vscodeVersion: resolveValue(vscodeVersion, vscode.version),
+    source,
+  };
+}
+
+function resolveExecutionEnvironmentSourceLabel(source: ExecutionEnvironmentSource): string {
+  if (source === 'execution') {
+    return t('artifact.executionReport.envSource.execution');
+  }
+  if (source === 'local') {
+    return t('artifact.executionReport.envSource.local');
+  }
+  return t('artifact.executionReport.envSource.unknown');
+}
+
+function resolveExecutionRunnerLabel(runner: TestExecutionRunner | undefined): string {
+  if (runner === 'extension') {
+    return t('artifact.executionReport.executionRunner.extension');
+  }
+  if (runner === 'cursorAgent') {
+    return t('artifact.executionReport.executionRunner.cursorAgent');
+  }
+  return t('artifact.executionReport.unknown');
+}
+
+function resolveOptionalLabel(value: string | undefined): string {
+  return getStrictStringOrUndefined(value) ?? t('artifact.executionReport.unknown');
+}
+
+function formatTestResultPathLabel(value: string | undefined): string {
+  const resolved = getStrictStringOrUndefined(value);
+  if (!resolved) {
+    return t('artifact.executionReport.unknown');
+  }
+  return `\`${resolved}\``;
+}
+
+function resolveTruncationStatusLabel(truncated: boolean | undefined): string {
+  if (truncated === true) {
+    return t('artifact.executionReport.truncation.truncated');
+  }
+  if (truncated === false) {
+    return t('artifact.executionReport.truncation.notTruncated');
+  }
+  return t('artifact.executionReport.unknown');
+}
+
+function buildTruncationLine(label: string, captureTruncated: boolean | undefined, reportTruncated: boolean): string {
+  const captureLabel = resolveTruncationStatusLabel(captureTruncated);
+  const reportLabel = resolveTruncationStatusLabel(reportTruncated);
+  return `- ${label}: ${t('artifact.executionReport.truncation.capture')}=${captureLabel}, ${t('artifact.executionReport.truncation.report')}=${reportLabel}`;
 }
 
 /**
@@ -815,6 +1157,61 @@ function buildTestDetailsSection(testResult: ParsedTestResult): string {
 
   lines.push('');
   return lines.join('\n');
+}
+
+type SummaryCounts = {
+  hasCounts: boolean;
+  passed?: number;
+  failed?: number;
+  pending?: number;
+  total?: number;
+};
+
+function resolveSummaryCounts(testResult: ParsedTestResult, structuredResult: TestResultFile | undefined): SummaryCounts {
+  if (structuredResult) {
+    const tests = structuredResult.tests;
+    if (Array.isArray(tests) && tests.length > 0) {
+      let passed = 0;
+      let failed = 0;
+      let pending = 0;
+      for (const t of tests) {
+        if (t.state === 'passed') {
+          passed += 1;
+          continue;
+        }
+        if (t.state === 'failed') {
+          failed += 1;
+          continue;
+        }
+        if (t.state === 'pending') {
+          pending += 1;
+        }
+      }
+      return { hasCounts: true, passed, failed, pending, total: tests.length };
+    }
+
+    const passed = typeof structuredResult.passes === 'number' ? structuredResult.passes : undefined;
+    const failed = typeof structuredResult.failures === 'number' ? structuredResult.failures : undefined;
+    const pending = typeof structuredResult.pending === 'number' ? structuredResult.pending : undefined;
+    const total = typeof structuredResult.total === 'number' ? structuredResult.total : undefined;
+
+    if (passed !== undefined || failed !== undefined || pending !== undefined || total !== undefined) {
+      const resolvedTotal =
+        total !== undefined ? total : (passed ?? 0) + (failed ?? 0) + (pending ?? 0);
+      return { hasCounts: true, passed, failed, pending, total: resolvedTotal };
+    }
+  }
+
+  if (testResult.parsed) {
+    return {
+      hasCounts: true,
+      passed: testResult.passed,
+      failed: testResult.failed,
+      total: testResult.passed + testResult.failed,
+    };
+  }
+
+  return { hasCounts: false };
 }
 
 /**
@@ -866,6 +1263,23 @@ function getStringOrNull(value: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
+function getStringOrUndefined(value: unknown): string | undefined {
+  const s = getStringOrEmpty(value);
+  return s.length > 0 ? s : undefined;
+}
+
+/**
+ * 厳密な文字列抽出。typeof === 'string' のみを受理し、空文字/空白のみは undefined とする。
+ * 数値や真偽値など他の型は undefined として扱う。
+ */
+function getStrictStringOrUndefined(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function getNumberOrNull(value: unknown): number | null {
   if (value === null || value === undefined) {
     return null;
@@ -882,6 +1296,11 @@ function getNumberOrNull(value: unknown): number | null {
   return null;
 }
 
+function getNumberOrUndefined(value: unknown): number | undefined {
+  const n = getNumberOrNull(value);
+  return n === null ? undefined : n;
+}
+
 function getNonNegativeNumberOrDefault(value: unknown, defaultValue: number): number {
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
     return value;
@@ -895,12 +1314,27 @@ function getNonNegativeNumberOrDefault(value: unknown, defaultValue: number): nu
   return defaultValue;
 }
 
+function normalizeTestCaseState(value: unknown): TestCaseState | undefined {
+  if (value === 'passed' || value === 'failed' || value === 'pending') {
+    return value;
+  }
+  return undefined;
+}
+
 function normalizeTableCell(value: string): string {
   // Markdown表セルを壊しやすい文字（改行、パイプ）を正規化する
   const withoutCrlf = value.replace(/\r\n/g, '\n');
   const withoutLf = withoutCrlf.replace(/\n+/g, ' ');
   const collapsedSpaces = withoutLf.replace(/\s+/g, ' ').trim();
   return collapsedSpaces.replace(/\|/g, '\\|');
+}
+
+function normalizeInlineText(value: string): string {
+  return stripAnsi(value).replace(/\r\n/g, '\n').replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeMultilineText(value: string): string {
+  return stripAnsi(value).replace(/\r\n/g, '\n').trim();
 }
 
 function stripCodeFence(text: string): string {

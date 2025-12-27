@@ -2103,6 +2103,7 @@ suite('test/runTest.ts', () => {
       parseIntOrFallback,
       normalizeLauncher,
       normalizeLocale,
+      resolveTestResultFilePathOverride,
       sleepMs,
       fileExists,
       waitForFile,
@@ -2322,6 +2323,64 @@ suite('test/runTest.ts', () => {
 
       // Then: ja を返す
       assert.strictEqual(result, 'ja', '未指定は既定ロケール');
+    });
+
+    // TC-RESFILE-N-01: resolveTestResultFilePathOverride absolute
+    test('TC-RESFILE-N-01: resolveTestResultFilePathOverride は絶対パスをそのまま返す', () => {
+      // Given: 絶対パス
+      const input = path.join(os.tmpdir(), 'test-result.json');
+      const baseDir = path.join(os.tmpdir(), 'base');
+
+      // When: resolveTestResultFilePathOverride を呼ぶ
+      const result = resolveTestResultFilePathOverride(input, baseDir);
+
+      // Then: 絶対パスがそのまま返る
+      assert.strictEqual(result, input, '絶対パスはそのまま返す');
+    });
+
+    // TC-RESFILE-N-02: resolveTestResultFilePathOverride relative
+    test('TC-RESFILE-N-02: resolveTestResultFilePathOverride は相対パスを baseDir で解決する', () => {
+      // Given: 相対パス
+      const input = 'reports/test-result.json';
+      const baseDir = path.join(os.tmpdir(), 'base');
+
+      // When: resolveTestResultFilePathOverride を呼ぶ
+      const result = resolveTestResultFilePathOverride(input, baseDir);
+
+      // Then: baseDir で解決される
+      assert.strictEqual(result, path.join(baseDir, input), '相対パスは baseDir で解決する');
+    });
+
+    // TC-RESFILE-B-01: resolveTestResultFilePathOverride empty
+    test('TC-RESFILE-B-01: resolveTestResultFilePathOverride は空白のみで undefined を返す', () => {
+      // Given: 空白のみ
+      const input = '   ';
+      const baseDir = path.join(os.tmpdir(), 'base');
+
+      // When: resolveTestResultFilePathOverride を呼ぶ
+      const result = resolveTestResultFilePathOverride(input, baseDir);
+
+      // Then: undefined を返す
+      assert.strictEqual(result, undefined, '空白のみは undefined');
+    });
+
+    // TC-RESFILE-E-01: resolveTestResultFilePathOverride traversal
+    test('TC-RESFILE-E-01: resolveTestResultFilePathOverride は baseDir 外を指す相対パスで Error を投げる', () => {
+      // Given: baseDir 外へ抜ける相対パス
+      const baseDir = path.join(os.tmpdir(), 'dontforgetest-base');
+      const input = `..${path.sep}outside${path.sep}test-result.json`;
+
+      // When/Then: 例外（型とメッセージ）を検証する
+      assert.throws(
+        () => resolveTestResultFilePathOverride(input, baseDir),
+        (err: unknown) => {
+          assert.ok(err instanceof Error, 'Error が投げられること');
+          assert.ok(err.message.includes('許可された範囲外'), 'メッセージに範囲外である旨が含まれること');
+          assert.ok(err.message.includes('baseDir='), 'メッセージに baseDir 情報が含まれること');
+          return true;
+        },
+        'baseDir 外を指す相対パスでは Error を投げる',
+      );
     });
 
     // TC-N-06: sleepMs(0) resolves

@@ -44,6 +44,10 @@ The \`dontforgetest-config\` comment at the top of this file controls output lan
 9. Do not swallow failures in tests (e.g., try/catch that ignores errors). If unavoidable, record the reason and an alternative verification in \`Notes\`.
 10. For external dependencies, document mock verification points (call args, counts, output paths) in \`Expected Result\`.
 11. Split major branches into separate cases (e.g., worktree/local/skip/cancel/cleanup failure).
+12. Do not bundle multiple input conditions in a single case. Split by runner type and by missing-field kind (null vs empty vs whitespace) when outcomes differ.
+13. Expected Results must be concrete and observable (exact label text, field values, lines). Avoid vague wording like "as expected" or "correct".
+14. Only include boundary values that are relevant to the diff/behavior being changed. Omit unrelated extremes and explain why in \`Notes\`.
+15. For report artifacts, Expected Results must point to the exact section/label/value to assert (not just "report is generated").
 
 ### Example (Rule 8)
 
@@ -88,6 +92,12 @@ assert.ok(fs.existsSync(reportPath));
 - [ ] Invalid type/format inputs
 - [ ] External dependency failures (API, DB, messaging) if applicable
 - [ ] Exception types AND error messages
+
+### Localization Assertions (t(...))
+
+1. Avoid strict string equality for localized output unless the literal is intentionally fixed.
+2. Prefer checks that the localized value is non-empty and does not equal the raw key.
+3. Ensure placeholders are resolved (e.g., no "{0}" or "\${...}" remains).
 
 ---
 
@@ -177,6 +187,7 @@ Before completing a test task, verify:
 - [ ] Given/When/Then comments on every test
 - [ ] Exception types AND messages are verified
 - [ ] Boundary values are covered (0, min, max, ±1, empty, null)
+- [ ] Localized strings avoid strict matching unless required; no raw key/placeholder leaks
 - [ ] Test execution command is documented
 - [ ] Coverage is reviewed
 

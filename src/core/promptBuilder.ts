@@ -196,12 +196,20 @@ export async function buildTestPerspectivePrompt(
   parts.push('- 最終的に拡張機能側で次の列の Markdown 表へ変換される前提で内容を埋める: `Case ID`, `Input / Precondition`, `Perspective (Equivalence / Boundary)`, `Expected Result`, `Notes`');
   parts.push('- 正常系・異常系・境界値を網羅し、境界値は最低でも `0 / 最小値 / 最大値 / ±1 / 空 / NULL` を含める');
   parts.push('');
+  parts.push('## Critical Quality Rules (MUST)');
+  parts.push('- 1 case = 1 branch. Do not bundle multiple input conditions in a single case.');
+  parts.push('- Split null vs empty vs whitespace into separate cases when outcomes differ.');
+  parts.push('- Expected Results must be concrete and observable (exact labels/values/lines). Avoid vague wording like "as expected" or "A or B".');
+  parts.push('- Only include boundary values relevant to this diff; if omitted, explain why in Notes.');
+  parts.push('- For report artifacts, Expected Results must name the exact section/label/value to assert.');
+  parts.push('');
   parts.push('## ツール使用制約（必須）');
   parts.push('- **shell（コマンド実行）ツールは使用禁止**（`git diff` / `npm test` 等を実行しない）');
   parts.push('- **Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）');
   parts.push('- ファイルの編集/追加は不要（実施しない）');
   parts.push('');
-  parts.push('## テスト戦略ルール（参考）');
+  parts.push('## Test Strategy Rules (MUST)');
+  parts.push('The following rules are mandatory. Follow them exactly.');
   parts.push(strategyText.trim());
 
   if (options.referenceText && options.referenceText.trim().length > 0) {
@@ -313,4 +321,3 @@ export function parseLanguageConfig(strategyText: string): TestGenLanguageConfig
     return undefined;
   }
 }
-

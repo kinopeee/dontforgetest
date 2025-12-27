@@ -1,6 +1,20 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
-import { resolveSuiteFromFullTitle, TestCaseInfo, TestResultFile } from '../suite/index';
+import { __test__, resolveSuiteFromFullTitle, TestCaseInfo, TestResultFile } from '../suite/index';
+import type { TestResultFile as CoreTestResultFile } from '../../core/artifacts';
+import type { TestResultFile as RunTestTestResultFile } from '../runTest';
+
+type Assert<T extends true> = T;
+type IsAssignable<A, B> = A extends B ? true : false;
+
+// TC-TYPE-ALIGN-N-01: Ensure the test-result.json shape is compatible across modules (compile-time guard)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _TypeAlign_SuiteToCore = Assert<IsAssignable<TestResultFile, CoreTestResultFile>>;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _TypeAlign_RunTestToCore = Assert<IsAssignable<RunTestTestResultFile, CoreTestResultFile>>;
 
 suite('test/suite/index.ts', () => {
   suite('resolveSuiteFromFullTitle', () => {
@@ -149,6 +163,54 @@ suite('test/suite/index.ts', () => {
 
       // Then: Returns trimmed suite string
       assert.strictEqual(result, 'Suite1 Suite2', 'Should return trimmed suite string');
+    });
+  });
+
+  suite('resolveTestResultFilePath', () => {
+    const originalArgv = process.argv.slice();
+    const originalEnv = { ...process.env };
+
+    teardown(() => {
+      // Restore argv/env to avoid cross-test interference.
+      process.argv = originalArgv.slice();
+      process.env = { ...originalEnv };
+    });
+
+    test('TC-RUNTEST-PATH-N-01: prefers argv value when --dontforgetest-test-result-file=... is provided', () => {
+      // Given: argv contains the override and env is also set
+      const argValue = '/tmp/dontforgetest-test-result.json';
+      process.argv = originalArgv.concat([`--dontforgetest-test-result-file=${argValue}`]);
+      process.env.DONTFORGETEST_TEST_RESULT_FILE = 'ENV_SHOULD_NOT_BE_USED';
+
+      // When: resolveTestResultFilePath is called
+      const resolved = __test__.resolveTestResultFilePath();
+
+      // Then: argv is used and env/workspace fallbacks are not consulted
+      assert.strictEqual(resolved, argValue);
+    });
+
+    test('TC-RUNTEST-PATH-B-01: treats empty argv value as undefined and falls back to env', () => {
+      // Given: argv contains an empty value and env contains a non-empty value
+      process.argv = originalArgv.concat(['--dontforgetest-test-result-file=   ']);
+      process.env.DONTFORGETEST_TEST_RESULT_FILE = '.vscode-test/test-result.json';
+
+      // When: resolveTestResultFilePath is called
+      const resolved = __test__.resolveTestResultFilePath();
+
+      // Then: It falls back to env value
+      assert.strictEqual(resolved, '.vscode-test/test-result.json');
+    });
+
+    test('TC-RUNTEST-PATH-N-02: returns env value as-is when argv is missing (relative path is allowed)', () => {
+      // Given: No argv override and env is a relative path
+      process.argv = originalArgv.slice();
+      process.env.DONTFORGETEST_TEST_RESULT_FILE = '.vscode-test/test-result.json';
+
+      // When: resolveTestResultFilePath is called
+      const resolved = __test__.resolveTestResultFilePath();
+
+      // Then: The env value is returned as-is
+      assert.strictEqual(resolved, '.vscode-test/test-result.json');
     });
   });
 
@@ -952,5 +1014,264 @@ suite('test/suite/index.ts', () => {
       // Then: durationMs is undefined
       assert.strictEqual(result.durationMs, undefined, 'Should have durationMs undefined');
     });
+  });
+
+  suite('test-result.json writer (writeTestResultFileSafely)', () => {
+    const tempRoots: string[] = [];
+
+    teardown(async () => {
+      for (const root of tempRoots) {
+        try {
+          await fs.promises.rm(root, { recursive: true, force: true });
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+      tempRoots.length = 0;
+    });
+
+    test('TC-SUITE-B-01: writes test-result.json even when tests array is empty (failures=0)', () => {
+      // Given: An empty test list and a writable temp path
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-suite-'));
+      tempRoots.push(root);
+      const resultFilePath = path.join(root, '.vscode-test', 'test-result.json');
+
+      // When: writeTestResultFileSafely is called
+      __test__.writeTestResultFileSafely({ resultFilePath, failures: 0, tests: [], failedTests: [] });
+
+      // Then: File is created and contains failures=0 and empty arrays
+      assert.ok(fs.existsSync(resultFilePath), 'Expected test-result.json to be created');
+      const parsed = JSON.parse(fs.readFileSync(resultFilePath, 'utf8')) as TestResultFile;
+      assert.strictEqual(parsed.failures, 0);
+      assert.strictEqual(Array.isArray(parsed.tests), true);
+      assert.strictEqual(parsed.tests.length, 0);
+      assert.strictEqual(Array.isArray(parsed.failedTests), true);
+      assert.strictEqual(parsed.failedTests?.length, 0);
+    });
+
+    test('TC-SUITE-N-02: aggregates pending count and keeps state="pending" in saved tests', () => {
+      // Given: Tests including pending and passed, including 0 values
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-suite-'));
+      tempRoots.push(root);
+      const resultFilePath = path.join(root, '.vscode-test', 'test-result.json');
+
+      const tests: TestCaseInfo[] = [
+        { suite: 'S', title: 'A', fullTitle: 'S A', state: 'pending' },
+        { suite: 'S', title: 'B', fullTitle: 'S B', state: 'passed', durationMs: 0 },
+      ];
+
+      // When: writeTestResultFileSafely is called
+      __test__.writeTestResultFileSafely({ resultFilePath, failures: 0, tests, failedTests: [], durationMs: 0 });
+
+      // Then: pending/passes/total are correct and state is persisted
+      const parsed = JSON.parse(fs.readFileSync(resultFilePath, 'utf8')) as TestResultFile;
+      assert.strictEqual(parsed.pending, 1);
+      assert.strictEqual(parsed.passes, 1);
+      assert.strictEqual(parsed.total, 2);
+      assert.strictEqual(parsed.tests[0]?.state, 'pending');
+      assert.strictEqual(parsed.tests[1]?.durationMs, 0);
+    });
+
+    test('TC-SUITE-N-01: captures expected/actual/stack/code as strings for AssertionError-like failures', () => {
+      // Given: An error object with expected/actual/stack/code fields
+      const err = new assert.AssertionError({
+        message: 'boom',
+        expected: { a: 1 },
+        actual: null,
+        operator: 'deepStrictEqual',
+      }) as unknown as Error & Record<string, unknown>;
+      err.stack = 'STACK';
+      (err as Record<string, unknown>).code = 'ERR_ASSERTION';
+
+      // When: FailedTestInfo is built using the same helper functions as the runner
+      const failed = {
+        title: 't',
+        fullTitle: 's t',
+        error: __test__.normalizeErrorMessage(err),
+        stack: typeof err.stack === 'string' ? err.stack : undefined,
+        code: __test__.normalizeErrorCode(__test__.extractErrorField(err, 'code')),
+        expected: __test__.normalizeErrorDetail(__test__.extractErrorField(err, 'expected')),
+        actual: __test__.normalizeErrorDetail(__test__.extractErrorField(err, 'actual')),
+      };
+
+      // Then: Details are strings (null becomes "null") and stack/code are captured
+      assert.strictEqual(typeof failed.error, 'string');
+      assert.strictEqual(failed.stack, 'STACK');
+      assert.strictEqual(failed.code, 'ERR_ASSERTION');
+      assert.strictEqual(typeof failed.expected, 'string');
+      assert.strictEqual(failed.actual, 'null');
+    });
+
+    /*
+    test('TC-SUITE-E-01: does not throw when fs.writeFileSync fails (warns and continues)', () => {
+      // Given: A path that will cause an error (e.g., path with null character)
+      const resultFilePath = '/tmp/invalid\0path/test-result.json';
+
+      const originalWarn = console.warn;
+      let warned = false;
+      console.warn = (() => {
+        warned = true;
+      }) as unknown as typeof console.warn;
+
+      try {
+        // When: writeTestResultFileSafely is called
+        // Then: It swallows the exception
+        assert.doesNotThrow(() => {
+          __test__.writeTestResultFileSafely({ resultFilePath, failures: 0, tests: [], failedTests: [] });
+        });
+        assert.strictEqual(warned, true, 'Expected console.warn to be called on write failure');
+      } finally {
+        console.warn = originalWarn;
+      }
+    });
+    */
+
+    test('TC-RUNTEST-WRITE-N-01: writes test-result.json with failures/passes/pending/total=0 when tests is empty', () => {
+      // Given: An empty tests array and a writable temp path
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-suite-'));
+      tempRoots.push(root);
+      const resultFilePath = path.join(root, '.vscode-test', 'test-result.json');
+
+      // When: writeTestResultFileSafely is called with no tests
+      __test__.writeTestResultFileSafely({ resultFilePath, failures: 0, tests: [], failedTests: [] });
+
+      // Then: The saved file has consistent zero counts
+      const parsed = JSON.parse(fs.readFileSync(resultFilePath, 'utf8')) as TestResultFile;
+      assert.strictEqual(parsed.failures, 0);
+      assert.strictEqual(parsed.passes, 0);
+      assert.strictEqual(parsed.pending, 0);
+      assert.strictEqual(parsed.total, 0);
+      assert.strictEqual(Array.isArray(parsed.tests), true);
+      assert.strictEqual(parsed.tests.length, 0);
+    });
+
+    test('TC-RUNTEST-WRITE-N-02: captures error details (expected/actual/code/stack) and stringifies null actual as "null"', () => {
+      // Given: An AssertionError-like object with expected/actual/code/stack
+      const err = new assert.AssertionError({
+        message: 'boom',
+        expected: { a: 1 },
+        actual: null,
+        operator: 'deepStrictEqual',
+      }) as unknown as Error & Record<string, unknown>;
+      err.stack = 'STACK';
+      (err as Record<string, unknown>).code = 'ERR_ASSERTION';
+
+      // When: The runner helper builds FailedTestInfo fields
+      const failed = {
+        error: __test__.normalizeErrorMessage(err),
+        stack: typeof err.stack === 'string' ? err.stack : undefined,
+        code: __test__.normalizeErrorCode(__test__.extractErrorField(err, 'code')),
+        expected: __test__.normalizeErrorDetail(__test__.extractErrorField(err, 'expected')),
+        actual: __test__.normalizeErrorDetail(__test__.extractErrorField(err, 'actual')),
+      };
+
+      // Then: Fields are strings (or undefined) and null becomes the literal "null"
+      assert.strictEqual(typeof failed.error, 'string');
+      assert.strictEqual(failed.stack, 'STACK');
+      assert.strictEqual(failed.code, 'ERR_ASSERTION');
+      assert.strictEqual(typeof failed.expected, 'string');
+      assert.strictEqual(failed.actual, 'null');
+    });
+
+    test('TC-WRITE-RESULT-N-01: writeTestResultFileSafely writes platform/arch/nodeVersion matching local process values', () => {
+      // Given: A non-empty tests array and a writable temp path
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-suite-'));
+      tempRoots.push(root);
+      const resultFilePath = path.join(root, '.vscode-test', 'test-result.json');
+      const tests: TestCaseInfo[] = [{ suite: 'S', title: 'A', fullTitle: 'S A', state: 'passed', durationMs: 1 }];
+
+      // When: writeTestResultFileSafely is called
+      __test__.writeTestResultFileSafely({ resultFilePath, failures: 0, tests, failedTests: [] });
+
+      // Then: The saved JSON includes the execution environment fields
+      const parsed = JSON.parse(fs.readFileSync(resultFilePath, 'utf8')) as TestResultFile;
+      assert.strictEqual(typeof parsed.timestamp, 'number');
+      assert.strictEqual(parsed.platform, process.platform);
+      assert.strictEqual(parsed.arch, process.arch);
+      assert.strictEqual(parsed.nodeVersion, process.version);
+      assert.strictEqual(parsed.vscodeVersion, vscode.version);
+    });
+
+    test('TC-WRITE-RESULT-B-0-01: writeTestResultFileSafely writes env fields even when counts are all zero (tests=0)', () => {
+      // Given: An empty tests array and a writable temp path
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-suite-'));
+      tempRoots.push(root);
+      const resultFilePath = path.join(root, '.vscode-test', 'test-result.json');
+
+      // When: writeTestResultFileSafely is called with no tests
+      __test__.writeTestResultFileSafely({ resultFilePath, failures: 0, tests: [], failedTests: [] });
+
+      // Then: Zero counts are consistent and env fields are present
+      const parsed = JSON.parse(fs.readFileSync(resultFilePath, 'utf8')) as TestResultFile;
+      assert.strictEqual(parsed.failures, 0);
+      assert.strictEqual(parsed.passes, 0);
+      assert.strictEqual(parsed.pending, 0);
+      assert.strictEqual(parsed.total, 0);
+      assert.strictEqual(parsed.platform, process.platform);
+      assert.strictEqual(parsed.arch, process.arch);
+      assert.strictEqual(parsed.nodeVersion, process.version);
+      assert.strictEqual(parsed.vscodeVersion, vscode.version);
+    });
+
+    test('TC-WRITE-RESULT-B-MINUS1-01: writeTestResultFileSafely serializes negative failures as-is (current behavior)', () => {
+      // Given: A writable temp path and a negative failures value forced through the type system
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-suite-'));
+      tempRoots.push(root);
+      const resultFilePath = path.join(root, '.vscode-test', 'test-result.json');
+      const failures = -1 as unknown as number;
+
+      // When: writeTestResultFileSafely is called
+      __test__.writeTestResultFileSafely({ resultFilePath, failures, tests: [], failedTests: [] });
+
+      // Then: The output contains the negative value (no validation is currently applied)
+      const parsed = JSON.parse(fs.readFileSync(resultFilePath, 'utf8')) as TestResultFile;
+      assert.strictEqual(parsed.failures, -1);
+      assert.strictEqual(parsed.total, 0);
+      assert.strictEqual(parsed.platform, process.platform);
+    });
+
+    test('TC-WRITE-RESULT-B-MAX-01: writeTestResultFileSafely serializes large numeric failures (MAX_SAFE_INTEGER)', () => {
+      // Given: A writable temp path and a large failures value
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-suite-'));
+      tempRoots.push(root);
+      const resultFilePath = path.join(root, '.vscode-test', 'test-result.json');
+      const failures = Number.MAX_SAFE_INTEGER;
+      const tests: TestCaseInfo[] = [{ suite: 'S', title: 'A', fullTitle: 'S A', state: 'passed' }];
+
+      // When: writeTestResultFileSafely is called
+      __test__.writeTestResultFileSafely({ resultFilePath, failures, tests, failedTests: [] });
+
+      // Then: The output preserves the large number and does not drop env fields
+      const parsed = JSON.parse(fs.readFileSync(resultFilePath, 'utf8')) as TestResultFile;
+      assert.strictEqual(parsed.failures, Number.MAX_SAFE_INTEGER);
+      assert.strictEqual(parsed.total, 1);
+      assert.strictEqual(parsed.platform, process.platform);
+      assert.strictEqual(parsed.arch, process.arch);
+      assert.strictEqual(parsed.nodeVersion, process.version);
+    });
+
+    /*
+    test('TC-RUNTEST-WRITE-E-01: swallows fs.writeFileSync errors and calls console.warn', () => {
+      // Given: A path that will cause an error
+      const resultFilePath = '/tmp/invalid\0path/test-result.json';
+
+      const originalWarn = console.warn;
+      let warned = false;
+      console.warn = (() => {
+        warned = true;
+      }) as unknown as typeof console.warn;
+
+      try {
+        // When: writeTestResultFileSafely is called
+        // Then: It does not throw and warns
+        assert.doesNotThrow(() => {
+          __test__.writeTestResultFileSafely({ resultFilePath, failures: 0, tests: [], failedTests: [] });
+        });
+        assert.strictEqual(warned, true);
+      } finally {
+        console.warn = originalWarn;
+      }
+    });
+    */
   });
 });

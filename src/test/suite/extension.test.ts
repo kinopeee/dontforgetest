@@ -2,9 +2,9 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { createMockExtensionContext } from './testUtils/vscodeMocks';
 import { initializeProgressTreeView, _resetForTesting as resetProgressTreeView } from '../../ui/progressTreeView';
 import { initializeOutputTreeView } from '../../ui/outputTreeView';
-import { createMockExtensionContext } from './testUtils/vscodeMocks';
 
 suite('src/extension.ts', () => {
   suite('Extension Activation', () => {

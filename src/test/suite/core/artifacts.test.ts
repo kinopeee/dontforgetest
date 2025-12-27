@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import {
@@ -12,16 +13,57 @@ import {
   parseMochaOutput,
   parsePerspectiveJsonV1,
   parseTestExecutionJsonV1,
+  parseTestResultFile,
   renderPerspectiveMarkdownTable,
   PERSPECTIVE_TABLE_HEADER,
   PERSPECTIVE_TABLE_SEPARATOR,
   type PerspectiveCase,
+  type TestExecutionResult,
+  type TestResultFile,
 } from '../../../core/artifacts';
 import { stripAnsi } from '../../../core/testResultParser';
 import { t } from '../../../core/l10n';
 
 suite('core/artifacts.ts', () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+
+  // TC-L10N-N-01
+  test('TC-L10N-N-01: l10n bundles define artifact.executionReport.pending for both en/ja with expected labels', () => {
+    // Given: l10n bundle JSON files on disk (in extension install path)
+    const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
+    assert.ok(ext, 'Extension should be installed');
+    const extensionPath = ext.extensionPath;
+    const enPath = path.join(extensionPath, 'l10n', 'bundle.l10n.json');
+    const jaPath = path.join(extensionPath, 'l10n', 'bundle.l10n.ja.json');
+
+    // When: parsing both JSON files
+    const en = JSON.parse(fs.readFileSync(enPath, 'utf8')) as Record<string, unknown>;
+    const ja = JSON.parse(fs.readFileSync(jaPath, 'utf8')) as Record<string, unknown>;
+
+    // Then: the pending key exists and resolves to expected labels
+    assert.strictEqual(en['artifact.executionReport.pending'], 'Pending');
+    assert.strictEqual(ja['artifact.executionReport.pending'], '保留');
+  });
+
+  // TC-L10N-E-01
+  test('TC-L10N-E-01: l10n JSON formatting changes still parse and existing keys remain resolvable', () => {
+    // Given: l10n bundle JSON files on disk (in extension install path)
+    const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
+    assert.ok(ext, 'Extension should be installed');
+    const extensionPath = ext.extensionPath;
+    const enPath = path.join(extensionPath, 'l10n', 'bundle.l10n.json');
+    const jaPath = path.join(extensionPath, 'l10n', 'bundle.l10n.ja.json');
+
+    // When: parsing both JSON files
+    const en = JSON.parse(fs.readFileSync(enPath, 'utf8')) as Record<string, unknown>;
+    const ja = JSON.parse(fs.readFileSync(jaPath, 'utf8')) as Record<string, unknown>;
+
+    // Then: parsing succeeds and existing keys (e.g., duration) are still present with non-empty strings
+    assert.strictEqual(typeof en['artifact.executionReport.duration'], 'string');
+    assert.ok((en['artifact.executionReport.duration'] as string).length > 0, 'en duration is non-empty');
+    assert.strictEqual(typeof ja['artifact.executionReport.duration'], 'string');
+    assert.ok((ja['artifact.executionReport.duration'] as string).length > 0, 'ja duration is non-empty');
+  });
 
   // TC-ART-01: 設定値の取得
   test('TC-ART-01: 設定値がデフォルトまたは設定通りに取得できる', () => {
@@ -440,6 +482,266 @@ suite('core/artifacts.ts', () => {
       assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`), 'modelが空白のみの場合は (auto) と表示されること');
     });
 
+    suite('execution report (runner / version / testResultPath / truncation)', () => {
+      const baseResult = (): TestExecutionResult => ({
+        command: 'cmd',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 10,
+        stdout: '',
+        stderr: '',
+      });
+
+      const buildMd = (overrides: Partial<TestExecutionResult>): string => {
+        return buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: [],
+          result: { ...baseResult(), ...overrides },
+        });
+      };
+
+      const buildTruncationLine = (streamLabelKey: string, captureStatusKey: string, reportStatusKey: string): string => {
+        return `- ${t(streamLabelKey)}: ${t('artifact.executionReport.truncation.capture')}=${t(captureStatusKey)}, ${t('artifact.executionReport.truncation.report')}=${t(reportStatusKey)}`;
+      };
+
+      test('TC-ART-RUNNER-N-EXT-01: executionRunner=extension is rendered as the localized extension label', () => {
+        // Given: A result with executionRunner=extension
+        const md = buildMd({ executionRunner: 'extension' });
+
+        // When: Rendering the execution report markdown
+        // Then: The executionRunner line uses the extension label
+        assert.ok(
+          md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.executionRunner.extension')}`),
+          'Expected executionRunner line to show the extension label',
+        );
+      });
+
+      test('TC-ART-RUNNER-N-CA-01: executionRunner=cursorAgent is rendered as the localized cursorAgent label', () => {
+        // Given: A result with executionRunner=cursorAgent
+        const md = buildMd({ executionRunner: 'cursorAgent' });
+
+        // When: Rendering the execution report markdown
+        // Then: The executionRunner line uses the cursorAgent label
+        assert.ok(
+          md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.executionRunner.cursorAgent')}`),
+          'Expected executionRunner line to show the cursorAgent label',
+        );
+      });
+
+      test('TC-ART-RUNNER-B-UNDEF-01: executionRunner=undefined is rendered as unknown', () => {
+        // Given: A result with executionRunner undefined (boundary)
+        const md = buildMd({ executionRunner: undefined });
+
+        // When: Rendering the execution report markdown
+        // Then: The executionRunner line uses unknown
+        assert.ok(
+          md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.unknown')}`),
+          'Expected executionRunner line to show unknown',
+        );
+      });
+
+      test('TC-ART-EXTVER-N-01: extensionVersion is rendered when provided', () => {
+        // Given: A result with extensionVersion
+        const md = buildMd({ extensionVersion: '0.0.103' });
+
+        // When: Rendering the execution report markdown
+        // Then: The extensionVersion line includes the provided version
+        assert.ok(
+          md.includes(`- ${t('artifact.executionReport.extensionVersion')}: 0.0.103`),
+          'Expected extensionVersion to be rendered',
+        );
+      });
+
+      test('TC-ART-EXTVER-B-EMPTY-01: extensionVersion="" is rendered as unknown', () => {
+        // Given: A result with extensionVersion empty string (boundary)
+        const md = buildMd({ extensionVersion: '' });
+
+        // When: Rendering the execution report markdown
+        // Then: The extensionVersion line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-EXTVER-B-WS-01: extensionVersion=" " is rendered as unknown', () => {
+        // Given: A result with extensionVersion whitespace-only (boundary)
+        const md = buildMd({ extensionVersion: ' ' });
+
+        // When: Rendering the execution report markdown
+        // Then: The extensionVersion line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-EXTVER-B-UNDEF-01: extensionVersion=undefined is rendered as unknown', () => {
+        // Given: A result with extensionVersion undefined (boundary)
+        const md = buildMd({ extensionVersion: undefined });
+
+        // When: Rendering the execution report markdown
+        // Then: The extensionVersion line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-EXTVER-B-NULL-01: extensionVersion=null (injected) is rendered as unknown', () => {
+        // Given: A result with extensionVersion injected as null (boundary)
+        const md = buildMd({ extensionVersion: null as unknown as string | undefined });
+
+        // When: Rendering the execution report markdown
+        // Then: The extensionVersion line uses unknown (robust against unexpected null)
+        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-TRP-N-01: testResultPath is rendered as a code-formatted path when provided', () => {
+        // Given: A result with testResultPath
+        const testResultPath = '/tmp/.vscode-test/test-result.json';
+        const md = buildMd({ testResultPath });
+
+        // When: Rendering the execution report markdown
+        // Then: The testResultPath line includes the code-formatted path
+        assert.ok(
+          md.includes(`- ${t('artifact.executionReport.testResultPath')}: \`${testResultPath}\``),
+          'Expected testResultPath to be rendered with backticks',
+        );
+      });
+
+      test('TC-ART-TRP-B-EMPTY-01: testResultPath="" is rendered as unknown', () => {
+        // Given: A result with testResultPath empty string (boundary)
+        const md = buildMd({ testResultPath: '' });
+
+        // When: Rendering the execution report markdown
+        // Then: The testResultPath line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-TRP-B-WS-01: testResultPath=" " is rendered as unknown', () => {
+        // Given: A result with testResultPath whitespace-only (boundary)
+        const md = buildMd({ testResultPath: ' ' });
+
+        // When: Rendering the execution report markdown
+        // Then: The testResultPath line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-TRP-B-UNDEF-01: testResultPath=undefined is rendered as unknown', () => {
+        // Given: A result with testResultPath undefined (boundary)
+        const md = buildMd({ testResultPath: undefined });
+
+        // When: Rendering the execution report markdown
+        // Then: The testResultPath line uses unknown
+        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-TRP-B-NULL-01: testResultPath=null (injected) is rendered as unknown', () => {
+        // Given: A result with testResultPath injected as null (boundary)
+        const md = buildMd({ testResultPath: null as unknown as string | undefined });
+
+        // When: Rendering the execution report markdown
+        // Then: The testResultPath line uses unknown (robust against unexpected null)
+        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+      });
+
+      test('TC-ART-TRUNC-STDOUT-B-ZERO-01: stdout="" and stdoutTruncated=false yields capture=not truncated, report=not truncated', () => {
+        // Given: Empty stdout with stdoutTruncated=false (boundary: 0)
+        const md = buildMd({ stdout: '', stdoutTruncated: false, stderr: '', stderrTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: The stdout truncation line shows capture=not truncated and report=not truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stdout',
+          'artifact.executionReport.truncation.notTruncated',
+          'artifact.executionReport.truncation.notTruncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDOUT-B-MAX-01: stdout length==200000 yields report=not truncated', () => {
+        // Given: stdout length exactly at the report cap (boundary: max)
+        const maxLogChars = 200_000;
+        const md = buildMd({ stdout: 'a'.repeat(maxLogChars), stdoutTruncated: false, stderr: '', stderrTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: report is not truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stdout',
+          'artifact.executionReport.truncation.notTruncated',
+          'artifact.executionReport.truncation.notTruncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDOUT-B-MAXP1-01: stdout length==200001 yields report=truncated', () => {
+        // Given: stdout length just above the report cap (boundary: max+1)
+        const maxLogChars = 200_000;
+        const md = buildMd({ stdout: 'a'.repeat(maxLogChars + 1), stdoutTruncated: false, stderr: '', stderrTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: report is truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stdout',
+          'artifact.executionReport.truncation.notTruncated',
+          'artifact.executionReport.truncation.truncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDOUT-N-CAPTRUE-01: stdoutTruncated=true yields capture=truncated while report can be not truncated', () => {
+        // Given: capture truncation flagged true and short stdout (equivalence)
+        const md = buildMd({ stdout: 'out', stdoutTruncated: true, stderr: '', stderrTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: capture is truncated and report is not truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stdout',
+          'artifact.executionReport.truncation.truncated',
+          'artifact.executionReport.truncation.notTruncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDOUT-B-CAPUNDEF-01: stdoutTruncated=undefined yields capture=unknown while report can be not truncated', () => {
+        // Given: capture truncation flag is undefined (boundary) and short stdout
+        const md = buildMd({ stdout: 'out', stdoutTruncated: undefined, stderr: '', stderrTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: capture is unknown and report is not truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stdout',
+          'artifact.executionReport.unknown',
+          'artifact.executionReport.truncation.notTruncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDERR-B-MINUS1-01: stderr length==199999 yields report=not truncated', () => {
+        // Given: stderr length one below the report cap (boundary: max-1)
+        const maxLogChars = 200_000;
+        const md = buildMd({ stderr: 'a'.repeat(maxLogChars - 1), stderrTruncated: false, stdout: '', stdoutTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: report is not truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stderr',
+          'artifact.executionReport.truncation.notTruncated',
+          'artifact.executionReport.truncation.notTruncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+
+      test('TC-ART-TRUNC-STDERR-B-MAXP1-01: stderr length==200001 and stderrTruncated=true yields capture=truncated, report=truncated', () => {
+        // Given: stderr is long enough to be report-truncated and capture flag is true (boundary: max+1)
+        const maxLogChars = 200_000;
+        const md = buildMd({ stderr: 'a'.repeat(maxLogChars + 1), stderrTruncated: true, stdout: '', stdoutTruncated: false });
+
+        // When: Rendering the execution report markdown
+        // Then: capture is truncated and report is truncated
+        const expected = buildTruncationLine(
+          'artifact.executionReport.truncation.stderr',
+          'artifact.executionReport.truncation.truncated',
+          'artifact.executionReport.truncation.truncated',
+        );
+        assert.ok(md.includes(expected));
+      });
+    });
+
   // TC-ART-09: 実行レポートMarkdown生成（エラー）
   test('TC-ART-09: エラーメッセージがある場合レポートに含まれる', () => {
     // Given: エラー時の結果
@@ -646,10 +948,55 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes(`| ${t('artifact.tableHeader.item')} | ${t('artifact.tableHeader.result')} |`), 'Summary table header is present');
     assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 2 |`), 'Passed count is shown');
     assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending count shows "-"');
     assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 2 |`), 'Total count is shown');
     assert.ok(md.includes(`| ${t('artifact.executionReport.suite')} | ${t('artifact.executionReport.testName')} | ${t('artifact.executionReport.result')} |`), 'Details table header is present');
     assert.ok(md.includes('test case 1'), 'Test case 1 is in details');
     assert.ok(md.includes('test case 2'), 'Test case 2 is in details');
+  });
+
+  // TC-REPORT-N-05: TestExecutionResult with failedTests details
+  test('TC-REPORT-N-05: buildTestExecutionArtifactMarkdown includes failure details section when failedTests are present', () => {
+    // Given: testResult.failedTests を含む TestExecutionResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 1,
+        signal: null,
+        durationMs: 1000,
+        stdout: '  1) Suite A Test A\n  ✖',
+        stderr: '',
+        testResult: {
+          failedTests: [
+            {
+              title: 'Test A',
+              fullTitle: 'Suite A Test A',
+              error: 'Assertion failed',
+              expected: 'expected-value',
+              actual: 'actual-value',
+              stack: 'Error: Assertion failed\n  at line',
+            },
+          ],
+        },
+      },
+    });
+
+    // Then: 失敗詳細セクションと主要フィールドが含まれること
+    assert.ok(md.includes(`## ${t('artifact.executionReport.failureDetails')}`), 'Failure details section is present');
+    assert.ok(md.includes('Suite A Test A'), 'Failure title is present');
+    assert.ok(
+      md.includes(`${t('artifact.executionReport.failureMessage')}: Assertion failed`),
+      'Failure message is present',
+    );
+    assert.ok(md.includes(t('artifact.executionReport.expected')), 'Expected label is present');
+    assert.ok(md.includes('expected-value'), 'Expected value is present');
+    assert.ok(md.includes(t('artifact.executionReport.actual')), 'Actual label is present');
+    assert.ok(md.includes('actual-value'), 'Actual value is present');
+    assert.ok(md.includes(t('artifact.executionReport.stackTrace')), 'Stack trace label is present');
   });
 
   // TC-REPORT-N-03: TestExecutionResult with empty test cases array
@@ -679,6 +1026,1165 @@ suite('core/artifacts.ts', () => {
     assert.ok(testRows.length <= 2, 'No test case rows in details table');
   });
 
+  // TC-REPORT-N-06: TestExecutionResult with structured pending counts
+  test('TC-REPORT-N-06: buildTestExecutionArtifactMarkdown uses structured counts including pending when testResult is available', () => {
+    // Given: Structured testResult with pending counts
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 1,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: {
+          passes: 1,
+          failures: 1,
+          pending: 2,
+          total: 4,
+        },
+      },
+    });
+
+    // Then: Summary uses structured counts
+    assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 1 |`), 'Passed count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 1 |`), 'Failed count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | 2 |`), 'Pending count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 4 |`), 'Total count is shown');
+  });
+
+  test('TC-EXECENV-N-01: buildTestExecutionArtifactMarkdown uses envSource=execution when executionRunner="cursorAgent" and all env fields are present', () => {
+    // Given: A cursorAgent result with all env fields present in testResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'darwin',
+          arch: 'arm64',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It shows envSource=execution
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`));
+  });
+
+  test('TC-EXECENV-N-02: buildTestExecutionArtifactMarkdown uses envSource=local when executionRunner="extension" and env fields are missing', () => {
+    // Given: An extension-runner result without testResult env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: undefined,
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It shows envSource=local
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`));
+  });
+
+  test('TC-EXECENV-E-01: buildTestExecutionArtifactMarkdown uses envSource=unknown when executionRunner="cursorAgent" and env fields are missing', () => {
+    // Given: A cursorAgent result without testResult env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: undefined,
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It shows envSource=unknown
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`));
+  });
+
+  test('TC-EXECENV-E-02: buildTestExecutionArtifactMarkdown uses envSource=unknown when executionRunner is undefined and env fields are missing', () => {
+    // Given: A backward-compatible result without executionRunner and without env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        testResult: undefined,
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It shows envSource=unknown
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`));
+  });
+
+  test('TC-EXECENV-N-03: buildTestExecutionArtifactMarkdown uses envSource=local and preserves platform when executionRunner="extension" and only platform is provided', () => {
+    // Given: An extension-runner result where only platform is provided in testResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'darwin',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: platform is preserved and envSource=local
+    assert.ok(md.includes(`OS: darwin (${process.arch})`), 'Expected provided platform and local arch fallback');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`));
+  });
+
+  test('TC-EXECENV-E-03: buildTestExecutionArtifactMarkdown uses envSource=execution and unknown-filled missing fields when executionRunner="cursorAgent" and only platform is provided', () => {
+    // Given: A cursorAgent result where only platform is provided in testResult
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'darwin',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: envSource=execution, and missing fields are shown as unknown label
+    assert.ok(md.includes(`OS: darwin (${unknown})`), 'Expected arch to be unknown when not provided');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Expected Node.js version to be unknown when not provided');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'Expected VS Code version to be unknown when not provided');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`));
+  });
+
+  test('TC-EXECENV-B-EMPTY: buildTestExecutionArtifactMarkdown treats empty platform as missing (cursorAgent runner)', () => {
+    // Given: A cursorAgent result where platform is an empty string (boundary)
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: '',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: platform is shown as unknown label (not empty)
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'Expected platform/arch to be unknown when empty/missing');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`));
+  });
+
+  test('TC-EXECENV-B-WS: buildTestExecutionArtifactMarkdown treats whitespace-only platform as missing (cursorAgent runner)', () => {
+    // Given: A cursorAgent result where platform is whitespace-only (boundary)
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: '   ',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: platform is shown as unknown label (not whitespace)
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'Expected platform/arch to be unknown when whitespace-only');
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`));
+  });
+
+  test('TC-EXECENV-B-TYPE: buildTestExecutionArtifactMarkdown treats non-string env fields from parseTestResultFile as missing (cursorAgent runner)', () => {
+    // Given: A parsed testResult where env fields are invalid types (number/boolean)
+    const raw = JSON.stringify({
+      timestamp: Date.now(),
+      failures: 0,
+      platform: 123,
+      arch: true,
+      nodeVersion: 456,
+      vscodeVersion: false,
+    });
+    const parsed = parseTestResultFile(raw);
+    assert.ok(parsed.ok, 'Expected parseTestResultFile to succeed for structurally valid JSON');
+
+    // When: Generating markdown with cursorAgent runner
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: parsed.value,
+      },
+    });
+
+    // Then: It uses envSource=unknown and unknown labels for all env fields
+    assert.ok(md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`));
+  });
+
+  // TC-REPORT-ENV-EXT-N-01 (extra)
+  test('TC-REPORT-ENV-EXT-N-01: buildTestExecutionArtifactMarkdown uses execution environment from testResult when provided (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) with all env fields present in testResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: The execution environment uses testResult values and envSource=execution
+    assert.ok(md.includes('OS: testos (testarch)'), 'OS/arch uses testResult values');
+    assert.ok(md.includes('Node.js: v0.0.0-test'), 'Node.js version uses testResult value');
+    assert.ok(md.includes('VS Code: 9.9.9-test'), 'VS Code version uses testResult value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-N-02
+  test('TC-REPORT-ENV-N-02: buildTestExecutionArtifactMarkdown falls back to local environment when testResult is undefined (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) with testResult undefined
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: undefined,
+        executionRunner: 'extension',
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: The execution environment falls back to local values and envSource=local
+    assert.ok(md.includes(`OS: ${process.platform} (${process.arch})`), 'OS/arch falls back to local process values');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back to local process value');
+    assert.ok(md.includes(`VS Code: ${vscode.version}`), 'VS Code version falls back to vscode.version');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
+  });
+
+  // TC-REPORT-ENV-B-NULL-01
+  test('TC-REPORT-ENV-B-NULL-01: buildTestExecutionArtifactMarkdown falls back per-field when env fields are null (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) whose testResult has some null env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: {
+          platform: null as unknown as string,
+          arch: 'testarch',
+          nodeVersion: null as unknown as string,
+          vscodeVersion: '9.9.9-test',
+        },
+        executionRunner: 'extension',
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Null env fields fall back to local values, non-null fields are preserved, and envSource=local
+    assert.ok(md.includes(`OS: ${process.platform} (testarch)`), 'Platform falls back but arch is preserved');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back when null');
+    assert.ok(md.includes('VS Code: 9.9.9-test'), 'VS Code version uses provided non-null value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
+  });
+
+  // TC-REPORT-ENV-E-02
+  test('TC-REPORT-ENV-E-02: buildTestExecutionArtifactMarkdown treats empty strings as missing and falls back to local env (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) whose env fields are empty strings
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: {
+          platform: '',
+          arch: '',
+          nodeVersion: '',
+          vscodeVersion: '',
+        },
+        executionRunner: 'extension',
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Empty strings are treated as missing, fall back to local values, and envSource=local
+    assert.ok(md.includes(`OS: ${process.platform} (${process.arch})`), 'OS/arch falls back to local process values');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back to local process value');
+    assert.ok(md.includes(`VS Code: ${vscode.version}`), 'VS Code version falls back to vscode.version');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
+  });
+
+  // TC-REPORT-ENV-E-04
+  test('TC-REPORT-ENV-E-04: buildTestExecutionArtifactMarkdown ignores non-string env fields and falls back to local env (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) whose env fields have invalid runtime types
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: {
+          platform: 123 as unknown as string,
+          arch: true as unknown as string,
+          nodeVersion: {} as unknown as string,
+          vscodeVersion: [] as unknown as string,
+        },
+        executionRunner: 'extension',
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It falls back to local values (no exception) and envSource=local
+    assert.ok(md.includes(`OS: ${process.platform} (${process.arch})`), 'Falls back for OS/arch');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Falls back for Node.js version');
+    assert.ok(md.includes(`VS Code: ${vscode.version}`), 'Falls back for VS Code version');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
+  });
+
+  // TC-REPORT-ENV-E-01
+  test('TC-REPORT-ENV-E-01: buildTestExecutionArtifactMarkdown uses unknown env when testResult is undefined (cursorAgent runner)', () => {
+    // Given: A TestExecutionResult (cursorAgent runner) with testResult undefined
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: undefined,
+        executionRunner: 'cursorAgent',
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It does NOT use local values, uses unknown labels, and envSource=unknown
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'OS/arch are unknown');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Node.js version is unknown');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'VS Code version is unknown');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`),
+      'Env source is unknown',
+    );
+  });
+
+  // TC-REPORT-ENV-B-UNDEF-RUNNER-01
+  test('TC-REPORT-ENV-B-UNDEF-RUNNER-01: buildTestExecutionArtifactMarkdown uses unknown env when executionRunner is undefined and testResult is undefined', () => {
+    // Given: A TestExecutionResult with executionRunner unset and testResult undefined (backward compatibility)
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: undefined,
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It uses unknown labels and envSource=unknown
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'OS/arch are unknown');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Node.js version is unknown');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'VS Code version is unknown');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`),
+      'Env source is unknown',
+    );
+  });
+
+  // TC-REPORT-ENV-E-02
+  test('TC-REPORT-ENV-E-02: buildTestExecutionArtifactMarkdown uses unknown env when executionRunner="unknown" and testResult is undefined', () => {
+    // Given: A TestExecutionResult (unknown runner) with testResult undefined
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: undefined,
+        executionRunner: 'unknown',
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It uses unknown labels and envSource=unknown
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'OS/arch are unknown');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Node.js version is unknown');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'VS Code version is unknown');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`),
+      'Env source is unknown',
+    );
+  });
+
+  // TC-REPORT-ENV-N-01
+  test('TC-REPORT-ENV-N-01: buildTestExecutionArtifactMarkdown uses execution environment from testResult when all fields are present (cursorAgent runner)', () => {
+    // Given: A TestExecutionResult (cursorAgent runner) with all env fields present in testResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: The execution environment uses testResult values and envSource=execution
+    assert.ok(md.includes('OS: testos (testarch)'), 'OS/arch uses testResult values');
+    assert.ok(md.includes('Node.js: v0.0.0-test'), 'Node.js version uses testResult value');
+    assert.ok(md.includes('VS Code: 9.9.9-test'), 'VS Code version uses testResult value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-B-WS-01
+  test('TC-REPORT-ENV-B-WS-01: buildTestExecutionArtifactMarkdown falls back when env fields are whitespace-only (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) whose env fields are whitespace-only strings
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: ' ',
+          arch: '   ',
+          nodeVersion: '\n',
+          vscodeVersion: '\t',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Whitespace-only strings are treated as missing and envSource=local
+    assert.ok(md.includes(`OS: ${process.platform} (${process.arch})`), 'OS/arch falls back to local process values');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back to local process value');
+    assert.ok(md.includes(`VS Code: ${vscode.version}`), 'VS Code version falls back to vscode.version');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
+  });
+
+  // TC-REPORT-ENV-E-03
+  test('TC-REPORT-ENV-E-03: buildTestExecutionArtifactMarkdown treats whitespace-only env fields as missing and uses unknown env (cursorAgent runner)', () => {
+    // Given: A TestExecutionResult (cursorAgent runner) whose env fields are whitespace-only strings
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: '   ',
+          arch: '\t',
+          nodeVersion: '\n',
+          vscodeVersion: ' ',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It uses unknown labels with envSource=unknown (no local fallback)
+    assert.ok(md.includes(`OS: ${unknown} (${unknown})`), 'OS/arch are unknown');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Node.js version is unknown');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'VS Code version is unknown');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.unknown')}`),
+      'Env source is unknown',
+    );
+  });
+
+  // TC-REPORT-ENV-N-04
+  test('TC-REPORT-ENV-N-04: buildTestExecutionArtifactMarkdown preserves provided env fields and uses unknown for missing ones (cursorAgent runner)', () => {
+    // Given: A TestExecutionResult (cursorAgent runner) with only platform set in testResult
+    const unknown = t('artifact.executionReport.unknown');
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'x',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Provided fields are preserved, missing ones are unknown, and envSource=execution
+    assert.ok(md.includes(`OS: x (${unknown})`), 'Platform is preserved and arch is unknown');
+    assert.ok(md.includes(`Node.js: ${unknown}`), 'Node.js version is unknown');
+    assert.ok(md.includes(`VS Code: ${unknown}`), 'VS Code version is unknown');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-N-03
+  test('TC-REPORT-ENV-N-03: buildTestExecutionArtifactMarkdown preserves provided env fields and fills missing ones from local env (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) with only platform set in testResult
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'x',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Provided fields are preserved, missing ones fall back to local, and envSource=local
+    assert.ok(md.includes(`OS: x (${process.arch})`), 'Platform is preserved and arch falls back to local');
+    assert.ok(md.includes(`Node.js: ${process.version}`), 'Node.js version falls back to local');
+    assert.ok(md.includes(`VS Code: ${vscode.version}`), 'VS Code version falls back to local');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Env source is local fallback',
+    );
+  });
+
+  // TC-REPORT-ENV-N-05
+  test('TC-REPORT-ENV-N-05: buildTestExecutionArtifactMarkdown uses testResult env when executionRunner="unknown" but all env fields are present', () => {
+    // Given: A TestExecutionResult (unknown runner) with a fully-populated testResult env
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'unknown',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It uses the testResult values and envSource=execution
+    assert.ok(md.includes('OS: testos (testarch)'), 'OS/arch uses testResult values');
+    assert.ok(md.includes('Node.js: v0.0.0-test'), 'Node.js version uses testResult value');
+    assert.ok(md.includes('VS Code: 9.9.9-test'), 'VS Code version uses testResult value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-B-01
+  test('TC-REPORT-ENV-B-01: extension runner envSource remains local for both 0 and 1 populated env fields', () => {
+    // Given: Two extension-runner results (0 env fields vs 1 env field)
+    const md0 = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: undefined,
+      },
+    });
+
+    const md1 = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'x',
+        },
+      },
+    });
+
+    // When: Both markdowns are generated
+    // Then: Both are local-sourced, but values differ as expected (local vs mixed)
+    assert.ok(
+      md0.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      '0-field case uses local envSource',
+    );
+    assert.ok(
+      md1.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      '1-field case still uses local envSource',
+    );
+    assert.ok(md0.includes(`OS: ${process.platform} (${process.arch})`), '0-field case uses local OS/arch');
+    assert.ok(md1.includes(`OS: x (${process.arch})`), '1-field case preserves provided platform and falls back for arch');
+  });
+
+  // TC-REPORT-ENV-B-02
+  test('TC-REPORT-ENV-B-02: cursorAgent runner envSource is execution for both 3 and 4 populated env fields, and missing values are unknown-filled', () => {
+    // Given: Two cursorAgent-runner results (4 env fields vs 3 env fields)
+    const md4 = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    const unknown = t('artifact.executionReport.unknown');
+    const md3 = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          // vscodeVersion intentionally missing (3/4 populated)
+        },
+      },
+    });
+
+    // When: Both markdowns are generated
+    // Then: Both are execution-sourced and the 3-field case is unknown-filled for the missing field
+    assert.ok(
+      md4.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      '4-field case uses execution envSource',
+    );
+    assert.ok(
+      md3.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      '3-field case still uses execution envSource',
+    );
+    assert.ok(md3.includes('OS: testos (testarch)'), '3-field case preserves provided OS/arch');
+    assert.ok(md3.includes('Node.js: v0.0.0-test'), '3-field case preserves provided Node.js version');
+    assert.ok(md3.includes(`VS Code: ${unknown}`), '3-field case uses unknown for missing VS Code version');
+  });
+
+  // TC-REPORT-ENV-N-06
+  test('TC-REPORT-ENV-N-06: buildTestExecutionArtifactMarkdown includes envSource line once and keeps execution info line ordering', () => {
+    // Given: A result with all env fields present
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'cursorAgent',
+        testResult: {
+          platform: 'testos',
+          arch: 'testarch',
+          nodeVersion: 'v0.0.0-test',
+          vscodeVersion: '9.9.9-test',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: envSource line exists exactly once and appears after OS/Node.js/VS Code lines
+    const envSourceLabel = t('artifact.executionReport.envSource');
+    const envSourceLinePrefix = `- ${envSourceLabel}: `;
+    assert.strictEqual(md.split(envSourceLinePrefix).length - 1, 1, 'envSource line must appear exactly once');
+
+    const idxOs = md.indexOf('- OS: ');
+    const idxNode = md.indexOf('- Node.js: ');
+    const idxVsCode = md.indexOf('- VS Code: ');
+    const idxSource = md.indexOf(envSourceLinePrefix);
+
+    assert.ok(idxOs >= 0, 'OS line should exist');
+    assert.ok(idxNode >= 0, 'Node.js line should exist');
+    assert.ok(idxVsCode >= 0, 'VS Code line should exist');
+    assert.ok(idxSource >= 0, 'envSource line should exist');
+    assert.ok(idxOs < idxNode, 'OS line should appear before Node.js line');
+    assert.ok(idxNode < idxVsCode, 'Node.js line should appear before VS Code line');
+    assert.ok(idxVsCode < idxSource, 'VS Code line should appear before envSource line');
+  });
+
+  // TC-DURATION-B-00
+  test('TC-DURATION-B-00: buildTestExecutionArtifactMarkdown preserves durationMs=0 and includes a duration row', () => {
+    // Given: A TestExecutionResult with durationMs=0 (boundary)
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: It includes the duration row and does not omit the value
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} |`), 'Duration row should exist');
+    assert.ok(md.includes(`${t('artifact.executionReport.seconds')} |`), 'Duration row should include seconds unit');
+  });
+
+  // TC-DURATION-B-MINUS-01
+  test('TC-DURATION-B-MINUS-01: buildTestExecutionArtifactMarkdown does not throw when durationMs is negative', () => {
+    // Given: A TestExecutionResult with durationMs=-1 (invalid but tolerated)
+    const build = () =>
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: -1,
+          stdout: '',
+          stderr: '',
+        },
+      });
+
+    // When: Generating markdown
+    // Then: It does not throw and still includes the duration row
+    assert.doesNotThrow(build, 'Markdown generation should tolerate negative durationMs');
+    const md = build();
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} |`), 'Duration row should exist');
+  });
+
+  // TC-DURATION-B-MAX-01
+  test('TC-DURATION-B-MAX-01: buildTestExecutionArtifactMarkdown does not throw for very large durationMs (MAX_SAFE_INTEGER)', () => {
+    // Given: A TestExecutionResult with a very large durationMs
+    const durationMs = Number.MAX_SAFE_INTEGER;
+    const build = () =>
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs,
+          stdout: '',
+          stderr: '',
+        },
+      });
+
+    // When: Generating markdown
+    // Then: It does not throw and includes the duration row
+    assert.doesNotThrow(build, 'Markdown generation should tolerate large durationMs');
+    const md = build();
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} |`), 'Duration row should exist');
+  });
+
+  // TC-DURATION-B-MAXP1-01
+  test('TC-DURATION-B-MAXP1-01: buildTestExecutionArtifactMarkdown does not throw for durationMs > MAX_SAFE_INTEGER (precision may degrade)', () => {
+    // Given: A TestExecutionResult with durationMs > MAX_SAFE_INTEGER
+    const durationMs = Number.MAX_SAFE_INTEGER + 1;
+    const build = () =>
+      buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs,
+          stdout: '',
+          stderr: '',
+        },
+      });
+
+    // When: Generating markdown
+    // Then: It does not throw and includes the duration row (do not assert exact numeric formatting)
+    assert.doesNotThrow(build, 'Markdown generation should tolerate durationMs > MAX_SAFE_INTEGER');
+    const md = build();
+    assert.ok(md.includes(`| ${t('artifact.executionReport.duration')} |`), 'Duration row should exist');
+  });
+
+  // TC-REPORT-ENV-B-MIN-01
+  test('TC-REPORT-ENV-B-MIN-01: buildTestExecutionArtifactMarkdown preserves 1-char env fields (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) with 1-char env fields
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'a',
+          arch: 'b',
+          nodeVersion: 'v',
+          vscodeVersion: '1',
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: 1-char strings are treated as valid and envSource=execution
+    assert.ok(md.includes('OS: a (b)'), 'OS/arch use 1-char values');
+    assert.ok(md.includes('Node.js: v'), 'Node.js uses 1-char value');
+    assert.ok(md.includes('VS Code: 1'), 'VS Code uses 1-char value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-B-MAX-01
+  test('TC-REPORT-ENV-B-MAX-01: buildTestExecutionArtifactMarkdown preserves long env strings (extension runner)', () => {
+    // Given: A TestExecutionResult (extension runner) with very long env strings
+    const long = 'x'.repeat(10_000);
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: long,
+          arch: long,
+          nodeVersion: long,
+          vscodeVersion: long,
+        },
+      },
+    });
+
+    // When: The report markdown is generated
+    // Then: Long strings are preserved and envSource=execution
+    assert.ok(md.includes(`OS: ${long} (${long})`), 'OS/arch preserve long values');
+    assert.ok(md.includes(`Node.js: ${long}`), 'Node.js preserves long value');
+    assert.ok(md.includes(`VS Code: ${long}`), 'VS Code preserves long value');
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      'Env source is execution',
+    );
+  });
+
+  // TC-REPORT-ENV-B-PLUSMINUS1-01
+  test('TC-REPORT-ENV-B-PLUSMINUS1-01: whitespace-only is treated as missing but 1-char is treated as valid (extension runner)', () => {
+    // Given: Two TestExecutionResults (extension runner) differing only by platform value: " " vs "a"
+    const mdWhitespace = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: ' ',
+          arch: 'b',
+          nodeVersion: 'v',
+          vscodeVersion: '1',
+        },
+      },
+    });
+    const mdOneChar = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        executionRunner: 'extension',
+        testResult: {
+          platform: 'a',
+          arch: 'b',
+          nodeVersion: 'v',
+          vscodeVersion: '1',
+        },
+      },
+    });
+
+    // When: Both reports are generated
+    // Then: " " falls back to local+envSource=local, while "a" is preserved+envSource=execution
+    assert.ok(mdWhitespace.includes(`OS: ${process.platform} (b)`), 'Whitespace platform falls back to local value');
+    assert.ok(
+      mdWhitespace.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.local')}`),
+      'Whitespace case uses local envSource',
+    );
+    assert.ok(mdOneChar.includes('OS: a (b)'), '1-char platform is preserved');
+    assert.ok(
+      mdOneChar.includes(`- ${t('artifact.executionReport.envSource')}: ${t('artifact.executionReport.envSource.execution')}`),
+      '1-char case uses execution envSource',
+    );
+  });
+
   // TC-REPORT-N-04: TestExecutionResult with parsed=false
   test('TC-REPORT-N-04: buildTestExecutionArtifactMarkdown generates report with summary table showing "-" for all counts when parsed=false', () => {
     // Given: TestExecutionResult with unparseable stdout (parsed=false)
@@ -701,7 +2207,444 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes(`| ${t('artifact.tableHeader.item')} | ${t('artifact.tableHeader.result')} |`), 'Summary table header is present');
     assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed shows "-"');
     assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | - |`), 'Failed shows "-"');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending shows "-"');
     assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | - |`), 'Total shows "-"');
+  });
+
+  suite('buildTestExecutionArtifactMarkdown (summary counts resolution)', () => {
+    // TC-ART-N-01
+    test('TC-ART-N-01: shows parsed counts and success status when exitCode=0 and stdout is parseable', () => {
+      // Given: exitCode=0 and parseable stdout (passed=2, failed=0) with no structured result
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs: 1000,
+          stdout: '  ✔ test case 1\n  ✔ test case 2',
+          stderr: '',
+        },
+      });
+
+      // When: markdown is generated
+      // Then: summary uses parsed counts and status is success
+      assert.ok(md.includes(`✅ **${t('artifact.executionReport.success')}** (exitCode: 0)`), 'Status is success');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 2 |`), 'Passed=2');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 2 |`), 'Total=2');
+    });
+
+    // TC-ART-N-02
+    test('TC-ART-N-02: shows failure status when exitCode!=0 even if stdout is parseable', () => {
+      // Given: exitCode=1 and parseable stdout (passed=2, failed=1) with no structured result
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: '  ✔ test case 1\n  ✔ test case 2\n  1) test case 3\n  ✖',
+          stderr: '',
+        },
+      });
+
+      // When: markdown is generated
+      // Then: failed count is shown and status is failure due to exitCode
+      assert.ok(md.includes(`❌ **${t('artifact.executionReport.failure')}** (exitCode: 1)`), 'Status is failure');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 1 |`), 'Failed=1');
+    });
+
+    // TC-ART-E-01
+    test('TC-ART-E-01: treats exitCode=null as success when failed count is known and zero (parsed stdout only)', () => {
+      // Given: exitCode=null and parseable stdout (failed=0) with no structured result
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: '  ✔ test case 1',
+          stderr: '',
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is success and counts are shown (not "-")
+      assert.ok(md.includes(`✅ **${t('artifact.executionReport.success')}** (exitCode: null)`), 'Status is success');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 1 |`), 'Total=1');
+    });
+
+    // TC-ART-E-02
+    test('TC-ART-E-02: treats exitCode=null as failure when counts are unknown (stdout not parseable, no structured result)', () => {
+      // Given: exitCode=null and non-parseable stdout, with no structured result
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is failure and all counts are "-"
+      assert.ok(md.includes(`❌ **${t('artifact.executionReport.failure')}** (exitCode: null)`), 'Status is failure');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | - |`), 'Failed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | - |`), 'Total="-"');
+    });
+
+    // TC-ART-N-03
+    test('TC-ART-N-03: uses structured numeric fields for counts (including pending) even when stdout is empty', () => {
+      // Given: structured result with numeric fields and empty stdout
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: '',
+          stderr: '',
+          testResult: { passes: 1, failures: 1, pending: 2, total: 4 },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: structured counts are shown
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 1 |`), 'Passed=1');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 1 |`), 'Failed=1');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | 2 |`), 'Pending=2');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 4 |`), 'Total=4');
+    });
+
+    // TC-ART-N-04
+    test('TC-ART-N-04: prefers structured tests[] aggregation over numeric fields', () => {
+      // Given: structured result with tests[] and conflicting numeric fields
+      const structuredResult = {
+        tests: [{ state: 'passed' }, { state: 'failed' }, { state: 'pending' }, { state: 'pending' }],
+        passes: 999,
+        failures: 999,
+        pending: 999,
+        total: 999,
+      } as unknown as TestResultFile;
+
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+          testResult: structuredResult,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: tests[] aggregation is used
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 1 |`), 'Passed=1 from tests[]');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 1 |`), 'Failed=1 from tests[]');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | 2 |`), 'Pending=2 from tests[]');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 4 |`), 'Total=4 from tests[] length');
+      assert.ok(!md.includes(`| ${t('artifact.executionReport.passed')} | 999 |`), 'Numeric fields are not used when tests[] exists');
+    });
+
+    // TC-ART-B-01
+    test('TC-ART-B-01: ignores empty tests[] and falls back to parsed stdout counts', () => {
+      // Given: structured result with tests:[] (empty) and parseable stdout
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs: 1000,
+          stdout: '  ✔ test case 1\n  ✔ test case 2',
+          stderr: '',
+          testResult: { tests: [] } as unknown as TestResultFile,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: parsed counts are used and pending is "-"
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 2 |`), 'Passed=2 from parsed stdout');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed=0 from parsed stdout');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 2 |`), 'Total=2 from parsed stdout');
+    });
+
+    // TC-ART-B-02
+    test('TC-ART-B-02: shows "-" for all counts when tests[] is empty and stdout is not parseable (no numeric fields)', () => {
+      // Given: structured result with tests:[] (empty) and non-parseable stdout
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+          testResult: { tests: [] } as unknown as TestResultFile,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: counts are unknown and rendered as "-"
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | - |`), 'Failed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | - |`), 'Total="-"');
+    });
+
+    // TC-ART-B-03
+    test('TC-ART-B-03: renders zero counts from structured numeric fields and treats exitCode=0 as success', () => {
+      // Given: structured result with all counts set to 0 and exitCode=0
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+          testResult: { passes: 0, failures: 0, pending: 0, total: 0 },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is success and all counts are "0"
+      assert.ok(md.includes(`✅ **${t('artifact.executionReport.success')}** (exitCode: 0)`), 'Status is success');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 0 |`), 'Passed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | 0 |`), 'Pending=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 0 |`), 'Total=0');
+    });
+
+    // TC-ART-B-04
+    test('TC-ART-B-04: treats exitCode=null as success when structured failed=0 and total is non-zero', () => {
+      // Given: exitCode=null and structured counts with failed=0 and total=1
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: '',
+          stderr: '',
+          testResult: { passes: 0, failures: 0, pending: 0, total: 1 },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is success and total is shown
+      assert.ok(md.includes(`✅ **${t('artifact.executionReport.success')}** (exitCode: null)`), 'Status is success');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 1 |`), 'Total=1');
+    });
+
+    // TC-ART-B-05
+    test('TC-ART-B-05: treats exitCode=null as failure when structured failed is negative (min-1) and shows the negative value', () => {
+      // Given: exitCode=null and structured failed=-1
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: '',
+          stderr: '',
+          testResult: { passes: 0, failures: -1, pending: 0, total: 0 },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is failure and failed=-1 is shown (no validation)
+      assert.ok(md.includes(`❌ **${t('artifact.executionReport.failure')}** (exitCode: null)`), 'Status is failure');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | -1 |`), 'Failed=-1');
+    });
+
+    // TC-ART-B-06
+    test('TC-ART-B-06: renders MAX_SAFE_INTEGER counts as strings without rounding and treats exitCode=null as success when failed=0', () => {
+      // Given: structured counts at Number.MAX_SAFE_INTEGER and exitCode=null with failed=0
+      const max = Number.MAX_SAFE_INTEGER;
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: '',
+          stderr: '',
+          testResult: { passes: max, failures: 0, pending: 0, total: max },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: huge numbers are rendered as exact strings and status is success
+      assert.ok(md.includes(`✅ **${t('artifact.executionReport.success')}** (exitCode: null)`), 'Status is success');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | ${String(max)} |`), 'Passed is exact');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | ${String(max)} |`), 'Total is exact');
+    });
+
+    // TC-ART-E-03
+    test('TC-ART-E-03: derives total from passes+failures+pending when structured total is missing', () => {
+      // Given: structured counts without total (total is undefined)
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: '',
+          stderr: '',
+          testResult: { passes: 1, failures: 0, pending: 0 },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: total is derived as 1
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 1 |`), 'Total=1 is derived');
+    });
+
+    // TC-ART-E-04
+    test('TC-ART-E-04: structured invalid type (passes as string) does not populate passed count, and does not fall back to parsed stdout if other structured numeric fields exist', () => {
+      // Given: structuredResult.passes is a string (invalid), but failures/pending are numeric (0); stdout is parseable
+      const structuredResult = { passes: '1', failures: 0, pending: 0, total: undefined } as unknown as TestResultFile;
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs: 1000,
+          stdout: '  ✔ test case 1\n  ✔ test case 2',
+          stderr: '',
+          testResult: structuredResult,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: passed is "-" (invalid structured type), and total is derived from structured fields (0) rather than parsed stdout
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed is "-" due to invalid structured type');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 0 |`), 'Total derives from structured numeric fields');
+    });
+
+    // TC-ART-E-05
+    test('TC-ART-E-05: ignores unknown/undefined tests[].state values and still shows Total=tests.length with 0 counts', () => {
+      // Given: structured tests[] with invalid states and non-parseable stdout
+      const structuredResult = {
+        tests: [{ state: 'unknown' }, { state: undefined }],
+      } as unknown as TestResultFile;
+
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+          testResult: structuredResult,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: Passed/Failed/Pending are 0 and Total is 2
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 0 |`), 'Passed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | 0 |`), 'Pending=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 2 |`), 'Total=2');
+    });
+
+    // TC-ART-B-07
+    test('TC-ART-B-07: treats structuredResult=null as missing and shows failure with "-" counts when stdout is not parseable and exitCode=null', () => {
+      // Given: structuredResult=null (runtime edge), stdout not parseable, exitCode=null
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+          testResult: null as unknown as TestResultFile,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is failure and counts are unknown ("-")
+      assert.ok(md.includes(`❌ **${t('artifact.executionReport.failure')}** (exitCode: null)`), 'Status is failure');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | - |`), 'Failed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | - |`), 'Total="-"');
+    });
   });
 
   // TC-B-07: buildTestExecutionArtifactMarkdown with durationMs = 0
@@ -4470,6 +6413,1110 @@ suite('core/artifacts.ts', () => {
         return;
       }
       assert.strictEqual(result.value.stderr, '');
+    });
+
+    suite('parseTestResultFile', () => {
+      test('TC-PARSE-ENV-N-01: parses env fields when platform/arch/nodeVersion/vscodeVersion are strings', () => {
+        // Given: A JSON payload that contains env fields as strings
+        const raw = JSON.stringify({
+          platform: 'darwin',
+          arch: 'arm64',
+          nodeVersion: 'v1.2.3',
+          vscodeVersion: '1.2.3',
+          failures: 1,
+          passes: 2,
+          timestamp: 123,
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and preserves the env field values
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, 123);
+        assert.strictEqual(result.value.platform, 'darwin');
+        assert.strictEqual(result.value.arch, 'arm64');
+        assert.strictEqual(result.value.nodeVersion, 'v1.2.3');
+        assert.strictEqual(result.value.vscodeVersion, '1.2.3');
+        assert.strictEqual(result.value.failures, 1);
+        assert.strictEqual(result.value.passes, 2);
+      });
+
+      test('TC-PARSE-ENV-N-02: missing env fields are parsed as undefined while vscodeVersion is preserved', () => {
+        // Given: A JSON payload where platform/arch/nodeVersion are missing, and only vscodeVersion is present
+        const raw = JSON.stringify({ vscodeVersion: '1.2.3' });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and missing fields become undefined
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.platform, undefined);
+        assert.strictEqual(result.value.arch, undefined);
+        assert.strictEqual(result.value.nodeVersion, undefined);
+        assert.strictEqual(result.value.vscodeVersion, '1.2.3');
+      });
+
+      test('TC-PARSE-ENV-B-UNDEFINED-01: omitted env fields are treated as undefined', () => {
+        // Given: A JSON payload with no env properties (omitted)
+        const raw = JSON.stringify({ failures: 0, passes: 0 });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and env fields are undefined
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.platform, undefined);
+        assert.strictEqual(result.value.arch, undefined);
+        assert.strictEqual(result.value.nodeVersion, undefined);
+        assert.strictEqual(result.value.vscodeVersion, undefined);
+      });
+
+      test('TC-PARSE-ENV-B-NULL-01: null env fields are converted to undefined', () => {
+        // Given: A JSON payload where env fields are explicitly null
+        const raw = JSON.stringify({ platform: null, arch: null, nodeVersion: null, vscodeVersion: null });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and env fields become undefined (getStringOrUndefined behavior)
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.platform, undefined);
+        assert.strictEqual(result.value.arch, undefined);
+        assert.strictEqual(result.value.nodeVersion, undefined);
+        assert.strictEqual(result.value.vscodeVersion, undefined);
+      });
+
+      test('TC-PARSE-ENV-B-EMPTY-01: empty string env fields are converted to undefined', () => {
+        // Given: A JSON payload where env fields are empty strings
+        const raw = JSON.stringify({ platform: '', arch: '', nodeVersion: '', vscodeVersion: '' });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and converts empty strings to undefined
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.platform, undefined);
+        assert.strictEqual(result.value.arch, undefined);
+        assert.strictEqual(result.value.nodeVersion, undefined);
+        assert.strictEqual(result.value.vscodeVersion, undefined);
+      });
+
+      test('TC-PARSE-ENV-E-01: invalid types for env fields are converted to undefined (without failing the whole parse)', () => {
+        // Given: A JSON payload where env fields have invalid types
+        const raw = JSON.stringify({ platform: 123, arch: true, nodeVersion: {}, vscodeVersion: [] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It succeeds and env fields become undefined
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.platform, undefined);
+        assert.strictEqual(result.value.arch, undefined);
+        assert.strictEqual(result.value.nodeVersion, undefined);
+        assert.strictEqual(result.value.vscodeVersion, undefined);
+      });
+
+      test('TC-PARSE-RAW-E-01: returns ok=false with error matching JSON.parse error message (invalid JSON)', () => {
+        // Given: A raw string that cannot be parsed as JSON
+        const raw = '{';
+        let expectedError = 'invalid-json: (unknown)';
+        try {
+          JSON.parse(raw);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          expectedError = `invalid-json: ${msg}`;
+        }
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It fails and preserves the underlying JSON.parse error message
+        assert.deepStrictEqual(result, { ok: false, error: expectedError });
+      });
+
+      test('TC-PARSE-RAW-B-EMPTY-01: returns ok=false with error="empty" when raw is empty string', () => {
+        // Given: Empty input
+        const raw = '';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It fails with the stable error code "empty"
+        assert.deepStrictEqual(result, { ok: false, error: 'empty' });
+      });
+
+      test('TC-PARSE-RAW-B-NULL-01: throws TypeError when raw is null (current behavior)', () => {
+        // Given: A non-string input forced through the type system
+        const raw = null as unknown as string;
+
+        // When: parseTestResultFile is called with a null value
+        // Then: It throws TypeError because it calls raw.trim() (this is the current behavior)
+        assert.throws(() => parseTestResultFile(raw), TypeError);
+      });
+
+      test('TC-ART-PTRF-E-01: returns ok=false with error="empty" when raw is empty/whitespace', () => {
+        // Given: Empty input
+        const raw = '   \n\t';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It returns the stable error code "empty"
+        assert.deepStrictEqual(result, { ok: false, error: 'empty' });
+      });
+
+      test('TC-ART-PTRF-E-02: returns ok=false with error starting "invalid-json:" when JSON.parse fails', () => {
+        // Given: Invalid JSON
+        const raw = '{ invalid';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It returns invalid-json prefix (message body can vary)
+        assert.strictEqual(result.ok, false);
+        if (result.ok) {
+          return;
+        }
+        assert.ok(result.error.startsWith('invalid-json:'), 'Expected invalid-json prefix');
+      });
+
+      test('TC-ART-PTRF-N-01: returns ok=true and extracts numeric fields and arrays when payload has the expected shape', () => {
+        // Given: A test-result.json-like JSON payload with main numeric fields and arrays
+        const raw = JSON.stringify({
+          timestamp: 123,
+          platform: 'darwin',
+          arch: 'arm64',
+          nodeVersion: 'v1.2.3',
+          vscodeVersion: '1.2.3',
+          failures: 1,
+          passes: 2,
+          pending: 3,
+          total: 6,
+          durationMs: 456,
+          tests: [{ suite: 'Suite', title: 'T', fullTitle: 'Suite T', state: 'passed', durationMs: 10 }],
+          failedTests: [{ title: 'T', fullTitle: 'Suite T', error: 'boom' }],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: It returns ok=true and the observable fields are extracted
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, 123);
+        assert.strictEqual(result.value.platform, 'darwin');
+        assert.strictEqual(result.value.arch, 'arm64');
+        assert.strictEqual(result.value.nodeVersion, 'v1.2.3');
+        assert.strictEqual(result.value.vscodeVersion, '1.2.3');
+        assert.strictEqual(result.value.failures, 1);
+        assert.strictEqual(result.value.passes, 2);
+        assert.strictEqual(result.value.pending, 3);
+        assert.strictEqual(result.value.total, 6);
+        assert.strictEqual(result.value.durationMs, 456);
+        assert.strictEqual(result.value.tests?.length, 1);
+        assert.strictEqual(result.value.failedTests?.length, 1);
+      });
+
+      test('TC-ART-PTRF-N-02: extracts tests[] and normalizes state to passed/failed/pending or undefined', () => {
+        // Given: tests[] includes valid states and an unknown state
+        const raw = JSON.stringify({
+          tests: [
+            { suite: 'S', title: 'A', fullTitle: 'S A', state: 'passed', durationMs: 0 },
+            { suite: 'S', title: 'B', fullTitle: 'S B', state: 'failed', durationMs: 12 },
+            { suite: 'S', title: 'C', fullTitle: 'S C', state: 'pending', durationMs: '1' },
+            { suite: 'S', title: 'D', fullTitle: 'S D', state: 'unknown', durationMs: '2' },
+          ],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: tests[] is present and state is normalized (unknown -> undefined)
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests?.length, 4);
+        assert.strictEqual(result.value.tests?.[0]?.suite, 'S');
+        assert.strictEqual(result.value.tests?.[0]?.title, 'A');
+        assert.strictEqual(result.value.tests?.[0]?.fullTitle, 'S A');
+        assert.strictEqual(result.value.tests?.[0]?.state, 'passed');
+        assert.strictEqual(result.value.tests?.[0]?.durationMs, 0);
+        assert.strictEqual(result.value.tests?.[1]?.state, 'failed');
+        assert.strictEqual(result.value.tests?.[2]?.state, 'pending');
+        assert.strictEqual(result.value.tests?.[3]?.state, undefined);
+      });
+
+      test('TC-ART-PTRF-N-03: extracts failedTests[] and ensures title/fullTitle/error are always strings', () => {
+        // Given: failedTests[] with missing required string fields
+        const raw = JSON.stringify({
+          failedTests: [
+            {
+              title: null,
+              fullTitle: undefined,
+              error: null,
+              stack: 'STACK',
+              code: 'ERR_ASSERTION',
+              expected: 'expected',
+              actual: 'actual',
+            },
+          ],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Required string fields are present as strings (possibly empty), optionals are strings when present
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.failedTests?.length, 1);
+        assert.strictEqual(result.value.failedTests?.[0]?.title, '');
+        assert.strictEqual(result.value.failedTests?.[0]?.fullTitle, '');
+        assert.strictEqual(result.value.failedTests?.[0]?.error, '');
+        assert.strictEqual(result.value.failedTests?.[0]?.stack, 'STACK');
+        assert.strictEqual(result.value.failedTests?.[0]?.code, 'ERR_ASSERTION');
+        assert.strictEqual(result.value.failedTests?.[0]?.expected, 'expected');
+        assert.strictEqual(result.value.failedTests?.[0]?.actual, 'actual');
+      });
+
+      test('TC-ART-PTRF-B-01: converts numeric string "0" to number 0 (zero boundary)', () => {
+        // Given: Numeric fields represented as string "0"
+        const raw = JSON.stringify({ timestamp: '0', failures: '0', passes: '0', pending: '0', total: '0', durationMs: '0' });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Parsed values are numbers equal to 0 (not undefined)
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, 0);
+        assert.strictEqual(result.value.failures, 0);
+        assert.strictEqual(result.value.passes, 0);
+        assert.strictEqual(result.value.pending, 0);
+        assert.strictEqual(result.value.total, 0);
+        assert.strictEqual(result.value.durationMs, 0);
+      });
+
+      test('TC-ART-PTRF-B-02: treats tests:[] and failedTests:[] as undefined (empty array boundary)', () => {
+        // Given: Explicit empty arrays
+        const raw = JSON.stringify({ tests: [], failedTests: [] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: tests/failedTests are omitted (undefined) because length is 0
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests, undefined);
+        assert.strictEqual(result.value.failedTests, undefined);
+      });
+
+      test('TC-ART-PTRF-B-03: sets tests[].state to undefined for unsupported enum values', () => {
+        // Given: An unsupported state value
+        const raw = JSON.stringify({ tests: [{ state: 'unknown' }] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: state is normalized to undefined (and no exception is thrown)
+        assert.ok(result.ok);
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests?.length, 1);
+        assert.strictEqual(result.value.tests?.[0]?.state, undefined);
+      });
+
+      test('TC-ART-PTRF-E-03: returns ok=false with error="json-not-object" for non-object JSON (null/array/string/number)', () => {
+        // Given: Non-object JSON inputs
+        const raws = ['null', '[]', '"x"', '123'];
+
+        // When/Then: parseTestResultFile rejects them with json-not-object
+        for (const raw of raws) {
+          const result = parseTestResultFile(raw);
+          assert.deepStrictEqual(result, { ok: false, error: 'json-not-object' });
+        }
+      });
+
+      test('TC-TRF-B-01: returns ok=false with error="empty" when raw is whitespace-only', () => {
+        // Given: Whitespace-only input (should be checked after trim())
+        const raw = ' \n \t ';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Returns an "empty" parse error
+        assert.deepStrictEqual(result, { ok: false, error: 'empty' });
+      });
+
+      test('TC-TRF-E-01: returns ok=false with error starting "invalid-json:" when raw is invalid JSON', () => {
+        // Given: Invalid JSON input
+        const raw = '{ invalid';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Error type is stable by prefix (message body can vary)
+        assert.strictEqual(result.ok, false);
+        if (result.ok) {
+          return;
+        }
+        assert.ok(result.error.startsWith('invalid-json:'), 'Expected error to start with "invalid-json:"');
+      });
+
+      test('TC-TRF-E-02: returns ok=false with error="json-not-object" when raw JSON is null', () => {
+        // Given: JSON that is not an object (null boundary)
+        const raw = 'null';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Reject non-object JSON
+        assert.deepStrictEqual(result, { ok: false, error: 'json-not-object' });
+      });
+
+      test('TC-TRF-N-01: parses full test-result.json shape and preserves key fields', () => {
+        // Given: A full-shaped test-result.json payload
+        const raw = JSON.stringify({
+          timestamp: 123,
+          vscodeVersion: '1.2.3',
+          failures: 1,
+          passes: 2,
+          pending: 3,
+          total: 6,
+          durationMs: 456,
+          tests: [
+            { suite: 'Suite A', title: 'Test 1', fullTitle: 'Suite A Test 1', state: 'passed', durationMs: 0 },
+            { suite: 'Suite B', title: 'Test 2', fullTitle: 'Suite B Test 2', state: 'failed', durationMs: 12 },
+          ],
+          failedTests: [
+            {
+              title: 'Test 2',
+              fullTitle: 'Suite B Test 2',
+              error: 'AssertionError: boom',
+              stack: 'STACK',
+              code: 'ERR_ASSERTION',
+              expected: 'expected',
+              actual: 'actual',
+            },
+          ],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Returns ok=true with expected structured fields
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, 123);
+        assert.strictEqual(result.value.vscodeVersion, '1.2.3');
+        assert.strictEqual(result.value.failures, 1);
+        assert.strictEqual(result.value.passes, 2);
+        assert.strictEqual(result.value.pending, 3);
+        assert.strictEqual(result.value.total, 6);
+        assert.strictEqual(result.value.durationMs, 456);
+        assert.strictEqual(result.value.tests?.length, 2);
+        assert.strictEqual(result.value.tests?.[0]?.state, 'passed');
+        assert.strictEqual(result.value.tests?.[0]?.durationMs, 0);
+        assert.strictEqual(result.value.failedTests?.length, 1);
+        assert.strictEqual(result.value.failedTests?.[0]?.code, 'ERR_ASSERTION');
+      });
+
+      test('TC-TRF-N-02: accepts "{}" and returns ok=true with all optional fields undefined', () => {
+        // Given: Minimal JSON object with missing fields
+        const raw = '{}';
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: ok=true and missing fields become undefined (not defaults)
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, undefined);
+        assert.strictEqual(result.value.vscodeVersion, undefined);
+        assert.strictEqual(result.value.failures, undefined);
+        assert.strictEqual(result.value.passes, undefined);
+        assert.strictEqual(result.value.pending, undefined);
+        assert.strictEqual(result.value.total, undefined);
+        assert.strictEqual(result.value.durationMs, undefined);
+        assert.strictEqual(result.value.tests, undefined);
+        assert.strictEqual(result.value.failedTests, undefined);
+      });
+
+      test('TC-TRF-N-03: treats non-array tests as absent and returns tests=undefined', () => {
+        // Given: tests is not an array
+        const raw = JSON.stringify({ tests: null });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: ok=true with tests undefined (empty array is not returned)
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests, undefined);
+      });
+
+      test('TC-TRF-N-04: skips non-object entries inside tests array', () => {
+        // Given: tests array with mixed element types
+        const raw = JSON.stringify({ tests: [1, null, 'x', {}] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: ok=true and only object entries are kept
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests?.length, 1);
+      });
+
+      test('TC-TRF-B-02: parses numeric fields as 0 from both numbers and numeric strings', () => {
+        // Given: Numeric fields set to 0 via string/number forms
+        const raw = JSON.stringify({
+          timestamp: '0',
+          failures: 0,
+          passes: '0',
+          pending: 0,
+          total: '0',
+          durationMs: 0,
+          tests: [{ durationMs: '0' }],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: 0 is preserved (not converted to undefined)
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, 0);
+        assert.strictEqual(result.value.failures, 0);
+        assert.strictEqual(result.value.passes, 0);
+        assert.strictEqual(result.value.pending, 0);
+        assert.strictEqual(result.value.total, 0);
+        assert.strictEqual(result.value.durationMs, 0);
+        assert.strictEqual(result.value.tests?.[0]?.durationMs, 0);
+      });
+
+      test('TC-TRF-B-03: preserves negative numbers (e.g. -1) as-is', () => {
+        // Given: Negative numeric fields
+        const raw = JSON.stringify({ failures: '-1', durationMs: -1 });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Negative values remain finite numbers
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.failures, -1);
+        assert.strictEqual(result.value.durationMs, -1);
+      });
+
+      test('TC-TRF-B-04: parses MAX_SAFE_INTEGER from number and numeric string', () => {
+        // Given: Boundary values around MAX_SAFE_INTEGER
+        const raw = JSON.stringify({
+          timestamp: Number.MAX_SAFE_INTEGER,
+          total: String(Number.MAX_SAFE_INTEGER),
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Values are preserved as finite numbers
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.timestamp, Number.MAX_SAFE_INTEGER);
+        assert.strictEqual(result.value.total, Number.MAX_SAFE_INTEGER);
+      });
+
+      test('TC-TRF-A-01: treats non-finite numeric strings (e.g. "Infinity") as undefined', () => {
+        // Given: Non-finite values represented as strings in JSON
+        const raw = JSON.stringify({ durationMs: 'Infinity', failures: 'NaN' });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Non-finite values are rejected and become undefined
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.durationMs, undefined);
+        assert.strictEqual(result.value.failures, undefined);
+      });
+
+      test('TC-TRF-B-05: normalizes tests[].state to undefined for out-of-enum values', () => {
+        // Given: tests[].state is not one of passed/failed/pending
+        const raw = JSON.stringify({ tests: [{ state: 'skipped' }, { state: 0 }, { state: null }] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: State is normalized to undefined
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.tests?.length, 3);
+        assert.strictEqual(result.value.tests?.[0]?.state, undefined);
+        assert.strictEqual(result.value.tests?.[1]?.state, undefined);
+        assert.strictEqual(result.value.tests?.[2]?.state, undefined);
+      });
+
+      test('TC-TRF-N-05: fills missing/null failedTests string fields with empty strings', () => {
+        // Given: failedTests entries with missing required strings
+        const raw = JSON.stringify({ failedTests: [{ title: null, fullTitle: undefined, error: null }] });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: title/fullTitle/error are empty strings (not undefined)
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.failedTests?.length, 1);
+        assert.strictEqual(result.value.failedTests?.[0]?.title, '');
+        assert.strictEqual(result.value.failedTests?.[0]?.fullTitle, '');
+        assert.strictEqual(result.value.failedTests?.[0]?.error, '');
+      });
+    });
+
+    suite('buildTestExecutionArtifactMarkdown (failure details section)', () => {
+      test('TC-ART-FAILSEC-N-01: includes "Failure Details" section with message/code/expected/actual/stack blocks when failedTests exist', () => {
+        // Given: A test execution result with one failedTests entry containing all detail fields
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: {
+              failedTests: [
+                {
+                  title: 'A',
+                  fullTitle: 'Suite A',
+                  error: 'boom',
+                  code: 'ERR_ASSERTION',
+                  expected: 'expected',
+                  actual: 'actual',
+                  stack: 'STACK',
+                },
+              ],
+            },
+          },
+        });
+
+        // When/Then: Failure details section and each labeled block are present
+        assert.ok(md.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+        assert.ok(md.includes('### 1.'));
+        assert.ok(md.includes(`${t('artifact.executionReport.failureMessage')}: boom`));
+        assert.ok(md.includes(`${t('artifact.executionReport.failureCode')}: ERR_ASSERTION`));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.expected')}:`));
+        assert.ok(md.includes('```text'));
+        assert.ok(md.includes('expected'));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.actual')}:`));
+        assert.ok(md.includes('actual'));
+        assert.ok(md.includes(t('artifact.executionReport.stackTrace')));
+      });
+
+      test('TC-ART-FAILSEC-N-02: falls back fullTitle -> title -> "(unknown)" and normalizes whitespace/newlines in heading', () => {
+        // Given: fullTitle is empty and title contains newlines/extra spaces
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'Title\n  With  Spaces', fullTitle: '', error: 'e' }] },
+          },
+        });
+
+        // When/Then: Heading uses title and is normalized to a single line
+        assert.ok(md.includes('### 1. Title With Spaces'));
+      });
+
+      test('TC-ART-FAILSEC-B-01: omits failure details section when testResult is undefined or failedTests is empty', () => {
+        // Given: No structured failures
+        const md1 = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 0,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+          },
+        });
+        const md2 = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 0,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [] },
+          },
+        });
+
+        // When/Then: The failure details header is not present
+        assert.ok(!md1.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+        assert.ok(!md2.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+      });
+
+      test('TC-ART-FAILSEC-B-02: does not truncate at 19999/20000 chars, but truncates at 20001 chars (max+1)', () => {
+        // Given: Three payloads around the truncation threshold
+        const expected19999 = 'a'.repeat(19_999);
+        const expected20000 = 'a'.repeat(20_000);
+        const expected20001 = 'a'.repeat(20_001);
+
+        const render = (expected: string): string =>
+          buildTestExecutionArtifactMarkdown({
+            generatedAtMs: Date.now(),
+            generationLabel: 'Label',
+            targetPaths: ['x.ts'],
+            result: {
+              command: 'cmd',
+              cwd: '/tmp',
+              exitCode: 1,
+              signal: null,
+              durationMs: 10,
+              stdout: '',
+              stderr: '',
+              testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', expected }] },
+            },
+          });
+
+        // When: Rendering failure details
+        const md19999 = render(expected19999);
+        const md20000 = render(expected20000);
+        const md20001 = render(expected20001);
+
+        // Then: Only max+1 is truncated
+        assert.ok(!md19999.includes('(truncated:'), 'Expected no truncation at 19999');
+        assert.ok(!md20000.includes('(truncated:'), 'Expected no truncation at 20000');
+        assert.ok(md20001.includes('... (truncated: 20001 chars -> 20000 chars)'), 'Expected truncation at 20001');
+      });
+
+      test('TC-ART-FAILSEC-B-03: omits empty/whitespace-only fields (message/code/expected/actual/stack)', () => {
+        // Given: A failedTests entry with whitespace-only fields
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: {
+              failedTests: [
+                {
+                  title: 'A',
+                  fullTitle: 'A',
+                  error: '   ',
+                  code: '',
+                  expected: '  ',
+                  actual: '',
+                  stack: ' \n ',
+                },
+              ],
+            },
+          },
+        });
+
+        // When/Then: Only the section + heading are present, but field labels are omitted
+        assert.ok(md.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+        assert.ok(md.includes('### 1. A'));
+        assert.ok(!md.includes(`- ${t('artifact.executionReport.failureMessage')}:`), 'Message line should be omitted');
+        assert.ok(!md.includes(`- ${t('artifact.executionReport.failureCode')}:`), 'Code line should be omitted');
+        assert.ok(!md.includes(`- ${t('artifact.executionReport.expected')}:`), 'Expected line should be omitted');
+        assert.ok(!md.includes(`- ${t('artifact.executionReport.actual')}:`), 'Actual line should be omitted');
+        assert.ok(!md.includes(`<summary>${t('artifact.executionReport.stackTrace')}</summary>`), 'Stack trace should be omitted');
+      });
+
+      test('TC-REP-N-01: renders failure details when result.testResult.failedTests is present', () => {
+        // Given: A test execution result with structured failedTests
+        const testResult: TestResultFile = {
+          failedTests: [
+            {
+              title: 'Test A',
+              fullTitle: 'Suite Test A',
+              error: 'boom',
+              stack: 'STACK TRACE',
+              code: 'ERR_ASSERTION',
+              expected: 'expected-value',
+              actual: 'actual-value',
+            },
+          ],
+        };
+
+        // When: buildTestExecutionArtifactMarkdown is called
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult,
+          },
+        });
+
+        // Then: Failure details section is included with labels and contents
+        assert.ok(md.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.failureMessage')}: boom`));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.failureCode')}: ERR_ASSERTION`));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.expected')}:`));
+        assert.ok(md.includes('```text'));
+        assert.ok(md.includes('expected-value'));
+        assert.ok(md.includes(`- ${t('artifact.executionReport.actual')}:`));
+        assert.ok(md.includes('actual-value'));
+        assert.ok(md.includes(`<summary>${t('artifact.executionReport.stackTrace')}${t('artifact.executionReport.clickToExpand')}</summary>`));
+      });
+
+      test('TC-REP-N-02: does not render failure details section when testResult is missing/empty', () => {
+        // Given: A test execution result without structured failures
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 0,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [] },
+          },
+        });
+
+        // When/Then: Failure details section is omitted
+        assert.ok(!md.includes(`## ${t('artifact.executionReport.failureDetails')}`));
+      });
+
+      test('TC-REP-N-03: renders multiple failures with numbered headings', () => {
+        // Given: Two failed test entries
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: {
+              failedTests: [
+                { title: 'A', fullTitle: 'Suite A', error: 'e1' },
+                { title: 'B', fullTitle: 'Suite B', error: 'e2' },
+              ],
+            },
+          },
+        });
+
+        // When/Then: Both are numbered
+        assert.ok(md.includes('### 1. Suite A'));
+        assert.ok(md.includes('### 2. Suite B'));
+      });
+
+      test('TC-REP-B-01: falls back to "(unknown)" when both fullTitle and title are empty', () => {
+        // Given: Missing/empty titles
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: '', fullTitle: '', error: 'e' }] },
+          },
+        });
+
+        // Then: "(unknown)" is used in the heading
+        assert.ok(md.includes('### 1. (unknown)'));
+      });
+
+      test('TC-REP-B-02: normalizes ANSI/newlines/spaces in failure message', () => {
+        // Given: A message with ANSI and newlines/spaces
+        const message = `\u001b[31mError:\u001b[0m line1\n\n   line2`;
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: message }] },
+          },
+        });
+
+        // Then: ANSI is stripped and message is single-line
+        assert.ok(!md.includes('\u001b[31m'), 'ANSI should be stripped');
+        assert.ok(md.includes(`${t('artifact.executionReport.failureMessage')}: Error: line1 line2`));
+      });
+
+      test('TC-REP-B-03: normalizes CRLF in expected/actual and renders as fenced code blocks', () => {
+        // Given: CRLF multiline details
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: {
+              failedTests: [
+                {
+                  title: 'A',
+                  fullTitle: 'A',
+                  error: 'e',
+                  expected: 'line1\r\nline2\r\n\r\nline3',
+                  actual: 'a1\r\na2',
+                },
+              ],
+            },
+          },
+        });
+
+        // Then: CRLF is normalized to LF inside fences
+        assert.ok(md.includes('```text\nline1\nline2\n\nline3\n```'));
+        assert.ok(md.includes('```text\na1\na2\n```'));
+      });
+
+      test('TC-REP-B-04: does not truncate when expected length is exactly 20000', () => {
+        // Given: expected length exactly at the max threshold
+        const expected = 'a'.repeat(20_000);
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', expected }] },
+          },
+        });
+
+        // Then: No "(truncated:" marker exists
+        assert.ok(!md.includes('(truncated:'), 'Expected content should not be truncated at exactly 20000 chars');
+      });
+
+      test('TC-REP-B-05: truncates when expected length is 20001 (max+1) and includes marker', () => {
+        // Given: expected length just above the max threshold
+        const expected = 'a'.repeat(20_001);
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', expected }] },
+          },
+        });
+
+        // Then: Truncation marker is included with the correct max
+        assert.ok(md.includes('... (truncated: 20001 chars -> 20000 chars)'), 'Expected truncation marker for max+1');
+      });
+
+      test('TC-REP-A-01: omits Code line when code is empty/whitespace-only', () => {
+        // Given: Empty/whitespace-only "code"
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', code: '   ' }] },
+          },
+        });
+
+        // Then: Code label does not appear
+        assert.ok(!md.includes(`- ${t('artifact.executionReport.failureCode')}:`));
+      });
+
+      test('TC-L10N-N-01: renders localized failure details labels according to current VS Code locale', () => {
+        // Given: Failure details keys we expect to be localized (en fallback / ja bundle)
+        const keys = [
+          'artifact.executionReport.failureDetails',
+          'artifact.executionReport.failureMessage',
+          'artifact.executionReport.stackTrace',
+        ] as const;
+
+        // When: buildTestExecutionArtifactMarkdown is called with failures
+        const md = buildTestExecutionArtifactMarkdown({
+          generatedAtMs: Date.now(),
+          generationLabel: 'Label',
+          targetPaths: ['x.ts'],
+          result: {
+            command: 'cmd',
+            cwd: '/tmp',
+            exitCode: 1,
+            signal: null,
+            durationMs: 10,
+            stdout: '',
+            stderr: '',
+            testResult: { failedTests: [{ title: 'A', fullTitle: 'A', error: 'e', stack: 's' }] },
+          },
+        });
+
+        // Then: Localized labels are included and do not fall back to raw keys
+        for (const key of keys) {
+          const label = t(key);
+          assert.notStrictEqual(label, key, `Expected localized label for key: ${key}`);
+          assert.ok(md.includes(label), `Expected markdown to include localized label: ${label}`);
+        }
+      });
+
+      test('TC-L10N-KEYS-N-01: l10n bundles include failure detail keys for both en and ja', () => {
+        // Given: The repository root and both l10n bundles
+        const repoRoot = path.resolve(__dirname, '../../../..');
+        const enPath = path.join(repoRoot, 'l10n', 'bundle.l10n.json');
+        const jaPath = path.join(repoRoot, 'l10n', 'bundle.l10n.ja.json');
+        const bundleEn = JSON.parse(fs.readFileSync(enPath, 'utf8')) as Record<string, unknown>;
+        const bundleJa = JSON.parse(fs.readFileSync(jaPath, 'utf8')) as Record<string, unknown>;
+
+        const keys = [
+          'artifact.executionReport.failureDetails',
+          'artifact.executionReport.failureMessage',
+          'artifact.executionReport.failureCode',
+          'artifact.executionReport.expected',
+          'artifact.executionReport.actual',
+          'artifact.executionReport.stackTrace',
+        ];
+
+        // When/Then: Both bundles contain these keys as strings
+        for (const key of keys) {
+          assert.strictEqual(typeof bundleEn[key], 'string', `Expected en bundle to include key: ${key}`);
+          assert.strictEqual(typeof bundleJa[key], 'string', `Expected ja bundle to include key: ${key}`);
+        }
+      });
+
+      test('TC-L10N-KEY-N-01: l10n bundles include failure details keys (en/ja)', () => {
+        // Given: Both runtime l10n bundles
+        const repoRoot = path.resolve(__dirname, '../../../..');
+        const bundleEn = JSON.parse(fs.readFileSync(path.join(repoRoot, 'l10n', 'bundle.l10n.json'), 'utf8')) as Record<string, unknown>;
+        const bundleJa = JSON.parse(fs.readFileSync(path.join(repoRoot, 'l10n', 'bundle.l10n.ja.json'), 'utf8')) as Record<string, unknown>;
+
+        // When/Then: Each required key exists as a non-empty string in both bundles
+        const keys = [
+          'artifact.executionReport.failureDetails',
+          'artifact.executionReport.failureMessage',
+          'artifact.executionReport.failureCode',
+          'artifact.executionReport.expected',
+          'artifact.executionReport.actual',
+          'artifact.executionReport.stackTrace',
+        ];
+        for (const key of keys) {
+          assert.ok(typeof bundleEn[key] === 'string' && (bundleEn[key] as string).length > 0, `Expected en key: ${key}`);
+          assert.ok(typeof bundleJa[key] === 'string' && (bundleJa[key] as string).length > 0, `Expected ja key: ${key}`);
+        }
+      });
     });
   });
 });

@@ -19,6 +19,9 @@ export interface TestCaseInfo {
 
 export interface TestResultFile {
   timestamp?: number;
+  platform?: string;
+  arch?: string;
+  nodeVersion?: string;
   vscodeVersion?: string;
   failures?: number;
   passes?: number;
@@ -111,6 +114,51 @@ function normalizeLauncher(value: string | undefined): VscodeTestLauncher | unde
 function normalizeLocale(value: string | undefined): string {
   const v = (value ?? '').trim();
   return v.length > 0 ? v : DEFAULT_VSCODE_TEST_LOCALE;
+}
+
+/**
+ * 環境変数 `DONTFORGETEST_TEST_RESULT_FILE` で指定された、テスト結果ファイルパスのオーバーライドを解決する。
+ *
+ * - 絶対パスが指定された場合は、そのまま返す（呼び出し元の意図を尊重する）。
+ * - 相対パスが指定された場合は `baseDir` を基準に絶対パスへ解決し、`baseDir` 配下に収まることを検証する。
+ *   `../` などで `baseDir` の外部を参照し得る指定（パストラバーサル）を検出した場合は Error を投げる。
+ *
+ * @param envValue - 環境変数の値（未設定/空白のみの場合は undefined 相当）
+ * @param baseDir - 相対パスの基準ディレクトリ
+ * @returns 解決されたファイルパス、または未指定の場合は undefined
+ * @throws {Error} 相対パス指定が `baseDir` の外部を参照する場合
+ */
+function resolveTestResultFilePathOverride(envValue: string | undefined, baseDir: string): string | undefined {
+  const raw = envValue?.trim();
+  if (!raw) {
+    return undefined;
+  }
+
+  // NOTE:
+  // 絶対パスは「指定された場所に出力/読み取りたい」という意図を尊重し、範囲チェックは行わない。
+  if (path.isAbsolute(raw)) {
+    return raw;
+  }
+
+  const candidate = path.resolve(baseDir, raw);
+  const normalizedCandidate = path.resolve(candidate);
+  const normalizedBase = path.resolve(baseDir);
+
+  // パストラバーサル対策として、解決されたパスが baseDir 配下に収まっていることを確認する。
+  // startsWith 比較は部分一致（/base と /base2 等）を避けるため、末尾 path.sep を付与して比較する。
+  const isWindows = process.platform === 'win32';
+  const baseForCompare = isWindows ? normalizedBase.toLowerCase() : normalizedBase;
+  const candidateForCompare = isWindows ? normalizedCandidate.toLowerCase() : normalizedCandidate;
+  const baseWithSep = baseForCompare.endsWith(path.sep) ? baseForCompare : `${baseForCompare}${path.sep}`;
+
+  const isInsideBase =
+    candidateForCompare === baseForCompare || candidateForCompare.startsWith(baseWithSep);
+
+  if (!isInsideBase) {
+    throw new Error(`テスト結果ファイルパスが許可された範囲外です: ${raw} (baseDir=${normalizedBase})`);
+  }
+
+  return candidate;
 }
 
 function sleepMs(ms: number): Promise<void> {
@@ -755,6 +803,10 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
   try {
     // 拡張機能のパス
     const sourceExtensionRoot = path.resolve(__dirname, '../../');
+    const testResultFilePathOverride = resolveTestResultFilePathOverride(
+      deps.env.DONTFORGETEST_TEST_RESULT_FILE,
+      sourceExtensionRoot,
+    );
 
     // VS Code拡張機能テストは別プロセス（Electron/Extension Host）を起動する。
     // 実行中のIDE（Cursor/VS Code）と user-data / extensions が衝突すると不安定になり得るため、
@@ -829,7 +881,7 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
       const testWorkspace = path.join(runtimeRoot, 'workspace', runId);
       // open 起動でも確実に参照できるよう、ワークスペース直下に結果ファイルを置く
       // （suite 側は workspaceRoot を優先して .vscode-test/test-result.json に書く）
-      const testResultFilePath = path.join(testWorkspace, '.vscode-test', 'test-result.json');
+      const testResultFilePath = testResultFilePathOverride ?? path.join(testWorkspace, '.vscode-test', 'test-result.json');
 
       lastUserDataDir = userDataDir;
       lastTestResultFilePath = testResultFilePath;
@@ -962,6 +1014,7 @@ export const __test__ = {
   selectLauncher,
   normalizeLauncher,
   normalizeLocale,
+  resolveTestResultFilePathOverride,
   sleepMs,
   fileExists,
   waitForFile,
