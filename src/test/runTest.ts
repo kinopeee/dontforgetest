@@ -536,8 +536,6 @@ export async function stageExtensionToTemp(params: {
     { src: path.join(params.sourceExtensionRoot, 'package.nls.ja.json'), dest: path.join(params.stageExtensionRoot, 'package.nls.ja.json') },
     // runtime ローカライズ（vscode.l10n.t 用）
     { src: path.join(params.sourceExtensionRoot, 'l10n'), dest: path.join(params.stageExtensionRoot, 'l10n') },
-    // パッケージング除外設定（テストでの検証用）
-    { src: path.join(params.sourceExtensionRoot, '.vscodeignore'), dest: path.join(params.stageExtensionRoot, '.vscodeignore') },
   ];
 
   // 必須ファイルは事前に存在確認し、欠落があれば cp ループに入る前に ENOENT を投げる（部分的コピーを避ける）
