@@ -10,6 +10,7 @@ Cursor CLI（cursor-agent）をヘッドレスモードで非同期呼び出し�
 - **ランタイム**: Node.js
 - **ターゲット**: Cursor（VS Code 1.85.0+ 互換）
 - **ビルド**: tsc (TypeScript Compiler)
+- **テスト/カバレッジ**: c8
 - **出力先**: `out/` ディレクトリ
 
 ## プロジェクト構造
