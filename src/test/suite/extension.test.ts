@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { initializeProgressTreeView, _resetForTesting as resetProgressTreeView } from '../../ui/progressTreeView';
 import { initializeOutputTreeView } from '../../ui/outputTreeView';
+import { createMockExtensionContext } from './testUtils/vscodeMocks';
 
 suite('src/extension.ts', () => {
   suite('Extension Activation', () => {
@@ -1454,7 +1455,6 @@ suite('src/extension.ts', () => {
     // Then: ID matches 'kinopeee.dontforgetest.test'
     test('TC-N-05: createMockExtensionContext returns correct extension ID', () => {
       // Given: Mock context
-      const { createMockExtensionContext } = require('./testUtils/vscodeMocks');
       const context = createMockExtensionContext();
 
       // When & Then: ID matches 'kinopeee.dontforgetest.test'

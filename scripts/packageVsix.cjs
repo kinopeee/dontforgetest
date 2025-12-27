@@ -14,7 +14,6 @@ const { spawnSync } = require('child_process');
 
 const repoRoot = path.resolve(__dirname, '..');
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require(path.join(repoRoot, 'package.json'));
 
 const version = typeof pkg?.version === 'string' ? pkg.version : '';
@@ -24,7 +23,8 @@ if (!version) {
   process.exit(1);
 }
 
-const outFilePath = path.join(repoRoot, `dontforgetest-${version}.vsix`);
+const packageName = typeof pkg?.name === 'string' && pkg.name.trim() !== '' ? pkg.name.trim() : 'extension';
+const outFilePath = path.join(repoRoot, `${packageName}-${version}.vsix`);
 
 const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const args = ['--yes', '@vscode/vsce', 'package', '--out', outFilePath, '--no-rewrite-relative-links'];
