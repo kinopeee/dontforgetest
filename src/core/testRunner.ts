@@ -2,6 +2,12 @@ import { spawn } from 'child_process';
 import { nowMs } from './event';
 import { type TestExecutionResult } from './artifacts';
 
+/**
+ * テスト実行時に収集する stdout/stderr の最大バイト数（UTF-8文字列として保持するため、実際のバイト数とは厳密一致しない）。
+ * 既定値は 5MB。
+ */
+export const MAX_CAPTURE_BYTES = 5 * 1024 * 1024;
+
 export interface RunTestCommandOptions {
   command: string;
   cwd: string;
@@ -16,7 +22,7 @@ export interface RunTestCommandOptions {
  */
 export async function runTestCommand(options: RunTestCommandOptions): Promise<TestExecutionResult> {
   const startedAt = nowMs();
-  const maxCaptureBytes = 5 * 1024 * 1024;
+  const maxCaptureBytes = MAX_CAPTURE_BYTES;
   const env = options.env ? { ...process.env, ...options.env } : process.env;
 
   let stdout = '';

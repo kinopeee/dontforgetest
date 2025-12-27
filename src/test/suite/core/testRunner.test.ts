@@ -1,12 +1,14 @@
 import * as assert from 'assert';
-import { runTestCommand } from '../../../core/testRunner';
+import { MAX_CAPTURE_BYTES, runTestCommand } from '../../../core/testRunner';
 
 suite('core/testRunner.ts', () => {
   const cwd = process.cwd();
-  const maxCaptureBytes = 5 * 1024 * 1024;
+  const maxCaptureBytes = MAX_CAPTURE_BYTES;
   const nodeExecutable = process.execPath.includes(' ') ? `"${process.execPath}"` : process.execPath;
   const quoteDouble = (value: string): string => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
   const nodeEval = (code: string): string => `${nodeExecutable} -e ${quoteDouble(code)}`;
+  const looksLikeCommandNotFoundMessage = (text: string): boolean =>
+    /not found|command not found|enoent|no such file|cannot find|is not recognized/i.test(text);
 
   // TC-RUN-01
   test('TC-RUN-01: runs a successful command and captures stdout/stderr', async () => {
@@ -30,8 +32,13 @@ suite('core/testRunner.ts', () => {
     // When: runTestCommand is called
     const result = await runTestCommand({ command, cwd });
 
-    // Then: Either exitCode is non-zero or errorMessage is provided
+    // Then: Either exitCode is non-zero or errorMessage is provided, and message looks like "command not found"
     assert.ok(result.exitCode !== 0 || result.errorMessage !== undefined, 'Should fail or return an errorMessage');
+    const combined = `${result.errorMessage ?? ''}\n${result.stderr ?? ''}\n${result.stdout ?? ''}`;
+    assert.ok(
+      combined.includes(command) || looksLikeCommandNotFoundMessage(combined),
+      'Error output should include the command name or a "command not found" like message',
+    );
   });
 
   // TC-RUN-03
@@ -87,6 +94,11 @@ suite('core/testRunner.ts', () => {
     assert.ok(
       result.exitCode !== 0 || (typeof result.errorMessage === 'string' && result.errorMessage.trim().length > 0),
       'Should fail or set errorMessage',
+    );
+    const combined = `${result.errorMessage ?? ''}\n${result.stderr ?? ''}\n${result.stdout ?? ''}`;
+    assert.ok(
+      combined.includes(command) || looksLikeCommandNotFoundMessage(combined),
+      'Error output should include the command name or a "command not found" like message',
     );
     assert.strictEqual(result.executionRunner, 'extension', 'executionRunner should remain extension');
   });

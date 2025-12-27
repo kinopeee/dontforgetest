@@ -2328,8 +2328,8 @@ suite('test/runTest.ts', () => {
     // TC-RESFILE-N-01: resolveTestResultFilePathOverride absolute
     test('TC-RESFILE-N-01: resolveTestResultFilePathOverride は絶対パスをそのまま返す', () => {
       // Given: 絶対パス
-      const input = '/tmp/test-result.json';
-      const baseDir = '/base';
+      const input = path.join(os.tmpdir(), 'test-result.json');
+      const baseDir = path.join(os.tmpdir(), 'base');
 
       // When: resolveTestResultFilePathOverride を呼ぶ
       const result = resolveTestResultFilePathOverride(input, baseDir);
@@ -2342,7 +2342,7 @@ suite('test/runTest.ts', () => {
     test('TC-RESFILE-N-02: resolveTestResultFilePathOverride は相対パスを baseDir で解決する', () => {
       // Given: 相対パス
       const input = 'reports/test-result.json';
-      const baseDir = '/base';
+      const baseDir = path.join(os.tmpdir(), 'base');
 
       // When: resolveTestResultFilePathOverride を呼ぶ
       const result = resolveTestResultFilePathOverride(input, baseDir);
@@ -2355,7 +2355,7 @@ suite('test/runTest.ts', () => {
     test('TC-RESFILE-B-01: resolveTestResultFilePathOverride は空白のみで undefined を返す', () => {
       // Given: 空白のみ
       const input = '   ';
-      const baseDir = '/base';
+      const baseDir = path.join(os.tmpdir(), 'base');
 
       // When: resolveTestResultFilePathOverride を呼ぶ
       const result = resolveTestResultFilePathOverride(input, baseDir);

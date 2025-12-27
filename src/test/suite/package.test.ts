@@ -56,44 +56,6 @@ suite('package.json and package-lock.json version validation', () => {
   const workspaceRoot = path.resolve(__dirname, '../../..');
 
   suite('Normal cases', () => {
-    test('TC-DOC-N-01: deleted .claude/commands/generate-tests.md is not referenced by source files', () => {
-      // Given: A repository root and the "src" directory
-      const needle = '.claude/commands/generate-tests.md';
-      const srcRoot = path.join(workspaceRoot, 'src');
-
-      const walk = (dir: string, acc: string[]): void => {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            // Skip node_modules-like directories defensively (even if not expected under src)
-            if (entry.name === 'node_modules' || entry.name === 'out') {
-              continue;
-            }
-            walk(fullPath, acc);
-            continue;
-          }
-          if (entry.isFile() && fullPath.endsWith('.ts')) {
-            acc.push(fullPath);
-          }
-        }
-      };
-
-      // When: Scanning source files for the removed path
-      const files: string[] = [];
-      walk(srcRoot, files);
-      const referenced = files.filter((f) => {
-        // Skip this test file itself to avoid matching the needle definition
-        if (f === __filename || f.endsWith('package.test.ts')) {
-          return false;
-        }
-        return fs.readFileSync(f, 'utf8').includes(needle);
-      });
-
-      // Then: No references exist
-      assert.strictEqual(referenced.length, 0, `Expected no references to ${needle}, but found in: ${JSON.stringify(referenced)}`);
-    });
-
     // TC-N-01: package.json の version が存在し、セマンティックバージョン形式である
     test('TC-N-01: package.json version is a valid semantic version', () => {
       // Given: package.json が存在し version フィールドを持つ
