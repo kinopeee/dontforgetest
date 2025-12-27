@@ -41,6 +41,7 @@ tsconfig.json       # TypeScript設定
 ### TypeScript
 - `strict: true` を維持
 - 型は明示的に定義（any禁止）
+- モジュールの読み込みには `import` 構文を使用（ESLint により `require()` は原則禁止）
 - `vscode` APIはimportで使用: `import * as vscode from 'vscode'`
 - バージョン番号に限らず、環境・実行時に変わり得る情報（例: ポート番号、外部コマンド/実行ファイルのパス、ファイル/ディレクトリパス、APIエンドポイント、モデル名、タイムアウト値など）のハードコードは**厳禁**（必要な場合は設定ファイル・環境変数・定数定義に集約し、参照する）
 
