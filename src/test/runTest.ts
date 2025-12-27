@@ -518,6 +518,8 @@ export async function stageExtensionToTemp(params: {
   const optionalCopyEntries: CopyEntry[] = [
     // package-lock.json は拡張機能本体の実行に必須ではないため、無い場合はスキップしてよい（テスト用の最小構成対応）
     { src: path.join(params.sourceExtensionRoot, 'package-lock.json'), dest: path.join(params.stageExtensionRoot, 'package-lock.json') },
+    // .vscodeignore はパッケージング用だが、メタデータ検証系のテストで参照するため可能なら退避する
+    { src: path.join(params.sourceExtensionRoot, '.vscodeignore'), dest: path.join(params.stageExtensionRoot, '.vscodeignore') },
     // package.json のローカライズ（%key% -> package.nls*.json）
     { src: path.join(params.sourceExtensionRoot, 'package.nls.json'), dest: path.join(params.stageExtensionRoot, 'package.nls.json') },
     { src: path.join(params.sourceExtensionRoot, 'package.nls.ja.json'), dest: path.join(params.stageExtensionRoot, 'package.nls.ja.json') },
