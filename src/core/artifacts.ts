@@ -735,7 +735,7 @@ export function buildTestExecutionArtifactMarkdown(params: {
 
   // stdoutをパースしてテスト結果を抽出
   const testResult = parseMochaOutput(params.result.stdout);
-  const summarySection = buildTestSummarySection(params.result.exitCode, params.result.durationMs, testResult);
+  const summarySection = buildTestSummarySection(params.result.exitCode, params.result.durationMs, testResult, params.result.testResult);
   const failureDetailsSection = buildFailureDetailsSection(params.result.testResult);
   const detailsSection = buildTestDetailsSection(testResult);
 
@@ -872,12 +872,19 @@ function truncate(text: string, maxChars: number): string {
 /**
  * テスト結果サマリーのMarkdownを生成する。
  */
-function buildTestSummarySection(exitCode: number | null, durationMs: number, testResult: ParsedTestResult): string {
+function buildTestSummarySection(
+  exitCode: number | null,
+  durationMs: number,
+  testResult: ParsedTestResult,
+  structuredResult: TestResultFile | undefined,
+): string {
+  const summary = resolveSummaryCounts(testResult, structuredResult);
+  const hasFailedCount = summary.hasCounts && typeof summary.failed === 'number';
   // 成功判定:
   // 1. exitCode === 0 の場合は成功
-  // 2. exitCode === null でも、テスト結果がパースできて失敗数が0なら成功とみなす
+  // 2. exitCode === null でも、テスト結果が取得できて失敗数が0なら成功とみなす
   //    （VS Code 拡張機能テストでは Extension Host が別プロセスで起動するため exitCode が null になることがある）
-  const isSuccess = exitCode === 0 || (exitCode === null && testResult.parsed && testResult.failed === 0);
+  const isSuccess = exitCode === 0 || (exitCode === null && hasFailedCount && summary.failed === 0);
   const statusEmoji = isSuccess ? '✅' : '❌';
   const statusText = isSuccess ? t('artifact.executionReport.success') : t('artifact.executionReport.failure');
   const durationSec = (durationMs / 1000).toFixed(1);
@@ -889,14 +896,16 @@ function buildTestSummarySection(exitCode: number | null, durationMs: number, te
     '',
   ];
 
-  const passed = testResult.parsed ? String(testResult.passed) : '-';
-  const failed = testResult.parsed ? String(testResult.failed) : '-';
-  const total = testResult.parsed ? String(testResult.passed + testResult.failed) : '-';
+  const passed = summary.hasCounts && typeof summary.passed === 'number' ? String(summary.passed) : '-';
+  const failed = summary.hasCounts && typeof summary.failed === 'number' ? String(summary.failed) : '-';
+  const pending = summary.hasCounts && typeof summary.pending === 'number' ? String(summary.pending) : '-';
+  const total = summary.hasCounts && typeof summary.total === 'number' ? String(summary.total) : '-';
   lines.push(
     `| ${t('artifact.tableHeader.item')} | ${t('artifact.tableHeader.result')} |`,
     '|------|------|',
     `| ${t('artifact.executionReport.passed')} | ${passed} |`,
     `| ${t('artifact.executionReport.failed')} | ${failed} |`,
+    `| ${t('artifact.executionReport.pending')} | ${pending} |`,
     `| ${t('artifact.executionReport.total')} | ${total} |`,
     `| ${t('artifact.executionReport.duration')} | ${durationSec} ${t('artifact.executionReport.seconds')} |`,
     '',
@@ -995,6 +1004,61 @@ function buildTestDetailsSection(testResult: ParsedTestResult): string {
 
   lines.push('');
   return lines.join('\n');
+}
+
+type SummaryCounts = {
+  hasCounts: boolean;
+  passed?: number;
+  failed?: number;
+  pending?: number;
+  total?: number;
+};
+
+function resolveSummaryCounts(testResult: ParsedTestResult, structuredResult: TestResultFile | undefined): SummaryCounts {
+  if (structuredResult) {
+    const tests = structuredResult.tests;
+    if (Array.isArray(tests) && tests.length > 0) {
+      let passed = 0;
+      let failed = 0;
+      let pending = 0;
+      for (const t of tests) {
+        if (t.state === 'passed') {
+          passed += 1;
+          continue;
+        }
+        if (t.state === 'failed') {
+          failed += 1;
+          continue;
+        }
+        if (t.state === 'pending') {
+          pending += 1;
+        }
+      }
+      return { hasCounts: true, passed, failed, pending, total: tests.length };
+    }
+
+    const passed = typeof structuredResult.passes === 'number' ? structuredResult.passes : undefined;
+    const failed = typeof structuredResult.failures === 'number' ? structuredResult.failures : undefined;
+    const pending = typeof structuredResult.pending === 'number' ? structuredResult.pending : undefined;
+    const total = typeof structuredResult.total === 'number' ? structuredResult.total : undefined;
+
+    if (passed !== undefined || failed !== undefined || pending !== undefined || total !== undefined) {
+      const resolvedTotal =
+        total !== undefined ? total : (passed ?? 0) + (failed ?? 0) + (pending ?? 0);
+      return { hasCounts: true, passed, failed, pending, total: resolvedTotal };
+    }
+  }
+
+  if (testResult.parsed) {
+    return {
+      hasCounts: true,
+      passed: testResult.passed,
+      failed: testResult.failed,
+      total: testResult.passed + testResult.failed,
+    };
+  }
+
+  return { hasCounts: false };
 }
 
 /**

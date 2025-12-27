@@ -26,6 +26,44 @@ import { t } from '../../../core/l10n';
 suite('core/artifacts.ts', () => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
 
+  // TC-L10N-N-01
+  test('TC-L10N-N-01: l10n bundles define artifact.executionReport.pending for both en/ja with expected labels', () => {
+    // Given: l10n bundle JSON files on disk (in extension install path)
+    const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
+    assert.ok(ext, 'Extension should be installed');
+    const extensionPath = ext.extensionPath;
+    const enPath = path.join(extensionPath, 'l10n', 'bundle.l10n.json');
+    const jaPath = path.join(extensionPath, 'l10n', 'bundle.l10n.ja.json');
+
+    // When: parsing both JSON files
+    const en = JSON.parse(fs.readFileSync(enPath, 'utf8')) as Record<string, unknown>;
+    const ja = JSON.parse(fs.readFileSync(jaPath, 'utf8')) as Record<string, unknown>;
+
+    // Then: the pending key exists and resolves to expected labels
+    assert.strictEqual(en['artifact.executionReport.pending'], 'Pending');
+    assert.strictEqual(ja['artifact.executionReport.pending'], '保留');
+  });
+
+  // TC-L10N-E-01
+  test('TC-L10N-E-01: l10n JSON formatting changes still parse and existing keys remain resolvable', () => {
+    // Given: l10n bundle JSON files on disk (in extension install path)
+    const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
+    assert.ok(ext, 'Extension should be installed');
+    const extensionPath = ext.extensionPath;
+    const enPath = path.join(extensionPath, 'l10n', 'bundle.l10n.json');
+    const jaPath = path.join(extensionPath, 'l10n', 'bundle.l10n.ja.json');
+
+    // When: parsing both JSON files
+    const en = JSON.parse(fs.readFileSync(enPath, 'utf8')) as Record<string, unknown>;
+    const ja = JSON.parse(fs.readFileSync(jaPath, 'utf8')) as Record<string, unknown>;
+
+    // Then: parsing succeeds and existing keys (e.g., duration) are still present with non-empty strings
+    assert.strictEqual(typeof en['artifact.executionReport.duration'], 'string');
+    assert.ok((en['artifact.executionReport.duration'] as string).length > 0, 'en duration is non-empty');
+    assert.strictEqual(typeof ja['artifact.executionReport.duration'], 'string');
+    assert.ok((ja['artifact.executionReport.duration'] as string).length > 0, 'ja duration is non-empty');
+  });
+
   // TC-ART-01: 設定値の取得
   test('TC-ART-01: 設定値がデフォルトまたは設定通りに取得できる', () => {
     // Given: package.json のデフォルト設定、または現在の設定
@@ -649,6 +687,7 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes(`| ${t('artifact.tableHeader.item')} | ${t('artifact.tableHeader.result')} |`), 'Summary table header is present');
     assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 2 |`), 'Passed count is shown');
     assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending count shows "-"');
     assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 2 |`), 'Total count is shown');
     assert.ok(md.includes(`| ${t('artifact.executionReport.suite')} | ${t('artifact.executionReport.testName')} | ${t('artifact.executionReport.result')} |`), 'Details table header is present');
     assert.ok(md.includes('test case 1'), 'Test case 1 is in details');
@@ -726,6 +765,37 @@ suite('core/artifacts.ts', () => {
     assert.ok(testRows.length <= 2, 'No test case rows in details table');
   });
 
+  // TC-REPORT-N-06: TestExecutionResult with structured pending counts
+  test('TC-REPORT-N-06: buildTestExecutionArtifactMarkdown uses structured counts including pending when testResult is available', () => {
+    // Given: Structured testResult with pending counts
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['test.ts'],
+      result: {
+        command: 'npm test',
+        cwd: '/tmp',
+        exitCode: 1,
+        signal: null,
+        durationMs: 1000,
+        stdout: '',
+        stderr: '',
+        testResult: {
+          passes: 1,
+          failures: 1,
+          pending: 2,
+          total: 4,
+        },
+      },
+    });
+
+    // Then: Summary uses structured counts
+    assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 1 |`), 'Passed count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 1 |`), 'Failed count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | 2 |`), 'Pending count is shown');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 4 |`), 'Total count is shown');
+  });
+
   // TC-REPORT-N-04: TestExecutionResult with parsed=false
   test('TC-REPORT-N-04: buildTestExecutionArtifactMarkdown generates report with summary table showing "-" for all counts when parsed=false', () => {
     // Given: TestExecutionResult with unparseable stdout (parsed=false)
@@ -748,7 +818,444 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes(`| ${t('artifact.tableHeader.item')} | ${t('artifact.tableHeader.result')} |`), 'Summary table header is present');
     assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed shows "-"');
     assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | - |`), 'Failed shows "-"');
+    assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending shows "-"');
     assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | - |`), 'Total shows "-"');
+  });
+
+  suite('buildTestExecutionArtifactMarkdown (summary counts resolution)', () => {
+    // TC-ART-N-01
+    test('TC-ART-N-01: shows parsed counts and success status when exitCode=0 and stdout is parseable', () => {
+      // Given: exitCode=0 and parseable stdout (passed=2, failed=0) with no structured result
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs: 1000,
+          stdout: '  ✔ test case 1\n  ✔ test case 2',
+          stderr: '',
+        },
+      });
+
+      // When: markdown is generated
+      // Then: summary uses parsed counts and status is success
+      assert.ok(md.includes(`✅ **${t('artifact.executionReport.success')}** (exitCode: 0)`), 'Status is success');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 2 |`), 'Passed=2');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 2 |`), 'Total=2');
+    });
+
+    // TC-ART-N-02
+    test('TC-ART-N-02: shows failure status when exitCode!=0 even if stdout is parseable', () => {
+      // Given: exitCode=1 and parseable stdout (passed=2, failed=1) with no structured result
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: '  ✔ test case 1\n  ✔ test case 2\n  1) test case 3\n  ✖',
+          stderr: '',
+        },
+      });
+
+      // When: markdown is generated
+      // Then: failed count is shown and status is failure due to exitCode
+      assert.ok(md.includes(`❌ **${t('artifact.executionReport.failure')}** (exitCode: 1)`), 'Status is failure');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 1 |`), 'Failed=1');
+    });
+
+    // TC-ART-E-01
+    test('TC-ART-E-01: treats exitCode=null as success when failed count is known and zero (parsed stdout only)', () => {
+      // Given: exitCode=null and parseable stdout (failed=0) with no structured result
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: '  ✔ test case 1',
+          stderr: '',
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is success and counts are shown (not "-")
+      assert.ok(md.includes(`✅ **${t('artifact.executionReport.success')}** (exitCode: null)`), 'Status is success');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 1 |`), 'Total=1');
+    });
+
+    // TC-ART-E-02
+    test('TC-ART-E-02: treats exitCode=null as failure when counts are unknown (stdout not parseable, no structured result)', () => {
+      // Given: exitCode=null and non-parseable stdout, with no structured result
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is failure and all counts are "-"
+      assert.ok(md.includes(`❌ **${t('artifact.executionReport.failure')}** (exitCode: null)`), 'Status is failure');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | - |`), 'Failed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | - |`), 'Total="-"');
+    });
+
+    // TC-ART-N-03
+    test('TC-ART-N-03: uses structured numeric fields for counts (including pending) even when stdout is empty', () => {
+      // Given: structured result with numeric fields and empty stdout
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: '',
+          stderr: '',
+          testResult: { passes: 1, failures: 1, pending: 2, total: 4 },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: structured counts are shown
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 1 |`), 'Passed=1');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 1 |`), 'Failed=1');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | 2 |`), 'Pending=2');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 4 |`), 'Total=4');
+    });
+
+    // TC-ART-N-04
+    test('TC-ART-N-04: prefers structured tests[] aggregation over numeric fields', () => {
+      // Given: structured result with tests[] and conflicting numeric fields
+      const structuredResult = {
+        tests: [{ state: 'passed' }, { state: 'failed' }, { state: 'pending' }, { state: 'pending' }],
+        passes: 999,
+        failures: 999,
+        pending: 999,
+        total: 999,
+      } as unknown as TestResultFile;
+
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+          testResult: structuredResult,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: tests[] aggregation is used
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 1 |`), 'Passed=1 from tests[]');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 1 |`), 'Failed=1 from tests[]');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | 2 |`), 'Pending=2 from tests[]');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 4 |`), 'Total=4 from tests[] length');
+      assert.ok(!md.includes(`| ${t('artifact.executionReport.passed')} | 999 |`), 'Numeric fields are not used when tests[] exists');
+    });
+
+    // TC-ART-B-01
+    test('TC-ART-B-01: ignores empty tests[] and falls back to parsed stdout counts', () => {
+      // Given: structured result with tests:[] (empty) and parseable stdout
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs: 1000,
+          stdout: '  ✔ test case 1\n  ✔ test case 2',
+          stderr: '',
+          testResult: { tests: [] } as unknown as TestResultFile,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: parsed counts are used and pending is "-"
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 2 |`), 'Passed=2 from parsed stdout');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed=0 from parsed stdout');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 2 |`), 'Total=2 from parsed stdout');
+    });
+
+    // TC-ART-B-02
+    test('TC-ART-B-02: shows "-" for all counts when tests[] is empty and stdout is not parseable (no numeric fields)', () => {
+      // Given: structured result with tests:[] (empty) and non-parseable stdout
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+          testResult: { tests: [] } as unknown as TestResultFile,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: counts are unknown and rendered as "-"
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | - |`), 'Failed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | - |`), 'Total="-"');
+    });
+
+    // TC-ART-B-03
+    test('TC-ART-B-03: renders zero counts from structured numeric fields and treats exitCode=0 as success', () => {
+      // Given: structured result with all counts set to 0 and exitCode=0
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+          testResult: { passes: 0, failures: 0, pending: 0, total: 0 },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is success and all counts are "0"
+      assert.ok(md.includes(`✅ **${t('artifact.executionReport.success')}** (exitCode: 0)`), 'Status is success');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 0 |`), 'Passed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | 0 |`), 'Pending=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 0 |`), 'Total=0');
+    });
+
+    // TC-ART-B-04
+    test('TC-ART-B-04: treats exitCode=null as success when structured failed=0 and total is non-zero', () => {
+      // Given: exitCode=null and structured counts with failed=0 and total=1
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: '',
+          stderr: '',
+          testResult: { passes: 0, failures: 0, pending: 0, total: 1 },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is success and total is shown
+      assert.ok(md.includes(`✅ **${t('artifact.executionReport.success')}** (exitCode: null)`), 'Status is success');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 1 |`), 'Total=1');
+    });
+
+    // TC-ART-B-05
+    test('TC-ART-B-05: treats exitCode=null as failure when structured failed is negative (min-1) and shows the negative value', () => {
+      // Given: exitCode=null and structured failed=-1
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: '',
+          stderr: '',
+          testResult: { passes: 0, failures: -1, pending: 0, total: 0 },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is failure and failed=-1 is shown (no validation)
+      assert.ok(md.includes(`❌ **${t('artifact.executionReport.failure')}** (exitCode: null)`), 'Status is failure');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | -1 |`), 'Failed=-1');
+    });
+
+    // TC-ART-B-06
+    test('TC-ART-B-06: renders MAX_SAFE_INTEGER counts as strings without rounding and treats exitCode=null as success when failed=0', () => {
+      // Given: structured counts at Number.MAX_SAFE_INTEGER and exitCode=null with failed=0
+      const max = Number.MAX_SAFE_INTEGER;
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: '',
+          stderr: '',
+          testResult: { passes: max, failures: 0, pending: 0, total: max },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: huge numbers are rendered as exact strings and status is success
+      assert.ok(md.includes(`✅ **${t('artifact.executionReport.success')}** (exitCode: null)`), 'Status is success');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | ${String(max)} |`), 'Passed is exact');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | ${String(max)} |`), 'Total is exact');
+    });
+
+    // TC-ART-E-03
+    test('TC-ART-E-03: derives total from passes+failures+pending when structured total is missing', () => {
+      // Given: structured counts without total (total is undefined)
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: '',
+          stderr: '',
+          testResult: { passes: 1, failures: 0, pending: 0 },
+        },
+      });
+
+      // When: markdown is generated
+      // Then: total is derived as 1
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 1 |`), 'Total=1 is derived');
+    });
+
+    // TC-ART-E-04
+    test('TC-ART-E-04: structured invalid type (passes as string) does not populate passed count, and does not fall back to parsed stdout if other structured numeric fields exist', () => {
+      // Given: structuredResult.passes is a string (invalid), but failures/pending are numeric (0); stdout is parseable
+      const structuredResult = { passes: '1', failures: 0, pending: 0, total: undefined } as unknown as TestResultFile;
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 0,
+          signal: null,
+          durationMs: 1000,
+          stdout: '  ✔ test case 1\n  ✔ test case 2',
+          stderr: '',
+          testResult: structuredResult,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: passed is "-" (invalid structured type), and total is derived from structured fields (0) rather than parsed stdout
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed is "-" due to invalid structured type');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 0 |`), 'Total derives from structured numeric fields');
+    });
+
+    // TC-ART-E-05
+    test('TC-ART-E-05: ignores unknown/undefined tests[].state values and still shows Total=tests.length with 0 counts', () => {
+      // Given: structured tests[] with invalid states and non-parseable stdout
+      const structuredResult = {
+        tests: [{ state: 'unknown' }, { state: undefined }],
+      } as unknown as TestResultFile;
+
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: 1,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+          testResult: structuredResult,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: Passed/Failed/Pending are 0 and Total is 2
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | 0 |`), 'Passed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | 0 |`), 'Failed=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | 0 |`), 'Pending=0');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | 2 |`), 'Total=2');
+    });
+
+    // TC-ART-B-07
+    test('TC-ART-B-07: treats structuredResult=null as missing and shows failure with "-" counts when stdout is not parseable and exitCode=null', () => {
+      // Given: structuredResult=null (runtime edge), stdout not parseable, exitCode=null
+      const md = buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: ['test.ts'],
+        result: {
+          command: 'npm test',
+          cwd: '/tmp',
+          exitCode: null,
+          signal: null,
+          durationMs: 1000,
+          stdout: 'not mocha output',
+          stderr: '',
+          testResult: null as unknown as TestResultFile,
+        },
+      });
+
+      // When: markdown is generated
+      // Then: status is failure and counts are unknown ("-")
+      assert.ok(md.includes(`❌ **${t('artifact.executionReport.failure')}** (exitCode: null)`), 'Status is failure');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.passed')} | - |`), 'Passed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.failed')} | - |`), 'Failed="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.pending')} | - |`), 'Pending="-"');
+      assert.ok(md.includes(`| ${t('artifact.executionReport.total')} | - |`), 'Total="-"');
+    });
   });
 
   // TC-B-07: buildTestExecutionArtifactMarkdown with durationMs = 0
