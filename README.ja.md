@@ -1,4 +1,4 @@
-# テスト生成エージェント（Dontforgetest）
+# Dontforgetest
 
 **Don't forget test!** — コミット差分から、ワンクリックでテストを自動生成。
 
