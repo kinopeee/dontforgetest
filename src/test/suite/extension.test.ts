@@ -299,7 +299,7 @@ suite('src/extension.ts', () => {
       // NOTE:
       // `npm run test:ja` / `npm run test:en` のいずれでも、本テスト環境では
       // displayName は英語（package.nls.json）に解決されるため、英語値を期待する。
-      assert.strictEqual(pkg.displayName, 'Test Generation Agent (Dontforgetest)');
+      assert.strictEqual(pkg.displayName, 'Dontforgetest (Test Generation Agent)');
     });
   });
 

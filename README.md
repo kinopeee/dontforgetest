@@ -1,4 +1,4 @@
-# Test Generation Agent (Dontforgetest)
+# Dontforgetest
 
 **Don't forget test!** — One-click, commit-based test generation for Cursor.
 
