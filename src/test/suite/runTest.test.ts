@@ -2854,6 +2854,14 @@ suite('test/runTest.ts', () => {
       assert.ok(logs[1]?.includes('boom'), 'エラーが出る');
     });
 
+    // Test Perspectives Table for selectLauncher (coverage-aware on darwin)
+    // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+    // |---------|----------------------|--------------------------------------|-----------------|-------|
+    // | TC-LAUNCH-COV-N-01 | preferDirectOnDarwin=true, platform=darwin, attemptIndex=0, defaultLauncher=direct | Equivalence – normal | Returns direct | min/max/±1 not applicable |
+    // | TC-LAUNCH-COV-E-01 | preferDirectOnDarwin=true, platform=darwin, attemptIndex=1, defaultLauncher=direct | Equivalence – error | Returns open (fallback) | Confirms retry toggle still works |
+    // | TC-LAUNCH-COV-E-02 | preferDirectOnDarwin=true, pinnedLauncher=open | Equivalence – error | Returns pinned open | Pinned overrides coverage preference |
+    // | TC-LAUNCH-COV-B-01 | preferDirectOnDarwin=false, platform=darwin | Boundary – default | Returns open | Covered by existing TC-B-17 |
+
     // TC-N-19: selectLauncher pinned
     test('TC-N-19: selectLauncher は pinnedLauncher を優先する', () => {
       // Given: pinnedLauncher 指定
@@ -2897,6 +2905,51 @@ suite('test/runTest.ts', () => {
 
       // When/Then: direct が返る
       assert.strictEqual(result, 'direct', '2回目は direct');
+    });
+
+    test('TC-LAUNCH-COV-N-01: selectLauncher prefers direct on darwin when coverage is enabled', () => {
+      // Given: preferDirectOnDarwin=true on darwin
+      const result = selectLauncher({
+        pinnedLauncher: undefined,
+        platform: 'darwin',
+        attemptIndex: 0,
+        defaultLauncher: 'direct',
+        preferDirectOnDarwin: true,
+      });
+
+      // When: selectLauncher is called
+      // Then: direct is returned
+      assert.strictEqual(result, 'direct', 'coverage prefers direct on darwin');
+    });
+
+    test('TC-LAUNCH-COV-E-01: selectLauncher still toggles to open on retry when coverage is enabled', () => {
+      // Given: preferDirectOnDarwin=true with retry attempt
+      const result = selectLauncher({
+        pinnedLauncher: undefined,
+        platform: 'darwin',
+        attemptIndex: 1,
+        defaultLauncher: 'direct',
+        preferDirectOnDarwin: true,
+      });
+
+      // When: selectLauncher is called
+      // Then: open is returned for fallback
+      assert.strictEqual(result, 'open', 'retry toggles to open');
+    });
+
+    test('TC-LAUNCH-COV-E-02: selectLauncher respects pinned open even when coverage is enabled', () => {
+      // Given: pinnedLauncher=open with coverage preference
+      const result = selectLauncher({
+        pinnedLauncher: 'open',
+        platform: 'darwin',
+        attemptIndex: 0,
+        defaultLauncher: 'direct',
+        preferDirectOnDarwin: true,
+      });
+
+      // When: selectLauncher is called
+      // Then: pinned open is returned
+      assert.strictEqual(result, 'open', 'pinned launcher overrides coverage preference');
     });
 
     // TC-N-20: buildLaunchArgs

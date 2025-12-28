@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { ensurePreflight } from '../../../core/preflight';
 
@@ -224,6 +225,253 @@ suite('core/preflight.ts', () => {
       } finally {
         await config.update('testStrategyPath', originalPath, vscode.ConfigurationTarget.Workspace);
       }
+    });
+
+    // Test Perspectives Table for ensurePreflight (deterministic coverage)
+    // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+    // |---------|----------------------|--------------------------------------|-----------------|-------|
+    // | TC-PF-DET-N-01 | testStrategyPath points to existing file; cursorAgentPath=process.execPath | Equivalence – normal | Returns PreflightOk with testStrategyPath preserved and cursorAgentCommand set; no warning | Numeric boundaries not applicable; empty/null handled in TC-PF-01/04 |
+    // | TC-PF-DET-E-01 | testStrategyPath points to missing file; cursorAgentPath=process.execPath | Error – missing file | showWarningMessage called with path; PreflightOk.testStrategyPath="" | Empty file path is covered elsewhere |
+    // | TC-PF-DET-E-02 | cursorAgentPath missing; VSCODE_TEST_RUNNER=1 | Error – command not found | showErrorMessage called and ensurePreflight returns undefined | Avoids blocking UI in test runner |
+    // | TC-PF-DET-E-03 | cursorAgentPath missing; VSCODE_TEST_RUNNER unset; user picks first action | Error – command not found | executeCommand called to open settings; returns undefined | items[0] is openSettings |
+    // | TC-PF-DET-E-04 | cursorAgentPath missing; VSCODE_TEST_RUNNER unset; user picks second action | Error – command not found | openExternal called with docs URL; returns undefined | items[1] is openDocs |
+    suite('ensurePreflight deterministic coverage', () => {
+      let originalShowWarningMessage: typeof vscode.window.showWarningMessage;
+      let originalShowErrorMessage: typeof vscode.window.showErrorMessage;
+      let originalExecuteCommand: typeof vscode.commands.executeCommand;
+      let originalOpenExternal: typeof vscode.env.openExternal;
+
+      let warningMessages: string[] = [];
+      let errorCalls: Array<{ message: string; items: string[] }> = [];
+      let executeCommands: Array<{ command: string; args: unknown[] }> = [];
+      let openExternalUris: vscode.Uri[] = [];
+      let selectErrorAction: ((items: string[]) => string | undefined) | undefined;
+
+      setup(() => {
+        warningMessages = [];
+        errorCalls = [];
+        executeCommands = [];
+        openExternalUris = [];
+        selectErrorAction = undefined;
+
+        originalShowWarningMessage = vscode.window.showWarningMessage;
+        originalShowErrorMessage = vscode.window.showErrorMessage;
+        originalExecuteCommand = vscode.commands.executeCommand;
+        originalOpenExternal = vscode.env.openExternal;
+
+        vscode.window.showWarningMessage = (async (message: string, ..._items: unknown[]) => {
+          warningMessages.push(message);
+          return undefined;
+        }) as typeof vscode.window.showWarningMessage;
+        vscode.window.showErrorMessage = (async (message: string, ...items: unknown[]) => {
+          const stringItems = items.filter((item): item is string => typeof item === 'string');
+          errorCalls.push({ message, items: stringItems });
+          if (selectErrorAction) {
+            return selectErrorAction(stringItems);
+          }
+          return undefined;
+        }) as typeof vscode.window.showErrorMessage;
+        vscode.commands.executeCommand = (async (command: string, ...args: unknown[]) => {
+          executeCommands.push({ command, args });
+          return undefined;
+        }) as typeof vscode.commands.executeCommand;
+        vscode.env.openExternal = (async (uri: vscode.Uri) => {
+          openExternalUris.push(uri);
+          return true;
+        }) as typeof vscode.env.openExternal;
+      });
+
+      teardown(() => {
+        vscode.window.showWarningMessage = originalShowWarningMessage;
+        vscode.window.showErrorMessage = originalShowErrorMessage;
+        vscode.commands.executeCommand = originalExecuteCommand;
+        vscode.env.openExternal = originalOpenExternal;
+      });
+
+      test('TC-PF-DET-N-01: existing testStrategyPath returns PreflightOk without warnings', async () => {
+        // Given: Existing test strategy file and a runnable cursorAgentPath
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalPath = config.get<string>('testStrategyPath', '');
+        const originalAgentPath = config.get<string>('cursorAgentPath', '');
+
+        const tempDir = path.join(workspaceRoot, 'out', 'test-preflight');
+        const tempFile = path.join(tempDir, `strategy-${Date.now()}.md`);
+        const tempUri = vscode.Uri.file(tempFile);
+
+        try {
+          await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempDir));
+          await vscode.workspace.fs.writeFile(tempUri, Buffer.from('# test-strategy', 'utf8'));
+
+          const relativePath = path.relative(workspaceRoot, tempFile);
+          await config.update('testStrategyPath', relativePath, vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: PreflightOk is returned and no warning is shown
+          assert.ok(result, 'Expected PreflightOk result');
+          assert.strictEqual(result?.workspaceRoot, workspaceRoot);
+          assert.strictEqual(result?.testStrategyPath, relativePath);
+          assert.strictEqual(result?.cursorAgentCommand, process.execPath);
+          assert.strictEqual(warningMessages.length, 0, 'No warning should be emitted');
+        } finally {
+          await config.update('testStrategyPath', originalPath, vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+          try {
+            await vscode.workspace.fs.delete(tempUri, { useTrash: false });
+          } catch {
+            // テストの後処理失敗は無視する
+          }
+        }
+      });
+
+      test('TC-PF-DET-E-01: missing testStrategyPath emits warning and falls back', async () => {
+        // Given: Missing test strategy file and a runnable cursorAgentPath
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalPath = config.get<string>('testStrategyPath', '');
+        const originalAgentPath = config.get<string>('cursorAgentPath', '');
+        const missingPath = path.join('out', 'test-preflight', `missing-${Date.now()}.md`);
+
+        try {
+          await config.update('testStrategyPath', missingPath, vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: Warning is shown and testStrategyPath falls back to empty string
+          assert.ok(result, 'Expected PreflightOk result even when file is missing');
+          assert.strictEqual(result?.testStrategyPath, '', 'Expected fallback to built-in strategy');
+          assert.strictEqual(warningMessages.length, 1, 'Expected one warning');
+          assert.ok(warningMessages[0]?.includes(missingPath), 'Warning should include missing path');
+        } finally {
+          await config.update('testStrategyPath', originalPath, vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      test('TC-PF-DET-E-02: missing cursorAgentPath returns undefined in test runner mode', async () => {
+        // Given: Missing cursorAgentPath and VSCODE_TEST_RUNNER enabled
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalPath = config.get<string>('testStrategyPath', '');
+        const originalAgentPath = config.get<string>('cursorAgentPath', '');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const missingCommand = `dontforgetest-missing-agent-${Date.now()}`;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('testStrategyPath', '', vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: Error is shown and undefined is returned
+          assert.strictEqual(result, undefined);
+          assert.strictEqual(errorCalls.length, 1, 'Expected one error message');
+          assert.ok(errorCalls[0]?.message.includes(missingCommand), 'Error should include missing command');
+        } finally {
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
+          await config.update('testStrategyPath', originalPath, vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      test('TC-PF-DET-E-03: missing cursorAgentPath opens settings when first action is chosen', async () => {
+        // Given: Missing cursorAgentPath and user selects the first action
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalAgentPath = config.get<string>('cursorAgentPath', '');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const missingCommand = `dontforgetest-missing-agent-${Date.now()}`;
+
+        try {
+          delete process.env.VSCODE_TEST_RUNNER;
+          selectErrorAction = (items) => items[0];
+          await config.update('cursorAgentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: Settings command is executed and undefined is returned
+          assert.strictEqual(result, undefined);
+          assert.strictEqual(errorCalls.length, 1, 'Expected one error message');
+          assert.strictEqual(executeCommands.length, 1, 'Expected one command execution');
+          assert.strictEqual(executeCommands[0]?.command, 'workbench.action.openSettings');
+          assert.strictEqual(executeCommands[0]?.args[0], 'dontforgetest.cursorAgentPath');
+          assert.strictEqual(openExternalUris.length, 0, 'Docs should not be opened');
+        } finally {
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
+          await config.update('cursorAgentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      test('TC-PF-DET-E-04: missing cursorAgentPath opens docs when second action is chosen', async () => {
+        // Given: Missing cursorAgentPath and user selects the second action
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalAgentPath = config.get<string>('cursorAgentPath', '');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const missingCommand = `dontforgetest-missing-agent-${Date.now()}`;
+
+        try {
+          delete process.env.VSCODE_TEST_RUNNER;
+          selectErrorAction = (items) => items[1];
+          await config.update('cursorAgentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: Docs are opened and undefined is returned
+          assert.strictEqual(result, undefined);
+          assert.strictEqual(errorCalls.length, 1, 'Expected one error message');
+          assert.strictEqual(openExternalUris.length, 1, 'Expected one openExternal call');
+          assert.ok(
+            openExternalUris[0]?.toString().includes('cursor.com/docs/cli/overview'),
+            'Docs URL should be opened',
+          );
+          assert.strictEqual(executeCommands.length, 0, 'Settings should not be opened');
+        } finally {
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
+          await config.update('cursorAgentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
     });
   });
 });
