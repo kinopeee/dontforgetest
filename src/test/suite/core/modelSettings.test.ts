@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { getModelCandidates, normalizeModelList, getModelSettings, type ModelSettings } from '../../../core/modelSettings';
+import { getModelCandidates, normalizeModelList, getModelSettings, setDefaultModel, type ModelSettings } from '../../../core/modelSettings';
 
 suite('core/modelSettings.ts', () => {
   suite('normalizeModelList', () => {
@@ -74,6 +74,107 @@ suite('core/modelSettings.ts', () => {
       const settings = getModelSettings();
       // dontforgetest.defaultModel should be undefined (default)
       assert.strictEqual(settings.defaultModel, undefined);
+    });
+  });
+
+  suite('setDefaultModel (Deterministic)', () => {
+    // Test Perspectives Table
+    // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+    // |---------|----------------------|--------------------------------------|-----------------|-------|
+    // | TC-SDMSET-N-01 | model="  o3  " | Equivalence – normal | Calls config.update("defaultModel","o3",target) | target depends on workspaceFolders |
+    // | TC-SDMSET-B-01 | model=undefined | Boundary – null | Calls config.update("defaultModel","",target) | Clears model |
+    // | TC-SDMSET-E-01 | config.update throws | Error – exception | setDefaultModel rejects with same error | Verify message |
+    // | TC-SDMSET-E-02 | getConfiguration throws | Error – exception | setDefaultModel rejects | Verify message |
+
+    let originalGetConfiguration: typeof vscode.workspace.getConfiguration;
+    let getConfigurationShouldThrow = false;
+    let updateShouldThrow = false;
+    let updateCalls: Array<{ section: string; value: unknown; target: vscode.ConfigurationTarget | boolean | undefined }> = [];
+
+    setup(() => {
+      getConfigurationShouldThrow = false;
+      updateShouldThrow = false;
+      updateCalls = [];
+
+      originalGetConfiguration = vscode.workspace.getConfiguration;
+      (vscode.workspace as unknown as { getConfiguration: typeof vscode.workspace.getConfiguration }).getConfiguration = (_section?: string) => {
+        if (getConfigurationShouldThrow) {
+          throw new Error('getConfiguration failed');
+        }
+        return {
+          update: async (
+            section: string,
+            value: unknown,
+            target?: vscode.ConfigurationTarget | boolean,
+            _overrideInLanguage?: boolean,
+          ) => {
+            if (updateShouldThrow) {
+              throw new Error('update failed');
+            }
+            updateCalls.push({ section, value, target });
+          },
+        } as unknown as vscode.WorkspaceConfiguration;
+      };
+    });
+
+    teardown(() => {
+      (vscode.workspace as unknown as { getConfiguration: typeof originalGetConfiguration }).getConfiguration = originalGetConfiguration;
+    });
+
+    test('TC-SDMSET-N-01: setDefaultModel trims value and updates config', async () => {
+      // Given: model が前後に空白を含む
+      const expectedTarget =
+        vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+          ? vscode.ConfigurationTarget.Workspace
+          : vscode.ConfigurationTarget.Global;
+
+      // When: setDefaultModel を呼び出す
+      await setDefaultModel('  o3  ');
+
+      // Then: trimされた値で update が呼ばれる
+      assert.strictEqual(updateCalls.length, 1);
+      assert.strictEqual(updateCalls[0]?.section, 'defaultModel');
+      assert.strictEqual(updateCalls[0]?.value, 'o3');
+      assert.strictEqual(updateCalls[0]?.target, expectedTarget);
+    });
+
+    test('TC-SDMSET-B-01: setDefaultModel clears model when model is undefined', async () => {
+      // Given: model が undefined（クリア）
+      const expectedTarget =
+        vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+          ? vscode.ConfigurationTarget.Workspace
+          : vscode.ConfigurationTarget.Global;
+
+      // When: setDefaultModel を呼び出す
+      await setDefaultModel(undefined);
+
+      // Then: 空文字で update が呼ばれる（未設定扱い）
+      assert.strictEqual(updateCalls.length, 1);
+      assert.strictEqual(updateCalls[0]?.section, 'defaultModel');
+      assert.strictEqual(updateCalls[0]?.value, '');
+      assert.strictEqual(updateCalls[0]?.target, expectedTarget);
+    });
+
+    test('TC-SDMSET-E-01: setDefaultModel rejects when config.update throws', async () => {
+      // Given: update が例外を投げる
+      updateShouldThrow = true;
+
+      // When/Then: 例外が伝播する
+      await assert.rejects(
+        setDefaultModel('o3'),
+        (e: unknown) => e instanceof Error && e.message === 'update failed',
+      );
+    });
+
+    test('TC-SDMSET-E-02: setDefaultModel rejects when getConfiguration throws', async () => {
+      // Given: getConfiguration が例外を投げる
+      getConfigurationShouldThrow = true;
+
+      // When/Then: 例外が伝播する
+      await assert.rejects(
+        setDefaultModel('o3'),
+        (e: unknown) => e instanceof Error && e.message === 'getConfiguration failed',
+      );
     });
   });
 });

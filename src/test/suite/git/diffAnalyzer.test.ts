@@ -1,5 +1,6 @@
 import * as assert from 'assert';
-import { analyzeGitUnifiedDiff, extractChangedPaths, GitDiffAnalysis } from '../../../git/diffAnalyzer';
+import { analyzeGitUnifiedDiff, extractChangedPaths, getCommitRangeDiff, getWorkingTreeDiff, GitDiffAnalysis } from '../../../git/diffAnalyzer';
+import * as gitExecModule from '../../../git/gitExec';
 
 suite('git/diffAnalyzer.ts', () => {
   suite('analyzeGitUnifiedDiff', () => {
@@ -399,6 +400,154 @@ diff --git a/valid.ts b/valid.ts`;
 
       // Then: 空配列が返される
       assert.deepStrictEqual(paths, []);
+    });
+  });
+
+  suite('getCommitRangeDiff / getWorkingTreeDiff deterministic coverage', () => {
+    const workspaceRoot = process.cwd();
+
+    // Test Perspectives Table
+    // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+    // |---------|----------------------|--------------------------------------|-----------------|-------|
+    // | TC-GITDIFF-N-01 | range diff stdout ends with newline | Equivalence – normal | Returns stdout.trimEnd() and calls git diff --no-color <range> | - |
+    // | TC-WTD-N-01 | mode="staged" with trailing newline | Equivalence – normal | Returns trimmed staged diff; calls git diff --cached --no-color | - |
+    // | TC-WTD-N-02 | mode="unstaged" with trailing newline | Equivalence – normal | Returns trimmed unstaged diff; calls git diff --no-color | - |
+    // | TC-WTD-N-03 | mode="both", both non-empty | Equivalence – normal | Returns "staged\\n\\nunstaged" after trimEnd | - |
+    // | TC-WTD-B-01 | mode="both", staged empty | Boundary – empty | Returns unstaged only (no extra blank lines) | - |
+    // | TC-WTD-B-02 | mode="both", both empty | Boundary – empty | Returns empty string | - |
+    // | TC-WTD-E-01 | execGitStdout throws | Error – exception | getWorkingTreeDiff rejects with the same error | Validate type/message |
+
+    let originalExecGitStdout: typeof gitExecModule.execGitStdout;
+    let execCalls: Array<{ cwd: string; args: string[]; maxBufferBytes: number }> = [];
+    let stagedOut = '';
+    let unstagedOut = '';
+    let commitRangeOut = '';
+    let shouldThrow = false;
+
+    setup(() => {
+      execCalls = [];
+      stagedOut = '';
+      unstagedOut = '';
+      commitRangeOut = '';
+      shouldThrow = false;
+
+      originalExecGitStdout = gitExecModule.execGitStdout;
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async (
+        cwd,
+        args,
+        maxBufferBytes,
+      ) => {
+        execCalls.push({ cwd, args, maxBufferBytes });
+        if (shouldThrow) {
+          throw new Error('execGitStdout failed');
+        }
+        if (args[0] === 'diff' && args[1] === '--cached' && args[2] === '--no-color') {
+          return stagedOut;
+        }
+        if (args[0] === 'diff' && args[1] === '--no-color' && args.length === 2) {
+          return unstagedOut;
+        }
+        if (args[0] === 'diff' && args[1] === '--no-color' && args.length === 3) {
+          return commitRangeOut;
+        }
+        throw new Error(`Unexpected git args: ${args.join(' ')}`);
+      };
+    });
+
+    teardown(() => {
+      (gitExecModule as unknown as { execGitStdout: typeof originalExecGitStdout }).execGitStdout = originalExecGitStdout;
+    });
+
+    test('TC-GITDIFF-N-01: getCommitRangeDiff returns trimEnd() output and passes correct args', async () => {
+      // Given: range diff の stdout が末尾改行を含む
+      const range = 'main..HEAD';
+      commitRangeOut = 'RANGE_DIFF\n\n';
+
+      // When: getCommitRangeDiff を呼び出す
+      const result = await getCommitRangeDiff(workspaceRoot, range);
+
+      // Then: trimEnd され、git diff --no-color <range> が呼ばれる
+      assert.strictEqual(result, 'RANGE_DIFF');
+      assert.deepStrictEqual(execCalls, [
+        { cwd: workspaceRoot, args: ['diff', '--no-color', range], maxBufferBytes: 20 * 1024 * 1024 },
+      ]);
+    });
+
+    test('TC-WTD-N-01: getWorkingTreeDiff staged returns trimmed staged diff', async () => {
+      // Given: staged diff が末尾改行を含む
+      stagedOut = 'STAGED\n';
+
+      // When: staged を取得する
+      const result = await getWorkingTreeDiff(workspaceRoot, 'staged');
+
+      // Then: trimEnd された内容が返る
+      assert.strictEqual(result, 'STAGED');
+      assert.deepStrictEqual(execCalls, [
+        { cwd: workspaceRoot, args: ['diff', '--cached', '--no-color'], maxBufferBytes: 20 * 1024 * 1024 },
+      ]);
+    });
+
+    test('TC-WTD-N-02: getWorkingTreeDiff unstaged returns trimmed unstaged diff', async () => {
+      // Given: unstaged diff が末尾改行を含む
+      unstagedOut = 'UNSTAGED\n';
+
+      // When: unstaged を取得する
+      const result = await getWorkingTreeDiff(workspaceRoot, 'unstaged');
+
+      // Then: trimEnd された内容が返る
+      assert.strictEqual(result, 'UNSTAGED');
+      assert.deepStrictEqual(execCalls, [{ cwd: workspaceRoot, args: ['diff', '--no-color'], maxBufferBytes: 20 * 1024 * 1024 }]);
+    });
+
+    test('TC-WTD-N-03: getWorkingTreeDiff both joins non-empty staged+unstaged with blank line', async () => {
+      // Given: staged/unstaged が両方とも非空
+      stagedOut = 'S\n';
+      unstagedOut = 'U\n';
+
+      // When: both を取得する
+      const result = await getWorkingTreeDiff(workspaceRoot, 'both');
+
+      // Then: trimEnd 後に空行で連結される
+      assert.strictEqual(result, 'S\n\nU');
+      assert.deepStrictEqual(execCalls, [
+        { cwd: workspaceRoot, args: ['diff', '--cached', '--no-color'], maxBufferBytes: 20 * 1024 * 1024 },
+        { cwd: workspaceRoot, args: ['diff', '--no-color'], maxBufferBytes: 20 * 1024 * 1024 },
+      ]);
+    });
+
+    test('TC-WTD-B-01: getWorkingTreeDiff both omits empty staged and returns unstaged only', async () => {
+      // Given: staged が空で、unstaged のみ存在
+      stagedOut = '';
+      unstagedOut = 'U\n';
+
+      // When: both を取得する
+      const result = await getWorkingTreeDiff(workspaceRoot, 'both');
+
+      // Then: 余計な改行なしで unstaged のみが返る
+      assert.strictEqual(result, 'U');
+    });
+
+    test('TC-WTD-B-02: getWorkingTreeDiff both returns empty string when both empty', async () => {
+      // Given: staged/unstaged ともに空
+      stagedOut = '';
+      unstagedOut = '';
+
+      // When: both を取得する
+      const result = await getWorkingTreeDiff(workspaceRoot, 'both');
+
+      // Then: 空文字列が返る
+      assert.strictEqual(result, '');
+    });
+
+    test('TC-WTD-E-01: getWorkingTreeDiff rejects when execGitStdout throws', async () => {
+      // Given: execGitStdout が例外を投げる
+      shouldThrow = true;
+
+      // When/Then: 例外が伝播する
+      await assert.rejects(
+        getWorkingTreeDiff(workspaceRoot, 'staged'),
+        (e: unknown) => e instanceof Error && e.message === 'execGitStdout failed',
+      );
     });
   });
 });

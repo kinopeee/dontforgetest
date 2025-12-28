@@ -4,11 +4,132 @@ import * as path from 'path';
 import * as os from 'os';
 import { createTemporaryWorktree, removeTemporaryWorktree, type TemporaryWorktree } from '../../../git/worktreeManager';
 import { execGitStdout } from '../../../git/gitExec';
+import * as gitExecModule from '../../../git/gitExec';
 
 suite('git/worktreeManager.ts', () => {
   let tempBaseDir: string;
   let repoRoot: string;
   let isGitRepo = false;
+
+  suite('deterministic coverage (stubs)', () => {
+    // Test Perspectives Table
+    // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+    // |---------|----------------------|--------------------------------------|-----------------|-------|
+    // | TC-WTM-B-01 | ref is undefined | Boundary – null | Uses ref="HEAD" in git worktree add args | Verify args[4] === "HEAD" |
+    // | TC-WTM-B-02 | ref is whitespace | Boundary – empty | Uses ref="HEAD" (trim() -> empty -> fallback) | - |
+    // | TC-WTM-E-01 | git worktree remove/prune and fs.rm throw | Error – exception | removeTemporaryWorktree resolves (swallows errors) | Verify call order |
+
+    test('TC-WTM-B-01: createTemporaryWorktree defaults ref to HEAD when ref is undefined', async () => {
+      // Given: ref を省略し、execGitStdout をスタブする
+      const baseDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'dontforgetest-wtm-'));
+      const fakeRepoRoot = '/repo/root';
+      const taskId = 'task';
+      const expectedWorktreeDir = path.join(baseDir, 'worktrees', taskId);
+
+      const originalExecGitStdout = gitExecModule.execGitStdout;
+      const calls: Array<{ cwd: string; args: string[]; maxBufferBytes: number }> = [];
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async (
+        cwd,
+        args,
+        maxBufferBytes,
+      ) => {
+        calls.push({ cwd, args, maxBufferBytes });
+        if (args[0] === 'worktree' && args[1] === 'add') {
+          const dir = args[3] ?? '';
+          await fs.promises.mkdir(dir, { recursive: true });
+          return '';
+        }
+        throw new Error(`Unexpected git args: ${args.join(' ')}`);
+      };
+
+      try {
+        // When: createTemporaryWorktree を呼び出す（ref 省略）
+        const result = await createTemporaryWorktree({ repoRoot: fakeRepoRoot, baseDir, taskId });
+
+        // Then: ref が HEAD に正規化され、git worktree add の引数に入る
+        assert.strictEqual(result.worktreeDir, expectedWorktreeDir);
+        assert.strictEqual(fs.existsSync(expectedWorktreeDir), true, 'スタブが worktreeDir を作成する');
+        assert.strictEqual(calls.length, 1);
+        assert.deepStrictEqual(calls[0].args, ['worktree', 'add', '--detach', expectedWorktreeDir, 'HEAD']);
+        assert.strictEqual(calls[0].cwd, fakeRepoRoot);
+      } finally {
+        (gitExecModule as unknown as { execGitStdout: typeof originalExecGitStdout }).execGitStdout = originalExecGitStdout;
+        await fs.promises.rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test('TC-WTM-B-02: createTemporaryWorktree defaults ref to HEAD when ref is whitespace', async () => {
+      // Given: ref が空白のみで、execGitStdout をスタブする
+      const baseDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'dontforgetest-wtm-'));
+      const fakeRepoRoot = '/repo/root';
+      const taskId = 'task';
+      const expectedWorktreeDir = path.join(baseDir, 'worktrees', taskId);
+
+      const originalExecGitStdout = gitExecModule.execGitStdout;
+      const calls: Array<{ cwd: string; args: string[]; maxBufferBytes: number }> = [];
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async (
+        cwd,
+        args,
+        maxBufferBytes,
+      ) => {
+        calls.push({ cwd, args, maxBufferBytes });
+        if (args[0] === 'worktree' && args[1] === 'add') {
+          const dir = args[3] ?? '';
+          await fs.promises.mkdir(dir, { recursive: true });
+          return '';
+        }
+        throw new Error(`Unexpected git args: ${args.join(' ')}`);
+      };
+
+      try {
+        // When: createTemporaryWorktree を呼び出す（ref="   "）
+        const result = await createTemporaryWorktree({ repoRoot: fakeRepoRoot, baseDir, taskId, ref: '   ' });
+
+        // Then: ref は HEAD になり、git worktree add の引数に入る（trim() -> empty -> fallback）
+        assert.strictEqual(result.worktreeDir, expectedWorktreeDir);
+        assert.strictEqual(calls.length, 1);
+        assert.deepStrictEqual(calls[0].args, ['worktree', 'add', '--detach', expectedWorktreeDir, 'HEAD']);
+      } finally {
+        (gitExecModule as unknown as { execGitStdout: typeof originalExecGitStdout }).execGitStdout = originalExecGitStdout;
+        await fs.promises.rm(baseDir, { recursive: true, force: true });
+      }
+    });
+
+    test('TC-WTM-E-01: removeTemporaryWorktree swallows errors from git and fs.rm', async () => {
+      // Given: git worktree remove/prune と fs.rm が失敗する状況をスタブで再現
+      const fakeRepoRoot = '/repo/root';
+      const fakeWorktreeDir = '/worktree/dir';
+
+      const originalExecGitStdout = gitExecModule.execGitStdout;
+      const originalFsRm = fs.promises.rm;
+
+      const events: string[] = [];
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async (_cwd, args) => {
+        if (args[0] === 'worktree' && args[1] === 'remove') {
+          events.push('git-remove');
+          throw new Error('worktree remove failed');
+        }
+        if (args[0] === 'worktree' && args[1] === 'prune') {
+          events.push('git-prune');
+          throw new Error('worktree prune failed');
+        }
+        throw new Error(`Unexpected git args: ${args.join(' ')}`);
+      };
+      (fs.promises as unknown as { rm: typeof fs.promises.rm }).rm = async (_path, _options) => {
+        events.push('fs-rm');
+        throw new Error('fs rm failed');
+      };
+
+      try {
+        // When/Then: removeTemporaryWorktree は例外を握りつぶして完了する
+        await assert.doesNotReject(removeTemporaryWorktree(fakeRepoRoot, fakeWorktreeDir));
+        assert.deepStrictEqual(events, ['git-remove', 'git-prune', 'fs-rm'], '失敗しても順に試行する');
+      } finally {
+        (gitExecModule as unknown as { execGitStdout: typeof originalExecGitStdout }).execGitStdout = originalExecGitStdout;
+        (fs.promises as unknown as { rm: typeof originalFsRm }).rm = originalFsRm;
+      }
+    });
+  });
 
   suiteSetup(async () => {
     // Find the actual git repository root

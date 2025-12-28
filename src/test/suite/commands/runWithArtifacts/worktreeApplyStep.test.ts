@@ -20,6 +20,9 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
   // | TC-WA-E-03 | patchText is empty | Boundary – empty | Returns reason=empty-patch and emits info log | - |
   // | TC-WA-E-04 | genExit != 0 | Error – generation failed | Returns reason=gen-failed; showWarningMessage called | Includes untracked add -N failure path |
   // | TC-WA-E-05 | git apply --check fails | Error – apply failed | Returns reason=apply-failed; showWarningMessage called | - |
+  // | TC-WA-E-06 | git apply fails after check OK (conflict) | Error – apply conflict | Returns reason=apply-failed; persists artifacts with apply output | Verify applyCheckOutput forwarded |
+  // | TC-WA-E-07 | fs.rename fails while persisting patch | Error – rename failed | Persists patch via writeFile and removes tmp patch | Verify patch exists and tmp is removed |
+  // | TC-WA-E-08 | git diff output has no trailing newline | Boundary – formatting | Persisted patch ends with newline | Prevent "corrupt patch" |
   // | TC-WA-N-01 | git apply succeeds | Equivalence – normal | Returns applied=true, reason=applied; showInformationMessage called | - |
   suite('applyWorktreeTestChanges deterministic coverage', () => {
     let originalExecGitStdout: typeof gitExecModule.execGitStdout;
@@ -44,6 +47,7 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
     let appendEventCalls: Array<unknown> = [];
     let warningMessages: Array<{ message: string; items: string[] }> = [];
     let infoMessages: string[] = [];
+    let lastInstructionParams: mergeAssistanceModule.MergeAssistancePromptParams | undefined = undefined;
 
     const baseTmpDir = path.join(workspaceRoot, 'out', 'test-worktree-apply');
 
@@ -70,6 +74,7 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       appendEventCalls = [];
       warningMessages = [];
       infoMessages = [];
+      lastInstructionParams = undefined;
 
       originalExecGitStdout = gitExecModule.execGitStdout;
       originalExecGitResult = gitExecModule.execGitResult;
@@ -110,7 +115,10 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       (mergeAssistanceModule as unknown as { buildMergeAssistancePromptText: typeof mergeAssistanceModule.buildMergeAssistancePromptText })
         .buildMergeAssistancePromptText = () => 'PROMPT_TEXT';
       (mergeAssistanceModule as unknown as { buildMergeAssistanceInstructionMarkdown: typeof mergeAssistanceModule.buildMergeAssistanceInstructionMarkdown })
-        .buildMergeAssistanceInstructionMarkdown = () => 'INSTRUCTION_MD';
+        .buildMergeAssistanceInstructionMarkdown = (params: mergeAssistanceModule.MergeAssistancePromptParams) => {
+          lastInstructionParams = params;
+          return 'INSTRUCTION_MD';
+        };
       (outputChannelModule as unknown as { appendEventToOutput: typeof outputChannelModule.appendEventToOutput }).appendEventToOutput = (
         event,
       ) => {
@@ -321,6 +329,113 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       assert.strictEqual(result.reason, 'applied');
       assert.strictEqual(infoMessages.length, 1);
       assert.strictEqual(fs.existsSync(tmpPatchPath), false, '一時パッチが削除される');
+    });
+
+    test('TC-WA-E-06: apply failure after check ok returns apply-failed and forwards apply output', async () => {
+      // Given: apply --check は成功するが apply が失敗する（競合等）
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('apply-conflict');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content';
+      applyCheckResult = { ok: true, stdout: '', stderr: '' };
+      applyResult = { ok: false, output: 'error: patch failed: tests/app.test.ts:1' };
+      await createTestFile(runWorkspaceRoot, testPath);
+
+      const generationTaskId = `test-apply-conflict-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const patchPath = path.join(extensionContext.globalStorageUri.fsPath, 'patches', `${generationTaskId}.patch`);
+      const instructionPath = path.join(extensionContext.globalStorageUri.fsPath, 'merge-instructions', `${generationTaskId}.md`);
+      const snapshotPath = path.join(extensionContext.globalStorageUri.fsPath, 'snapshots', generationTaskId, testPath);
+
+      // When: applyWorktreeTestChanges を呼び出す
+      const result = await applyWorktreeTestChanges({
+        generationTaskId,
+        genExit: 0,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: apply-failed で終了し、保存物と案内が生成される
+      assert.strictEqual(result.applied, false);
+      assert.strictEqual(result.reason, 'apply-failed');
+      assert.strictEqual(warningMessages.length, 1);
+      assert.strictEqual(fs.existsSync(patchPath), true, 'patch が保存される');
+      assert.strictEqual(fs.existsSync(instructionPath), true, 'instruction が保存される');
+      assert.strictEqual(fs.existsSync(snapshotPath), true, 'snapshot が保存される');
+      assert.strictEqual(lastInstructionParams?.applyCheckOutput, 'error: patch failed: tests/app.test.ts:1', 'apply 出力が指示文へ渡る');
+    });
+
+    test('TC-WA-E-07: rename failure persists patch via writeFile and removes tmp patch', async () => {
+      // Given: artifacts 永続化時の rename が失敗する
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('rename-failed');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'DIFF_NO_TRAILING_NEWLINE';
+      renameShouldFail = true;
+      await createTestFile(runWorkspaceRoot, testPath);
+
+      const generationTaskId = `test-rename-failed-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const tmpPatchPath = path.join(extensionContext.globalStorageUri.fsPath, 'tmp', `${generationTaskId}.patch`);
+      const patchPath = path.join(extensionContext.globalStorageUri.fsPath, 'patches', `${generationTaskId}.patch`);
+
+      // When: applyWorktreeTestChanges を呼び出す（genExit!=0 で自動適用しない）
+      const result = await applyWorktreeTestChanges({
+        generationTaskId,
+        genExit: 1,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: パッチは writeFile で保存され、tmp パッチは削除される
+      assert.strictEqual(result.applied, false);
+      assert.strictEqual(result.reason, 'gen-failed');
+      assert.strictEqual(warningMessages.length, 1);
+      assert.strictEqual(fs.existsSync(patchPath), true, 'patch が保存される（rename 失敗のフォールバック）');
+      assert.strictEqual(fs.existsSync(tmpPatchPath), false, 'tmp patch が削除される（rename 失敗時）');
+      const patch = await fs.promises.readFile(patchPath, 'utf8');
+      assert.strictEqual(patch, `${diffText}\n`, '末尾改行が補完された patch が保存される');
+    });
+
+    test('TC-WA-E-08: diff output without trailing newline is normalized in persisted patch', async () => {
+      // Given: git diff の出力が末尾改行で終わらない（フォーマット崩れ）
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('diff-formatting');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'PATCH_WITHOUT_NEWLINE';
+      await createTestFile(runWorkspaceRoot, testPath);
+
+      const generationTaskId = `test-diff-formatting-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const patchPath = path.join(extensionContext.globalStorageUri.fsPath, 'patches', `${generationTaskId}.patch`);
+
+      // When: applyWorktreeTestChanges を呼び出す（genExit!=0 で保存まで進める）
+      const result = await applyWorktreeTestChanges({
+        generationTaskId,
+        genExit: 1,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: 保存された patch は末尾改行を持つ（git apply corrupt patch 対策）
+      assert.strictEqual(result.applied, false);
+      assert.strictEqual(result.reason, 'gen-failed');
+      assert.strictEqual(fs.existsSync(patchPath), true, 'patch が保存される');
+      const patch = await fs.promises.readFile(patchPath, 'utf8');
+      assert.strictEqual(patch, `${diffText}\n`);
+      assert.ok(patch.endsWith('\n'), '末尾改行がある');
     });
   });
 });

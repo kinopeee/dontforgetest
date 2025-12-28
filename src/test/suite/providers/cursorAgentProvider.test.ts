@@ -1,8 +1,16 @@
 import * as assert from 'assert';
+import { EventEmitter } from 'events';
 import * as path from 'path';
 import { CursorAgentProvider } from '../../../providers/cursorAgentProvider';
 import { type AgentRunOptions } from '../../../providers/provider';
 import { type TestGenEvent } from '../../../core/event';
+import type * as childProcessTypes from 'child_process';
+
+// NOTE:
+// - `import * as childProcess from 'child_process'` は Node16 + __importStar の影響でプロパティが getter になり、代入できない。
+// - ここでは require で実体モジュールを取得して spawn を差し替える。
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const childProcess = require('child_process') as typeof import('child_process');
 
 /**
  * テストで spawn されたプロセスの非同期イベント（error, close）が
@@ -217,6 +225,152 @@ suite('providers/cursorAgentProvider.ts', () => {
 
       // 非同期イベントの収束を待つ
       await waitForAsyncCleanup();
+    });
+
+    // Test Perspectives Table for wireOutput (stream-json parsing path)
+    // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+    // |---------|----------------------|--------------------------------------|-----------------|-------|
+    // | TC-WO-N-01 | stdout emits valid stream-json assistant line | Equivalence – normal | Emits log(info) with assistant text; emits completed on close | Covers tryParseJson success + markOutput |
+    // | TC-WO-E-01 | stdout emits non-JSON line | Error – format | Emits log(warn) with raw line | Covers tryParseJson failure |
+    // | TC-WO-E-02 | stderr emits message | Error – stderr | Emits log(error) with stderr message | markOutput on stderr path |
+
+    suite('wireOutput', () => {
+      class MockChildProcess extends EventEmitter {
+        public readonly stdout = new EventEmitter();
+        public readonly stderr = new EventEmitter();
+        public readonly stdin = { end: () => {} } as unknown as NodeJS.WritableStream;
+        private closed = false;
+
+        public kill(): boolean {
+          // Provider の dispose() で呼ばれるだけなので、ここでは close は発行しない（テスト側で明示）
+          return true;
+        }
+
+        public emitClose(code: number | null): void {
+          if (this.closed) {
+            return;
+          }
+          this.closed = true;
+          this.emit('close', code);
+        }
+      }
+
+      let originalSpawn: typeof childProcess.spawn;
+      let lastSpawned: MockChildProcess | undefined;
+
+      setup(() => {
+        lastSpawned = undefined;
+        originalSpawn = childProcess.spawn;
+
+        // child_process.spawn をスタブし、stdout/stderr を自由に制御できる MockChildProcess を返す
+        (childProcess as unknown as { spawn: (...args: unknown[]) => unknown }).spawn = () => {
+          const child = new MockChildProcess();
+          lastSpawned = child;
+          return child as unknown as childProcessTypes.ChildProcessWithoutNullStreams;
+        };
+      });
+
+      teardown(async () => {
+        (childProcess as unknown as { spawn: unknown }).spawn = originalSpawn;
+        // タイマー等が残留しないよう、非同期イベントの収束を少し待つ
+        await waitForAsyncCleanup();
+      });
+
+      test('TC-WO-N-01: emits assistant log via stream-json parsing', async () => {
+        // Given: spawn をスタブし、stdout から assistant の stream-json が流れる
+        const provider = new CursorAgentProvider();
+        const events: TestGenEvent[] = [];
+        const options: AgentRunOptions = {
+          taskId: 'test-task-wo-n-01',
+          workspaceRoot: '/tmp',
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (event) => {
+            events.push(event);
+          },
+        };
+
+        // When: provider.run を呼び、stdout に 1 行分の stream-json を流す
+        const task = provider.run(options);
+        assert.ok(lastSpawned, 'MockChildProcess が生成される');
+        lastSpawned?.stdout.emit(
+          'data',
+          Buffer.from('{"type":"assistant","message":{"content":[{"text":"hello"}]}}\n', 'utf8'),
+        );
+        lastSpawned?.emitClose(0);
+
+        // Then: assistant text が log(info) として流れ、close により completed が発行される
+        const logEvent = events.find((e) => e.type === 'log' && e.level === 'info' && e.message === 'hello');
+        assert.ok(logEvent, 'assistant の text が log(info) で通知される');
+        const completedEvent = events.find((e) => e.type === 'completed');
+        assert.ok(completedEvent, 'completed イベントが発行される');
+        if (completedEvent?.type === 'completed') {
+          assert.strictEqual(completedEvent.exitCode, 0);
+        }
+
+        // Cleanup: dispose() は例外なく呼べる（プロセス残留防止）
+        task.dispose();
+        await waitForAsyncCleanup();
+      });
+
+      test('TC-WO-E-01: emits warn log when stdout line is not JSON', async () => {
+        // Given: spawn をスタブし、stdout から非JSONの1行が流れる
+        const provider = new CursorAgentProvider();
+        const events: TestGenEvent[] = [];
+        const options: AgentRunOptions = {
+          taskId: 'test-task-wo-e-01',
+          workspaceRoot: '/tmp',
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (event) => {
+            events.push(event);
+          },
+        };
+
+        // When: provider.run を呼び、stdout に非JSON行を流す
+        const task = provider.run(options);
+        assert.ok(lastSpawned, 'MockChildProcess が生成される');
+        lastSpawned?.stdout.emit('data', Buffer.from('NOT_JSON\n', 'utf8'));
+        lastSpawned?.emitClose(0);
+
+        // Then: warn ログとして行が残る（JSONでない出力もあり得るため）
+        const warnEvent = events.find((e) => e.type === 'log' && e.level === 'warn' && e.message === 'NOT_JSON');
+        assert.ok(warnEvent, '非JSON行が warn として通知される');
+
+        task.dispose();
+        await waitForAsyncCleanup();
+      });
+
+      test('TC-WO-E-02: emits error log when stderr has message', async () => {
+        // Given: spawn をスタブし、stderr にエラーメッセージが流れる
+        const provider = new CursorAgentProvider();
+        const events: TestGenEvent[] = [];
+        const options: AgentRunOptions = {
+          taskId: 'test-task-wo-e-02',
+          workspaceRoot: '/tmp',
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (event) => {
+            events.push(event);
+          },
+        };
+
+        // When: provider.run を呼び、stderr にメッセージを流す
+        const task = provider.run(options);
+        assert.ok(lastSpawned, 'MockChildProcess が生成される');
+        lastSpawned?.stderr.emit('data', Buffer.from('stderr message\n', 'utf8'));
+        lastSpawned?.emitClose(0);
+
+        // Then: error ログとして通知される
+        const errorEvent = events.find((e) => e.type === 'log' && e.level === 'error' && e.message === 'stderr message');
+        assert.ok(errorEvent, 'stderr の内容が error として通知される');
+
+        task.dispose();
+        await waitForAsyncCleanup();
+      });
     });
   });
 
