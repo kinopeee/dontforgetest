@@ -32,6 +32,20 @@ export interface TestResultFile {
   tests?: TestCaseInfo[];
 }
 
+/**
+ * V8 カバレッジファイルの型定義（必要最小限）。
+ * 実データは多くのプロパティを含むため、未知のプロパティも許容する。
+ *
+ * 参考: https://nodejs.org/api/cli.html#coverage-output
+ */
+interface V8CoverageFile {
+  result?: Array<{
+    url?: string;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+}
+
 const DEFAULT_TEST_RESULT_WAIT_TIMEOUT_MS = 3000;
 const DEFAULT_TEST_RESULT_WAIT_INTERVAL_MS = 100;
 const DEFAULT_VSCODE_TEST_MAX_ATTEMPTS = 2;
@@ -96,6 +110,8 @@ function selectLauncher(params: {
     // NOTE:
     // macOS では direct(spawn) 起動が SIGABRT で落ちるケースがある（AppKit の _RegisterApplication 等）。
     // 安定性優先で、未指定の場合は open 起動に固定する。
+    // ただし、NODE_V8_COVERAGE が設定されている場合は、カバレッジの正確な取得のため direct 起動を優先する
+    // （preferDirectOnDarwin=true として呼び出され、この分岐を通らない）。
     return 'open';
   }
   return params.attemptIndex === 0
@@ -113,6 +129,15 @@ function normalizeLauncher(value: string | undefined): VscodeTestLauncher | unde
   return undefined;
 }
 
+/**
+ * macOS 環境で V8 カバレッジ取得時に direct launcher を優先すべきか判定する。
+ *
+ * `NODE_V8_COVERAGE` が設定されている場合、カバレッジデータの取り回し（URL/パスの整合）を安定させるため、
+ * open ではなく direct(spawn) 起動を優先する。
+ *
+ * @param nodeV8Coverage - NODE_V8_COVERAGE 環境変数の値
+ * @returns カバレッジディレクトリが指定されている場合 true、そうでない場合 false
+ */
 function shouldPreferDirectLauncherOnDarwin(nodeV8Coverage: string | undefined): boolean {
   const trimmed = (nodeV8Coverage ?? '').trim();
   return trimmed.length > 0;
@@ -364,6 +389,8 @@ async function remapV8CoverageUrls(params: {
       return;
     }
 
+    // macOS では /tmp が /private/tmp へのシンボリックリンクであるため、
+    // パス比較の前に /private/ プレフィックスを正規化する
     const normalizePath = (value: string): string => (value.startsWith('/private/') ? value.slice('/private'.length) : value);
     const stageRoot = normalizePath(path.resolve(params.stageExtensionRoot));
     const sourceRoot = path.resolve(params.sourceExtensionRoot);
@@ -375,7 +402,7 @@ async function remapV8CoverageUrls(params: {
       }
       const filePath = path.join(params.coverageDir, entry);
       const raw = await fs.promises.readFile(filePath, 'utf8');
-      const data = JSON.parse(raw) as { result?: Array<{ url?: string }> };
+      const data = JSON.parse(raw) as V8CoverageFile;
       if (!Array.isArray(data.result)) {
         continue;
       }

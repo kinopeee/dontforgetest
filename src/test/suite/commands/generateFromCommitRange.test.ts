@@ -5,27 +5,10 @@ import * as preflightModule from '../../../core/preflight';
 import * as promptBuilderModule from '../../../core/promptBuilder';
 import * as diffAnalyzerModule from '../../../git/diffAnalyzer';
 import * as runWithArtifactsModule from '../../../commands/runWithArtifacts';
-import { type AgentProvider } from '../../../providers/provider';
 import { createMockExtensionContext } from '../testUtils/vscodeMocks';
-
-// Mock Provider that does nothing
-class MockGenerateProvider implements AgentProvider {
-  readonly id = 'mock-generate';
-  readonly displayName = 'Mock Generate';
-  run() {
-    return { taskId: 'mock', dispose: () => {} };
-  }
-}
+import { MockGenerateProvider } from '../testUtils/mockProviders';
 
 suite('commands/generateFromCommitRange.ts', () => {
-  function setShowInputBoxMock(mock: typeof vscode.window.showInputBox): () => void {
-    const original = vscode.window.showInputBox;
-    (vscode.window as unknown as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = mock;
-    return () => {
-      (vscode.window as unknown as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = original;
-    };
-  }
-
   // Test Perspectives Table for generateTestFromCommitRange (deterministic branch coverage)
   // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
   // |---------|----------------------|--------------------------------------|-----------------|-------|
@@ -35,6 +18,7 @@ suite('commands/generateFromCommitRange.ts', () => {
   // | TC-GCR-E-04 | diffText is empty | Boundary – empty | showInformationMessage called; runWithArtifacts not called | - |
   // | TC-GCR-E-05 | runLocation=worktree and extensionContext is undefined | Error – invalid options | showErrorMessage called; runWithArtifacts not called | - |
   // | TC-GCR-N-01 | valid range with local runLocation | Equivalence – normal | runWithArtifacts called; range is trimmed in diff fetch | - |
+  // | TC-GCR-N-02 | valid range with worktree runLocation and extensionContext | Equivalence – normal | runWithArtifacts called with runLocation=worktree and extensionContext | - |
   suite('generateTestFromCommitRange deterministic coverage', () => {
     let originalShowInputBox: typeof vscode.window.showInputBox;
     let originalShowErrorMessage: typeof vscode.window.showErrorMessage;
@@ -228,103 +212,21 @@ suite('commands/generateFromCommitRange.ts', () => {
       assert.ok(call.generationPrompt.includes('TEST_PROMPT'), 'プロンプトが含まれる');
       assert.ok(call.generationPrompt.includes('diff content'), '差分テキストが含まれる');
     });
-  });
 
-  // TC-N-05: generateTestFromCommitRange called with valid range and runLocation='local'
-  test('TC-N-05: generateTestFromCommitRange triggers test generation in local mode', async function () {
-    // Given: Valid range and runLocation='local'
-    const provider = new MockGenerateProvider();
+    test('TC-GCR-N-02: worktree mode calls runWithArtifacts with extensionContext', async () => {
+      // Given: worktree 実行で extensionContext がある
+      showInputBoxResult = 'HEAD~1..HEAD';
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
 
-    // Mock the input box to return a valid range
-    let inputBoxCalled = false;
-    const restore = setShowInputBoxMock(async () => {
-      inputBoxCalled = true;
-      return 'HEAD~1..HEAD';
+      // When: generateTestFromCommitRange を呼び出す
+      await generateTestFromCommitRange(provider, undefined, { runLocation: 'worktree', extensionContext });
+
+      // Then: runWithArtifacts が worktree モードで呼ばれる
+      assert.strictEqual(runWithArtifactsCalls.length, 1);
+      const call = runWithArtifactsCalls[0];
+      assert.strictEqual(call.runLocation, 'worktree');
+      assert.strictEqual(call.extensionContext, extensionContext);
+      assert.strictEqual(call.model, preflightResult?.defaultModel);
     });
-
-    try {
-      // When: generateTestFromCommitRange is called
-      await generateTestFromCommitRange(provider, undefined, { runLocation: 'local' });
-      // Test passes if no exception is thrown
-      assert.ok(inputBoxCalled, 'Input box should be called');
-    } catch (e) {
-      // If it fails due to git issues, that's acceptable for this test
-      const message = e instanceof Error ? e.message : String(e);
-      if (message.includes('Git') || message.includes('diff') || message.includes('範囲')) {
-        // Expected failure in non-git environment
-        assert.ok(true, 'Function handles git errors gracefully');
-      } else {
-        throw e;
-      }
-    } finally {
-      restore();
-    }
-  }).timeout(10000);
-
-  // TC-N-06: generateTestFromCommitRange called with valid range and runLocation='worktree'
-  test('TC-N-06: generateTestFromCommitRange triggers test generation in worktree mode', async function () {
-    // Given: Valid range and runLocation='worktree'
-    const provider = new MockGenerateProvider();
-    const mockContext = createMockExtensionContext();
-
-    // Mock the input box to return a valid range
-    let inputBoxCalled = false;
-    const restore = setShowInputBoxMock(async () => {
-      inputBoxCalled = true;
-      return 'HEAD~1..HEAD';
-    });
-
-    try {
-      // When: generateTestFromCommitRange is called
-      await generateTestFromCommitRange(provider, undefined, {
-        runLocation: 'worktree',
-        extensionContext: mockContext,
-      });
-      // Test passes if no exception is thrown
-      assert.ok(inputBoxCalled, 'Input box should be called');
-    } catch (e) {
-      // If it fails due to git issues, that's acceptable for this test
-      const message = e instanceof Error ? e.message : String(e);
-      if (message.includes('Git') || message.includes('diff') || message.includes('範囲')) {
-        // Expected failure in non-git environment
-        assert.ok(true, 'Function handles git errors gracefully');
-      } else {
-        throw e;
-      }
-    } finally {
-      restore();
-    }
-  }).timeout(10000);
-
-  // TC-E-03: generateTestFromCommitRange called with runLocation='worktree' but extensionContext is undefined
-  test('TC-E-03: generateTestFromCommitRange shows error when worktree mode requires extensionContext', async () => {
-    // Given: runLocation='worktree' but extensionContext is undefined
-    const provider = new MockGenerateProvider();
-
-    // Mock the input box to return a valid range
-    const restore = setShowInputBoxMock(async () => {
-      return 'HEAD~1..HEAD';
-    });
-
-    try {
-      // When: generateTestFromCommitRange is called
-      // Then: Error message shown, function returns early
-      await generateTestFromCommitRange(provider, undefined, {
-        runLocation: 'worktree',
-        extensionContext: undefined,
-      });
-      // Function should return early without throwing
-      assert.ok(true, 'Function should handle missing extensionContext gracefully');
-    } catch (e) {
-      // If it fails due to git issues before checking extensionContext, that's acceptable
-      const message = e instanceof Error ? e.message : String(e);
-      if (message.includes('Git') || message.includes('diff') || message.includes('範囲')) {
-        assert.ok(true, 'Function handles git errors gracefully');
-      } else {
-        throw e;
-      }
-    } finally {
-      restore();
-    }
   });
 });
