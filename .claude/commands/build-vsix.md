@@ -53,16 +53,16 @@ GitHub Actions 等では問題なく全テストが完走します。
 
 ## 実行手順
 
-### AI（スラッシュコマンド）向け：ビルド→VSIX生成→インストール（最短）
+### CLI（コピペ用）：ビルド→VSIX生成→インストール（最短）
 
 ```bash
-cd "/Users/yoo/dev/dontforgetest" && npm run vsix:build
+cd "$(git rev-parse --show-toplevel)" && npm run vsix:build
 ```
 
 次にインストール：
 
 ```bash
-cd "/Users/yoo/dev/dontforgetest" && npm run vsix:install
+cd "$(git rev-parse --show-toplevel)" && npm run vsix:install
 ```
 
 > **注意**: インストール後、拡張機能を有効にするには IDE のリロード（`Developer: Reload Window`）が必要な場合があります。
@@ -118,7 +118,7 @@ git add package.json package-lock.json
 git commit -m "chore: バージョンを$(node -p \"require('./package.json').version\")に更新"
 ```
 
-または `/commit-only` スラッシュコマンドを使用してください。
+または `.claude/commands/commit-only.md` を参照してください。
 
 ## インストール方法
 
@@ -131,25 +131,25 @@ VS Code の拡張機能ビューで `...` → **Install from VSIX...** を選び
 コマンドラインから直接インストールできます。`--force` で既存バージョンを上書きします。
 
 ```bash
-cd "/Users/yoo/dev/dontforgetest" && npm run vsix:install
+cd "$(git rev-parse --show-toplevel)" && npm run vsix:install
 ```
 
 > **備考**: Cursor 環境では `code` コマンドも `cursor` コマンドも Cursor を指します。どちらを使っても同じです。
 
 ### ビルド＆インストール（分割推奨）
 
-AI 実行では **ビルドとインストールを分けた方が失敗時に再試行しやすく、結果も確認しやすい**です。
+CLI 実行では **ビルドとインストールを分けた方が失敗時に再試行しやすく、結果も確認しやすい**です。
 
 ```bash
-cd "/Users/yoo/dev/dontforgetest" && npm run vsix:build
-cd "/Users/yoo/dev/dontforgetest" && npm run vsix:install
+cd "$(git rev-parse --show-toplevel)" && npm run vsix:build
+cd "$(git rev-parse --show-toplevel)" && npm run vsix:install
 ```
 
 バージョンも上げる場合：
 
 ```bash
-cd "/Users/yoo/dev/dontforgetest" && npm run vsix:build:bump
-cd "/Users/yoo/dev/dontforgetest" && npm run vsix:install
+cd "$(git rev-parse --show-toplevel)" && npm run vsix:build:bump
+cd "$(git rev-parse --show-toplevel)" && npm run vsix:install
 ```
 
 ## ノート
