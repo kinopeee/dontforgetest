@@ -53,7 +53,7 @@ GitHub Actions 等では問題なく全テストが完走します。
 
 ## 実行手順
 
-### CLI（コピペ用）：ビルド→VSIX生成→インストール（最短）
+### スラッシュコマンド用（CLI）：ビルド→VSIX生成→インストール（最短）
 
 ```bash
 cd "$(git rev-parse --show-toplevel)" && npm run vsix:build
@@ -69,7 +69,7 @@ cd "$(git rev-parse --show-toplevel)" && npm run vsix:install
 
 ### A) パッチバージョンを上げて VSIX を生成（推奨）
 
-#### ワンライナー（コピペ用）
+#### ワンライナー（最短）
 
 ```bash
 npm version patch --no-git-tag-version && npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "dontforgetest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links && echo "✅ 生成完了: dontforgetest-$VERSION.vsix"
