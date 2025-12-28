@@ -1,5 +1,5 @@
 {
-  "displayName": "Test Generation Agent (Dontforgetest)",
+  "displayName": "Dontforgetest (Test Generation Agent)",
   "description": "One-click, commit-based test generation for Cursor.",
   "viewsContainers.activitybar.title": "Dontforgetest",
   "views.controlPanel.name": "Control",

@@ -1,5 +1,5 @@
 {
-  "displayName": "Dontforgetest",
+  "displayName": "Dontforgetest (Test Generation Agent)",
   "description": "コミット単位でワンアクションでテスト生成",
   "viewsContainers.activitybar.title": "Dontforgetest",
   "views.controlPanel.name": "操作",
