@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as childProcess from 'child_process';
 import * as os from 'os';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { downloadAndUnzipVSCode, TestRunFailedError } from '@vscode/test-electron';
 import { getProfileArguments } from '@vscode/test-electron/out/util';
 
@@ -29,6 +30,20 @@ export interface TestResultFile {
   total?: number;
   durationMs?: number;
   tests?: TestCaseInfo[];
+}
+
+/**
+ * V8 カバレッジファイルの型定義（必要最小限）。
+ * 実データは多くのプロパティを含むため、未知のプロパティも許容する。
+ *
+ * 参考: https://nodejs.org/api/cli.html#coverage-output
+ */
+interface V8CoverageFile {
+  result?: Array<{
+    url?: string;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
 }
 
 const DEFAULT_TEST_RESULT_WAIT_TIMEOUT_MS = 3000;
@@ -86,14 +101,17 @@ function selectLauncher(params: {
   platform: NodeJS.Platform;
   attemptIndex: number;
   defaultLauncher: VscodeTestLauncher;
+  preferDirectOnDarwin?: boolean;
 }): VscodeTestLauncher {
   if (params.pinnedLauncher) {
     return params.pinnedLauncher;
   }
-  if (params.platform === 'darwin') {
+  if (params.platform === 'darwin' && !params.preferDirectOnDarwin) {
     // NOTE:
     // macOS では direct(spawn) 起動が SIGABRT で落ちるケースがある（AppKit の _RegisterApplication 等）。
     // 安定性優先で、未指定の場合は open 起動に固定する。
+    // ただし、NODE_V8_COVERAGE が設定されている場合は、カバレッジの正確な取得のため direct 起動を優先する
+    // （preferDirectOnDarwin=true として呼び出され、この分岐を通らない）。
     return 'open';
   }
   return params.attemptIndex === 0
@@ -109,6 +127,20 @@ function normalizeLauncher(value: string | undefined): VscodeTestLauncher | unde
     return v;
   }
   return undefined;
+}
+
+/**
+ * macOS 環境で V8 カバレッジ取得時に direct launcher を優先すべきか判定する。
+ *
+ * `NODE_V8_COVERAGE` が設定されている場合、カバレッジデータの取り回し（URL/パスの整合）を安定させるため、
+ * open ではなく direct(spawn) 起動を優先する。
+ *
+ * @param nodeV8Coverage - NODE_V8_COVERAGE 環境変数の値
+ * @returns カバレッジディレクトリが指定されている場合 true、そうでない場合 false
+ */
+function shouldPreferDirectLauncherOnDarwin(nodeV8Coverage: string | undefined): boolean {
+  const trimmed = (nodeV8Coverage ?? '').trim();
+  return trimmed.length > 0;
 }
 
 function normalizeLocale(value: string | undefined): string {
@@ -344,6 +376,68 @@ function buildDirectSpawnCommand(params: {
     command: params.vscodeExecutablePath,
     args: params.allArgs,
   };
+}
+
+async function remapV8CoverageUrls(params: {
+  coverageDir: string;
+  stageExtensionRoot: string;
+  sourceExtensionRoot: string;
+}): Promise<void> {
+  try {
+    const entries = await fs.promises.readdir(params.coverageDir);
+    if (entries.length === 0) {
+      return;
+    }
+
+    // macOS では /tmp が /private/tmp へのシンボリックリンクであるため、
+    // パス比較の前に /private/ プレフィックスを正規化する
+    const normalizePath = (value: string): string => (value.startsWith('/private/') ? value.slice('/private'.length) : value);
+    const stageRoot = normalizePath(path.resolve(params.stageExtensionRoot));
+    const sourceRoot = path.resolve(params.sourceExtensionRoot);
+    const stagePrefix = stageRoot.endsWith(path.sep) ? stageRoot : `${stageRoot}${path.sep}`;
+
+    for (const entry of entries) {
+      if (!entry.startsWith('coverage-') || !entry.endsWith('.json')) {
+        continue;
+      }
+      const filePath = path.join(params.coverageDir, entry);
+      const raw = await fs.promises.readFile(filePath, 'utf8');
+      const data = JSON.parse(raw) as V8CoverageFile;
+      if (!Array.isArray(data.result)) {
+        continue;
+      }
+
+      let updated = false;
+      for (const item of data.result) {
+        const url = item.url;
+        if (typeof url !== 'string' || !url.startsWith('file://')) {
+          continue;
+        }
+        let filePathFromUrl: string;
+        try {
+          filePathFromUrl = fileURLToPath(url);
+        } catch {
+          continue;
+        }
+        const normalizedPath = normalizePath(filePathFromUrl);
+        if (!normalizedPath.startsWith(stagePrefix)) {
+          continue;
+        }
+        const relative = path.relative(stageRoot, normalizedPath);
+        const mapped = path.join(sourceRoot, relative);
+        item.url = pathToFileURL(mapped).toString();
+        updated = true;
+      }
+
+      if (updated) {
+        await fs.promises.writeFile(filePath, JSON.stringify(data), 'utf8');
+      }
+    }
+  } catch (err) {
+    // カバレッジ補正の失敗はテスト結果に影響させない（ただし原因調査のためログは残す）
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[dontforgetest] カバレッジURL補正に失敗しました（続行します）: ${message}`);
+  }
 }
 
 async function runDirectLauncher(params: {
@@ -800,9 +894,12 @@ type MainDeps = {
 };
 
 async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
+  const sourceExtensionRoot = path.resolve(__dirname, '../../');
+  const coverageDir = (deps.env.NODE_V8_COVERAGE ?? '').trim();
+  let stageExtensionRoot = '';
+
   try {
     // 拡張機能のパス
-    const sourceExtensionRoot = path.resolve(__dirname, '../../');
     const testResultFilePathOverride = resolveTestResultFilePathOverride(
       deps.env.DONTFORGETEST_TEST_RESULT_FILE,
       sourceExtensionRoot,
@@ -840,7 +937,7 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
 
     // stage は重いので 1 回だけ作る（runId ごとに分ける必要はない）
     const stageRoot = path.join(runtimeRoot, 'stage');
-    const stageExtensionRoot = path.join(stageRoot, 'extension');
+    stageExtensionRoot = path.join(stageRoot, 'extension');
     const stagedExtensionTestsPath = path.join(stageExtensionRoot, 'out', 'test', 'suite', 'index');
 
     await deps.stageExtensionToTemp({ sourceExtensionRoot, stageExtensionRoot });
@@ -867,7 +964,8 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
 
     // 起動方式は環境変数で固定できる。未指定なら 1 回だけ別方式で再試行する。
     const pinnedLauncher = normalizeLauncher(deps.env.DONTFORGETEST_VSCODE_TEST_LAUNCHER);
-    const defaultLauncher: VscodeTestLauncher = deps.platform === 'darwin' ? 'open' : 'direct';
+    const preferDirectOnDarwin = shouldPreferDirectLauncherOnDarwin(deps.env.NODE_V8_COVERAGE);
+    const defaultLauncher: VscodeTestLauncher = deps.platform === 'darwin' && !preferDirectOnDarwin ? 'open' : 'direct';
 
     let lastUserDataDir: string | null = null;
     let lastTestResultFilePath: string | null = null;
@@ -899,6 +997,7 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
         platform: deps.platform,
         attemptIndex,
         defaultLauncher,
+        preferDirectOnDarwin,
       });
 
       const locale = normalizeLocale(deps.env.DONTFORGETEST_VSCODE_TEST_LOCALE);
@@ -976,6 +1075,14 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
   } catch (err) {
     reportMainError(err, (message) => console.error(message));
     return 1;
+  } finally {
+    if (coverageDir.length > 0 && stageExtensionRoot.length > 0) {
+      await remapV8CoverageUrls({
+        coverageDir,
+        stageExtensionRoot,
+        sourceExtensionRoot,
+      });
+    }
   }
 }
 
