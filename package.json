@@ -12,7 +12,6 @@
     "Other"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [],
   "l10n": "./l10n",
   "contributes": {
     "viewsContainers": {
