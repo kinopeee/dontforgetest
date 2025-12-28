@@ -28,14 +28,6 @@ suite('commands/generateFromCommit.ts', () => {
   // | TC-GC-N-01 | runLocation=local with valid commit/diff | Equivalence – normal | runWithArtifacts called with targetPaths and model override | - |
   // | TC-GC-N-02 | runLocation=worktree with extensionContext | Equivalence – normal | runWithArtifacts called with runLocation=worktree | - |
   suite('generateTestFromLatestCommit deterministic coverage', () => {
-    class MockGenerateProvider implements AgentProvider {
-      readonly id = 'mock-generate';
-      readonly displayName = 'Mock Generate';
-      run() {
-        return { taskId: 'mock', dispose: () => {} };
-      }
-    }
-
     let originalEnsurePreflight: typeof preflightModule.ensurePreflight;
     let originalExecGitStdout: typeof gitExecModule.execGitStdout;
     let originalBuildTestGenPrompt: typeof promptBuilderModule.buildTestGenPrompt;

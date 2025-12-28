@@ -156,6 +156,15 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       (fs.promises as unknown as { rename: typeof originalFsRename }).rename = originalFsRename;
     });
 
+    suiteTeardown(async () => {
+      // テスト用に作成した一時ディレクトリはスイート終了時にまとめて削除する（ローカル実行時の蓄積を防ぐ）
+      try {
+        await fs.promises.rm(baseTmpDir, { recursive: true, force: true });
+      } catch {
+        // 一時ディレクトリの削除失敗はテスト結果に影響させない
+      }
+    });
+
     test('TC-WA-E-01: empty runWorkspaceRoot returns exception reason', async () => {
       // Given: runWorkspaceRoot が空
       const extensionContext = createMockExtensionContext({ workspaceRoot });

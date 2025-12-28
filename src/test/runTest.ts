@@ -406,8 +406,10 @@ async function remapV8CoverageUrls(params: {
         await fs.promises.writeFile(filePath, JSON.stringify(data), 'utf8');
       }
     }
-  } catch {
-    // カバレッジ補正の失敗はテスト結果に影響させない
+  } catch (err) {
+    // カバレッジ補正の失敗はテスト結果に影響させない（ただし原因調査のためログは残す）
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[dontforgetest] カバレッジURL補正に失敗しました（続行します）: ${message}`);
   }
 }
 

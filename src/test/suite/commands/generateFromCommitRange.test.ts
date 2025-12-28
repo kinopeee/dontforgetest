@@ -13,7 +13,7 @@ class MockGenerateProvider implements AgentProvider {
   readonly id = 'mock-generate';
   readonly displayName = 'Mock Generate';
   run() {
-    return { taskId: 'mock', dispose: () => { } };
+    return { taskId: 'mock', dispose: () => {} };
   }
 }
 
@@ -36,14 +36,6 @@ suite('commands/generateFromCommitRange.ts', () => {
   // | TC-GCR-E-05 | runLocation=worktree and extensionContext is undefined | Error – invalid options | showErrorMessage called; runWithArtifacts not called | - |
   // | TC-GCR-N-01 | valid range with local runLocation | Equivalence – normal | runWithArtifacts called; range is trimmed in diff fetch | - |
   suite('generateTestFromCommitRange deterministic coverage', () => {
-    class MockGenerateProvider implements AgentProvider {
-      readonly id = 'mock-generate';
-      readonly displayName = 'Mock Generate';
-      run() {
-        return { taskId: 'mock', dispose: () => {} };
-      }
-    }
-
     let originalShowInputBox: typeof vscode.window.showInputBox;
     let originalShowErrorMessage: typeof vscode.window.showErrorMessage;
     let originalShowInformationMessage: typeof vscode.window.showInformationMessage;

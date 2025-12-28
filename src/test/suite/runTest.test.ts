@@ -2880,6 +2880,7 @@ suite('test/runTest.ts', () => {
     });
 
     // TC-B-17: selectLauncher darwin default
+    // NOTE: preferDirectOnDarwin は未指定（false/undefined 扱い）での挙動を検証している
     test('TC-B-17: selectLauncher は darwin で open を返す', () => {
       // Given: darwin かつ pinned なし
       const result = selectLauncher({
