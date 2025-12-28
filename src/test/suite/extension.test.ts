@@ -296,8 +296,9 @@ suite('src/extension.ts', () => {
       // Then: name / displayName が期待値と一致する
       assert.strictEqual(pkg.name, 'dontforgetest');
       // package.nls により VS Code 側で解決された displayName が取得できること
-      // NOTE: テストハーネスは ja ロケールで起動するが、ステージング環境での NLS 解決は
-      // package.nls.json (英語) がデフォルトで使用される
+      // NOTE:
+      // `npm run test:ja` / `npm run test:en` のいずれでも、本テスト環境では
+      // displayName は英語（package.nls.json）に解決されるため、英語値を期待する。
       assert.strictEqual(pkg.displayName, 'Test Generation Agent (Dontforgetest)');
     });
   });
