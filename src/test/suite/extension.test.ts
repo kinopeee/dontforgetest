@@ -286,9 +286,14 @@ suite('src/extension.ts', () => {
 
     // TC-N-06: package.json validation
     test('TC-N-06: Package metadata check (Name/DisplayName)', () => {
+      // Given: 拡張機能がインストールされ、参照可能である
       const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, 'Extension not found');
+
+      // When: 拡張機能の package.json メタデータを取得する
       const pkg = ext.packageJSON;
+
+      // Then: name / displayName が期待値と一致する
       assert.strictEqual(pkg.name, 'dontforgetest');
       // package.nls により VS Code 側で解決された displayName が取得できること
       // テストハーネスは ja ロケールで実行されるため（DEFAULT_VSCODE_TEST_LOCALE）、
