@@ -12,6 +12,14 @@ import * as selectDefaultModelModule from '../../../commands/selectDefaultModel'
 
 type ExecuteCommand = typeof vscode.commands.executeCommand;
 
+const assertRejectsWithErrorMessage = async (fn: () => Promise<unknown>, expectedMessage: string): Promise<void> => {
+  await assert.rejects(fn, (err: unknown) => {
+    assert.ok(err instanceof Error, 'Expected Error instance');
+    assert.ok(err.message.includes(expectedMessage), `Expected message to include "${expectedMessage}"`);
+    return true;
+  });
+};
+
 suite('src/extension.ts command handlers (high priority coverage)', () => {
   suiteSetup(async () => {
     // Given: The extension is installed
@@ -59,9 +67,9 @@ suite('src/extension.ts command handlers (high priority coverage)', () => {
     try {
       // When: Executing the command
       // Then: The command rejects with the expected error message
-      await assert.rejects(async () => {
+      await assertRejectsWithErrorMessage(async () => {
         await vscode.commands.executeCommand('dontforgetest.generateTest');
-      }, new RegExp(expectedMessage));
+      }, expectedMessage);
     } finally {
       (quickPickModule as unknown as { generateTestWithQuickPick: typeof original }).generateTestWithQuickPick = original;
     }
@@ -98,9 +106,9 @@ suite('src/extension.ts command handlers (high priority coverage)', () => {
 
     try {
       // When / Then: The command rejects with the expected error message
-      await assert.rejects(async () => {
+      await assertRejectsWithErrorMessage(async () => {
         await vscode.commands.executeCommand('dontforgetest.generateTestFromWorkingTree');
-      }, new RegExp(expectedMessage));
+      }, expectedMessage);
     } finally {
       (generateFromWorkingTreeModule as unknown as { generateTestFromWorkingTree: typeof original }).generateTestFromWorkingTree = original;
     }
@@ -135,9 +143,9 @@ suite('src/extension.ts command handlers (high priority coverage)', () => {
 
     try {
       // When / Then: The command rejects with the expected message
-      await assert.rejects(async () => {
+      await assertRejectsWithErrorMessage(async () => {
         await vscode.commands.executeCommand('dontforgetest.showTestGeneratorOutput');
-      }, new RegExp(expectedMessage));
+      }, expectedMessage);
     } finally {
       (outputChannelModule as unknown as { showTestGenOutput: typeof original }).showTestGenOutput = original;
     }
@@ -174,9 +182,9 @@ suite('src/extension.ts command handlers (high priority coverage)', () => {
 
     try {
       // When / Then: The command rejects with the expected message
-      await assert.rejects(async () => {
+      await assertRejectsWithErrorMessage(async () => {
         await vscode.commands.executeCommand('dontforgetest.selectDefaultModel');
-      }, new RegExp(expectedMessage));
+      }, expectedMessage);
     } finally {
       (selectDefaultModelModule as unknown as { selectDefaultModel: typeof original }).selectDefaultModel = original;
     }
@@ -251,9 +259,9 @@ suite('src/extension.ts command handlers (high priority coverage)', () => {
 
     try {
       // When / Then: Executing openSettings should reject with the built-in error
-      await assert.rejects(async () => {
+      await assertRejectsWithErrorMessage(async () => {
         await vscode.commands.executeCommand('dontforgetest.openSettings');
-      }, new RegExp(expectedMessage));
+      }, expectedMessage);
     } finally {
       (vscode.commands as unknown as { executeCommand: ExecuteCommand }).executeCommand = originalExecute;
     }

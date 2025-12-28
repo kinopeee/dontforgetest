@@ -600,17 +600,22 @@ suite('providers/cursorAgentProvider.ts', () => {
       const originalClearTimeout = globalThis.clearTimeout;
       const originalClearInterval = globalThis.clearInterval;
 
-      const timeouts: TimerHandlerFn[] = [];
-      const intervals: TimerHandlerFn[] = [];
+      let nextTimerId = 1;
+      const timeouts = new Map<number, TimerHandlerFn>();
+      const intervals = new Map<number, TimerHandlerFn>();
+
+      const tryGetNumericId = (id: unknown): number | undefined => {
+        return typeof id === 'number' ? id : undefined;
+      };
 
       (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout = ((
         handler: (...innerArgs: unknown[]) => void,
         _timeout?: number,
         ...args: unknown[]
       ) => {
-        timeouts.push(() => handler(...args));
-        // Return a dummy timer id
-        return 1 as unknown as ReturnType<typeof setTimeout>;
+        const id = nextTimerId++;
+        timeouts.set(id, () => handler(...args));
+        return id as unknown as ReturnType<typeof setTimeout>;
       }) as unknown as typeof setTimeout;
 
       (globalThis as unknown as { setInterval: typeof setInterval }).setInterval = ((
@@ -618,12 +623,24 @@ suite('providers/cursorAgentProvider.ts', () => {
         _timeout?: number,
         ...args: unknown[]
       ) => {
-        intervals.push(() => handler(...args));
-        return 1 as unknown as ReturnType<typeof setInterval>;
+        const id = nextTimerId++;
+        intervals.set(id, () => handler(...args));
+        return id as unknown as ReturnType<typeof setInterval>;
       }) as unknown as typeof setInterval;
 
-      (globalThis as unknown as { clearTimeout: typeof clearTimeout }).clearTimeout = (() => {}) as unknown as typeof clearTimeout;
-      (globalThis as unknown as { clearInterval: typeof clearInterval }).clearInterval = (() => {}) as unknown as typeof clearInterval;
+      (globalThis as unknown as { clearTimeout: typeof clearTimeout }).clearTimeout = ((id: unknown) => {
+        const numericId = tryGetNumericId(id);
+        if (numericId !== undefined) {
+          timeouts.delete(numericId);
+        }
+      }) as unknown as typeof clearTimeout;
+
+      (globalThis as unknown as { clearInterval: typeof clearInterval }).clearInterval = ((id: unknown) => {
+        const numericId = tryGetNumericId(id);
+        if (numericId !== undefined) {
+          intervals.delete(numericId);
+        }
+      }) as unknown as typeof clearInterval;
 
       return {
         restore: () => {
@@ -633,12 +650,14 @@ suite('providers/cursorAgentProvider.ts', () => {
           (globalThis as unknown as { clearInterval: typeof clearInterval }).clearInterval = originalClearInterval;
         },
         fireAllTimeouts: () => {
-          for (const fn of timeouts) {
+          for (const [id, fn] of Array.from(timeouts.entries())) {
+            // setTimeoutは発火後に自動的に解除される想定に合わせる
+            timeouts.delete(id);
             fn();
           }
         },
         fireAllIntervals: () => {
-          for (const fn of intervals) {
+          for (const fn of Array.from(intervals.values())) {
             fn();
           }
         },
