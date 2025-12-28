@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import * as path from 'path';
+import { EventEmitter } from 'events';
 import { CursorAgentProvider } from '../../../providers/cursorAgentProvider';
 import { type AgentRunOptions } from '../../../providers/provider';
 import { type TestGenEvent } from '../../../core/event';
@@ -217,6 +218,95 @@ suite('providers/cursorAgentProvider.ts', () => {
 
       // 非同期イベントの収束を待つ
       await waitForAsyncCleanup();
+    });
+
+    test('TC-CAP-RUN-E-01: run() kills previous activeChild and emits warn log with previous task id', async () => {
+      // Given: A provider with an existing activeChild + activeTaskId (multi-run scenario)
+      const provider = new CursorAgentProvider();
+      const events: TestGenEvent[] = [];
+      let killedCount = 0;
+
+      const prevChild = {
+        kill: () => {
+          killedCount += 1;
+          return true;
+        },
+      };
+
+      // Override internal state + internal methods to avoid spawning a real process
+      (provider as unknown as { activeChild: unknown; activeTaskId: string | undefined }).activeChild = prevChild;
+      (provider as unknown as { activeTaskId: string | undefined }).activeTaskId = 'prev-task-123';
+      (provider as unknown as { spawnCursorAgent: (options: AgentRunOptions) => unknown }).spawnCursorAgent = () => ({
+        kill: () => true,
+      });
+      (provider as unknown as { wireOutput: (child: unknown, options: AgentRunOptions) => void }).wireOutput = () => {
+        // noop: avoid timers and streams
+      };
+
+      const options: AgentRunOptions = {
+        taskId: 'next-task-1',
+        workspaceRoot: '/tmp',
+        prompt: 'test prompt',
+        outputFormat: 'stream-json',
+        allowWrite: false,
+        onEvent: (event) => events.push(event),
+      };
+
+      // When: run() is called while a previous child is active
+      const task = provider.run(options);
+      task.dispose();
+      await waitForAsyncCleanup();
+
+      // Then: Previous process kill is attempted and a warning log is emitted
+      assert.strictEqual(killedCount, 1, 'Expected previous activeChild.kill() to be called exactly once');
+      const warnLogs = events.filter((e) => e.type === 'log' && e.level === 'warn');
+      assert.ok(warnLogs.length >= 1, 'Expected at least one warn log event');
+      const message = warnLogs[0]?.type === 'log' ? warnLogs[0].message : '';
+      assert.ok(message.includes('prev-task-123'), 'Warn message should include previous task id');
+    });
+
+    test('TC-CAP-RUN-E-02: run() tolerates activeChild.kill() throw and still emits warn log', async () => {
+      // Given: A provider with an activeChild whose kill() throws
+      const provider = new CursorAgentProvider();
+      const events: TestGenEvent[] = [];
+
+      const prevChild = {
+        kill: () => {
+          throw new Error('kill failed');
+        },
+      };
+
+      // Override internal state + internal methods to avoid spawning a real process
+      (provider as unknown as { activeChild: unknown; activeTaskId: string | undefined }).activeChild = prevChild;
+      (provider as unknown as { activeTaskId: string | undefined }).activeTaskId = 'prev-task-throw';
+      (provider as unknown as { spawnCursorAgent: (options: AgentRunOptions) => unknown }).spawnCursorAgent = () => ({
+        kill: () => true,
+      });
+      (provider as unknown as { wireOutput: (child: unknown, options: AgentRunOptions) => void }).wireOutput = () => {
+        // noop
+      };
+
+      const options: AgentRunOptions = {
+        taskId: 'next-task-2',
+        workspaceRoot: '/tmp',
+        prompt: 'test prompt',
+        outputFormat: 'stream-json',
+        allowWrite: false,
+        onEvent: (event) => events.push(event),
+      };
+
+      // When: run() is called
+      assert.doesNotThrow(() => {
+        const task = provider.run(options);
+        task.dispose();
+      });
+      await waitForAsyncCleanup();
+
+      // Then: A warning log is still emitted and includes previous task id
+      const warnLogs = events.filter((e) => e.type === 'log' && e.level === 'warn');
+      assert.ok(warnLogs.length >= 1, 'Expected at least one warn log event');
+      const message = warnLogs[0]?.type === 'log' ? warnLogs[0].message : '';
+      assert.ok(message.includes('prev-task-throw'), 'Warn message should include previous task id');
     });
   });
 
@@ -467,6 +557,286 @@ suite('providers/cursorAgentProvider.ts', () => {
         assert.strictEqual(event.message, 'event:unknown');
       }
       assert.strictEqual(result.next, undefined);
+    });
+  });
+
+  suite('wireOutput (time-based monitoring without long sleeps)', () => {
+    type WireOutput = (child: unknown, options: AgentRunOptions) => void;
+
+    type TimerHandlerFn = (...args: unknown[]) => void;
+
+    const createFakeChild = (): {
+      child: unknown;
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+      emitter: EventEmitter;
+      killedRef: { killed: boolean };
+    } => {
+      const emitter = new EventEmitter();
+      const stdout = new EventEmitter();
+      const stderr = new EventEmitter();
+      const killedRef = { killed: false };
+
+      const child = Object.assign(emitter, {
+        stdout,
+        stderr,
+        stdin: { end: () => {} },
+        kill: () => {
+          killedRef.killed = true;
+          return true;
+        },
+      });
+
+      return { child, stdout, stderr, emitter, killedRef };
+    };
+
+    const patchTimers = (): {
+      restore: () => void;
+      fireAllTimeouts: () => void;
+      fireAllIntervals: () => void;
+    } => {
+      const originalSetTimeout = globalThis.setTimeout;
+      const originalSetInterval = globalThis.setInterval;
+      const originalClearTimeout = globalThis.clearTimeout;
+      const originalClearInterval = globalThis.clearInterval;
+
+      const timeouts: TimerHandlerFn[] = [];
+      const intervals: TimerHandlerFn[] = [];
+
+      (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout = ((
+        handler: (...innerArgs: unknown[]) => void,
+        _timeout?: number,
+        ...args: unknown[]
+      ) => {
+        timeouts.push(() => handler(...args));
+        // Return a dummy timer id
+        return 1 as unknown as ReturnType<typeof setTimeout>;
+      }) as unknown as typeof setTimeout;
+
+      (globalThis as unknown as { setInterval: typeof setInterval }).setInterval = ((
+        handler: (...innerArgs: unknown[]) => void,
+        _timeout?: number,
+        ...args: unknown[]
+      ) => {
+        intervals.push(() => handler(...args));
+        return 1 as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval;
+
+      (globalThis as unknown as { clearTimeout: typeof clearTimeout }).clearTimeout = (() => {}) as unknown as typeof clearTimeout;
+      (globalThis as unknown as { clearInterval: typeof clearInterval }).clearInterval = (() => {}) as unknown as typeof clearInterval;
+
+      return {
+        restore: () => {
+          (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout = originalSetTimeout;
+          (globalThis as unknown as { setInterval: typeof setInterval }).setInterval = originalSetInterval;
+          (globalThis as unknown as { clearTimeout: typeof clearTimeout }).clearTimeout = originalClearTimeout;
+          (globalThis as unknown as { clearInterval: typeof clearInterval }).clearInterval = originalClearInterval;
+        },
+        fireAllTimeouts: () => {
+          for (const fn of timeouts) {
+            fn();
+          }
+        },
+        fireAllIntervals: () => {
+          for (const fn of intervals) {
+            fn();
+          }
+        },
+      };
+    };
+
+    test('TC-CAP-WO-N-01: heartbeat emits log when there is no output yet (fake timers)', () => {
+      // Given: wireOutput is wired with fake timers and a controlled clock
+      const provider = new CursorAgentProvider();
+      const wireOutput = (provider as unknown as { wireOutput: WireOutput }).wireOutput.bind(provider);
+      const events: TestGenEvent[] = [];
+
+      const originalNow = Date.now;
+      let fakeNow = 0;
+      (Date as unknown as { now: () => number }).now = () => fakeNow;
+
+      const timers = patchTimers();
+      const { child, stdout, emitter } = createFakeChild();
+
+      try {
+        const options: AgentRunOptions = {
+          taskId: 'wo-heartbeat',
+          workspaceRoot: path.resolve('tmp-workspace'),
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (e) => events.push(e),
+        };
+
+        wireOutput(child, options);
+
+        // When: Time advances beyond the initial heartbeat delay and the heartbeat timeout fires
+        fakeNow = 10_000;
+        timers.fireAllTimeouts();
+
+        // Also simulate first output afterwards to cover heartbeatInterval cleanup path
+        stdout.emit('data', Buffer.from('not-json\n'));
+
+        // Then: A heartbeat info log is emitted
+        const heartbeat = events.find(
+          (e) => e.type === 'log' && e.level === 'info' && e.message.includes('まだ出力がありません'),
+        );
+        assert.ok(heartbeat, 'Expected a heartbeat info log when no output is observed');
+
+        // Cleanup: close the process
+        emitter.emit('close', 0);
+        const completed = events.filter((e) => e.type === 'completed');
+        assert.strictEqual(completed.length, 1, 'Expected exactly one completed event');
+        if (completed[0]?.type === 'completed') {
+          assert.strictEqual(completed[0].exitCode, 0);
+        }
+      } finally {
+        timers.restore();
+        (Date as unknown as { now: () => number }).now = originalNow;
+      }
+    });
+
+    test('TC-CAP-WO-B-01: monitor emits a silence info log after output becomes quiet (fake timers + fake clock)', () => {
+      // Given: A child that outputs once, then becomes silent beyond thresholds
+      const provider = new CursorAgentProvider();
+      const wireOutput = (provider as unknown as { wireOutput: WireOutput }).wireOutput.bind(provider);
+      const events: TestGenEvent[] = [];
+
+      const originalNow = Date.now;
+      let fakeNow = 0;
+      (Date as unknown as { now: () => number }).now = () => fakeNow;
+
+      const timers = patchTimers();
+      const { child, stdout } = createFakeChild();
+
+      try {
+        const options: AgentRunOptions = {
+          taskId: 'wo-silence',
+          workspaceRoot: path.resolve('tmp-workspace'),
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (e) => events.push(e),
+        };
+
+        wireOutput(child, options);
+
+        // When: Some output arrives at t=0
+        fakeNow = 0;
+        stdout.emit(
+          'data',
+          Buffer.from(
+            [
+              JSON.stringify({ type: 'assistant', message: { content: [{ text: 'hello' }] } }),
+              '', // newline
+            ].join('\n'),
+          ),
+        );
+
+        // ...and later the monitor runs at t=30s (>=10s silence, >=30s log interval)
+        fakeNow = 30_000;
+        timers.fireAllIntervals();
+
+        // Then: A silence info log is emitted
+        const silence = events.find(
+          (e) => e.type === 'log' && e.level === 'info' && e.message.includes('最終出力から'),
+        );
+        assert.ok(silence, 'Expected a silence info log after output becomes quiet');
+      } finally {
+        timers.restore();
+        (Date as unknown as { now: () => number }).now = originalNow;
+      }
+    });
+
+    test('TC-CAP-WO-N-02: monitor emits an ignored-summary log when only thinking/user are received (fake timers + fake clock)', () => {
+      // Given: thinking/user-only output (no visible events), then a quiet period
+      const provider = new CursorAgentProvider();
+      const wireOutput = (provider as unknown as { wireOutput: WireOutput }).wireOutput.bind(provider);
+      const events: TestGenEvent[] = [];
+
+      const originalNow = Date.now;
+      let fakeNow = 0;
+      (Date as unknown as { now: () => number }).now = () => fakeNow;
+
+      const timers = patchTimers();
+      const { child, stdout } = createFakeChild();
+
+      try {
+        const options: AgentRunOptions = {
+          taskId: 'wo-ignored-summary',
+          workspaceRoot: path.resolve('tmp-workspace'),
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (e) => events.push(e),
+        };
+
+        wireOutput(child, options);
+
+        // When: Only thinking/user events arrive at t=25s (no emitted events)
+        fakeNow = 25_000;
+        stdout.emit(
+          'data',
+          Buffer.from([JSON.stringify({ type: 'thinking' }), JSON.stringify({ type: 'user' }), ''].join('\n')),
+        );
+
+        // ...and the monitor runs at t=30s
+        fakeNow = 30_000;
+        timers.fireAllIntervals();
+
+        // Then: The ignored-summary info log is emitted
+        const summary = events.find(
+          (e) =>
+            e.type === 'log' &&
+            e.level === 'info' &&
+            e.message.includes('表示されないイベントが継続') &&
+            e.message.includes('ignored(thinking)=1') &&
+            e.message.includes('ignored(user)=1') &&
+            e.message.includes('last=user'),
+        );
+        assert.ok(summary, 'Expected an ignored-summary log for thinking/user-only output');
+      } finally {
+        timers.restore();
+        (Date as unknown as { now: () => number }).now = originalNow;
+      }
+    });
+
+    test('TC-CAP-WO-E-01: emits error log and completed(exitCode=null) on child error', () => {
+      // Given: A wired child process
+      const provider = new CursorAgentProvider();
+      const wireOutput = (provider as unknown as { wireOutput: WireOutput }).wireOutput.bind(provider);
+      const events: TestGenEvent[] = [];
+
+      const timers = patchTimers();
+      const { child, emitter } = createFakeChild();
+
+      try {
+        const options: AgentRunOptions = {
+          taskId: 'wo-error',
+          workspaceRoot: path.resolve('tmp-workspace'),
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (e) => events.push(e),
+        };
+
+        wireOutput(child, options);
+
+        // When: The child emits an error event
+        emitter.emit('error', new Error('spawn failed'));
+
+        // Then: An error log and a completed(null) event are emitted
+        const errLog = events.find((e) => e.type === 'log' && e.level === 'error' && e.message.includes('実行エラー'));
+        assert.ok(errLog, 'Expected an error log event');
+
+        const completed = events.filter((e) => e.type === 'completed');
+        assert.strictEqual(completed.length, 1, 'Expected exactly one completed event');
+        if (completed[0]?.type === 'completed') {
+          assert.strictEqual(completed[0].exitCode, null);
+        }
+      } finally {
+        timers.restore();
+      }
     });
   });
 });
