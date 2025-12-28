@@ -5,6 +5,8 @@ dist
 .vscode-test
 .DS_Store
 .cursor/debug.log
+.cursor/environment.json
+.claude/settings.local.json
 
 # テスト生成物
 docs/test-execution-reports/

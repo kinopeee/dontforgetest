@@ -1,5 +1,0 @@
-{
-  "agentCanUpdateSnapshot": true,
-  "install": "npm install",
-  "start": "npm test"
-}

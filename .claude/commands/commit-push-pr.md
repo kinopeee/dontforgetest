@@ -3,13 +3,13 @@
 ## 概要
 
 現在のブランチに対して変更をコミットし、リモートへプッシュしたあと、Pull Request を作成するための一括実行コマンドの例です。  
-main/master への直接プッシュ禁止や、コミット前に実行する品質チェック（lint / test / build など）、PR 作成フロー（AI/MCP を使うか、CLI を使うかなど）は、各プロジェクトのポリシーに応じてこのテンプレートを調整してください。
+main/master への直接プッシュ禁止や、コミット前に実行する品質チェック（lint / test / build など）、PR 作成フロー（GitHub CLI `gh` を使う運用など）は、各プロジェクトのポリシーに応じてこのテンプレートを調整してください。
 
 ## 前提条件
 
 - 変更済みファイルが存在すること
 - リモート `origin` が設定済みであること
-- GitHub CLI (`gh`) がインストール済みであること（フォールバック用）
+- GitHub CLI (`gh`) がインストール済みであること
 - 作業ブランチ（feature/_, fix/_ など）にいること
 
 ## 実行手順（対話なし）
@@ -19,13 +19,13 @@ main/master への直接プッシュ禁止や、コミット前に実行する�
 3. 変更のステージング（`git add -A`）
 4. コミット（引数または環境変数のメッセージ使用）
 5. プッシュ（`git push -u origin <current-branch>`）
-6. PR作成（MCP や CLI など、環境に応じた方法で作成）
+6. PR作成（GitHub CLI `gh` で作成）
 
 ## 使い方
 
 ### A) 最小限の情報で実行（推奨）
 
-コミットメッセージだけ指定し、PR タイトルと本文は AI（MCP 経由など）に任せるパターンです。
+コミットメッセージだけ指定し、PR タイトル/本文は `gh pr create --fill` でコミットから補完するパターンです（必要なら後で編集）。
 
 ```bash
 # コミットメッセージのみ指定（例）
@@ -43,16 +43,9 @@ fi
 
 git add -A && \
 git commit -m "$MSG" && \
-git push -u origin "$BRANCH"
-
-# ここでAIがPR作成を実行（例）
-# - ブランチ名から目的を推測
-# - git diff --name-status で変更ファイルを確認
-# - PRタイトルとメッセージを自動生成
-# - mcp_github_create_pull_request / gh pr create 等で PR 作成
+git push -u origin "$BRANCH" && \
+gh pr create --fill --base main
 ```
-
-> 注意: MCP（Model Context Protocol）はエージェントからGitHub等の外部サービスを安全に操作するための標準プロトコルです。本手順ではPR作成にMCPのGitHub連携を使用します。利用にはMCP対応環境の設定が必要です。参考: <https://modelcontextprotocol.io/>
 
 ### B) 手動で PR タイトル・メッセージを指定
 
@@ -128,16 +121,16 @@ echo "コミット完了"
 git push -u origin "$BRANCH"
 echo "プッシュ完了"
 
-# 7) PR作成（AIやCLIに依頼）
-# この後、AI や gh コマンドなどを使って PR を作成：
-# - ブランチ名: $BRANCH
-# - 差分: git diff main...HEAD --name-status
-# - コミット履歴: git log main..HEAD --oneline
+# 7) PR作成（対話なし）
+# - コミットメッセージから補完したい場合：
+gh pr create --fill --base main
+#
+# - PR本文をテンプレートに沿って書きたい場合は B) の例を使用
 ```
 
-## PR自動生成の情報源
+## PR作成時に役立つ情報源
 
-AIがPRを作成する際に使用する情報：
+PR タイトル/本文を作る際に使える情報：
 
 ```bash
 # ブランチ名を取得（目的の推測に使用）
@@ -197,7 +190,7 @@ gh pr create --title "タイトル" --body "メッセージ" --base main
 ## 実行例
 
 ```bash
-# 例1: 最小限の指定（AIが自動生成）
+# 例1: 最小限の指定（gh がコミットから補完）
 MSG="fix: 不要なデバッグログ出力を削除"
 BRANCH=$(git branch --show-current)
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
@@ -207,11 +200,7 @@ fi
 # 任意の品質チェック（必要な場合のみ）
 # ./scripts/quality-check.sh || exit 1
 
-git add -A && git commit -m "$MSG" && git push -u origin "$BRANCH"
-
-# この後、AI に以下を依頼：
-# "ブランチ $BRANCH に対して PR を作成してください。
-#  ブランチ名と差分から適切なタイトルとメッセージを生成してください。"
+git add -A && git commit -m "$MSG" && git push -u origin "$BRANCH" && gh pr create --fill --base main
 ```
 
 ## 関連ドキュメント
