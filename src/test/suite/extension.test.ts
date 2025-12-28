@@ -291,7 +291,9 @@ suite('src/extension.ts', () => {
       const pkg = ext.packageJSON;
       assert.strictEqual(pkg.name, 'dontforgetest');
       // package.nls により VS Code 側で解決された displayName が取得できること
-      assert.strictEqual(pkg.displayName, 'Test Generation Agent (Dontforgetest)');
+      // テストハーネスは ja ロケールで実行されるため（DEFAULT_VSCODE_TEST_LOCALE）、
+      // package.nls.ja.json の値を期待する
+      assert.strictEqual(pkg.displayName, 'Dontforgetest');
     });
   });
 
