@@ -30,6 +30,58 @@ suite('l10n key consistency', () => {
     assert.ok(typeof value === 'string' && value.trim().length > 0, `Expected non-empty value for ${key}`);
   }
 
+  test('L10N-N-KEYS-01: new runMode/controlPanel keys resolve to non-empty localized strings', () => {
+    // Given: Keys added for runMode selection and control panel labels
+    const keys = [
+      'quickPick.selectRunMode',
+      'quickPick.runMode.perspectiveOnly',
+      'controlPanel.generatePerspectivesOnly',
+    ];
+    for (const key of keys) {
+      assertNonEmptyL10nValue(bundleEn, key);
+      assertNonEmptyL10nValue(bundleJa, key);
+    }
+
+    // When: Resolving via t()
+    for (const key of keys) {
+      const actual = t(key);
+
+      // Then: It is non-empty and not the raw key
+      assert.ok(actual.trim().length > 0, `Expected non-empty value for ${key}`);
+      assert.notStrictEqual(actual, key, `Expected ${key} to not fall back to raw key`);
+    }
+  });
+
+  test('L10N-N-PLACEHOLDER-01: runMode.perspectiveOnly.completed resolves {0} placeholder', () => {
+    // Given: A concrete path argument
+    const p = 'docs/test-perspectives/test-perspectives_x.md';
+    const key = 'runMode.perspectiveOnly.completed';
+    assertNonEmptyL10nValue(bundleEn, key);
+    assertNonEmptyL10nValue(bundleJa, key);
+
+    // When: Resolving via t(key, p)
+    const actual = t(key, p);
+
+    // Then: Placeholder is resolved and path is included
+    assert.ok(actual.includes(p), 'Expected output to include the provided path');
+    assert.ok(!actual.includes('{0}'), 'Expected no unresolved {0} placeholder');
+  });
+
+  test('L10N-N-PLACEHOLDER-02: runMode.perspectiveOnly.completedWithWarning resolves {0} placeholder', () => {
+    // Given: A concrete path argument
+    const p = 'docs/test-perspectives/test-perspectives_x.md';
+    const key = 'runMode.perspectiveOnly.completedWithWarning';
+    assertNonEmptyL10nValue(bundleEn, key);
+    assertNonEmptyL10nValue(bundleJa, key);
+
+    // When: Resolving via t(key, p)
+    const actual = t(key, p);
+
+    // Then: Placeholder is resolved and path is included
+    assert.ok(actual.includes(p), 'Expected output to include the provided path');
+    assert.ok(!actual.includes('{0}'), 'Expected no unresolved {0} placeholder');
+  });
+
   test('TC-L10N-N-01: bundle.l10n.json defines artifact.executionReport.envSource with non-empty value', () => {
     // Given: The English bundle file
     // When: Looking up the key

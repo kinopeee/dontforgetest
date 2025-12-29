@@ -7,6 +7,7 @@ import { generateTestFromLatestCommit } from './commands/generateFromCommit';
 import { generateTestFromCommitRange } from './commands/generateFromCommitRange';
 import { generateTestFromWorkingTree } from './commands/generateFromWorkingTree';
 import { selectDefaultModel } from './commands/selectDefaultModel';
+import { type TestGenerationRunMode } from './commands/runWithArtifacts';
 import { CursorAgentProvider } from './providers/cursorAgentProvider';
 import { TestGenControlPanelViewProvider } from './ui/controlPanel';
 import { showTestGenOutput } from './ui/outputChannel';
@@ -16,6 +17,7 @@ import { initializeProgressTreeView } from './ui/progressTreeView';
 import { initializeOutputTreeView } from './ui/outputTreeView';
 
 type RunLocation = 'local' | 'worktree';
+type RunMode = TestGenerationRunMode;
 
 /**
  * RunLocation 値を正規化する。
@@ -26,6 +28,14 @@ type RunLocation = 'local' | 'worktree';
  */
 export function normalizeRunLocation(value: unknown): RunLocation {
   return value === 'worktree' ? 'worktree' : 'local';
+}
+
+/**
+ * RunMode 値を正規化する。
+ * 'perspectiveOnly' の場合のみ 'perspectiveOnly' を返し、それ以外はすべて 'full' を返す。
+ */
+export function normalizeRunMode(value: unknown): RunMode {
+  return value === 'perspectiveOnly' ? 'perspectiveOnly' : 'full';
 }
 
 /**
@@ -59,27 +69,34 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('dontforgetest.generateTestFromCommit', async (args?: { runLocation?: RunLocation; modelOverride?: string }) => {
-      const runLocation = normalizeRunLocation(args?.runLocation);
-      const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
-      await generateTestFromLatestCommit(provider, modelOverride, { runLocation, extensionContext: context });
-    }),
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand(
-      'dontforgetest.generateTestFromCommitRange',
-      async (args?: { runLocation?: RunLocation; modelOverride?: string }) => {
+      'dontforgetest.generateTestFromCommit',
+      async (args?: { runLocation?: RunLocation; modelOverride?: string; runMode?: RunMode }) => {
         const runLocation = normalizeRunLocation(args?.runLocation);
         const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
-        await generateTestFromCommitRange(provider, modelOverride, { runLocation, extensionContext: context });
+        const runMode = normalizeRunMode(args?.runMode);
+        await generateTestFromLatestCommit(provider, modelOverride, { runLocation, runMode, extensionContext: context });
       },
     ),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('dontforgetest.generateTestFromWorkingTree', async () => {
-      await generateTestFromWorkingTree(provider);
+    vscode.commands.registerCommand(
+      'dontforgetest.generateTestFromCommitRange',
+      async (args?: { runLocation?: RunLocation; modelOverride?: string; runMode?: RunMode }) => {
+        const runLocation = normalizeRunLocation(args?.runLocation);
+        const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
+        const runMode = normalizeRunMode(args?.runMode);
+        await generateTestFromCommitRange(provider, modelOverride, { runLocation, runMode, extensionContext: context });
+      },
+    ),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('dontforgetest.generateTestFromWorkingTree', async (args?: { modelOverride?: string; runMode?: RunMode }) => {
+      const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
+      const runMode = normalizeRunMode(args?.runMode);
+      await generateTestFromWorkingTree(provider, modelOverride, { runMode });
     }),
   );
 

@@ -3,9 +3,7 @@ import * as vscode from 'vscode';
 
 type L10nModule = typeof import('../../../core/l10n');
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const nodeRequire = require as (id: string) => unknown;
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const nodeRequireResolve = require.resolve as (id: string) => string;
 
 const realFs = nodeRequire('fs') as typeof import('fs');
@@ -21,7 +19,6 @@ function isEnglishBundlePath(filePath: unknown): boolean {
 function loadFreshL10nModule(): L10nModule {
   const id = '../../../core/l10n';
   const resolved = nodeRequireResolve(id);
-  // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
   delete require.cache[resolved];
   return nodeRequire(id) as L10nModule;
 }

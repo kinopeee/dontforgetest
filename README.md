@@ -14,6 +14,8 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
   - Latest commit diff
   - Commit range diff
   - Uncommitted diff (staged / unstaged)
+- Select output:
+  - **Perspective table + Generate tests (default)** / **Generate perspective table only**
 - Choose execution target (diff-based sources):
   - **Local**: writes directly into your current workspace
   - **Worktree**: generates in a temporary worktree and applies **only test diffs** back to local *only when* `git apply --check` passes

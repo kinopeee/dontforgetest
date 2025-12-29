@@ -4,6 +4,13 @@ import { type AgentProvider } from '../providers/provider';
 import { TestGenerationSession } from './runWithArtifacts/testGenerationSession';
 import { createTemporaryWorktree, removeTemporaryWorktree } from '../git/worktreeManager';
 
+/**
+ * テスト生成の実行モード。
+ * - full: 観点表 → テスト生成 → テスト実行（既存フロー）
+ * - perspectiveOnly: 観点表のみ生成して停止（ユーザー確認待ち）
+ */
+export type TestGenerationRunMode = 'full' | 'perspectiveOnly';
+
 export interface WorktreeOps {
   createTemporaryWorktree: typeof createTemporaryWorktree;
   removeTemporaryWorktree: typeof removeTemporaryWorktree;
@@ -26,6 +33,8 @@ export interface RunWithArtifactsOptions {
   model: string | undefined;
   /** 生成タスクID（lastRun と紐づく） */
   generationTaskId: string;
+  /** 実行モード（未指定の場合は full） */
+  runMode?: TestGenerationRunMode;
   /**
    * 実行先。
    * - local: 現在のワークスペースを直接編集

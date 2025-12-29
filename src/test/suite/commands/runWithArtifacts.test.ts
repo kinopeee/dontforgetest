@@ -7,6 +7,7 @@ import { AgentProvider, AgentRunOptions, RunningTask } from '../../../providers/
 import { initializeProgressTreeView } from '../../../ui/progressTreeView';
 import { createMockExtensionContext } from '../testUtils/vscodeMocks';
 import { t } from '../../../core/l10n';
+import * as perspectiveStepModule from '../../../commands/runWithArtifacts/perspectiveStep';
 
 // Mock Provider
 class MockProvider implements AgentProvider {
@@ -251,6 +252,327 @@ suite('commands/runWithArtifacts.ts', () => {
     } catch {
       // ディレクトリがないならOK
       assert.ok(true);
+    }
+  });
+
+  // TC-CMD-02B: 観点表のみモード（runMode=perspectiveOnly）
+  test('TC-CMD-02B: 観点表のみモードでは、観点表を保存して停止し、実行レポートは生成しない', async () => {
+    // Given: includeTestPerspectiveTable=false でも、runMode=perspectiveOnly を指定する
+    const provider = new MockProvider(0);
+    const taskId = `task-02b-${Date.now()}`;
+    const perspectiveDir = path.join(baseTempDir, 'perspectives-02b');
+    const reportDir = path.join(baseTempDir, 'reports-02b');
+
+    // When: runWithArtifacts を呼び出す（観点表のみで停止）
+    await runWithArtifacts({
+      provider,
+      workspaceRoot,
+      cursorAgentCommand: 'mock-agent',
+      testStrategyPath: 'docs/test-strategy.md',
+      generationLabel: 'Perspective Only',
+      targetPaths: ['test.ts'],
+      generationPrompt: 'prompt',
+      model: 'model',
+      generationTaskId: taskId,
+      runMode: 'perspectiveOnly',
+      settingsOverride: {
+        // 通常は観点表OFFだが、runMode=perspectiveOnly の場合は強制的に観点表を生成する
+        includeTestPerspectiveTable: false,
+        perspectiveReportDir: perspectiveDir,
+        testExecutionReportDir: reportDir,
+        testCommand: 'echo "should-not-run"',
+        testExecutionRunner: 'extension',
+      },
+    });
+
+    // Then: 観点表は保存される
+    const perspectiveUri = vscode.Uri.file(path.join(workspaceRoot, perspectiveDir));
+    const perspectives = await vscode.workspace.findFiles(new vscode.RelativePattern(perspectiveUri, 'test-perspectives_*.md'));
+    assert.ok(perspectives.length > 0, `観点表が ${perspectiveDir} に作成されること`);
+
+    // Then: 実行レポートは生成されない（観点表で停止するため）
+    const reportUri = vscode.Uri.file(path.join(workspaceRoot, reportDir));
+    const reports = await vscode.workspace.findFiles(new vscode.RelativePattern(reportUri, 'test-execution_*.md'));
+    assert.strictEqual(reports.length, 0, '観点表のみモードでは実行レポートを生成しないこと');
+
+    // Then: provider は観点表生成ステップのみ実行される
+    assert.strictEqual(provider.history.length, 1, 'provider.run は観点表生成のみで1回呼ばれること');
+    assert.ok(provider.history[0]?.taskId.endsWith('-perspectives'), '観点表生成の taskId が使用されること');
+  });
+
+  test('SES-N-PO-STOP-01: perspectiveOnly shows information message with resolved path and stops after perspectives', async () => {
+    // Given: runPerspectiveTableStep returns extracted=true and a saved path
+    const originalRunPerspective = perspectiveStepModule.runPerspectiveTableStep;
+    const originalShowInfo = vscode.window.showInformationMessage;
+    const originalShowWarn = vscode.window.showWarningMessage;
+    const prevEnv = process.env.VSCODE_TEST_RUNNER;
+    process.env.VSCODE_TEST_RUNNER = '1';
+
+    const infoMessages: string[] = [];
+    const warnMessages: string[] = [];
+    const provider = new MockProvider(0);
+    const taskId = `task-ses-stop-${Date.now()}`;
+    const savedRelativePath = 'docs/test-perspectives/test-perspectives_x.md';
+
+    (vscode.window as unknown as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = async (
+      message: string,
+    ) => {
+      infoMessages.push(message);
+      return undefined;
+    };
+    (vscode.window as unknown as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = async (
+      message: string,
+    ) => {
+      warnMessages.push(message);
+      return undefined;
+    };
+    (perspectiveStepModule as unknown as { runPerspectiveTableStep: typeof perspectiveStepModule.runPerspectiveTableStep }).runPerspectiveTableStep =
+      async (params) => {
+        // Simulate provider run for perspective step (taskId ends with "-perspectives")
+        params.provider.run({
+          taskId: `${params.baseTaskId}-perspectives`,
+          workspaceRoot: params.runWorkspaceRoot,
+          agentCommand: params.cursorAgentCommand,
+          prompt: 'mock perspective prompt',
+          model: params.model,
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: () => {},
+        });
+        return {
+          saved: { absolutePath: '/abs/test-perspectives_x.md', relativePath: savedRelativePath },
+          markdown: `${PERSPECTIVE_TABLE_HEADER}\n${PERSPECTIVE_TABLE_SEPARATOR}\n`,
+          extracted: true,
+        };
+      };
+
+    try {
+      // When: runWithArtifacts is called with runMode=perspectiveOnly
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Perspective Only (SES)',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        runMode: 'perspectiveOnly',
+        settingsOverride: {
+          includeTestPerspectiveTable: false,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-ses-stop'),
+          testExecutionReportDir: path.join(baseTempDir, 'reports-ses-stop'),
+          testCommand: 'echo "should-not-run"',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: It shows info (not warning), uses resolved placeholder, and stops after perspectives
+      assert.strictEqual(infoMessages.length, 1);
+      assert.strictEqual(warnMessages.length, 0);
+      assert.ok(infoMessages[0]?.includes(savedRelativePath), 'Expected message to include saved path');
+      assert.ok(!infoMessages[0]?.includes('{0}'), 'Expected no unresolved {0} placeholder');
+      assert.strictEqual(provider.history.length, 1);
+      assert.ok(provider.history[0]?.taskId.endsWith('-perspectives'));
+    } finally {
+      (perspectiveStepModule as unknown as { runPerspectiveTableStep: typeof originalRunPerspective }).runPerspectiveTableStep = originalRunPerspective;
+      (vscode.window as unknown as { showInformationMessage: typeof originalShowInfo }).showInformationMessage = originalShowInfo;
+      (vscode.window as unknown as { showWarningMessage: typeof originalShowWarn }).showWarningMessage = originalShowWarn;
+      process.env.VSCODE_TEST_RUNNER = prevEnv;
+    }
+  });
+
+  test('SES-E-PO-WARN-01: perspectiveOnly shows warning message when extracted=false', async () => {
+    // Given: runPerspectiveTableStep returns extracted=false
+    const originalRunPerspective = perspectiveStepModule.runPerspectiveTableStep;
+    const originalShowInfo = vscode.window.showInformationMessage;
+    const originalShowWarn = vscode.window.showWarningMessage;
+    const prevEnv = process.env.VSCODE_TEST_RUNNER;
+    process.env.VSCODE_TEST_RUNNER = '1';
+
+    const infoMessages: string[] = [];
+    const warnMessages: string[] = [];
+    const provider = new MockProvider(0);
+    const taskId = `task-ses-warn-${Date.now()}`;
+    const savedRelativePath = 'docs/test-perspectives/test-perspectives_warn.md';
+
+    (vscode.window as unknown as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = async (
+      message: string,
+    ) => {
+      infoMessages.push(message);
+      return undefined;
+    };
+    (vscode.window as unknown as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = async (
+      message: string,
+    ) => {
+      warnMessages.push(message);
+      return undefined;
+    };
+    (perspectiveStepModule as unknown as { runPerspectiveTableStep: typeof perspectiveStepModule.runPerspectiveTableStep }).runPerspectiveTableStep =
+      async (params) => {
+        params.provider.run({
+          taskId: `${params.baseTaskId}-perspectives`,
+          workspaceRoot: params.runWorkspaceRoot,
+          agentCommand: params.cursorAgentCommand,
+          prompt: 'mock perspective prompt',
+          model: params.model,
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: () => {},
+        });
+        return {
+          saved: { absolutePath: '/abs/test-perspectives_warn.md', relativePath: savedRelativePath },
+          markdown: `${PERSPECTIVE_TABLE_HEADER}\n${PERSPECTIVE_TABLE_SEPARATOR}\n`,
+          extracted: false,
+        };
+      };
+
+    try {
+      // When: runWithArtifacts is called with runMode=perspectiveOnly
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Perspective Only (WARN)',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        runMode: 'perspectiveOnly',
+        settingsOverride: {
+          includeTestPerspectiveTable: false,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-ses-warn'),
+          testExecutionReportDir: path.join(baseTempDir, 'reports-ses-warn'),
+          testCommand: 'echo "should-not-run"',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: It shows warning with resolved placeholder
+      assert.strictEqual(infoMessages.length, 0);
+      assert.strictEqual(warnMessages.length, 1);
+      assert.ok(warnMessages[0]?.includes(savedRelativePath), 'Expected warning to include saved path');
+      assert.ok(!warnMessages[0]?.includes('{0}'), 'Expected no unresolved {0} placeholder');
+    } finally {
+      (perspectiveStepModule as unknown as { runPerspectiveTableStep: typeof originalRunPerspective }).runPerspectiveTableStep = originalRunPerspective;
+      (vscode.window as unknown as { showInformationMessage: typeof originalShowInfo }).showInformationMessage = originalShowInfo;
+      (vscode.window as unknown as { showWarningMessage: typeof originalShowWarn }).showWarningMessage = originalShowWarn;
+      process.env.VSCODE_TEST_RUNNER = prevEnv;
+    }
+  });
+
+  test('SES-B-EMPTY-PATH-01: empty saved path uses t("artifact.none") and does not leak "{0}"', async () => {
+    // Given: saved.relativePath and saved.absolutePath are empty
+    const originalRunPerspective = perspectiveStepModule.runPerspectiveTableStep;
+    const originalShowInfo = vscode.window.showInformationMessage;
+    const prevEnv = process.env.VSCODE_TEST_RUNNER;
+    process.env.VSCODE_TEST_RUNNER = '1';
+
+    const infoMessages: string[] = [];
+    const provider = new MockProvider(0);
+    const taskId = `task-ses-empty-path-${Date.now()}`;
+
+    (vscode.window as unknown as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = async (
+      message: string,
+    ) => {
+      infoMessages.push(message);
+      return undefined;
+    };
+    (perspectiveStepModule as unknown as { runPerspectiveTableStep: typeof perspectiveStepModule.runPerspectiveTableStep }).runPerspectiveTableStep =
+      async () => {
+        return {
+          saved: { absolutePath: '' },
+          markdown: `${PERSPECTIVE_TABLE_HEADER}\n${PERSPECTIVE_TABLE_SEPARATOR}\n`,
+          extracted: true,
+        };
+      };
+
+    try {
+      // When: runWithArtifacts is called with runMode=perspectiveOnly
+      await runWithArtifacts({
+        provider,
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Perspective Only (EMPTY PATH)',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'prompt',
+        model: 'model',
+        generationTaskId: taskId,
+        runMode: 'perspectiveOnly',
+        settingsOverride: {
+          includeTestPerspectiveTable: false,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-ses-empty-path'),
+          testExecutionReportDir: path.join(baseTempDir, 'reports-ses-empty-path'),
+          testCommand: 'echo "should-not-run"',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: Message uses artifact.none and does not leak placeholder
+      assert.strictEqual(infoMessages.length, 1);
+      assert.ok(infoMessages[0]?.includes(t('artifact.none')), 'Expected artifact.none to be used');
+      assert.ok(!infoMessages[0]?.includes('{0}'), 'Expected no unresolved {0} placeholder');
+    } finally {
+      (perspectiveStepModule as unknown as { runPerspectiveTableStep: typeof originalRunPerspective }).runPerspectiveTableStep = originalRunPerspective;
+      (vscode.window as unknown as { showInformationMessage: typeof originalShowInfo }).showInformationMessage = originalShowInfo;
+      process.env.VSCODE_TEST_RUNNER = prevEnv;
+    }
+  });
+
+  test('SES-N-PO-NO-OPEN-IN-TEST-01: VSCODE_TEST_RUNNER=1 skips openTextDocument side effect', async () => {
+    // Given: Test runner env is set, and savedAbsolutePath is non-empty
+    const originalRunPerspective = perspectiveStepModule.runPerspectiveTableStep;
+    const workspaceAny = vscode.workspace as unknown as { openTextDocument: unknown };
+    const originalOpen = workspaceAny.openTextDocument as typeof vscode.workspace.openTextDocument;
+    const prevEnv = process.env.VSCODE_TEST_RUNNER;
+    process.env.VSCODE_TEST_RUNNER = '1';
+
+    let openCalled = 0;
+    workspaceAny.openTextDocument = (async () => {
+      openCalled += 1;
+      return {} as unknown as vscode.TextDocument;
+    }) as unknown;
+
+    (perspectiveStepModule as unknown as { runPerspectiveTableStep: typeof perspectiveStepModule.runPerspectiveTableStep }).runPerspectiveTableStep =
+      async () => {
+        return {
+          saved: { absolutePath: '/abs/should-not-open.md', relativePath: 'docs/test-perspectives/should-not-open.md' },
+          markdown: `${PERSPECTIVE_TABLE_HEADER}\n${PERSPECTIVE_TABLE_SEPARATOR}\n`,
+          extracted: true,
+        };
+      };
+
+    try {
+      // When: runWithArtifacts is called with runMode=perspectiveOnly
+      await runWithArtifacts({
+        provider: new MockProvider(0),
+        workspaceRoot,
+        cursorAgentCommand: 'mock-agent',
+        testStrategyPath: 'docs/test-strategy.md',
+        generationLabel: 'Perspective Only (NO OPEN)',
+        targetPaths: ['test.ts'],
+        generationPrompt: 'prompt',
+        model: 'model',
+        generationTaskId: `task-ses-no-open-${Date.now()}`,
+        runMode: 'perspectiveOnly',
+        settingsOverride: {
+          includeTestPerspectiveTable: false,
+          perspectiveReportDir: path.join(baseTempDir, 'perspectives-ses-no-open'),
+          testExecutionReportDir: path.join(baseTempDir, 'reports-ses-no-open'),
+          testCommand: 'echo "should-not-run"',
+          testExecutionRunner: 'extension',
+        },
+      });
+
+      // Then: openTextDocument is not called
+      assert.strictEqual(openCalled, 0);
+    } finally {
+      (perspectiveStepModule as unknown as { runPerspectiveTableStep: typeof originalRunPerspective }).runPerspectiveTableStep = originalRunPerspective;
+      workspaceAny.openTextDocument = originalOpen as unknown;
+      process.env.VSCODE_TEST_RUNNER = prevEnv;
     }
   });
 

@@ -4,11 +4,16 @@ import { t } from '../core/l10n';
 import { buildTestGenPrompt } from '../core/promptBuilder';
 import { analyzeGitUnifiedDiff, extractChangedPaths, getWorkingTreeDiff, type WorkingTreeDiffMode } from '../git/diffAnalyzer';
 import { type AgentProvider } from '../providers/provider';
-import { runWithArtifacts } from './runWithArtifacts';
+import { runWithArtifacts, type TestGenerationRunMode } from './runWithArtifacts';
 import { truncateText } from './runWithArtifacts/utils';
 
 /** プロンプトに含める差分テキストの最大文字数 */
 const MAX_DIFF_CHARS_FOR_PROMPT = 20_000;
+
+export interface GenerateFromWorkingTreeOptions {
+  /** 実行モード（未指定の場合は full） */
+  runMode?: TestGenerationRunMode;
+}
 
 export interface GenerateFromWorkingTreeDeps {
   ensurePreflight?: () => Promise<PreflightOk | undefined>;
@@ -26,6 +31,7 @@ export interface GenerateFromWorkingTreeDeps {
 export async function generateTestFromWorkingTree(
   provider: AgentProvider,
   modelOverride?: string,
+  options: GenerateFromWorkingTreeOptions = {},
   deps?: GenerateFromWorkingTreeDeps,
 ): Promise<void> {
   const resolvedDeps: Required<GenerateFromWorkingTreeDeps> = {
@@ -108,6 +114,7 @@ export async function generateTestFromWorkingTree(
     targetPaths: changedFiles,
     generationPrompt: finalPrompt,
     perspectiveReferenceText: diffForPrompt,
+    runMode: options.runMode === 'perspectiveOnly' ? 'perspectiveOnly' : 'full',
     model: modelOverride ?? defaultModel,
     generationTaskId: taskId,
   });

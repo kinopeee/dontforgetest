@@ -7131,7 +7131,7 @@ suite('core/artifacts.ts', () => {
 
     test('TC-ART-PARSE-PERSPECTIVE-E-01: parsePerspectiveJsonV1 returns invalid-json for unterminated JSON string', () => {
       // Given: An unterminated JSON string that starts with a quote (no JSON object in the text)
-      const raw = '\"abc';
+      const raw = '"abc';
 
       // When: parsePerspectiveJsonV1 is called
       const result = parsePerspectiveJsonV1(raw);
@@ -7143,7 +7143,7 @@ suite('core/artifacts.ts', () => {
 
     test('TC-ART-PARSE-PERSPECTIVE-N-01: parsePerspectiveJsonV1 handles non-fence backticks prefix and still parses JSON object', () => {
       // Given: Text starts with backticks but is not a valid fenced block (edge case)
-      const raw = '``````\n{\"version\":1,\"cases\":[]}';
+      const raw = '``````\n{"version":1,"cases":[]}';
 
       // When: parsePerspectiveJsonV1 is called
       const result = parsePerspectiveJsonV1(raw);
@@ -7159,7 +7159,7 @@ suite('core/artifacts.ts', () => {
 
     test('TC-ART-PARSE-EXEC-E-01: parseTestExecutionJsonV1 returns invalid-json for unterminated JSON string', () => {
       // Given: An unterminated JSON string that starts with a quote (no JSON object in the text)
-      const raw = '\"abc';
+      const raw = '"abc';
 
       // When: parseTestExecutionJsonV1 is called
       const result = parseTestExecutionJsonV1(raw);

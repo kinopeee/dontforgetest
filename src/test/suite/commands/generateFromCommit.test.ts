@@ -167,6 +167,27 @@ suite('commands/generateFromCommit.ts', () => {
       assert.strictEqual(runWithArtifactsCalls.length, 0);
     });
 
+    test('CM-N-PO-NOCTX-01: perspectiveOnly locks runLocation to local and does not require extensionContext', async () => {
+      // Given: Valid commit/diff, but requested runLocation=worktree and extensionContext is undefined
+      execGitStdoutResponses.set('rev-parse', 'abcdef1234567890');
+      execGitStdoutResponses.set('diff-tree', 'src/app.test.ts');
+      execGitStdoutResponses.set('show', 'diff content');
+
+      // When: Calling generateTestFromLatestCommit with runMode=perspectiveOnly
+      await generateTestFromLatestCommit(provider, undefined, {
+        runLocation: 'worktree',
+        runMode: 'perspectiveOnly',
+        extensionContext: undefined,
+      });
+
+      // Then: No worktree-context error, and runWithArtifacts uses effectiveRunLocation=local
+      assert.strictEqual(showErrorMessages.length, 0, 'Expected no error message for perspectiveOnly lock');
+      assert.strictEqual(runWithArtifactsCalls.length, 1);
+      const call = runWithArtifactsCalls[0];
+      assert.strictEqual(call.runMode, 'perspectiveOnly');
+      assert.strictEqual(call.runLocation, 'local');
+    });
+
     test('TC-GC-N-01: local mode calls runWithArtifacts with model override', async () => {
       // Given: 有効なコミット/差分とモデル上書き
       execGitStdoutResponses.set('rev-parse', 'abcdef1234567890');

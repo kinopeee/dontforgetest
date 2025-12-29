@@ -84,7 +84,7 @@ suite('commands/generateFromWorkingTree.ts', () => {
 
     try {
       // When: generateTestFromWorkingTree を呼び出す
-      await generateTestFromWorkingTree(provider, undefined, deps);
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
 
       // Then: QuickPick が呼ばれず終了する
       assert.strictEqual(quickPickCalled, false, 'preflight 失敗時は QuickPick を呼ばないこと');
@@ -109,7 +109,7 @@ suite('commands/generateFromWorkingTree.ts', () => {
 
     try {
       // When: generateTestFromWorkingTree を呼び出す
-      await generateTestFromWorkingTree(provider, undefined, deps);
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
 
       // Then: diff 取得が呼ばれない
       assert.strictEqual(diffCalled, false, 'キャンセル時は diff 取得が呼ばれないこと');
@@ -143,7 +143,7 @@ suite('commands/generateFromWorkingTree.ts', () => {
 
     try {
       // When: generateTestFromWorkingTree を呼び出す
-      await generateTestFromWorkingTree(provider, undefined, deps);
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
 
       // Then: エラーメッセージが通知される
       assert.ok(
@@ -179,7 +179,7 @@ suite('commands/generateFromWorkingTree.ts', () => {
 
     try {
       // When: generateTestFromWorkingTree を呼び出す
-      await generateTestFromWorkingTree(provider, undefined, deps);
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
 
       // Then: 変更なしの情報メッセージが表示される
       assert.ok(
@@ -225,13 +225,298 @@ suite('commands/generateFromWorkingTree.ts', () => {
 
     try {
       // When: generateTestFromWorkingTree を呼び出す
-      await generateTestFromWorkingTree(provider, undefined, deps);
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
 
       // Then: runWithArtifacts が呼ばれ、プロンプトに diff が含まれる
       assert.strictEqual(runCalled, true, 'runWithArtifacts が呼ばれること');
       assert.ok(receivedPrompt.includes('Base Prompt'), 'ベースプロンプトが含まれること');
       assert.ok(receivedPrompt.includes(diffText), 'diff がプロンプトに含まれること');
       assert.deepStrictEqual(receivedTargets, ['src/foo.ts'], '変更ファイルが抽出されること');
+    } finally {
+      restoreQuickPick();
+    }
+  });
+
+  test('WT-N-UNSTAGED-01: selecting Unstaged calls getWorkingTreeDiff with mode="unstaged"', async () => {
+    // Given: User picks Unstaged
+    const provider = new MockGenerateProvider();
+    const restoreQuickPick = setShowQuickPickMock(async () => ({
+      label: 'unstaged',
+      description: 'git diff',
+      mode: 'unstaged',
+    } satisfies WorkingTreePick));
+    let calledMode: string | undefined;
+    const deps: GenerateFromWorkingTreeDeps = {
+      ...baseDeps,
+      getWorkingTreeDiff: async (_repoRoot, mode) => {
+        calledMode = mode;
+        return 'diff --git a/a.ts b/a.ts\n';
+      },
+      analyzeGitUnifiedDiff: () => ({ files: [] }),
+      extractChangedPaths: () => [],
+      runWithArtifacts: async () => {
+        // noop
+      },
+    };
+
+    try {
+      // When: Calling generateTestFromWorkingTree
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
+
+      // Then: It calls getWorkingTreeDiff with mode="unstaged"
+      assert.strictEqual(calledMode, 'unstaged');
+    } finally {
+      restoreQuickPick();
+    }
+  });
+
+  test('WT-B-EMPTY-01: whitespace-only diff shows information message and does not call runWithArtifacts', async () => {
+    // Given: diffText is whitespace-only
+    const provider = new MockGenerateProvider();
+    const restoreQuickPick = setShowQuickPickMock(async () => ({
+      label: 'unstaged',
+      description: 'git diff',
+      mode: 'unstaged',
+    } satisfies WorkingTreePick));
+    let infoMessage: string | undefined;
+    const restoreMessages = setShowMessageMocks({
+      showInformationMessage: async (message: string) => {
+        infoMessage = message;
+        return undefined;
+      },
+    });
+    let runCalled = false;
+    const deps: GenerateFromWorkingTreeDeps = {
+      ...baseDeps,
+      getWorkingTreeDiff: async () => '   \n\t',
+      runWithArtifacts: async () => {
+        runCalled = true;
+      },
+    };
+
+    try {
+      // When: Calling generateTestFromWorkingTree
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
+
+      // Then: It shows "no changes" and does not run
+      assert.strictEqual(runCalled, false);
+      assert.strictEqual(infoMessage, t('git.workingTree.noChanges', 'unstaged'));
+    } finally {
+      restoreQuickPick();
+      restoreMessages();
+    }
+  });
+
+  test('WT-B-MIN-01: minimal non-empty diff triggers runWithArtifacts with extracted targetPaths', async () => {
+    // Given: diffText has minimum length=1 after trim
+    const provider = new MockGenerateProvider();
+    const restoreQuickPick = setShowQuickPickMock(async () => ({
+      label: 'unstaged',
+      description: 'git diff',
+      mode: 'unstaged',
+    } satisfies WorkingTreePick));
+    let receivedTargets: string[] | undefined;
+    const deps: GenerateFromWorkingTreeDeps = {
+      ...baseDeps,
+      getWorkingTreeDiff: async () => 'x',
+      analyzeGitUnifiedDiff: () => ({ files: [] }),
+      extractChangedPaths: () => ['a.ts'],
+      runWithArtifacts: async (options) => {
+        receivedTargets = options.targetPaths;
+      },
+    };
+
+    try {
+      // When: Calling generateTestFromWorkingTree
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
+
+      // Then: targetPaths contains the extracted file
+      assert.deepStrictEqual(receivedTargets, ['a.ts']);
+    } finally {
+      restoreQuickPick();
+    }
+  });
+
+  test('WT-B-0FILES-01: non-empty diff with 0 extracted files still calls runWithArtifacts with []', async () => {
+    // Given: diffText is non-empty but extractChangedPaths returns []
+    const provider = new MockGenerateProvider();
+    const restoreQuickPick = setShowQuickPickMock(async () => ({
+      label: 'unstaged',
+      description: 'git diff',
+      mode: 'unstaged',
+    } satisfies WorkingTreePick));
+    let receivedTargets: string[] | undefined;
+    const deps: GenerateFromWorkingTreeDeps = {
+      ...baseDeps,
+      getWorkingTreeDiff: async () => 'x',
+      analyzeGitUnifiedDiff: () => ({ files: [] }),
+      extractChangedPaths: () => [],
+      runWithArtifacts: async (options) => {
+        receivedTargets = options.targetPaths;
+      },
+    };
+
+    try {
+      // When: Calling generateTestFromWorkingTree
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
+
+      // Then: It passes an empty array safely
+      assert.deepStrictEqual(receivedTargets, []);
+    } finally {
+      restoreQuickPick();
+    }
+  });
+
+  test('WT-N-RUNMODE-PO-01: options.runMode="perspectiveOnly" is passed to runWithArtifacts', async () => {
+    // Given: runMode is perspectiveOnly
+    const provider = new MockGenerateProvider();
+    const restoreQuickPick = setShowQuickPickMock(async () => ({
+      label: 'unstaged',
+      description: 'git diff',
+      mode: 'unstaged',
+    } satisfies WorkingTreePick));
+    let receivedRunMode: string | undefined;
+    const deps: GenerateFromWorkingTreeDeps = {
+      ...baseDeps,
+      getWorkingTreeDiff: async () => 'x',
+      analyzeGitUnifiedDiff: () => ({ files: [] }),
+      extractChangedPaths: () => [],
+      runWithArtifacts: async (options) => {
+        receivedRunMode = options.runMode;
+      },
+    };
+
+    try {
+      // When: Calling generateTestFromWorkingTree with runMode=perspectiveOnly
+      await generateTestFromWorkingTree(provider, undefined, { runMode: 'perspectiveOnly' }, deps);
+
+      // Then: runMode is forwarded as perspectiveOnly
+      assert.strictEqual(receivedRunMode, 'perspectiveOnly');
+    } finally {
+      restoreQuickPick();
+    }
+  });
+
+  test('WT-N-RUNMODE-FULL-01: options.runMode undefined defaults to "full" in runWithArtifacts', async () => {
+    // Given: runMode is omitted
+    const provider = new MockGenerateProvider();
+    const restoreQuickPick = setShowQuickPickMock(async () => ({
+      label: 'unstaged',
+      description: 'git diff',
+      mode: 'unstaged',
+    } satisfies WorkingTreePick));
+    let receivedRunMode: string | undefined;
+    const deps: GenerateFromWorkingTreeDeps = {
+      ...baseDeps,
+      getWorkingTreeDiff: async () => 'x',
+      analyzeGitUnifiedDiff: () => ({ files: [] }),
+      extractChangedPaths: () => [],
+      runWithArtifacts: async (options) => {
+        receivedRunMode = options.runMode;
+      },
+    };
+
+    try {
+      // When: Calling generateTestFromWorkingTree without runMode
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
+
+      // Then: runMode defaults to full
+      assert.strictEqual(receivedRunMode, 'full');
+    } finally {
+      restoreQuickPick();
+    }
+  });
+
+  test('WT-B-MAX-01: diff length=20000 is not truncated in final prompt', async () => {
+    // Given: diffText length is exactly MAX_DIFF_CHARS_FOR_PROMPT (20000)
+    const provider = new MockGenerateProvider();
+    const restoreQuickPick = setShowQuickPickMock(async () => ({
+      label: 'unstaged',
+      description: 'git diff',
+      mode: 'unstaged',
+    } satisfies WorkingTreePick));
+    const diffText = 'x'.repeat(20_000);
+    let receivedPrompt = '';
+    const deps: GenerateFromWorkingTreeDeps = {
+      ...baseDeps,
+      getWorkingTreeDiff: async () => diffText,
+      analyzeGitUnifiedDiff: () => ({ files: [] }),
+      extractChangedPaths: () => [],
+      runWithArtifacts: async (options) => {
+        receivedPrompt = options.generationPrompt;
+      },
+    };
+
+    try {
+      // When: Calling generateTestFromWorkingTree
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
+
+      // Then: Prompt does not include truncation marker and includes full diff
+      assert.ok(!receivedPrompt.includes('... (truncated:'), 'Expected no truncation marker');
+      assert.ok(receivedPrompt.includes(diffText), 'Expected the full diff to be included');
+    } finally {
+      restoreQuickPick();
+    }
+  });
+
+  test('WT-B-MAXP1-01: diff length=20001 is truncated with marker in final prompt', async () => {
+    // Given: diffText length is MAX+1 (20001)
+    const provider = new MockGenerateProvider();
+    const restoreQuickPick = setShowQuickPickMock(async () => ({
+      label: 'unstaged',
+      description: 'git diff',
+      mode: 'unstaged',
+    } satisfies WorkingTreePick));
+    const diffText = 'x'.repeat(20_001);
+    let receivedPrompt = '';
+    const deps: GenerateFromWorkingTreeDeps = {
+      ...baseDeps,
+      getWorkingTreeDiff: async () => diffText,
+      analyzeGitUnifiedDiff: () => ({ files: [] }),
+      extractChangedPaths: () => [],
+      runWithArtifacts: async (options) => {
+        receivedPrompt = options.generationPrompt;
+      },
+    };
+
+    try {
+      // When: Calling generateTestFromWorkingTree
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
+
+      // Then: Prompt contains truncation marker for 20001 -> 20000
+      assert.ok(receivedPrompt.includes('... (truncated: 20001 chars -> 20000 chars)'), 'Expected truncation marker for MAX+1');
+    } finally {
+      restoreQuickPick();
+    }
+  });
+
+  test('WT-B-MINUS1-01: diff length=19999 is not truncated in final prompt', async () => {
+    // Given: diffText length is MAX-1 (19999)
+    const provider = new MockGenerateProvider();
+    const restoreQuickPick = setShowQuickPickMock(async () => ({
+      label: 'unstaged',
+      description: 'git diff',
+      mode: 'unstaged',
+    } satisfies WorkingTreePick));
+    const diffText = 'x'.repeat(19_999);
+    let receivedPrompt = '';
+    const deps: GenerateFromWorkingTreeDeps = {
+      ...baseDeps,
+      getWorkingTreeDiff: async () => diffText,
+      analyzeGitUnifiedDiff: () => ({ files: [] }),
+      extractChangedPaths: () => [],
+      runWithArtifacts: async (options) => {
+        receivedPrompt = options.generationPrompt;
+      },
+    };
+
+    try {
+      // When: Calling generateTestFromWorkingTree
+      await generateTestFromWorkingTree(provider, undefined, {}, deps);
+
+      // Then: Prompt does not include truncation marker and includes full diff
+      assert.ok(!receivedPrompt.includes('... (truncated:'), 'Expected no truncation marker');
+      assert.ok(receivedPrompt.includes(diffText), 'Expected the full diff to be included');
     } finally {
       restoreQuickPick();
     }
