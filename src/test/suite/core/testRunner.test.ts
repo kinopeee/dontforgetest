@@ -1,4 +1,7 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { MAX_CAPTURE_BYTES, runTestCommand } from '../../../core/testRunner';
 
 suite('core/testRunner.ts', () => {
@@ -242,5 +245,43 @@ suite('core/testRunner.ts', () => {
     } finally {
       process.env[key] = original;
     }
+  });
+
+  // TC-TRUN-ERR-01
+  test('TC-TRUN-ERR-01: resolves once when spawn emits error and then close, returning errorMessage and exitCode=null', async () => {
+    // Given: A non-existent working directory (spawn should emit an error)
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-testRunner-cwd-'));
+    fs.rmSync(tmp, { recursive: true, force: true });
+
+    // When: runTestCommand is called with an invalid cwd
+    const result = await runTestCommand({ command: 'echo ok', cwd: tmp });
+
+    // Then: exitCode is null and errorMessage exists (platform-dependent message)
+    assert.strictEqual(result.exitCode, null);
+    assert.strictEqual(result.signal, null);
+    assert.ok(typeof result.errorMessage === 'string' && result.errorMessage.length > 0, 'Expected errorMessage to be set');
+    assert.strictEqual(result.executionRunner, 'extension');
+  });
+
+  // TC-TRUN-TRUNC-SLICE-01
+  test('TC-TRUN-TRUNC-SLICE-01: truncates stdout via slice when a chunk crosses MAX_CAPTURE_BYTES, and keeps stdout capped afterwards', async function () {
+    this.timeout(20000);
+
+    // Given: A command that writes (cap-1) bytes, then writes 2 more bytes on a later tick to cross the cap
+    const command = nodeEval(
+      [
+        `process.stdout.write('a'.repeat(${maxCaptureBytes - 1}));`,
+        `setImmediate(() => { process.stdout.write('bb'); });`,
+      ].join(' '),
+    );
+
+    // When: runTestCommand is called
+    const result = await runTestCommand({ command, cwd });
+
+    // Then: stdout is truncated and includes marker
+    assert.strictEqual(result.exitCode, 0);
+    assert.strictEqual(result.stdoutTruncated, true);
+    assert.ok(result.stdout.includes('... (stdout truncated)'), 'stdout must include truncation marker');
+    assert.strictEqual(result.executionRunner, 'extension');
   });
 });
