@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { EventEmitter } from 'events';
-import childProcess = require('child_process');
+import * as childProcess from 'child_process';
 import { CursorAgentProvider } from '../../../providers/cursorAgentProvider';
 import { type AgentRunOptions } from '../../../providers/provider';
 import { type TestGenEvent } from '../../../core/event';
@@ -359,6 +359,13 @@ suite('providers/cursorAgentProvider.ts', () => {
   suite('spawnCursorAgent', () => {
     type SpawnCursorAgent = (options: AgentRunOptions) => unknown;
 
+    const getWritableChildProcessModule = (): { spawn: typeof childProcess.spawn } => {
+      const mod = childProcess as unknown as { default?: { spawn: typeof childProcess.spawn } };
+      // TypeScript の `import * as` はランタイムで __importStar を経由するため、
+      // writable な CommonJS 実体は `default` に入るケースがある（そこを優先して差し替える）
+      return mod.default ?? (childProcess as unknown as { spawn: typeof childProcess.spawn });
+    };
+
     const createFakeChild = (endThrows: boolean): unknown => {
       const emitter = new EventEmitter();
       const stdout = new EventEmitter();
@@ -409,9 +416,10 @@ suite('providers/cursorAgentProvider.ts', () => {
       const provider = new CursorAgentProvider();
       const spawnCursorAgent = (provider as unknown as { spawnCursorAgent: SpawnCursorAgent }).spawnCursorAgent.bind(provider);
 
-      const originalSpawn = childProcess.spawn;
+      const cpWritable = getWritableChildProcessModule();
+      const originalSpawn = cpWritable.spawn;
       const calls: Array<{ env: NodeJS.ProcessEnv | undefined }> = [];
-      (childProcess as unknown as { spawn: typeof childProcess.spawn }).spawn = ((_: unknown, __: unknown, options: unknown) => {
+      cpWritable.spawn = ((_: unknown, __: unknown, options: unknown) => {
         const env = (options as { env?: NodeJS.ProcessEnv } | undefined)?.env;
         calls.push({ env });
         return createFakeChild(false) as unknown as childProcess.ChildProcessWithoutNullStreams;
@@ -460,7 +468,7 @@ suite('providers/cursorAgentProvider.ts', () => {
           assert.strictEqual(calls[i]?.env?.EDITOR, expected);
         }
       } finally {
-        (childProcess as unknown as { spawn: typeof originalSpawn }).spawn = originalSpawn;
+        cpWritable.spawn = originalSpawn;
       }
     });
 
@@ -469,8 +477,9 @@ suite('providers/cursorAgentProvider.ts', () => {
       const provider = new CursorAgentProvider();
       const spawnCursorAgent = (provider as unknown as { spawnCursorAgent: SpawnCursorAgent }).spawnCursorAgent.bind(provider);
 
-      const originalSpawn = childProcess.spawn;
-      (childProcess as unknown as { spawn: typeof childProcess.spawn }).spawn = (() => {
+      const cpWritable = getWritableChildProcessModule();
+      const originalSpawn = cpWritable.spawn;
+      cpWritable.spawn = (() => {
         return createFakeChild(true) as unknown as childProcess.ChildProcessWithoutNullStreams;
       }) as unknown as typeof childProcess.spawn;
 
@@ -489,7 +498,7 @@ suite('providers/cursorAgentProvider.ts', () => {
           spawnCursorAgent(options);
         });
       } finally {
-        (childProcess as unknown as { spawn: typeof originalSpawn }).spawn = originalSpawn;
+        cpWritable.spawn = originalSpawn;
       }
     });
   });
