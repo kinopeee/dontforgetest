@@ -109,13 +109,18 @@ To output in Japanese, add a config comment at the top:
 
 Run from the side panel (**`Dontforgetest: Open Panel`**).
 
-1. Choose the **commit range** (when using commit range diff)
-2. Choose the **generation target**
-   - You can select **Local / Worktree**
-   - For **uncommitted diffs, only Local is available** (Worktree cannot be selected)
-3. Click **Generate Tests**
+1. Select **Output**
+   - **Perspective table + Generate tests (default)**: generates a perspective table → generates tests → (depending on settings) runs tests
+   - **Generate perspective table only**: generates only the perspective table (skips test generation/execution)
+2. Select **Target**
+   - **Uncommitted diff / Latest commit diff / Commit range diff**
+3. Select **Location**
+   - You can select **Local / Worktree** (Local may be locked depending on conditions)
+   - For **uncommitted diffs**, Location is locked to **Local**
+   - For **perspective-only output**, Location is locked to **Local**
+4. Click **Run**
    - You can track progress in **Progress**
-4. After completion, open outputs from **Output**
+5. After completion, open outputs from **Output**
    - Click **Perspective table** / **Execution report** to open the latest one
    - If applying back to **Local** failed in Worktree, you can open the **instruction prompt file** via **Manual merge**
 
@@ -127,13 +132,16 @@ Run from the side panel (**`Dontforgetest: Open Panel`**).
    - Latest commit diff
    - Commit range diff
    - Uncommitted diff
-3. (For latest commit diff / commit range diff) select an **execution target**
+3. Select an **output**
+   - Perspective table + Generate tests
+   - Generate perspective table only
+4. (For latest commit diff / commit range diff AND full output) select a **location**
    - **Local**: edits your current workspace directly
    - **Worktree**: generates in a temporary worktree and applies only test diffs back to local (manual merge if auto-apply is not possible)
-4. Select a **model**
+5. Select a **model**
    - Use `defaultModel` setting
    - Override by entering a model name
-5. Start
+6. Start
    - Progress is shown in the **Output Channel**
    - The status bar shows running tasks (click to open logs)
 

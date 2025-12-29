@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { generateTestFromCommitRange } from '../../../commands/generateFromCommitRange';
+import { t } from '../../../core/l10n';
 import * as preflightModule from '../../../core/preflight';
 import * as promptBuilderModule from '../../../core/promptBuilder';
 import * as diffAnalyzerModule from '../../../git/diffAnalyzer';
@@ -36,6 +37,7 @@ suite('commands/generateFromCommitRange.ts', () => {
     let showInfoMessages: string[] = [];
     let runWithArtifactsCalls: Array<Parameters<typeof runWithArtifactsModule.runWithArtifacts>[0]> = [];
     let preflightResult: preflightModule.PreflightOk | undefined;
+    let ensurePreflightCalls = 0;
     let lastRange: string | undefined;
 
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
@@ -48,6 +50,7 @@ suite('commands/generateFromCommitRange.ts', () => {
       showInfoMessages = [];
       runWithArtifactsCalls = [];
       lastRange = undefined;
+      ensurePreflightCalls = 0;
       preflightResult = {
         workspaceRoot,
         defaultModel: `model-${Date.now()}`,
@@ -79,7 +82,10 @@ suite('commands/generateFromCommitRange.ts', () => {
         showInfoMessages.push(message);
         return undefined;
       };
-      (preflightModule as unknown as { ensurePreflight: typeof preflightModule.ensurePreflight }).ensurePreflight = async () => preflightResult;
+      (preflightModule as unknown as { ensurePreflight: typeof preflightModule.ensurePreflight }).ensurePreflight = async () => {
+        ensurePreflightCalls += 1;
+        return preflightResult;
+      };
       (diffAnalyzerModule as unknown as { getCommitRangeDiff: typeof diffAnalyzerModule.getCommitRangeDiff }).getCommitRangeDiff = async (
         _cwd,
         range,
@@ -128,15 +134,51 @@ suite('commands/generateFromCommitRange.ts', () => {
     });
 
     test('TC-GCR-E-01: input canceled returns early', async () => {
-      // Given: 入力ボックスがキャンセルされる
+      // Case ID: CM-B-NULL-01
+      // Given: showInputBox returns undefined (cancel)
       showInputBoxResult = undefined;
 
-      // When: generateTestFromCommitRange を呼び出す
+      // When: Calling generateTestFromCommitRange
       await generateTestFromCommitRange(provider, undefined, { runLocation: 'local' });
 
-      // Then: preflight も runWithArtifacts も呼ばれない
+      // Then: ensurePreflight/getCommitRangeDiff/runWithArtifacts are not called
+      assert.strictEqual(ensurePreflightCalls, 0);
       assert.strictEqual(runWithArtifactsCalls.length, 0);
       assert.strictEqual(lastRange, undefined);
+    });
+
+    test('CM-B-EMPTY-01: validateInput returns message for empty string range', async () => {
+      // Given: We only want to capture validateInput (do not proceed)
+      showInputBoxResult = undefined;
+
+      // When: Calling generateTestFromCommitRange to capture input options
+      await generateTestFromCommitRange(provider, undefined, { runLocation: 'local' });
+
+      // Then: validateInput('') returns the localized validation message
+      assert.ok(lastInputBoxOptions?.validateInput, 'Expected validateInput to be provided');
+      const validate = lastInputBoxOptions?.validateInput;
+      if (validate) {
+        const invalid = await Promise.resolve(validate(''));
+        assert.strictEqual(invalid, t('quickPick.commitRangeValidation'));
+      }
+      assert.strictEqual(runWithArtifactsCalls.length, 0);
+    });
+
+    test('CM-B-WS-01: validateInput returns message for whitespace-only range', async () => {
+      // Given: We only want to capture validateInput (do not proceed)
+      showInputBoxResult = undefined;
+
+      // When: Calling generateTestFromCommitRange to capture input options
+      await generateTestFromCommitRange(provider, undefined, { runLocation: 'local' });
+
+      // Then: validateInput(' ') returns the localized validation message
+      assert.ok(lastInputBoxOptions?.validateInput, 'Expected validateInput to be provided');
+      const validate = lastInputBoxOptions?.validateInput;
+      if (validate) {
+        const invalid = await Promise.resolve(validate(' '));
+        assert.strictEqual(invalid, t('quickPick.commitRangeValidation'));
+      }
+      assert.strictEqual(runWithArtifactsCalls.length, 0);
     });
 
     test('TC-GCR-B-01: validateInput returns message for empty range and undefined for valid range', async () => {

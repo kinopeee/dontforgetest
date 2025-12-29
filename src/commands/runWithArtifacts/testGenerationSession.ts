@@ -26,7 +26,7 @@ import { cleanupUnexpectedPerspectiveFiles } from './cleanupStep';
 import { applyWorktreeTestChanges, type WorktreeApplyResult } from './worktreeApplyStep';
 import { runTestCommandViaCursorAgent } from './testExecutionStep';
 import { runPerspectiveTableStep } from './perspectiveStep';
-import type { RunWithArtifactsOptions, WorktreeOps } from '../runWithArtifacts';
+import type { RunWithArtifactsOptions, TestGenerationRunMode, WorktreeOps } from '../runWithArtifacts';
 
 type ReadFileUtf8 = (filePath: string) => Promise<string>;
 
@@ -69,6 +69,7 @@ export class TestGenerationSession {
   private readonly options: RunWithArtifactsOptions;
   private readonly settings: ArtifactSettings;
   private readonly timestamp: string;
+  private readonly runMode: TestGenerationRunMode;
   private readonly runLocation: 'local' | 'worktree';
   private readonly localWorkspaceRoot: string;
   private readonly worktreeOps: WorktreeOps;
@@ -77,13 +78,18 @@ export class TestGenerationSession {
   private runWorkspaceRoot: string;
   private worktreeDir: string | undefined;
   private testExecutionLogLines: string[] = [];
+  private lastPerspectiveSavedAbsolutePath: string | undefined;
+  private lastPerspectiveSavedRelativePath: string | undefined;
+  private lastPerspectiveExtracted: boolean = false;
 
   constructor(options: RunWithArtifactsOptions) {
     this.options = options;
     const baseSettings = getArtifactSettings();
     this.settings = { ...baseSettings, ...options.settingsOverride };
     this.timestamp = formatTimestamp(new Date());
-    this.runLocation = options.runLocation === 'worktree' ? 'worktree' : 'local';
+    this.runMode = options.runMode === 'perspectiveOnly' ? 'perspectiveOnly' : 'full';
+    // 観点表のみモードでは編集を行わないため、Worktree 実行は不要（常に local 扱い）
+    this.runLocation = this.runMode === 'perspectiveOnly' ? 'local' : options.runLocation === 'worktree' ? 'worktree' : 'local';
     this.localWorkspaceRoot = options.workspaceRoot;
     this.runWorkspaceRoot = this.localWorkspaceRoot;
     this.worktreeOps = options.worktreeOps ?? {
@@ -129,6 +135,12 @@ export class TestGenerationSession {
 
       // キャンセルチェック
       if (this.checkCancelled()) return;
+
+      // 観点表のみモード: ここで停止し、ユーザーの確認を待つ
+      if (this.runMode === 'perspectiveOnly') {
+        await this.finishAfterPerspective();
+        return;
+      }
 
       // テストコード生成
       const genExit = await this.generateTests(perspectiveMarkdown);
@@ -237,7 +249,10 @@ export class TestGenerationSession {
   }
 
   private async generatePerspectives(): Promise<string | undefined> {
-    if (!this.settings.includeTestPerspectiveTable) {
+    // NOTE:
+    // - full モードでは設定（includeTestPerspectiveTable）に従う
+    // - perspectiveOnly モードでは、ユーザーが明示的に「観点表だけ欲しい」ため常に実行する
+    if (!this.settings.includeTestPerspectiveTable && this.runMode !== 'perspectiveOnly') {
       return undefined;
     }
 
@@ -264,10 +279,55 @@ export class TestGenerationSession {
       },
     });
 
+    this.lastPerspectiveSavedAbsolutePath = perspectiveResult?.saved.absolutePath;
+    this.lastPerspectiveSavedRelativePath = perspectiveResult?.saved.relativePath;
+    this.lastPerspectiveExtracted = perspectiveResult?.extracted === true;
+
     if (perspectiveResult?.extracted) {
       return perspectiveResult.markdown;
     }
     return undefined;
+  }
+
+  /**
+   * 観点表生成で停止する（ユーザー確認待ち）。
+   * - 進捗TreeViewで「完了」扱いにして残骸を残さない
+   * - 保存された観点表を開く（テスト環境ではスキップ）
+   */
+  private async finishAfterPerspective(): Promise<void> {
+    const taskId = `${this.options.generationTaskId}-perspectiveOnly`;
+    const savedPath = this.lastPerspectiveSavedRelativePath ?? this.lastPerspectiveSavedAbsolutePath ?? '';
+    const message = this.lastPerspectiveExtracted
+      ? t('runMode.perspectiveOnly.completed', savedPath.length > 0 ? savedPath : t('artifact.none'))
+      : t('runMode.perspectiveOnly.completedWithWarning', savedPath.length > 0 ? savedPath : t('artifact.none'));
+
+    const log = emitLogEvent(taskId, this.lastPerspectiveExtracted ? 'info' : 'warn', message);
+    appendEventToOutput(log);
+    this.captureEvent(log);
+
+    // 進捗TreeView完了イベント（完了扱いにしてタスクが残り続けないようにする）
+    const completed: TestGenEvent = { type: 'completed', taskId: this.options.generationTaskId, exitCode: null, timestampMs: nowMs() };
+    handleTestGenEventForProgressView(completed);
+
+    // ユーザー通知（非ブロッキング）
+    if (this.lastPerspectiveExtracted) {
+      void vscode.window.showInformationMessage(message);
+    } else {
+      void vscode.window.showWarningMessage(message);
+    }
+
+    // 観点表ファイルを開いてレビューしやすくする（VS Code 拡張機能テストではスキップ）
+    if (process.env.VSCODE_TEST_RUNNER !== '1' && this.lastPerspectiveSavedAbsolutePath) {
+      const abs = this.lastPerspectiveSavedAbsolutePath.trim();
+      if (abs.length > 0) {
+        void vscode.workspace
+          .openTextDocument(vscode.Uri.file(abs))
+          .then((doc) => vscode.window.showTextDocument(doc, { preview: true }))
+          .then(undefined, () => {
+            // 失敗しても本体フローは完了扱いにしたいので無視する
+          });
+      }
+    }
   }
 
   private async generateTests(perspectiveMarkdown: string | undefined): Promise<number | null> {

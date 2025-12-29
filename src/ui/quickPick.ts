@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { generateTestFromLatestCommit } from '../commands/generateFromCommit';
 import { generateTestFromCommitRange } from '../commands/generateFromCommitRange';
 import { generateTestFromWorkingTree } from '../commands/generateFromWorkingTree';
+import { type TestGenerationRunMode } from '../commands/runWithArtifacts';
 import { getModelSettings } from '../core/modelSettings';
 import { t } from '../core/l10n';
 import { ensurePreflight } from '../core/preflight';
@@ -9,6 +10,8 @@ import { type AgentProvider } from '../providers/provider';
 
 type SourceKind = 'workingTree' | 'latestCommit' | 'commitRange';
 type SourcePickItem = vscode.QuickPickItem & { source: SourceKind };
+type RunMode = TestGenerationRunMode;
+type RunModePickItem = vscode.QuickPickItem & { runMode: RunMode };
 type ModelPickMode = 'useConfig' | 'useCandidate' | 'input' | 'separator';
 type ModelPickItem = vscode.QuickPickItem & { mode: ModelPickMode; modelValue?: string };
 type RunLocation = 'local' | 'worktree';
@@ -29,7 +32,12 @@ export async function generateTestWithQuickPick(provider: AgentProvider, context
     return;
   }
 
-  const runLocation = await pickRunLocation(source);
+  const runMode = await pickRunMode();
+  if (!runMode) {
+    return;
+  }
+
+  const runLocation = await pickRunLocation(source, runMode);
   if (!runLocation) {
     return;
   }
@@ -42,13 +50,13 @@ export async function generateTestWithQuickPick(provider: AgentProvider, context
 
   switch (source) {
     case 'workingTree':
-      await generateTestFromWorkingTree(provider, modelOverride);
+      await generateTestFromWorkingTree(provider, modelOverride, { runMode });
       return;
     case 'latestCommit':
-      await generateTestFromLatestCommit(provider, modelOverride, { runLocation, extensionContext: context });
+      await generateTestFromLatestCommit(provider, modelOverride, { runLocation, runMode, extensionContext: context });
       return;
     case 'commitRange':
-      await generateTestFromCommitRange(provider, modelOverride, { runLocation, extensionContext: context });
+      await generateTestFromCommitRange(provider, modelOverride, { runLocation, runMode, extensionContext: context });
       return;
     default: {
       const _exhaustive: never = source;
@@ -69,7 +77,26 @@ async function pickSource(): Promise<SourceKind | undefined> {
   return picked?.source;
 }
 
-async function pickRunLocation(source: SourceKind): Promise<RunLocation | undefined> {
+async function pickRunMode(): Promise<RunMode | undefined> {
+  const picked = await vscode.window.showQuickPick<RunModePickItem>(
+    [
+      { label: t('quickPick.runMode.full'), description: t('quickPick.runMode.fullDesc'), runMode: 'full' },
+      {
+        label: t('quickPick.runMode.perspectiveOnly'),
+        description: t('quickPick.runMode.perspectiveOnlyDesc'),
+        runMode: 'perspectiveOnly',
+      },
+    ],
+    { title: `Dontforgetest: ${t('quickPick.selectRunMode')}`, placeHolder: t('quickPick.selectRunModePlaceholder') },
+  );
+  return picked?.runMode;
+}
+
+async function pickRunLocation(source: SourceKind, runMode: RunMode): Promise<RunLocation | undefined> {
+  // 観点表のみモードでは、実装編集を行わないため Local 固定（worktree 選択の意味がない）
+  if (runMode === 'perspectiveOnly') {
+    return 'local';
+  }
   // 未コミット差分は「その時点の作業ツリー再現」が重くなるため、MVPでは Local のみ。
   if (source === 'workingTree') {
     return 'local';

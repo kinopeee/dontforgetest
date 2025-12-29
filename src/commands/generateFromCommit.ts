@@ -3,7 +3,7 @@ import { ensurePreflight } from '../core/preflight';
 import { t } from '../core/l10n';
 import { buildTestGenPrompt } from '../core/promptBuilder';
 import { execGitStdout } from '../git/gitExec';
-import { runWithArtifacts } from './runWithArtifacts';
+import { runWithArtifacts, type TestGenerationRunMode } from './runWithArtifacts';
 import { type AgentProvider } from '../providers/provider';
 
 /**
@@ -11,6 +11,7 @@ import { type AgentProvider } from '../providers/provider';
  */
 export interface GenerateTestCommandOptions {
   runLocation?: 'local' | 'worktree';
+  runMode?: TestGenerationRunMode;
   extensionContext?: vscode.ExtensionContext;
 }
 
@@ -59,8 +60,10 @@ export async function generateTestFromLatestCommit(
   const taskId = `fromCommit-${Date.now()}`;
   const generationLabel = t('prompt.generationLabel.latestCommit', commit.slice(0, 7));
 
-  const runLocation = options.runLocation === 'worktree' ? 'worktree' : 'local';
-  if (runLocation === 'worktree' && !options.extensionContext) {
+  const runMode: TestGenerationRunMode = options.runMode === 'perspectiveOnly' ? 'perspectiveOnly' : 'full';
+  const requestedRunLocation = options.runLocation === 'worktree' ? 'worktree' : 'local';
+  const effectiveRunLocation = runMode === 'perspectiveOnly' ? 'local' : requestedRunLocation;
+  if (effectiveRunLocation === 'worktree' && !options.extensionContext) {
     vscode.window.showErrorMessage(t('worktree.extensionContextRequired'));
     return;
   }
@@ -76,7 +79,8 @@ export async function generateTestFromLatestCommit(
     perspectiveReferenceText: diffForPrompt,
     model: modelOverride ?? defaultModel,
     generationTaskId: taskId,
-    runLocation,
+    runMode,
+    runLocation: effectiveRunLocation,
     extensionContext: options.extensionContext,
   });
 }

@@ -27,11 +27,13 @@ suite('src/ui/controlPanel.ts', () => {
 
   // Spy variables
   let executedCommands: string[] = [];
+  let executedCommandCalls: Array<{ command: string; args: unknown[] }> = [];
   let postedMessages: unknown[] = [];
 
   setup(() => {
     // Reset
     executedCommands = [];
+    executedCommandCalls = [];
     postedMessages = [];
 
     // タスクマネージャーをクリーンアップ
@@ -45,7 +47,10 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Mock Deps
     const deps = {
-      executeCommand: async (cmd: string) => { executedCommands.push(cmd); },
+      executeCommand: async (cmd: string, ...args: unknown[]) => {
+        executedCommands.push(cmd);
+        executedCommandCalls.push({ command: cmd, args });
+      },
     };
 
     // Mock WebviewView
@@ -238,7 +243,7 @@ suite('src/ui/controlPanel.ts', () => {
     resolveView();
     const html = webviewView.webview.html;
     assert.ok(html.includes('.hint {'), 'Hint class CSS is present');
-    assert.ok(html.includes('<div class="hint" id="optionDesc">'), 'Hint class is used in HTML');
+    assert.ok(html.includes('<div class="hint" id="helpLine"'), 'Hint class is used in HTML');
   });
 
   // TC-N-10: Divider CSS class
@@ -559,6 +564,37 @@ suite('src/ui/controlPanel.ts', () => {
     assert.strictEqual(executedCommands.length, 0, 'No commands executed');
   });
 
+  test('CP-N-RUNMODE-DEFAULT-01: run message without runMode defaults to full and passes args', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+
+    // When: A run message is sent without runMode (default path)
+    await webviewView.webview._onMessage?.({ type: 'run', source: 'latestCommit', runLocation: 'local' });
+
+    // Then: executeCommand is called once with runMode='full'
+    assert.strictEqual(executedCommandCalls.length, 1);
+    assert.strictEqual(executedCommandCalls[0]?.command, 'dontforgetest.generateTestFromCommit');
+    assert.deepStrictEqual(executedCommandCalls[0]?.args, [{ runLocation: 'local', runMode: 'full' }]);
+  });
+
+  test('CP-N-RUNMODE-PO-01: run message with runMode=perspectiveOnly passes args', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+
+    // When: A run message is sent with runMode=perspectiveOnly
+    await webviewView.webview._onMessage?.({
+      type: 'run',
+      source: 'latestCommit',
+      runLocation: 'worktree',
+      runMode: 'perspectiveOnly',
+    });
+
+    // Then: executeCommand is called once with runMode='perspectiveOnly'
+    assert.strictEqual(executedCommandCalls.length, 1);
+    assert.strictEqual(executedCommandCalls[0]?.command, 'dontforgetest.generateTestFromCommit');
+    assert.deepStrictEqual(executedCommandCalls[0]?.args, [{ runLocation: 'worktree', runMode: 'perspectiveOnly' }]);
+  });
+
   // TC-E-07: handleMessage with invalid command
   // Given: handleMessage called with { type: 'runCommand', command: 'invalid.command' }
   // When: Message is processed
@@ -598,7 +634,7 @@ suite('src/ui/controlPanel.ts', () => {
     const html = webviewView.webview.html;
     // When: JavaScript code is generated
     // Then: Fallback logic is present for undefined values
-    assert.ok(html.includes('optionDesc.textContent = descriptions[source] || ""'), 'JavaScript has fallback for undefined value');
+    assert.ok(html.includes('descriptions[source] || ""'), 'JavaScript has fallback for undefined value');
   });
 
   // TC-E-10: HTML JavaScript receives invalid message type
@@ -690,6 +726,19 @@ suite('src/ui/controlPanel.ts', () => {
     assert.strictEqual(msg.taskCount, 0, 'taskCount is 0');
   });
 
+  test('CP-N-READY-0: ready posts stateUpdate with isRunning=false and taskCount=0', async () => {
+    // Given: No tasks running
+    resolveView();
+    postedMessages = [];
+
+    // When: Sending ready message
+    await webviewView.webview._onMessage?.({ type: 'ready' });
+
+    // Then: One stateUpdate is posted with count=0
+    assert.strictEqual(postedMessages.length, 1);
+    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: false, taskCount: 0 });
+  });
+
   // TC-N-27: Ready message sends running state
   // Given: Provider initialized and resolved, task running
   // When: Ready message is received
@@ -711,6 +760,21 @@ suite('src/ui/controlPanel.ts', () => {
     assert.strictEqual(msg.type, 'stateUpdate', 'Message type is stateUpdate');
     assert.strictEqual(msg.isRunning, true, 'isRunning is true');
     assert.strictEqual(msg.taskCount, 1, 'taskCount is 1');
+  });
+
+  test('CP-N-READY-1: ready posts stateUpdate with isRunning=true and taskCount=1', async () => {
+    // Given: One task running
+    const mockTask: RunningTask = { taskId: 'one-task', dispose: () => {} };
+    taskManager.register('one-task', 'test', mockTask);
+    resolveView();
+    postedMessages = [];
+
+    // When: Sending ready message
+    await webviewView.webview._onMessage?.({ type: 'ready' });
+
+    // Then: One stateUpdate is posted with count=1
+    assert.strictEqual(postedMessages.length, 1);
+    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1 });
   });
 
   // TC-N-28: Task registration notifies webview
@@ -781,6 +845,25 @@ suite('src/ui/controlPanel.ts', () => {
     assert.strictEqual(taskManager.getRunningCount(), 0, 'No tasks running');
   });
 
+  test('CP-N-CANCEL-01: cancel message disposes all running tasks and resets count', async () => {
+    // Given: Two running tasks are registered
+    let disposed1 = false;
+    let disposed2 = false;
+    const mockTask1: RunningTask = { taskId: 'cancel-task-1', dispose: () => { disposed1 = true; } };
+    const mockTask2: RunningTask = { taskId: 'cancel-task-2', dispose: () => { disposed2 = true; } };
+    taskManager.register('cancel-task-1', 'task1', mockTask1);
+    taskManager.register('cancel-task-2', 'task2', mockTask2);
+    resolveView();
+
+    // When: Sending cancel message
+    await webviewView.webview._onMessage?.({ type: 'cancel' });
+
+    // Then: Both tasks are disposed and count becomes 0
+    assert.strictEqual(disposed1, true);
+    assert.strictEqual(disposed2, true);
+    assert.strictEqual(taskManager.getRunningCount(), 0);
+  });
+
   // TC-N-31: Cancel message with no tasks does nothing
   // Given: Provider initialized and resolved, no tasks running
   // When: Cancel message is received
@@ -809,7 +892,9 @@ suite('src/ui/controlPanel.ts', () => {
     assert.ok(html.includes('let isRunning = false;'), 'isRunning state variable exists');
     assert.ok(html.includes('function updateButtonState(running)'), 'updateButtonState function exists');
     assert.ok(html.includes(t('controlPanel.generatingTests')), 'Running state button text exists');
-    assert.ok(html.includes(t('controlPanel.generateTests')), 'Default button text exists');
+    assert.ok(html.includes(t('controlPanel.run')), 'Run button text exists');
+    assert.ok(html.includes(t('controlPanel.generateTests')), 'Full output option text exists');
+    assert.ok(html.includes(t('controlPanel.generatePerspectivesOnly')), 'Perspective-only output option text exists');
   });
 
   // TC-N-33: HTML contains message handler for stateUpdate
@@ -977,7 +1062,7 @@ suite('src/ui/controlPanel.ts', () => {
   test('TC-N-09: HTML contains button text when not running', () => {
     resolveView();
     const html = webviewView.webview.html;
-    assert.ok(html.includes(`runBtn.textContent = "${t('controlPanel.generateTests')}"`), 'Default button text is correct');
+    assert.ok(html.includes(`runBtn.textContent = "${t('controlPanel.run')}"`), 'Default button text is correct');
   });
 
   // TC-N-10: HTML contains animation properties for running button
@@ -1055,7 +1140,7 @@ suite('src/ui/controlPanel.ts', () => {
     const html = webviewView.webview.html;
     // The code should update textContent before classList operations
     // If classList.remove fails, textContent should still be updated
-    assert.ok(html.includes(`runBtn.textContent = "${t('controlPanel.generateTests')}"`), 'Button text is updated');
+    assert.ok(html.includes(`runBtn.textContent = "${t('controlPanel.run')}"`), 'Button text is updated');
     assert.ok(html.includes('runBtn.classList.remove("running")'), 'classList.remove is called');
     // Note: Actual error handling is tested in browser environment with mocked classList
   });
