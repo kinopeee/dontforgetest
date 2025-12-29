@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { getModelCandidates, normalizeModelList, getModelSettings, type ModelSettings } from '../../../core/modelSettings';
+import { getModelCandidates, normalizeModelList, getModelSettings, setDefaultModel, type ModelSettings } from '../../../core/modelSettings';
 
 suite('core/modelSettings.ts', () => {
   suite('normalizeModelList', () => {
@@ -74,6 +74,108 @@ suite('core/modelSettings.ts', () => {
       const settings = getModelSettings();
       // dontforgetest.defaultModel should be undefined (default)
       assert.strictEqual(settings.defaultModel, undefined);
+    });
+  });
+
+  suite('setDefaultModel', () => {
+    let originalGetConfiguration: typeof vscode.workspace.getConfiguration;
+
+    teardown(() => {
+      // Restore vscode API if it was mocked
+      if (originalGetConfiguration) {
+        try {
+          vscode.workspace.getConfiguration = originalGetConfiguration;
+        } catch {
+          // ignore
+        }
+      }
+    });
+
+    test('TC-MODEL-SET-N-01: trims model value and calls config.update once', async () => {
+      // Given: A mocked configuration.update that records calls
+      originalGetConfiguration = vscode.workspace.getConfiguration;
+      const calls: Array<{ section: string; value: unknown; target: unknown }> = [];
+      const configStub = {
+        update: async (section: string, value: unknown, target: unknown) => {
+          calls.push({ section, value, target });
+        },
+      } as unknown as vscode.WorkspaceConfiguration;
+
+      vscode.workspace.getConfiguration = () => configStub;
+
+      // When: setDefaultModel is called with a trimmed value
+      await setDefaultModel('  model-a  ');
+
+      // Then: update is called with trimmed value and a valid ConfigurationTarget
+      assert.strictEqual(calls.length, 1);
+      assert.strictEqual(calls[0]?.section, 'defaultModel');
+      assert.strictEqual(calls[0]?.value, 'model-a');
+      assert.ok(
+        calls[0]?.target === vscode.ConfigurationTarget.Workspace || calls[0]?.target === vscode.ConfigurationTarget.Global,
+        'target should be Workspace or Global',
+      );
+    });
+
+    test('TC-MODEL-SET-B-01: undefined clears defaultModel as empty string', async () => {
+      // Given: A mocked configuration.update that records calls
+      originalGetConfiguration = vscode.workspace.getConfiguration;
+      const calls: Array<{ section: string; value: unknown; target: unknown }> = [];
+      const configStub = {
+        update: async (section: string, value: unknown, target: unknown) => {
+          calls.push({ section, value, target });
+        },
+      } as unknown as vscode.WorkspaceConfiguration;
+
+      vscode.workspace.getConfiguration = () => configStub;
+
+      // When: setDefaultModel is called with undefined
+      await setDefaultModel(undefined);
+
+      // Then: update is called with empty string
+      assert.strictEqual(calls.length, 1);
+      assert.strictEqual(calls[0]?.section, 'defaultModel');
+      assert.strictEqual(calls[0]?.value, '');
+    });
+
+    test('TC-MODEL-SET-E-01: propagates Error from config.update', async () => {
+      // Given: config.update throws Error('update failed')
+      originalGetConfiguration = vscode.workspace.getConfiguration;
+      const configStub = {
+        update: async () => {
+          throw new Error('update failed');
+        },
+      } as unknown as vscode.WorkspaceConfiguration;
+
+      vscode.workspace.getConfiguration = () => configStub;
+
+      // When: setDefaultModel is called
+      // Then: It rejects with Error('update failed')
+      try {
+        await setDefaultModel('model');
+        assert.fail('Should have thrown');
+      } catch (err) {
+        assert.ok(err instanceof Error, 'Should throw Error');
+        assert.strictEqual(err.message, 'update failed');
+      }
+    });
+
+    test('TC-MODEL-SET-E-02: propagates TypeError from vscode.workspace.getConfiguration', async () => {
+      // Given: vscode.workspace.getConfiguration throws TypeError('boom')
+      originalGetConfiguration = vscode.workspace.getConfiguration;
+
+      vscode.workspace.getConfiguration = () => {
+        throw new TypeError('boom');
+      };
+
+      // When: setDefaultModel is called
+      // Then: It rejects with TypeError('boom')
+      try {
+        await setDefaultModel('model');
+        assert.fail('Should have thrown');
+      } catch (err) {
+        assert.ok(err instanceof TypeError, 'Should throw TypeError');
+        assert.strictEqual((err as Error).message, 'boom');
+      }
     });
   });
 });

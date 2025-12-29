@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { ensurePreflight } from '../../../core/preflight';
@@ -41,10 +42,66 @@ suite('core/preflight.ts', () => {
     // When: ensurePreflightを呼び出す
     // Then: undefinedが返され、エラーメッセージが表示される
     test('TC-A-01: ワークスペースが開かれていない', async () => {
-      // このテストは実際のVS Code環境に依存するため、
-      // ワークスペースが開かれていない環境では実行できない
-      // モックを使用したテストが必要だが、VS Code APIのモックは複雑なため、
-      // 統合テストとして実装する
+      // Given: workspaceFolders を undefined にして「ワークスペース未オープン」を擬似的に再現する
+      const originalFolders = vscode.workspace.workspaceFolders;
+      const hadOwn = Object.prototype.hasOwnProperty.call(vscode.workspace, 'workspaceFolders');
+      const originalDescriptor = Object.getOwnPropertyDescriptor(vscode.workspace, 'workspaceFolders');
+
+      const originalShowErrorMessage = vscode.window.showErrorMessage;
+      const errorMessages: string[] = [];
+
+      let patched = false;
+      let patchMethod: 'assign' | 'define' | undefined;
+
+      try {
+        vscode.window.showErrorMessage = (async (message: string, ..._items: unknown[]) => {
+          errorMessages.push(message);
+          return undefined;
+        }) as typeof vscode.window.showErrorMessage;
+
+        try {
+          (vscode.workspace as unknown as { workspaceFolders: typeof originalFolders }).workspaceFolders = undefined;
+          patched = true;
+          patchMethod = 'assign';
+        } catch {
+          try {
+            Object.defineProperty(vscode.workspace, 'workspaceFolders', { value: undefined, configurable: true });
+            patched = true;
+            patchMethod = 'define';
+          } catch {
+            // 環境によっては workspaceFolders を差し替えできないため、その場合はスキップ
+            console.warn('workspaceFolders cannot be patched in this environment; skipping TC-A-01');
+            return;
+          }
+        }
+
+        // When: ensurePreflight を呼び出す
+        const result = await ensurePreflight();
+
+        // Then: undefined が返り、エラー表示が行われる
+        assert.strictEqual(result, undefined);
+        assert.strictEqual(errorMessages.length, 1, 'Expected one error message');
+        assert.ok(errorMessages[0] && errorMessages[0].length > 0, 'Expected non-empty error message');
+      } finally {
+        vscode.window.showErrorMessage = originalShowErrorMessage;
+
+        if (patched) {
+          try {
+            if (patchMethod === 'assign') {
+              (vscode.workspace as unknown as { workspaceFolders: typeof originalFolders }).workspaceFolders = originalFolders;
+            } else if (patchMethod === 'define') {
+              if (hadOwn && originalDescriptor) {
+                Object.defineProperty(vscode.workspace, 'workspaceFolders', originalDescriptor);
+              } else {
+                // もともと own property でなければ削除して元に戻す
+                delete (vscode.workspace as unknown as Record<string, unknown>).workspaceFolders;
+              }
+            }
+          } catch {
+            // ignore restore failures
+          }
+        }
+      }
     });
 
     // Given: cursorAgentPathが未設定
@@ -470,6 +527,165 @@ suite('core/preflight.ts', () => {
             process.env.VSCODE_TEST_RUNNER = originalTestRunner;
           }
           await config.update('cursorAgentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      test('TC-PF-ADD-N-01: absolute testStrategyPath is preserved and returns PreflightOk', async () => {
+        // Given: Existing test strategy file with an absolute path and a runnable cursorAgentPath
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalPath = config.get<string>('testStrategyPath', '');
+        const originalAgentPath = config.get<string>('cursorAgentPath', '');
+
+        const tempDir = path.join(workspaceRoot, 'out', 'test-preflight-abs');
+        const tempFile = path.join(tempDir, `strategy-abs-${Date.now()}.md`);
+        const tempUri = vscode.Uri.file(tempFile);
+
+        try {
+          await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempDir));
+          await vscode.workspace.fs.writeFile(tempUri, Buffer.from('# test-strategy', 'utf8'));
+
+          // Use absolute path here
+          await config.update('testStrategyPath', tempFile, vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: PreflightOk is returned and absolute testStrategyPath is preserved
+          assert.ok(result, 'Expected PreflightOk result');
+          assert.strictEqual(result?.workspaceRoot, workspaceRoot);
+          assert.strictEqual(result?.testStrategyPath, tempFile);
+          assert.strictEqual(result?.cursorAgentCommand, process.execPath);
+        } finally {
+          await config.update('testStrategyPath', originalPath, vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+          try {
+            await vscode.workspace.fs.delete(tempUri, { useTrash: false });
+          } catch {
+            // ignore
+          }
+        }
+      });
+
+      test('TC-PF-ADD-E-03: non-executable cursorAgentPath triggers non-ENOENT spawn error path and returns undefined', async () => {
+        // Given: An existing non-executable file path as cursorAgentPath and VSCODE_TEST_RUNNER enabled
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalAgentPath = config.get<string>('cursorAgentPath', '');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        const tempDir = path.join(workspaceRoot, 'out', 'test-preflight-nonexec');
+        const tempFile = path.join(tempDir, `nonexec-${Date.now()}.txt`);
+
+        try {
+          await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempDir));
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(tempFile), Buffer.from('not executable', 'utf8'));
+          await fs.promises.chmod(tempFile, 0o644);
+
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('cursorAgentPath', tempFile, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: Returns undefined and shows an error message (non-blocking in test runner)
+          assert.strictEqual(result, undefined);
+          assert.strictEqual(errorCalls.length, 1, 'Expected one error message');
+          assert.ok(errorCalls[0]?.message.includes(tempFile), 'Error should include command path');
+        } finally {
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
+          await config.update('cursorAgentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+          try {
+            await vscode.workspace.fs.delete(vscode.Uri.file(tempDir), { recursive: true, useTrash: false });
+          } catch {
+            // ignore
+          }
+        }
+      });
+    });
+
+    suite('ensurePreflight additional branch coverage', () => {
+      let originalGetConfiguration: typeof vscode.workspace.getConfiguration;
+      let originalShowErrorMessage: typeof vscode.window.showErrorMessage;
+
+      teardown(() => {
+        // Restore patched APIs
+        if (originalGetConfiguration) {
+          try {
+            vscode.workspace.getConfiguration = originalGetConfiguration;
+          } catch {
+            // ignore
+          }
+        }
+        if (originalShowErrorMessage) {
+          try {
+            vscode.window.showErrorMessage = originalShowErrorMessage;
+          } catch {
+            // ignore
+          }
+        }
+      });
+
+      test('TC-PF-ADD-E-02: nullish config.get values use fallback and still handle missing command', async () => {
+        // Given: workspace is open and getConfiguration().get(...) returns undefined for relevant keys
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const originalPathEnv = process.env.PATH;
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const errorMessages: string[] = [];
+
+        originalGetConfiguration = vscode.workspace.getConfiguration;
+        originalShowErrorMessage = vscode.window.showErrorMessage;
+
+        const configStub = {
+          get: (_section: string, _defaultValue?: unknown) => undefined,
+        } as unknown as vscode.WorkspaceConfiguration;
+
+        vscode.workspace.getConfiguration = () => configStub;
+        vscode.window.showErrorMessage = (async (message: string, ..._items: unknown[]) => {
+          errorMessages.push(message);
+          return undefined;
+        }) as typeof vscode.window.showErrorMessage;
+
+        try {
+          // Force command lookup failure deterministically
+          process.env.PATH = '';
+          process.env.VSCODE_TEST_RUNNER = '1';
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: Returns undefined and shows an error message containing the fallback command name
+          assert.strictEqual(result, undefined);
+          assert.strictEqual(errorMessages.length, 1, 'Expected one error message');
+          assert.ok(errorMessages[0]?.includes('cursor-agent'), 'Expected message to include fallback command name');
+        } finally {
+          if (originalPathEnv === undefined) {
+            delete process.env.PATH;
+          } else {
+            process.env.PATH = originalPathEnv;
+          }
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
         }
       });
     });

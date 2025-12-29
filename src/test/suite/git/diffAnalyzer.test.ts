@@ -395,6 +395,76 @@ diff --git a/valid.ts b/valid.ts`;
       assert.strictEqual(result.files.length, 1);
       assert.strictEqual(result.files[0]?.path, 'src/unkqhere.ts');
     });
+
+    test('TC-GD-ADD-N-01: should parse diff --git line with trailing spaces after tokens', () => {
+      // Given: A diff line with trailing spaces after the second token
+      const diffText = 'diff --git a/src/trailing.ts b/src/trailing.ts   ';
+
+      // When: analyzeGitUnifiedDiff is called
+      const result = analyzeGitUnifiedDiff(diffText);
+
+      // Then: Parsing succeeds and returns a single changed file
+      assert.strictEqual(result.files.length, 1);
+      assert.strictEqual(result.files[0]?.path, 'src/trailing.ts');
+      assert.strictEqual(result.files[0]?.changeType, 'modified');
+    });
+
+    test('TC-GD-ADD-N-02: should decode \\r, \\b, \\f, \\v escapes in quoted paths', () => {
+      // Given: A diff line with quoted paths that contain escape sequences
+      const diffText = 'diff --git "a/src/a\\r\\b\\f\\v.ts" "b/src/a\\r\\b\\f\\v.ts"';
+
+      // When: analyzeGitUnifiedDiff is called
+      const result = analyzeGitUnifiedDiff(diffText);
+
+      // Then: Escapes are decoded to control characters
+      assert.strictEqual(result.files.length, 1);
+      assert.strictEqual(result.files[0]?.path, 'src/a\r\b\f\v.ts');
+    });
+
+    test('TC-GD-ADD-B-01: should decode short octal escape and continue after non-octal char', () => {
+      // Given: A diff line with a short octal escape followed by a non-octal char (\\12x)
+      const diffText = 'diff --git "a/src/oct\\12x.ts" "b/src/oct\\12x.ts"';
+
+      // When: analyzeGitUnifiedDiff is called
+      const result = analyzeGitUnifiedDiff(diffText);
+
+      // Then: Octal part is decoded and parsing continues
+      assert.strictEqual(result.files.length, 1);
+      assert.strictEqual(result.files[0]?.path, 'src/oct\nx.ts');
+    });
+
+    test('TC-GD-ADD-E-01: should skip quoted diff --git line with only one token (missing second path)', () => {
+      // Given: A quoted diff line that has only one token
+      const diffText = 'diff --git "a/src/only-one.ts"';
+
+      // When: analyzeGitUnifiedDiff is called
+      const result = analyzeGitUnifiedDiff(diffText);
+
+      // Then: The invalid line is skipped
+      assert.strictEqual(result.files.length, 0);
+    });
+
+    test('TC-GD-ADD-E-02: should skip quoted diff --git line when tokens do not start with a/ and b/', () => {
+      // Given: Quoted tokens that do not start with a/ and b/
+      const diffText = 'diff --git "src/no-prefix.ts" "src/no-prefix.ts"';
+
+      // When: analyzeGitUnifiedDiff is called
+      const result = analyzeGitUnifiedDiff(diffText);
+
+      // Then: The invalid line is skipped
+      assert.strictEqual(result.files.length, 0);
+    });
+
+    test('TC-GD-ADD-E-03: should skip diff --git line with only spaces after the keyword', () => {
+      // Given: A diff line with only spaces after diff --git
+      const diffText = 'diff --git     ';
+
+      // When: analyzeGitUnifiedDiff is called
+      const result = analyzeGitUnifiedDiff(diffText);
+
+      // Then: The line is skipped
+      assert.strictEqual(result.files.length, 0);
+    });
   });
 
   suite('extractChangedPaths', () => {
