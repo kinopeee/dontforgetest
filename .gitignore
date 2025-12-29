@@ -11,6 +11,7 @@ dist
 # テスト生成物
 docs/test-execution-reports/
 docs/test-perspectives/
+docs/test-perspective-tables/
 coverage/
 .nyc_output/
 
