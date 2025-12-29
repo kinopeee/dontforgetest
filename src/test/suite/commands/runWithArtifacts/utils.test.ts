@@ -150,4 +150,86 @@ suite('commands/runWithArtifacts/utils.ts', () => {
     assert.ok(result.includes('truncated'), 'Result should include truncation message');
     assert.ok(result.startsWith('a'.repeat(100)), 'Result should start with truncated text');
   });
+
+  test('TC-RWAU-ADD-N-01: coerceLegacyPerspectiveMarkdownTable tolerates non-table lines before header', () => {
+    // Given: Markdown with a non-table line before a valid header+separator+body
+    const markdown = [
+      '# Title',
+      PERSPECTIVE_TABLE_HEADER,
+      PERSPECTIVE_TABLE_SEPARATOR,
+      '| TC-01 | Input | Perspective | Expected | Notes |',
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTable is called
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: Returns normalized table string and keeps body rows
+    assert.ok(typeof result === 'string' && result.length > 0, 'Expected normalized table string');
+    assert.ok(result.includes(PERSPECTIVE_TABLE_HEADER), 'Expected normalized header');
+    assert.ok(result.includes(PERSPECTIVE_TABLE_SEPARATOR), 'Expected normalized separator');
+    assert.ok(result.includes('| TC-01 |'), 'Expected body row to be included');
+  });
+
+  test('TC-RWAU-ADD-N-02: coerceLegacyPerspectiveMarkdownTable detects header via keywords (non-legacy header)', () => {
+    // Given: A 5-column header that is not the legacy fixed header, but includes header keywords
+    const headerVariant = '| Case ID | Input | Perspective | Expected | Notes |';
+    const markdown = [
+      headerVariant,
+      PERSPECTIVE_TABLE_SEPARATOR,
+      '| TC-01 | Input | Perspective | Expected | Notes |',
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTable is called
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: Header is detected and output header is normalized to current locale
+    assert.ok(typeof result === 'string' && result.length > 0, 'Expected normalized table string');
+    assert.ok(result.startsWith(PERSPECTIVE_TABLE_HEADER), 'Expected output header to be normalized');
+  });
+
+  test('TC-RWAU-ADD-E-01: coerceLegacyPerspectiveMarkdownTable returns undefined when separator line is missing (header only)', () => {
+    // Given: Markdown that contains only a header line (no separator line)
+    const markdown = `${PERSPECTIVE_TABLE_HEADER}\n`;
+
+    // When: coerceLegacyPerspectiveMarkdownTable is called
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: Returns undefined
+    assert.strictEqual(result, undefined);
+  });
+
+  test('TC-RWAU-ADD-B-01: coerceLegacyPerspectiveMarkdownTable stops at first non-table line and ignores rows after it', () => {
+    // Given: A table body followed by a non-table line and additional pipe rows
+    const markdown = [
+      PERSPECTIVE_TABLE_HEADER,
+      PERSPECTIVE_TABLE_SEPARATOR,
+      '| TC-01 | Input | Perspective | Expected | Notes |',
+      'not-a-table-line',
+      '| TC-02 | Input | Perspective | Expected | Notes |',
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTable is called
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: Parsing stops at the non-table line (TC-02 is ignored)
+    assert.ok(typeof result === 'string' && result.length > 0, 'Expected normalized table string');
+    assert.ok(result.includes('| TC-01 |'), 'Expected first body row to be included');
+    assert.ok(!result.includes('| TC-02 |'), 'Expected body rows after non-table line to be ignored');
+  });
+
+  test('TC-RWAU-ADD-E-02: coerceLegacyPerspectiveMarkdownTable returns undefined when 5-column header contains no known keywords', () => {
+    // Given: A 5-column table header that does not contain header keywords
+    const headerNoKeywords = '| Col1 | Col2 | Col3 | Col4 | Col5 |';
+    const markdown = [
+      headerNoKeywords,
+      PERSPECTIVE_TABLE_SEPARATOR,
+      '| A | B | C | D | E |',
+    ].join('\n');
+
+    // When: coerceLegacyPerspectiveMarkdownTable is called
+    const result = coerceLegacyPerspectiveMarkdownTable(markdown);
+
+    // Then: Header is not detected and undefined is returned
+    assert.strictEqual(result, undefined);
+  });
 });
