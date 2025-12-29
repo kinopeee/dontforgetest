@@ -1,11 +1,12 @@
 import * as assert from 'assert';
-import * as child_process from 'child_process';
+import childProcess from 'child_process';
+import type { ExecFileOptions } from 'child_process';
 import { execGitStdout, execGitResult } from '../../../git/gitExec';
 
 suite('git/gitExec.ts', () => {
   const workspaceRoot = process.cwd();
-  const childProcessMutable = child_process as unknown as { execFile: typeof child_process.execFile };
-  const originalExecFile = child_process.execFile;
+  const childProcessMutable = childProcess as unknown as { execFile: typeof childProcess.execFile };
+  const originalExecFile = childProcess.execFile;
 
   teardown(() => {
     // Given: Restore original execFile after each test
@@ -35,7 +36,7 @@ suite('git/gitExec.ts', () => {
     childProcessMutable.execFile = ((
       file: string,
       fileArgs: string[],
-      options: child_process.ExecFileOptions,
+      options: ExecFileOptions,
       callback: (error: Error | null, stdout: unknown, stderr: unknown) => void,
     ) => {
       // When: execGitStdout is called (it will call execFile with prefixed args)
@@ -46,7 +47,7 @@ suite('git/gitExec.ts', () => {
       assert.strictEqual(fileArgs[2], '--version');
       assert.strictEqual((options as { cwd?: unknown }).cwd, cwd);
       callback(null, stdoutBuffer, Buffer.from(''));
-    }) as typeof child_process.execFile;
+    }) as typeof childProcess.execFile;
 
     // When: execGitStdout is called
     const result = await execGitStdout(cwd, args, 1024 * 1024);
@@ -83,7 +84,7 @@ suite('git/gitExec.ts', () => {
     childProcessMutable.execFile = ((
       file: string,
       fileArgs: string[],
-      options: child_process.ExecFileOptions,
+      options: ExecFileOptions,
       callback: (error: Error | null, stdout: unknown, stderr: unknown) => void,
     ) => {
       // When: execGitResult is called
@@ -93,7 +94,7 @@ suite('git/gitExec.ts', () => {
       assert.strictEqual(fileArgs[2], 'status');
       assert.strictEqual((options as { maxBuffer?: unknown }).maxBuffer, 1024);
       callback(null, stdoutBuffer, stderrBuffer);
-    }) as typeof child_process.execFile;
+    }) as typeof childProcess.execFile;
 
     // When: execGitResult is called
     const result = await execGitResult(cwd, args, 1024);
@@ -147,7 +148,7 @@ suite('git/gitExec.ts', () => {
     childProcessMutable.execFile = ((
       file: string,
       fileArgs: string[],
-      options: child_process.ExecFileOptions,
+      options: ExecFileOptions,
       callback: (error: Error | null, stdout: unknown, stderr: unknown) => void,
     ) => {
       // When: execGitStdout is called
@@ -155,7 +156,7 @@ suite('git/gitExec.ts', () => {
       assert.strictEqual(fileArgs[2], '--version');
       assert.strictEqual((options as { maxBuffer?: unknown }).maxBuffer, 0);
       callback(null, Buffer.from('git version mock', 'utf8'), Buffer.from(''));
-    }) as typeof child_process.execFile;
+    }) as typeof childProcess.execFile;
 
     // When: execGitStdout is called
     const result = await execGitStdout(cwd, args, 0);
@@ -173,7 +174,7 @@ suite('git/gitExec.ts', () => {
     childProcessMutable.execFile = ((
       file: string,
       fileArgs: string[],
-      _options: child_process.ExecFileOptions,
+      _options: ExecFileOptions,
       callback: (error: Error | null, stdout: unknown, stderr: unknown) => void,
     ) => {
       assert.strictEqual(file, 'git');
@@ -182,7 +183,7 @@ suite('git/gitExec.ts', () => {
       (err as unknown as { stdout?: unknown }).stdout = ' mock-stdout ';
       (err as unknown as { stderr?: unknown }).stderr = ' mock-stderr ';
       callback(err, (err as unknown as { stdout?: unknown }).stdout, (err as unknown as { stderr?: unknown }).stderr);
-    }) as typeof child_process.execFile;
+    }) as typeof childProcess.execFile;
 
     // When: execGitResult is called
     const result = await execGitResult(cwd, args, 1024);
@@ -202,12 +203,12 @@ suite('git/gitExec.ts', () => {
     childProcessMutable.execFile = ((
       _file: string,
       _fileArgs: string[],
-      _options: child_process.ExecFileOptions,
+      _options: ExecFileOptions,
       callback: (error: Error | null, stdout: unknown, stderr: unknown) => void,
     ) => {
       const err = { stdout: Buffer.from('buf-out'), stderr: 123, message: { reason: 'x' } };
       callback(err as unknown as Error, err.stdout, err.stderr);
-    }) as typeof child_process.execFile;
+    }) as typeof childProcess.execFile;
 
     // When: execGitResult is called
     const result = await execGitResult(cwd, args, 1024);
@@ -229,14 +230,14 @@ suite('git/gitExec.ts', () => {
     childProcessMutable.execFile = ((
       _file: string,
       _fileArgs: string[],
-      _options: child_process.ExecFileOptions,
+      _options: ExecFileOptions,
       callback: (error: Error | null, stdout: unknown, stderr: unknown) => void,
     ) => {
       const err = new Error('   ');
       (err as unknown as { stdout?: unknown }).stdout = '   ';
       (err as unknown as { stderr?: unknown }).stderr = '';
       callback(err, '   ', '');
-    }) as typeof child_process.execFile;
+    }) as typeof childProcess.execFile;
 
     // When: execGitResult is called
     const result = await execGitResult(cwd, args, 1024);

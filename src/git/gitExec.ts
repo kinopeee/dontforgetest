@@ -65,10 +65,14 @@ export async function execGitResult(cwd: string, args: string[], maxBufferBytes:
     };
   } catch (e) {
     const err = e as { stdout?: unknown; stderr?: unknown; message?: unknown };
-    const stdoutText = typeof err.stdout === 'string' ? err.stdout : err.stdout ? String(err.stdout) : '';
-    const stderrText = typeof err.stderr === 'string' ? err.stderr : err.stderr ? String(err.stderr) : '';
-    const message = typeof err.message === 'string' ? err.message : err.message ? String(err.message) : '';
-    const output = [stderrText, stdoutText, message].filter((s) => s.trim().length > 0).join('\n').trim();
+    const normalizePart = (value: unknown): string => {
+      const text = typeof value === 'string' ? value : value ? String(value) : '';
+      return text.trim();
+    };
+    const stdoutText = normalizePart(err.stdout);
+    const stderrText = normalizePart(err.stderr);
+    const message = normalizePart(err.message);
+    const output = [stderrText, stdoutText, message].filter((s) => s.length > 0).join('\n');
     return { ok: false, output: output.length > 0 ? output : '(詳細不明)' };
   }
 }
