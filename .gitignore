@@ -9,8 +9,11 @@ dist
 .claude/settings.local.json
 
 # テスト生成物
-docs/test-execution-reports/
-docs/test-perspectives/
+# フォルダ自体は追跡するが、フォルダ内のファイルは無視する
+docs/test-execution-reports/*
+!docs/test-execution-reports/.gitkeep
+docs/test-perspectives/*
+!docs/test-perspectives/.gitkeep
 docs/test-perspective-tables/
 coverage/
 .nyc_output/
