@@ -152,6 +152,20 @@ suite('commands/selectDefaultModel.ts', () => {
       assert.strictEqual(infoMessages.length, 0);
     });
 
+    test('TC-SDM-B-01: QuickPick placeholder uses current model when defaultModel is set', async () => {
+      // Given: defaultModel が設定されている
+      modelSettingsValue = { defaultModel: 'current-model', customModels: [] };
+      quickPickSelector = () => undefined;
+
+      // When: selectDefaultModel を呼び出す
+      await selectDefaultModelModule.selectDefaultModel();
+
+      // Then: QuickPick の placeholder に current-model が含まれる
+      assert.strictEqual(quickPickCalls.length, 1);
+      const placeholder = quickPickCalls[0]?.options.placeHolder;
+      assert.ok(typeof placeholder === 'string' && placeholder.includes('current-model'), 'placeholder should include current model');
+    });
+
     test('TC-SDM-N-01: Unset selection clears default model', async () => {
       // Given: unset を選択する
       quickPickSelector = (items) => items.find((item) => item.mode === 'unset');
@@ -196,6 +210,19 @@ suite('commands/selectDefaultModel.ts', () => {
       assert.strictEqual(inputBoxCalls.length, 0);
     });
 
+    test('TC-SDM-E-04: useCandidate selection without modelValue does not update model', async () => {
+      // Given: QuickPick が不正な candidate（modelValue が欠落）を返す
+      quickPickSelector = () => ({ label: 'broken-candidate', mode: 'useCandidate' } as DefaultModelPickItem);
+
+      // When: selectDefaultModel を呼び出す
+      await selectDefaultModelModule.selectDefaultModel();
+
+      // Then: setDefaultModel は呼ばれない
+      assert.strictEqual(setDefaultModelCalls.length, 0);
+      assert.strictEqual(infoMessages.length, 0);
+      assert.strictEqual(inputBoxCalls.length, 0);
+    });
+
     test('TC-SDM-N-03: Input model selection trims input value', async () => {
       // Given: 入力モデルを選択し、入力値が返る
       quickPickSelector = (items) => items.find((item) => item.mode === 'input');
@@ -207,6 +234,13 @@ suite('commands/selectDefaultModel.ts', () => {
       // Then: setDefaultModel がトリム済み入力で呼ばれる
       assert.strictEqual(inputBoxCalls.length, 1);
       assert.ok(typeof inputBoxCalls[0].validateInput === 'function');
+      const validate = inputBoxCalls[0].validateInput;
+      if (validate) {
+        const invalid = await Promise.resolve(validate('   '));
+        assert.ok(typeof invalid === 'string' && invalid.length > 0, 'validateInput should return message for empty/whitespace');
+        const valid = await Promise.resolve(validate('model'));
+        assert.strictEqual(valid, undefined);
+      }
       assert.strictEqual(setDefaultModelCalls.length, 1);
       assert.strictEqual(setDefaultModelCalls[0], 'model-input');
       assert.strictEqual(infoMessages.length, 1);

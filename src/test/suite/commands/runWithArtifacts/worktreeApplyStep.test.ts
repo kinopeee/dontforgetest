@@ -30,6 +30,8 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
     let originalAppendEventToOutput: typeof outputChannelModule.appendEventToOutput;
     let originalShowWarningMessage: typeof vscode.window.showWarningMessage;
     let originalShowInformationMessage: typeof vscode.window.showInformationMessage;
+    let originalOpenTextDocument: typeof vscode.workspace.openTextDocument;
+    let originalShowTextDocument: typeof vscode.window.showTextDocument;
     let originalFsRename: typeof fs.promises.rename;
 
     let trackedPaths: string[] = [];
@@ -44,6 +46,11 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
     let appendEventCalls: Array<unknown> = [];
     let warningMessages: Array<{ message: string; items: string[] }> = [];
     let infoMessages: string[] = [];
+    let warningPickSelector: ((items: string[]) => string | undefined) | undefined;
+    let openTextDocumentCalls: string[] = [];
+    let showTextDocumentCalls: Array<vscode.TextDocumentShowOptions | undefined> = [];
+    let promptParamsCalls: mergeAssistanceModule.MergeAssistancePromptParams[] = [];
+    let instructionParamsCalls: mergeAssistanceModule.MergeAssistancePromptParams[] = [];
 
     const baseTmpDir = path.join(workspaceRoot, 'out', 'test-worktree-apply');
 
@@ -70,6 +77,11 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       appendEventCalls = [];
       warningMessages = [];
       infoMessages = [];
+      warningPickSelector = undefined;
+      openTextDocumentCalls = [];
+      showTextDocumentCalls = [];
+      promptParamsCalls = [];
+      instructionParamsCalls = [];
 
       originalExecGitStdout = gitExecModule.execGitStdout;
       originalExecGitResult = gitExecModule.execGitResult;
@@ -79,6 +91,8 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       originalAppendEventToOutput = outputChannelModule.appendEventToOutput;
       originalShowWarningMessage = vscode.window.showWarningMessage;
       originalShowInformationMessage = vscode.window.showInformationMessage;
+      originalOpenTextDocument = vscode.workspace.openTextDocument;
+      originalShowTextDocument = vscode.window.showTextDocument;
       originalFsRename = fs.promises.rename;
 
       (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async (_cwd, args) => {
@@ -108,9 +122,15 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       (testPathClassifierModule as unknown as { filterTestLikePaths: typeof testPathClassifierModule.filterTestLikePaths }).filterTestLikePaths =
         () => filteredTestPaths;
       (mergeAssistanceModule as unknown as { buildMergeAssistancePromptText: typeof mergeAssistanceModule.buildMergeAssistancePromptText })
-        .buildMergeAssistancePromptText = () => 'PROMPT_TEXT';
+        .buildMergeAssistancePromptText = (params) => {
+        promptParamsCalls.push(params);
+        return 'PROMPT_TEXT';
+      };
       (mergeAssistanceModule as unknown as { buildMergeAssistanceInstructionMarkdown: typeof mergeAssistanceModule.buildMergeAssistanceInstructionMarkdown })
-        .buildMergeAssistanceInstructionMarkdown = () => 'INSTRUCTION_MD';
+        .buildMergeAssistanceInstructionMarkdown = (params) => {
+        instructionParamsCalls.push(params);
+        return 'INSTRUCTION_MD';
+      };
       (outputChannelModule as unknown as { appendEventToOutput: typeof outputChannelModule.appendEventToOutput }).appendEventToOutput = (
         event,
       ) => {
@@ -123,7 +143,7 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       ) => {
         const selectedItems = typeof optionsOrItem === 'string' ? [optionsOrItem, ...items] : items;
         warningMessages.push({ message, items: selectedItems });
-        return undefined;
+        return warningPickSelector ? warningPickSelector(selectedItems) : undefined;
       };
       (vscode.window as unknown as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = async (
         message: string,
@@ -131,6 +151,20 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
         infoMessages.push(message);
         return undefined;
       };
+      (vscode.workspace as unknown as { openTextDocument: typeof vscode.workspace.openTextDocument }).openTextDocument = (async (
+        uriOrFileName: vscode.Uri | string,
+      ) => {
+        const uri = typeof uriOrFileName === 'string' ? vscode.Uri.file(uriOrFileName) : uriOrFileName;
+        openTextDocumentCalls.push(uri.fsPath);
+        return { uri } as unknown as vscode.TextDocument;
+      }) as unknown as typeof vscode.workspace.openTextDocument;
+      (vscode.window as unknown as { showTextDocument: typeof vscode.window.showTextDocument }).showTextDocument = (async (
+        doc: vscode.TextDocument,
+        options?: vscode.TextDocumentShowOptions,
+      ) => {
+        showTextDocumentCalls.push(options);
+        return { document: doc } as unknown as vscode.TextEditor;
+      }) as unknown as typeof vscode.window.showTextDocument;
       (fs.promises as unknown as { rename: typeof fs.promises.rename }).rename = async (src, dest) => {
         if (renameShouldFail) {
           throw new Error(`rename failed: ${src} -> ${dest}`);
@@ -153,6 +187,8 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       (vscode.window as unknown as { showWarningMessage: typeof originalShowWarningMessage }).showWarningMessage = originalShowWarningMessage;
       (vscode.window as unknown as { showInformationMessage: typeof originalShowInformationMessage }).showInformationMessage =
         originalShowInformationMessage;
+      (vscode.workspace as unknown as { openTextDocument: typeof originalOpenTextDocument }).openTextDocument = originalOpenTextDocument;
+      (vscode.window as unknown as { showTextDocument: typeof originalShowTextDocument }).showTextDocument = originalShowTextDocument;
       (fs.promises as unknown as { rename: typeof originalFsRename }).rename = originalFsRename;
     });
 
@@ -321,6 +357,359 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       assert.strictEqual(result.reason, 'applied');
       assert.strictEqual(infoMessages.length, 1);
       assert.strictEqual(fs.existsSync(tmpPatchPath), false, '一時パッチが削除される');
+    });
+
+    test('TC-WA-B-01: diffText ending with newline is preserved in persisted patch', async () => {
+      // Given: diffText が末尾改行を含み、genExit != 0 で手動マージになる
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('newline-patch');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content\n';
+      await createTestFile(runWorkspaceRoot, testPath);
+
+      const generationTaskId = `test-newline-patch-${Date.now()}`;
+
+      // When: applyWorktreeTestChanges を呼び出す
+      const result = await applyWorktreeTestChanges({
+        generationTaskId,
+        genExit: 1,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: gen-failed で終了し、patch は末尾改行が重複しない
+      assert.strictEqual(result.applied, false);
+      assert.strictEqual(result.reason, 'gen-failed');
+      const patchPath = path.join(extensionContext.globalStorageUri.fsPath, 'patches', `${generationTaskId}.patch`);
+      const patchContent = await fs.promises.readFile(patchPath, 'utf8');
+      assert.strictEqual(patchContent, diffText);
+    });
+
+    test('TC-WA-E-06: rm failure during apply success cleanup is tolerated', async () => {
+      // Given: apply 成功だが、一時パッチ削除（rm）が失敗する
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('apply-success-rm-throw');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content';
+      applyCheckResult = { ok: true, stdout: '', stderr: '' };
+      applyResult = { ok: true, stdout: '', stderr: '' };
+
+      const generationTaskId = `test-apply-success-rm-throw-${Date.now()}`;
+      const tmpPatchPath = path.join(extensionContext.globalStorageUri.fsPath, 'tmp', `${generationTaskId}.patch`);
+
+      const originalRm = fs.promises.rm;
+      (fs.promises as unknown as { rm: typeof fs.promises.rm }).rm = async () => {
+        throw new Error('rm failed');
+      };
+
+      try {
+        // When: applyWorktreeTestChanges を呼び出す
+        const result = await applyWorktreeTestChanges({
+          generationTaskId,
+          genExit: 0,
+          localWorkspaceRoot: workspaceRoot,
+          runWorkspaceRoot,
+          extensionContext,
+          preTestCheckCommand: '',
+        });
+
+        // Then: applied で終了し、rm 失敗でも例外にならない（パッチは残る）
+        assert.strictEqual(result.applied, true);
+        assert.strictEqual(result.reason, 'applied');
+        assert.strictEqual(infoMessages.length, 1);
+        assert.strictEqual(fs.existsSync(tmpPatchPath), true, 'rm 失敗時は一時パッチが残る');
+      } finally {
+        (fs.promises as unknown as { rm: typeof originalRm }).rm = originalRm;
+      }
+    });
+
+    test('TC-WA-E-07: apply failure after check returns apply-failed and records apply output', async () => {
+      // Given: apply --check は成功するが、apply が失敗する
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('apply-failed-after-check');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content';
+      applyCheckResult = { ok: true, stdout: '', stderr: '' };
+      applyResult = { ok: false, output: 'apply failed' };
+      await createTestFile(runWorkspaceRoot, testPath);
+
+      const generationTaskId = `test-apply-failed-after-check-${Date.now()}`;
+
+      // When: applyWorktreeTestChanges を呼び出す
+      const result = await applyWorktreeTestChanges({
+        generationTaskId,
+        genExit: 0,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: apply-failed で終了し、apply の出力が applyCheckOutput として保持される
+      assert.strictEqual(result.applied, false);
+      assert.strictEqual(result.reason, 'apply-failed');
+      assert.strictEqual(warningMessages.length, 1);
+      assert.ok(
+        instructionParamsCalls.some((p) => p.taskId === generationTaskId && p.applyCheckOutput.includes('apply failed')),
+        'Expected apply output to be passed to merge instruction params',
+      );
+    });
+
+    test('TC-WA-B-02: genExit=null is reflected in applyCheckOutput (exit=null)', async () => {
+      // Given: genExit が null の場合は自動適用せず、exit=null が表示される
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('gen-null');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content';
+      await createTestFile(runWorkspaceRoot, testPath);
+
+      const generationTaskId = `test-gen-null-${Date.now()}`;
+
+      // When: applyWorktreeTestChanges を呼び出す
+      const result = await applyWorktreeTestChanges({
+        generationTaskId,
+        genExit: null,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: gen-failed で終了し、applyCheckOutput に exit=null が含まれる
+      assert.strictEqual(result.applied, false);
+      assert.strictEqual(result.reason, 'gen-failed');
+      assert.ok(
+        instructionParamsCalls.some((p) => p.taskId === generationTaskId && p.applyCheckOutput.includes('exit=null')),
+        'Expected applyCheckOutput to include exit=null when genExit is null',
+      );
+    });
+
+    test('TC-WA-N-02: manual merge actionCopy writes prompt to clipboard', async () => {
+      // Given: 手動マージになり、ユーザーが「プロンプトをコピー」を選ぶ
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('manual-copy');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content';
+      await createTestFile(runWorkspaceRoot, testPath);
+      warningPickSelector = (items) => items[1];
+
+      const generationTaskId = `test-manual-copy-${Date.now()}`;
+
+      // When: applyWorktreeTestChanges を呼び出す
+      await applyWorktreeTestChanges({
+        generationTaskId,
+        genExit: 1,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: then() の導線が非同期で動くため1tick待って検証する
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.ok(
+        promptParamsCalls.some((p) => p.taskId === generationTaskId),
+        'Expected buildMergeAssistancePromptText to be called for actionCopy',
+      );
+      assert.strictEqual(openTextDocumentCalls.length, 0);
+    });
+
+    test('TC-WA-N-03: manual merge actionOpenInstruction opens instruction document', async () => {
+      // Given: 手動マージになり、ユーザーが「手順を開く」を選ぶ
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('manual-open');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content';
+      await createTestFile(runWorkspaceRoot, testPath);
+      warningPickSelector = (items) => items[0];
+
+      const generationTaskId = `test-manual-open-${Date.now()}`;
+
+      // When: applyWorktreeTestChanges を呼び出す
+      await applyWorktreeTestChanges({
+        generationTaskId,
+        genExit: 1,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: then() の導線が非同期で動くため1tick待って検証する
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const expectedInstructionPath = path.join(extensionContext.globalStorageUri.fsPath, 'merge-instructions', `${generationTaskId}.md`);
+      assert.strictEqual(openTextDocumentCalls.length, 1);
+      assert.strictEqual(openTextDocumentCalls[0], expectedInstructionPath);
+      assert.strictEqual(showTextDocumentCalls.length, 1);
+      assert.strictEqual(showTextDocumentCalls[0]?.preview, true);
+    });
+
+    test('TC-WA-E-08: manual merge actionCopy tolerates clipboard.writeText throwing', async () => {
+      // Given: ユーザーが「プロンプトをコピー」を選ぶが、プロンプト生成が例外を投げる（then内catch確認）
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('manual-copy-throw');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content';
+      await createTestFile(runWorkspaceRoot, testPath);
+      warningPickSelector = (items) => items[1];
+      const originalPromptBuilder = mergeAssistanceModule.buildMergeAssistancePromptText;
+      (mergeAssistanceModule as unknown as { buildMergeAssistancePromptText: typeof mergeAssistanceModule.buildMergeAssistancePromptText })
+        .buildMergeAssistancePromptText = () => {
+        throw new Error('prompt build failed');
+      };
+
+      try {
+        // When: applyWorktreeTestChanges を呼び出す（本体は例外にしない）
+        await applyWorktreeTestChanges({
+          generationTaskId: `test-manual-copy-throw-${Date.now()}`,
+          genExit: 1,
+          localWorkspaceRoot: workspaceRoot,
+          runWorkspaceRoot,
+          extensionContext,
+          preTestCheckCommand: '',
+        });
+
+        // Then: then() の導線が非同期で動くため1tick待って検証する
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.strictEqual(infoMessages.length, 0);
+      } finally {
+        (mergeAssistanceModule as unknown as { buildMergeAssistancePromptText: typeof originalPromptBuilder }).buildMergeAssistancePromptText =
+          originalPromptBuilder;
+      }
+    });
+
+    test('TC-WA-B-03: snapshot skips non-file paths', async () => {
+      // Given: 生成済みテストパスが「ディレクトリ」である（isFile=false）
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('snapshot-dir');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content';
+      await fs.promises.mkdir(path.join(runWorkspaceRoot, testPath), { recursive: true });
+
+      // When: applyWorktreeTestChanges を呼び出す
+      const result = await applyWorktreeTestChanges({
+        generationTaskId: `test-snapshot-dir-${Date.now()}`,
+        genExit: 1,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: gen-failed で終了し、例外にはならない
+      assert.strictEqual(result.applied, false);
+      assert.strictEqual(result.reason, 'gen-failed');
+    });
+
+    test('TC-WA-E-09: snapshot ignores missing source file', async () => {
+      // Given: 生成済みテストパスが存在しない（stat/copy が失敗）
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('snapshot-missing');
+      const testPath = 'tests/missing.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content';
+
+      // When: applyWorktreeTestChanges を呼び出す
+      const result = await applyWorktreeTestChanges({
+        generationTaskId: `test-snapshot-missing-${Date.now()}`,
+        genExit: 1,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: gen-failed で終了し、例外にはならない
+      assert.strictEqual(result.applied, false);
+      assert.strictEqual(result.reason, 'gen-failed');
+    });
+
+    test('TC-WA-E-10: execGitStdout throw is caught and returns exception reason', async () => {
+      // Given: execGitStdout が例外を投げる
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('exec-throw');
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async () => {
+        throw new Error('boom');
+      };
+
+      // When: applyWorktreeTestChanges を呼び出す
+      const result = await applyWorktreeTestChanges({
+        generationTaskId: `test-exec-throw-${Date.now()}`,
+        genExit: 0,
+        localWorkspaceRoot: workspaceRoot,
+        runWorkspaceRoot,
+        extensionContext,
+        preTestCheckCommand: '',
+      });
+
+      // Then: exception で終了し、warn log が記録される
+      assert.strictEqual(result.applied, false);
+      assert.strictEqual(result.reason, 'exception');
+      assert.strictEqual(appendEventCalls.length, 1);
+    });
+
+    test('TC-WA-E-11: persistMergeArtifacts tolerates rm failure when rename fails', async () => {
+      // Given: rename が失敗し、その後の tmpPatch rm も失敗する
+      const extensionContext = createMockExtensionContext({ workspaceRoot });
+      const runWorkspaceRoot = await createTempDir('rename-rm-fail');
+      const testPath = 'tests/app.test.ts';
+      trackedPaths = [testPath];
+      untrackedPaths = [testPath];
+      filteredTestPaths = [testPath];
+      diffText = 'diff content';
+      renameShouldFail = true;
+      await createTestFile(runWorkspaceRoot, testPath);
+
+      const originalRm = fs.promises.rm;
+      (fs.promises as unknown as { rm: typeof fs.promises.rm }).rm = async () => {
+        throw new Error('rm failed');
+      };
+
+      try {
+        // When: applyWorktreeTestChanges を呼び出す
+        const result = await applyWorktreeTestChanges({
+          generationTaskId: `test-rename-rm-fail-${Date.now()}`,
+          genExit: 1,
+          localWorkspaceRoot: workspaceRoot,
+          runWorkspaceRoot,
+          extensionContext,
+          preTestCheckCommand: '',
+        });
+
+        // Then: gen-failed で終了し、例外にはならない
+        assert.strictEqual(result.applied, false);
+        assert.strictEqual(result.reason, 'gen-failed');
+      } finally {
+        (fs.promises as unknown as { rm: typeof originalRm }).rm = originalRm;
+      }
     });
   });
 });
