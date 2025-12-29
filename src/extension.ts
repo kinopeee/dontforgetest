@@ -17,7 +17,14 @@ import { initializeOutputTreeView } from './ui/outputTreeView';
 
 type RunLocation = 'local' | 'worktree';
 
-function normalizeRunLocation(value: unknown): RunLocation {
+/**
+ * RunLocation 値を正規化する。
+ * 'worktree' の場合のみ 'worktree' を返し、それ以外はすべて 'local' を返す。
+ *
+ * @param value - 正規化する値（コマンド引数から渡される可能性がある任意の型）
+ * @returns 'worktree' または 'local'
+ */
+export function normalizeRunLocation(value: unknown): RunLocation {
   return value === 'worktree' ? 'worktree' : 'local';
 }
 
