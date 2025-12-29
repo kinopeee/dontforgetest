@@ -1,5 +1,12 @@
 import * as assert from 'assert';
-import { analyzeGitUnifiedDiff, extractChangedPaths, GitDiffAnalysis } from '../../../git/diffAnalyzer';
+import * as gitExecModule from '../../../git/gitExec';
+import {
+  analyzeGitUnifiedDiff,
+  extractChangedPaths,
+  getCommitRangeDiff,
+  getWorkingTreeDiff,
+  GitDiffAnalysis,
+} from '../../../git/diffAnalyzer';
 
 suite('git/diffAnalyzer.ts', () => {
   suite('analyzeGitUnifiedDiff', () => {
@@ -362,6 +369,32 @@ diff --git a/valid.ts b/valid.ts`;
       assert.strictEqual(result.files.length, 1);
       assert.strictEqual(result.files[0].path, 'valid.ts');
     });
+
+    // TC-GD-PARSE-B-01
+    test('TC-GD-PARSE-B-01: should decode \\n escape in quoted paths', () => {
+      // Given: A diff line with a quoted path that contains \\n escape
+      const diffText = 'diff --git "a/src/line\\nfeed.ts" "b/src/line\\nfeed.ts"';
+
+      // When: analyzeGitUnifiedDiff is called
+      const result = analyzeGitUnifiedDiff(diffText);
+
+      // Then: The parsed path contains an actual LF character
+      assert.strictEqual(result.files.length, 1);
+      assert.ok(result.files[0]?.path.includes('\n'), 'Expected parsed path to include an actual newline character');
+    });
+
+    // TC-GD-PARSE-B-02
+    test('TC-GD-PARSE-B-02: should treat unknown escape sequences as literal characters', () => {
+      // Given: A diff line with an unknown escape (\\q)
+      const diffText = 'diff --git "a/src/unk\\qhere.ts" "b/src/unk\\qhere.ts"';
+
+      // When: analyzeGitUnifiedDiff is called
+      const result = analyzeGitUnifiedDiff(diffText);
+
+      // Then: The escape is decoded as the literal next character (q)
+      assert.strictEqual(result.files.length, 1);
+      assert.strictEqual(result.files[0]?.path, 'src/unkqhere.ts');
+    });
   });
 
   suite('extractChangedPaths', () => {
@@ -399,6 +432,165 @@ diff --git a/valid.ts b/valid.ts`;
 
       // Then: 空配列が返される
       assert.deepStrictEqual(paths, []);
+    });
+  });
+
+  suite('getCommitRangeDiff', () => {
+    let originalExecGitStdout: typeof gitExecModule.execGitStdout;
+    const calls: Array<{ cwd: string; args: string[]; maxBufferBytes: number }> = [];
+
+    setup(() => {
+      originalExecGitStdout = gitExecModule.execGitStdout;
+      calls.length = 0;
+    });
+
+    teardown(() => {
+      (gitExecModule as unknown as { execGitStdout: typeof originalExecGitStdout }).execGitStdout = originalExecGitStdout;
+    });
+
+    // TC-GD-CR-N-01
+    test('TC-GD-CR-N-01: should return trimEnd()-ed diff and call execGitStdout with expected args', async () => {
+      // Given: execGitStdout is stubbed to return a diff with trailing newlines
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async (
+        cwd: string,
+        args: string[],
+        maxBufferBytes: number,
+      ) => {
+        calls.push({ cwd, args, maxBufferBytes });
+        return 'diff --git a/a.ts b/a.ts\n+new\n\n';
+      };
+
+      // When: getCommitRangeDiff is called
+      const workspaceRoot = '/tmp/repo';
+      const range = 'main..HEAD';
+      const result = await getCommitRangeDiff(workspaceRoot, range);
+
+      // Then: Output is trimEnd()-ed and execGitStdout is called with expected args
+      assert.strictEqual(result.endsWith('\n'), false, 'Expected trimEnd() to remove trailing newline');
+      assert.strictEqual(calls.length, 1);
+      assert.strictEqual(calls[0]?.cwd, workspaceRoot);
+      assert.deepStrictEqual(calls[0]?.args, ['diff', '--no-color', range]);
+      assert.strictEqual(calls[0]?.maxBufferBytes, 20 * 1024 * 1024);
+    });
+
+    // TC-GD-CR-E-01
+    test('TC-GD-CR-E-01: should reject when execGitStdout throws', async () => {
+      // Given: execGitStdout throws
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async () => {
+        throw new Error('git failed');
+      };
+
+      // When/Then: getCommitRangeDiff rejects with the same error
+      await assert.rejects(async () => await getCommitRangeDiff('/tmp/repo', 'HEAD~1..HEAD'), /git failed/);
+    });
+  });
+
+  suite('getWorkingTreeDiff', () => {
+    let originalExecGitStdout: typeof gitExecModule.execGitStdout;
+    const calls: Array<{ cwd: string; args: string[]; maxBufferBytes: number }> = [];
+
+    setup(() => {
+      originalExecGitStdout = gitExecModule.execGitStdout;
+      calls.length = 0;
+    });
+
+    teardown(() => {
+      (gitExecModule as unknown as { execGitStdout: typeof originalExecGitStdout }).execGitStdout = originalExecGitStdout;
+    });
+
+    // TC-GD-WT-N-01
+    test('TC-GD-WT-N-01: staged mode calls git diff --cached and returns trimmed output', async () => {
+      // Given: execGitStdout returns staged diff with trailing newline
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async (
+        cwd: string,
+        args: string[],
+        maxBufferBytes: number,
+      ) => {
+        calls.push({ cwd, args, maxBufferBytes });
+        return 'staged\n\n';
+      };
+
+      // When: getWorkingTreeDiff is called
+      const result = await getWorkingTreeDiff('/tmp/repo', 'staged');
+
+      // Then: trimEnd() applied and args match
+      assert.strictEqual(result, 'staged');
+      assert.strictEqual(calls.length, 1);
+      assert.deepStrictEqual(calls[0]?.args, ['diff', '--cached', '--no-color']);
+      assert.strictEqual(calls[0]?.maxBufferBytes, 20 * 1024 * 1024);
+    });
+
+    // TC-GD-WT-N-02
+    test('TC-GD-WT-N-02: unstaged mode calls git diff and returns trimmed output', async () => {
+      // Given: execGitStdout returns unstaged diff with trailing newline
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async (
+        cwd: string,
+        args: string[],
+        maxBufferBytes: number,
+      ) => {
+        calls.push({ cwd, args, maxBufferBytes });
+        return 'unstaged\n';
+      };
+
+      // When: getWorkingTreeDiff is called
+      const result = await getWorkingTreeDiff('/tmp/repo', 'unstaged');
+
+      // Then: trimEnd() applied and args match
+      assert.strictEqual(result, 'unstaged');
+      assert.strictEqual(calls.length, 1);
+      assert.deepStrictEqual(calls[0]?.args, ['diff', '--no-color']);
+      assert.strictEqual(calls[0]?.maxBufferBytes, 20 * 1024 * 1024);
+    });
+
+    // TC-GD-WT-B-01
+    test('TC-GD-WT-B-01: both mode returns unstaged only when staged is empty', async () => {
+      // Given: execGitStdout returns empty staged and non-empty unstaged
+      let callIndex = 0;
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async (
+        cwd: string,
+        args: string[],
+        maxBufferBytes: number,
+      ) => {
+        calls.push({ cwd, args, maxBufferBytes });
+        callIndex += 1;
+        return callIndex === 1 ? '' : 'unstaged\n';
+      };
+
+      // When: getWorkingTreeDiff is called
+      const result = await getWorkingTreeDiff('/tmp/repo', 'both');
+
+      // Then: It returns only unstaged with no extra blank lines
+      assert.strictEqual(result, 'unstaged');
+      assert.strictEqual(calls.length, 2);
+      assert.deepStrictEqual(calls[0]?.args, ['diff', '--cached', '--no-color']);
+      assert.deepStrictEqual(calls[1]?.args, ['diff', '--no-color']);
+    });
+
+    // TC-GD-WT-B-02
+    test('TC-GD-WT-B-02: both mode concatenates staged and unstaged with a blank line', async () => {
+      // Given: execGitStdout returns non-empty staged and unstaged
+      let callIndex = 0;
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async () => {
+        callIndex += 1;
+        return callIndex === 1 ? 'staged\n' : 'unstaged\n';
+      };
+
+      // When: getWorkingTreeDiff is called
+      const result = await getWorkingTreeDiff('/tmp/repo', 'both');
+
+      // Then: It concatenates both diffs with a blank line
+      assert.strictEqual(result, 'staged\n\nunstaged');
+    });
+
+    // TC-GD-WT-E-01
+    test('TC-GD-WT-E-01: should reject when execGitStdout throws', async () => {
+      // Given: execGitStdout throws
+      (gitExecModule as unknown as { execGitStdout: typeof gitExecModule.execGitStdout }).execGitStdout = async () => {
+        throw new Error('git diff failed');
+      };
+
+      // When/Then: getWorkingTreeDiff rejects with the same error
+      await assert.rejects(async () => await getWorkingTreeDiff('/tmp/repo', 'staged'), /git diff failed/);
     });
   });
 });

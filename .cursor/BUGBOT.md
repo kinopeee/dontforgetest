@@ -1,1 +1,1 @@
-常に日本語で回答してください。
+Always respond in Japanese.

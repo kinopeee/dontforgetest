@@ -558,6 +558,70 @@ suite('providers/cursorAgentProvider.ts', () => {
       }
       assert.strictEqual(result.next, undefined);
     });
+
+    test('TC-HSJ-B-01: emits fileWrite with absolute path when path is outside workspaceRoot', () => {
+      // Given: editToolCall started with an absolute path outside workspaceRoot
+      const filePath = path.resolve(workspaceRoot, '..', 'outside', 'generated.test.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          editToolCall: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: fileWrite path falls back to the absolute path (relative is undefined) and returns lastWritePath
+      assert.strictEqual(result.events.length, 1);
+      const event = result.events[0];
+      assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.path, filePath);
+      }
+      assert.strictEqual(result.next, filePath);
+    });
+
+    test('TC-HSJ-B-02: emits fileWrite with relative path as-is when args.path is already relative', () => {
+      // Given: editToolCall started with a relative path
+      const filePath = path.join('src', 'generated.test.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          editToolCall: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: fileWrite uses the same relative path and returns it as lastWritePath
+      assert.strictEqual(result.events.length, 1);
+      const event = result.events[0];
+      assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.path, filePath);
+      }
+      assert.strictEqual(result.next, filePath);
+    });
+
+    test('TC-HSJ-E-08: tool_call with empty tool_call object emits no event and does not throw', () => {
+      // Given: A tool_call event with empty tool_call payload
+      const obj = { type: 'tool_call', subtype: 'started', tool_call: {} };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: No event is emitted
+      assert.strictEqual(result.events.length, 0);
+      assert.strictEqual(result.next, undefined);
+    });
   });
 
   suite('wireOutput (time-based monitoring without long sleeps)', () => {
@@ -853,6 +917,86 @@ suite('providers/cursorAgentProvider.ts', () => {
         if (completed[0]?.type === 'completed') {
           assert.strictEqual(completed[0].exitCode, null);
         }
+      } finally {
+        timers.restore();
+      }
+    });
+
+    test('TC-CAP-WO-E-02: monitor kills the process after long silence and tolerates child.kill() throwing', () => {
+      // Given: A wired child process with a controlled clock and fake timers
+      const provider = new CursorAgentProvider();
+      const wireOutput = (provider as unknown as { wireOutput: WireOutput }).wireOutput.bind(provider);
+      const events: TestGenEvent[] = [];
+
+      const originalNow = Date.now;
+      let fakeNow = 0;
+      (Date as unknown as { now: () => number }).now = () => fakeNow;
+
+      const timers = patchTimers();
+      const { child, stdout, killedRef } = createFakeChild();
+
+      // Make kill() throw to cover kill try/catch while still recording that it was attempted
+      (child as unknown as { kill: () => boolean }).kill = () => {
+        killedRef.killed = true;
+        throw new Error('kill failed');
+      };
+
+      try {
+        const options: AgentRunOptions = {
+          taskId: 'wo-kill-after-silence',
+          workspaceRoot: path.resolve('tmp-workspace'),
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (e) => events.push(e),
+        };
+
+        wireOutput(child, options);
+
+        // When: Some output arrives at t=0, then time advances beyond the kill threshold (10min)
+        fakeNow = 0;
+        stdout.emit('data', Buffer.from('not-json\n'));
+
+        fakeNow = 10 * 60_000;
+        timers.fireAllIntervals();
+
+        // Then: A kill is attempted and an error log is emitted about auto-stop
+        assert.strictEqual(killedRef.killed, true, 'Expected child.kill() to be attempted');
+        const killLog = events.find((e) => e.type === 'log' && e.level === 'error' && e.message.includes('無音'));
+        assert.ok(killLog, 'Expected an error log about long silence auto-stop');
+      } finally {
+        timers.restore();
+        (Date as unknown as { now: () => number }).now = originalNow;
+      }
+    });
+
+    test('TC-CAP-STDERR-E-01: emits error log when stderr outputs a non-empty message', () => {
+      // Given: A wired child process
+      const provider = new CursorAgentProvider();
+      const wireOutput = (provider as unknown as { wireOutput: WireOutput }).wireOutput.bind(provider);
+      const events: TestGenEvent[] = [];
+
+      const timers = patchTimers();
+      const { child, stderr } = createFakeChild();
+
+      try {
+        const options: AgentRunOptions = {
+          taskId: 'wo-stderr',
+          workspaceRoot: path.resolve('tmp-workspace'),
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (e) => events.push(e),
+        };
+
+        wireOutput(child, options);
+
+        // When: stderr emits a message
+        stderr.emit('data', Buffer.from('something went wrong\n'));
+
+        // Then: An error log is emitted
+        const errLog = events.find((e) => e.type === 'log' && e.level === 'error' && e.message.includes('something went wrong'));
+        assert.ok(errLog, 'Expected an error log event from stderr output');
       } finally {
         timers.restore();
       }

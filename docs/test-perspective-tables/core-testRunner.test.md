@@ -15,4 +15,6 @@ This table documents the test design (perspectives) for the unit tests in `src/t
 | TC-TRUN-B-MAXP1 | stdout length exceeds `MAX_CAPTURE_BYTES` is truncated | `stdout` contains truncation marker; output is capped | Boundary (max+1) |
 | TC-TRUN-ENV-N-01 | `options.env` overrides `process.env` when merging env | spawned process sees overridden value | Normal (env precedence) |
 | TC-TRUN-ENV-B-01 | When `options.env` is omitted, `process.env` is passed through | spawned process sees `process.env` value | Boundary (env omitted) |
+| TC-TRUN-ERR-01 | Spawn emits `error` and then `close` (double-finish guard) | Promise resolves once; `exitCode === null`; `errorMessage` equals the error message; truncation marker appended when stdout exceeds the cap | Error (spawn error path + idempotent finish) |
+| TC-TRUN-TRUNC-SLICE-01 | Stdout arrives in chunks such that `prev < cap` but `prev+chunk > cap` | `stdoutTruncated === true`; `stdout` is sliced to the cap and includes truncation marker in the final result | Boundary (crossing cap in a single append) |
 
