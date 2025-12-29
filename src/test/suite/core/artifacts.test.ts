@@ -6,6 +6,7 @@ import {
   getArtifactSettings,
   formatTimestamp,
   resolveDirAbsolute,
+  findLatestArtifact,
   saveTestPerspectiveTable,
   saveTestExecutionReport,
   buildTestPerspectiveArtifactMarkdown,
@@ -7020,6 +7021,181 @@ suite('core/artifacts.ts', () => {
         assert.strictEqual(result.value.failedTests?.[0]?.error, '');
       });
     });
+
+  suite('additional coverage: findLatestArtifact and parsing edge cases', () => {
+    test('TC-ART-LATEST-N-01: findLatestArtifact returns newest matching artifact by timestamp', async () => {
+      // Given: A temp directory with multiple files (some matching, some not)
+      const tempRoot = path.join(workspaceRoot, 'out', 'test-findLatestArtifact-n01');
+      const prefix = 'test-perspectives_';
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+      const older = `${prefix}20250101_000000.md`;
+      const newer = `${prefix}20251231_235959.md`;
+      const unrelated = `other_${prefix}20251231_235959.md`;
+      const wrongExt = `${prefix}20251231_235959.txt`;
+
+      try {
+        // When: Writing files and calling findLatestArtifact
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, older)), Buffer.from('old', 'utf8'));
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, newer)), Buffer.from('new', 'utf8'));
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, unrelated)), Buffer.from('x', 'utf8'));
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, wrongExt)), Buffer.from('x', 'utf8'));
+
+        const latest = await findLatestArtifact(workspaceRoot, tempRoot, prefix);
+
+        // Then: The newest timestamp file path is returned
+        assert.strictEqual(latest, path.join(tempRoot, newer));
+      } finally {
+        // Cleanup
+        await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+      }
+    });
+
+    test('TC-ART-LATEST-E-01: findLatestArtifact returns undefined when no valid matching files exist', async () => {
+      // Given: A temp directory with only invalid candidates
+      const tempRoot = path.join(workspaceRoot, 'out', 'test-findLatestArtifact-e01');
+      const prefix = 'test-perspectives_';
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+
+      const wrongPrefix = `test-execution_20251231_235959.md`;
+      const invalidTsLen = `${prefix}20251231_23595.md`; // length mismatch
+      const invalidTsPattern = `${prefix}20251231235959.md`; // missing underscore
+      const wrongExt = `${prefix}20251231_235959.txt`;
+
+      try {
+        // When: Writing files and calling findLatestArtifact
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, wrongPrefix)), Buffer.from('x', 'utf8'));
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, invalidTsLen)), Buffer.from('x', 'utf8'));
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, invalidTsPattern)), Buffer.from('x', 'utf8'));
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, wrongExt)), Buffer.from('x', 'utf8'));
+
+        const latest = await findLatestArtifact(workspaceRoot, tempRoot, prefix);
+
+        // Then: No artifact is found
+        assert.strictEqual(latest, undefined);
+      } finally {
+        // Cleanup
+        await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+      }
+    });
+
+    test('TC-ART-LATEST-E-02: findLatestArtifact returns undefined when directory does not exist', async () => {
+      // Given: A non-existent directory
+      const tempRoot = path.join(workspaceRoot, 'out', 'test-findLatestArtifact-e02-does-not-exist');
+      const prefix = 'test-perspectives_';
+
+      // Ensure it does not exist (best-effort)
+      try {
+        await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+      } catch {
+        // ignore
+      }
+
+      // When: Calling findLatestArtifact
+      const latest = await findLatestArtifact(workspaceRoot, tempRoot, prefix);
+
+      // Then: Returns undefined (does not throw)
+      assert.strictEqual(latest, undefined);
+    });
+
+    test('TC-ART-PATH-B-01: saveTestPerspectiveTable returns relativePath undefined when reportDir is outside workspaceRoot', async () => {
+      // Given: workspaceRoot parameter points to a subdirectory, while reportDir is outside it (but still inside repo workspace)
+      const base = path.join(workspaceRoot, 'out', 'test-saveTestPerspectiveTable-outside-root');
+      const fakeWorkspaceRoot = path.join(base, 'workspaceRoot');
+      const reportDir = path.join(base, 'outside');
+
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(fakeWorkspaceRoot));
+
+      try {
+        // When: Saving the artifact to an absolute reportDir outside fakeWorkspaceRoot
+        const saved = await saveTestPerspectiveTable({
+          workspaceRoot: fakeWorkspaceRoot,
+          targetLabel: 'label',
+          targetPaths: ['a.ts'],
+          perspectiveMarkdown: '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |\n|---|---|---|---|---|\n| X | - | - | - | - |',
+          reportDir,
+          timestamp: '20251229_000000',
+        });
+
+        // Then: absolutePath is in reportDir and relativePath is undefined
+        assert.strictEqual(saved.absolutePath, path.join(reportDir, 'test-perspectives_20251229_000000.md'));
+        assert.strictEqual(saved.relativePath, undefined);
+
+        const stat = await vscode.workspace.fs.stat(vscode.Uri.file(saved.absolutePath));
+        assert.ok(stat.size >= 0, 'Saved file should exist');
+      } finally {
+        // Cleanup
+        await vscode.workspace.fs.delete(vscode.Uri.file(base), { recursive: true, useTrash: false });
+      }
+    });
+
+    test('TC-ART-PARSE-PERSPECTIVE-E-01: parsePerspectiveJsonV1 returns invalid-json for unterminated JSON string', () => {
+      // Given: An unterminated JSON string that starts with a quote (no JSON object in the text)
+      const raw = '\"abc';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false with error starting with invalid-json:
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+    });
+
+    test('TC-ART-PARSE-PERSPECTIVE-N-01: parsePerspectiveJsonV1 handles non-fence backticks prefix and still parses JSON object', () => {
+      // Given: Text starts with backticks but is not a valid fenced block (edge case)
+      const raw = '``````\n{\"version\":1,\"cases\":[]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: JSON object inside text is parsed successfully
+      assert.ok(result.ok, 'Expected ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.version, 1);
+      assert.deepStrictEqual(result.value.cases, []);
+    });
+
+    test('TC-ART-PARSE-EXEC-E-01: parseTestExecutionJsonV1 returns invalid-json for unterminated JSON string', () => {
+      // Given: An unterminated JSON string that starts with a quote (no JSON object in the text)
+      const raw = '\"abc';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false with error starting with invalid-json:
+      assert.ok(!result.ok, 'Returns ok=false');
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+    });
+
+    test('TC-ART-PARSE-RESULT-B-01: parseTestResultFile ignores non-object failedTests entries', () => {
+      // Given: failedTests contains a non-object entry and a valid object entry
+      const raw = JSON.stringify({
+        failedTests: [
+          123,
+          {
+            title: 'T',
+            fullTitle: 'Suite T',
+            error: 'boom',
+          },
+        ],
+      });
+
+      // When: parseTestResultFile is called
+      const result = parseTestResultFile(raw);
+
+      // Then: Non-object entry is ignored and object entry is kept
+      assert.ok(result.ok, 'Expected ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.failedTests?.length, 1);
+      assert.strictEqual(result.value.failedTests?.[0]?.title, 'T');
+      assert.strictEqual(result.value.failedTests?.[0]?.fullTitle, 'Suite T');
+      assert.strictEqual(result.value.failedTests?.[0]?.error, 'boom');
+    });
+  });
 
     suite('buildTestExecutionArtifactMarkdown (failure details section)', () => {
       test('TC-ART-FAILSEC-N-01: includes "Failure Details" section with message/code/expected/actual/stack blocks when failedTests exist', () => {
