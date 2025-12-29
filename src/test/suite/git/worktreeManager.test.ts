@@ -222,4 +222,97 @@ suite('git/worktreeManager.ts', () => {
       }
     }
   }).timeout(30000);
+
+  // TC-B-01: createTemporaryWorktree called with ref: undefined
+  test('TC-B-01: createTemporaryWorktree defaults ref to HEAD when undefined', async function () {
+    if (!isGitRepo) {
+      this.skip(); // Skip test if not in a git repository
+    }
+    // Given: ref is undefined
+    const taskId = `test-task-ref-undefined-${Date.now()}`;
+    let worktree: TemporaryWorktree | undefined;
+    try {
+      // When: createTemporaryWorktree is called without ref
+      worktree = await createTemporaryWorktree({
+        repoRoot,
+        baseDir: tempBaseDir,
+        taskId,
+        // ref is omitted (undefined)
+      });
+
+      // Then: Worktree created with HEAD (default ref)
+      assert.ok(worktree !== undefined, 'Worktree should be created');
+      assert.ok(fs.existsSync(worktree.worktreeDir), 'Worktree directory should exist');
+    } finally {
+      if (worktree) {
+        try {
+          await removeTemporaryWorktree(repoRoot, worktree.worktreeDir);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    }
+  }).timeout(30000);
+
+  // TC-B-02: createTemporaryWorktree called with ref: '   ' (whitespace)
+  test('TC-B-02: createTemporaryWorktree defaults ref to HEAD when whitespace', async function () {
+    if (!isGitRepo) {
+      this.skip(); // Skip test if not in a git repository
+    }
+    // Given: ref is whitespace-only string
+    const taskId = `test-task-ref-whitespace-${Date.now()}`;
+    let worktree: TemporaryWorktree | undefined;
+    try {
+      // When: createTemporaryWorktree is called with blank ref
+      worktree = await createTemporaryWorktree({
+        repoRoot,
+        baseDir: tempBaseDir,
+        taskId,
+        ref: '   ',
+      });
+
+      // Then: Worktree created with HEAD (blank ref falls back to HEAD)
+      assert.ok(worktree !== undefined, 'Worktree should be created');
+      assert.ok(fs.existsSync(worktree.worktreeDir), 'Worktree directory should exist');
+    } finally {
+      if (worktree) {
+        try {
+          await removeTemporaryWorktree(repoRoot, worktree.worktreeDir);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    }
+  }).timeout(30000);
+
+  // TC-B-03: createTemporaryWorktree called with taskId: '   ' (whitespace)
+  test('TC-B-03: createTemporaryWorktree sanitizes whitespace taskId to default', async function () {
+    if (!isGitRepo) {
+      this.skip(); // Skip test if not in a git repository
+    }
+    // Given: taskId is whitespace-only string
+    const taskId = '   ';
+    let worktree: TemporaryWorktree | undefined;
+    try {
+      // When: createTemporaryWorktree is called
+      worktree = await createTemporaryWorktree({
+        repoRoot,
+        baseDir: tempBaseDir,
+        taskId,
+        ref: 'HEAD',
+      });
+
+      // Then: TaskId sanitized to 'task', worktree created
+      assert.ok(worktree !== undefined, 'Worktree should be created even with whitespace taskId');
+      assert.ok(worktree.worktreeDir.includes('task'), 'Worktree directory should contain sanitized taskId');
+    } finally {
+      if (worktree) {
+        try {
+          await removeTemporaryWorktree(repoRoot, worktree.worktreeDir);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    }
+  }).timeout(30000);
 });

@@ -1,9 +1,35 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-
-const execFileAsync = promisify(execFile);
+import * as child_process from 'child_process';
 
 export type ExecGitResult = { ok: true; stdout: string; stderr: string } | { ok: false; output: string };
+
+/**
+ * child_process.execFile を Promise 化する。
+ *
+ * NOTE:
+ * - util.promisify を使うとモジュール初期化時に execFile を束縛してしまい、テストでのモックが困難になる。
+ * - ここでは都度 child_process.execFile を呼ぶことで、テスト側での差し替えを可能にする。
+ */
+async function execFileAsync(
+  file: string,
+  args: string[],
+  options: child_process.ExecFileOptions,
+): Promise<{ stdout: unknown; stderr: unknown }> {
+  return await new Promise((resolve, reject) => {
+    child_process.execFile(file, args, options, (error, stdout, stderr) => {
+      if (error) {
+        // Node.js の execFile/promisify と同様に、stdout/stderr を error に載せる（載っていない場合のみ）
+        const errObj = error as unknown as { stdout?: unknown; stderr?: unknown };
+        if (typeof errObj === 'object' && errObj !== null) {
+          if (errObj.stdout === undefined) errObj.stdout = stdout;
+          if (errObj.stderr === undefined) errObj.stderr = stderr;
+        }
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
 
 /**
  * git コマンドを実行し、stdout を文字列として返す。
