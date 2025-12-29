@@ -3,7 +3,7 @@
 ## 概要
 
 現在のブランチに対して変更をコミットし、リモートへプッシュしたあと、Pull Request を作成するための一括実行コマンドの例です。  
-main/master への直接プッシュ禁止や、コミット前に実行する品質チェック（lint / test / build など）、PR 作成フロー（GitHub CLI `gh` を使う運用など）は、各プロジェクトのポリシーに応じてこのテンプレートを調整してください。
+誤操作防止のため main/master での実行はテンプレート内のチェックでブロックします（詳細は `AGENTS.md`）。コミット前に実行する品質チェック（lint / test / build など）や PR 作成フロー（GitHub CLI `gh` を使う運用など）は、各プロジェクトのポリシーに応じてこのテンプレートを調整してください。
 
 ## 前提条件
 
@@ -34,7 +34,7 @@ MSG="fix: 不要なデバッグログ出力を削除"
 # 一括実行
 BRANCH=$(git branch --show-current) && \
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then \
-  echo "⚠️ main/master への直接プッシュは禁止です"; exit 1; \
+  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1; \
 fi
 
 # 任意の品質チェック（必要な場合のみ）
@@ -77,7 +77,7 @@ EOF
 # 一括実行
 BRANCH=$(git branch --show-current) && \
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then \
-  echo "⚠️ main/master への直接プッシュは禁止です"; exit 1; \
+  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1; \
 fi
 
 # 任意の品質チェック（必要な場合のみ）
@@ -96,7 +96,7 @@ gh pr create --title "$PR_TITLE" --body "$PR_BODY" --base main
 BRANCH=$(git branch --show-current)
 echo "現在のブランチ: $BRANCH"
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
-  echo "⚠️ main/master への直接プッシュは禁止です"; exit 1;
+  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
 # 2) 変更ファイルの確認
@@ -175,17 +175,7 @@ gh pr create --title "タイトル" --body "メッセージ" --base main
 
 ### ブランチ名から Prefix を推測
 
-| ブランチ接頭辞 | Prefix   |
-| -------------- | -------- |
-| feature/       | feat     |
-| fix/           | fix      |
-| refactor/      | refactor |
-| perf/          | perf     |
-| test/          | test     |
-| docs/          | docs     |
-| build/         | build    |
-| ci/            | ci       |
-| chore/         | chore    |
+- ブランチ命名や Prefix のルールは `AGENTS.md` を参照してください。
 
 ## 実行例
 
@@ -194,7 +184,7 @@ gh pr create --title "タイトル" --body "メッセージ" --base main
 MSG="fix: 不要なデバッグログ出力を削除"
 BRANCH=$(git branch --show-current)
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
-  echo "⚠️ main/master への直接プッシュは禁止です"; exit 1;
+  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
 # 任意の品質チェック（必要な場合のみ）

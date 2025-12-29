@@ -3,7 +3,7 @@
 ## 概要
 
 現在のブランチに対して変更をコミットし、リモートへプッシュするための汎用的なコマンド例です。  
-main/master への直接プッシュ禁止や、コミット前に実行する品質チェック（lint / test / build など）は、各プロジェクトのポリシーに応じてこのテンプレートを調整してください。
+誤操作防止のため main/master での実行はテンプレート内のチェックでブロックします（詳細は `AGENTS.md`）。品質チェック（lint / test / build など）は、各プロジェクトのポリシーに応じてこのテンプレートを調整してください。
 
 ## 前提条件
 
@@ -26,7 +26,7 @@ main/master への直接プッシュ禁止や、コミット前に実行する�
 MSG="<Prefix>: <サマリ（命令形/簡潔に）>" \
 BRANCH=$(git branch --show-current) && \
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then \
-  echo "⚠️ main/master への直接プッシュは禁止です"; exit 1; \
+  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1; \
 fi
 
 # 任意の品質チェック（必要な場合のみ）
@@ -44,7 +44,7 @@ git push -u origin "$BRANCH"
 MSG="fix: 不要なデバッグログ出力を削除" \
 BRANCH=$(git branch --show-current) && \
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then \
-  echo "⚠️ main/master への直接プッシュは禁止です"; exit 1; \
+  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1; \
 fi
 
 # 任意の品質チェック（必要な場合のみ）
@@ -59,7 +59,7 @@ git add -A && git commit -m "$MSG" && git push -u origin "$BRANCH"
 # 1) ブランチ確認
 BRANCH=$(git branch --show-current)
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
-  echo "⚠️ main/master への直接プッシュは禁止です"; exit 1;
+  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
 # 2) 任意のローカル品質チェック（必要に応じて追加）
@@ -79,5 +79,6 @@ git push -u origin "$BRANCH"
 
 ## ノート
 
+- ブランチ運用の詳細は、`AGENTS.md` の「ブランチ運用規約」を参照してください。
 - コミットメッセージのフォーマットやメッセージ生成の原則は、`AGENTS.md` の規約に従ってください。
 - 先に `git status` や `git diff` で差分を確認してからの実行を推奨します。
