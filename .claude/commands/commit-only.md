@@ -22,9 +22,9 @@
 
 ```bash
 MSG="<Prefix>: <サマリ（命令形/簡潔に）>"
-BRANCH=$(git branch --show-current) && \
-if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then \
-  echo "⚠️ main/master での直接コミットは禁止です（詳細はAGENTS.md）"; exit 1; \
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+  echo "⚠️ main/master での直接コミットは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
 git add -A && \
@@ -35,9 +35,9 @@ git commit -m "$MSG"
 
 ```bash
 MSG="fix: 不要なデバッグログ出力を削除"
-BRANCH=$(git branch --show-current) && \
-if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then \
-  echo "⚠️ main/master での直接コミットは禁止です（詳細はAGENTS.md）"; exit 1; \
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+  echo "⚠️ main/master での直接コミットは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
 git add -A && \
