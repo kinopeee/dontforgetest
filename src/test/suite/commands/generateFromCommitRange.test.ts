@@ -31,6 +31,7 @@ suite('commands/generateFromCommitRange.ts', () => {
     let originalRunWithArtifacts: typeof runWithArtifactsModule.runWithArtifacts;
 
     let showInputBoxResult: string | undefined;
+    let lastInputBoxOptions: vscode.InputBoxOptions | undefined;
     let showErrorMessages: string[] = [];
     let showInfoMessages: string[] = [];
     let runWithArtifactsCalls: Array<Parameters<typeof runWithArtifactsModule.runWithArtifacts>[0]> = [];
@@ -42,6 +43,7 @@ suite('commands/generateFromCommitRange.ts', () => {
 
     setup(() => {
       showInputBoxResult = undefined;
+      lastInputBoxOptions = undefined;
       showErrorMessages = [];
       showInfoMessages = [];
       runWithArtifactsCalls = [];
@@ -63,7 +65,10 @@ suite('commands/generateFromCommitRange.ts', () => {
       originalBuildTestGenPrompt = promptBuilderModule.buildTestGenPrompt;
       originalRunWithArtifacts = runWithArtifactsModule.runWithArtifacts;
 
-      (vscode.window as unknown as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = async () => showInputBoxResult;
+      (vscode.window as unknown as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = async (options) => {
+        lastInputBoxOptions = options;
+        return showInputBoxResult;
+      };
       (vscode.window as unknown as { showErrorMessage: typeof vscode.window.showErrorMessage }).showErrorMessage = async (message: string) => {
         showErrorMessages.push(message);
         return undefined;
@@ -134,6 +139,24 @@ suite('commands/generateFromCommitRange.ts', () => {
       assert.strictEqual(lastRange, undefined);
     });
 
+    test('TC-GCR-B-01: validateInput returns message for empty range and undefined for valid range', async () => {
+      // Given: 入力ボックスがキャンセルされる（本処理は進めない）
+      showInputBoxResult = undefined;
+
+      // When: generateTestFromCommitRange を呼び出す（showInputBox の options を捕捉）
+      await generateTestFromCommitRange(provider, undefined, { runLocation: 'local' });
+
+      // Then: validateInput の分岐を直接呼び出して検証する
+      assert.ok(lastInputBoxOptions?.validateInput, 'Expected validateInput to be provided');
+      const validate = lastInputBoxOptions?.validateInput;
+      if (validate) {
+        const invalid = await Promise.resolve(validate('   '));
+        assert.ok(typeof invalid === 'string' && invalid.length > 0, 'Expected validation message for empty/whitespace');
+        const valid = await Promise.resolve(validate('HEAD~1..HEAD'));
+        assert.strictEqual(valid, undefined);
+      }
+    });
+
     test('TC-GCR-E-02: preflight failure returns early', async () => {
       // Given: 入力はあるが preflight が失敗する
       showInputBoxResult = 'HEAD~1..HEAD';
@@ -160,6 +183,22 @@ suite('commands/generateFromCommitRange.ts', () => {
       // Then: エラーメッセージが表示され、runWithArtifacts は呼ばれない
       assert.strictEqual(showErrorMessages.length, 1);
       assert.ok(showErrorMessages[0]?.length > 0, 'エラーメッセージは空でない');
+      assert.strictEqual(runWithArtifactsCalls.length, 0);
+    });
+
+    test('TC-GCR-E-06: diff fetch throws non-Error value and still shows error message', async () => {
+      // Given: diff 取得が Error 以外（文字列）を投げる
+      showInputBoxResult = 'HEAD~1..HEAD';
+      (diffAnalyzerModule as unknown as { getCommitRangeDiff: typeof diffAnalyzerModule.getCommitRangeDiff }).getCommitRangeDiff = async () => {
+        throw 'diff-failed-string';
+      };
+
+      // When: generateTestFromCommitRange を呼び出す
+      await generateTestFromCommitRange(provider, undefined, { runLocation: 'local' });
+
+      // Then: エラーメッセージが表示され、内容に thrown value が含まれる
+      assert.strictEqual(showErrorMessages.length, 1);
+      assert.ok(showErrorMessages[0]?.includes('diff-failed-string'), 'Expected thrown string to be included in error message');
       assert.strictEqual(runWithArtifactsCalls.length, 0);
     });
 
@@ -211,6 +250,35 @@ suite('commands/generateFromCommitRange.ts', () => {
       assert.ok(call.generationTaskId.startsWith('fromCommitRange-'), 'generationTaskId に prefix が付く');
       assert.ok(call.generationPrompt.includes('TEST_PROMPT'), 'プロンプトが含まれる');
       assert.ok(call.generationPrompt.includes('diff content'), '差分テキストが含まれる');
+    });
+
+    test('TC-GCR-B-02: long diff is truncated in prompt and perspectiveReferenceText', async () => {
+      // Given: diffText が 20,000 文字を超える
+      showInputBoxResult = 'HEAD~1..HEAD';
+      const longDiff = 'x'.repeat(20_001);
+      (diffAnalyzerModule as unknown as { getCommitRangeDiff: typeof diffAnalyzerModule.getCommitRangeDiff }).getCommitRangeDiff = async (
+        _cwd,
+        range,
+      ) => {
+        lastRange = range;
+        return longDiff;
+      };
+
+      // When: generateTestFromCommitRange を呼び出す
+      await generateTestFromCommitRange(provider, undefined, { runLocation: 'local' });
+
+      // Then: runWithArtifacts が呼ばれ、diff は truncated marker を含む
+      assert.strictEqual(runWithArtifactsCalls.length, 1);
+      const call = runWithArtifactsCalls[0];
+      assert.ok(call.generationPrompt.includes('... (truncated:'), 'Expected truncation marker in generationPrompt');
+      assert.ok(typeof call.perspectiveReferenceText === 'string', 'Expected perspectiveReferenceText to be provided');
+      if (typeof call.perspectiveReferenceText === 'string') {
+        assert.ok(
+          call.perspectiveReferenceText.includes('... (truncated:'),
+          'Expected truncation marker in perspectiveReferenceText',
+        );
+        assert.notStrictEqual(call.perspectiveReferenceText, longDiff, 'Expected truncated diff text to differ from original');
+      }
     });
 
     test('TC-GCR-N-02: worktree mode calls runWithArtifacts with extensionContext', async () => {
