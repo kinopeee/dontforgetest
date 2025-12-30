@@ -33,18 +33,19 @@ The \`dontforgetest-config\` comment at the top of this file controls output lan
 3. Cover all categories:
    - Normal cases (happy path)
    - Error cases (validation errors, exceptions)
-   - Boundary values: \`0\`, \`min\`, \`max\`, \`min-1\`, \`max+1\`, \`empty\`, \`null\`
+   - Boundary values: \`0\`, \`min\`, \`max\`, \`min-1\`, \`max+1\`, \`empty\`, \`null\`, \`undefined\`
 4. If a boundary value is not applicable, document the reason in \`Notes\` and omit it.
 5. If you discover missing cases later, update the table and add the corresponding tests.
 6. For minor test fixes (message adjustments, small expected value changes) without new branches, table updates are optional.
 7. Expected Results MUST be observable and verifiable (e.g., call counts, saved artifacts, emitted events). Avoid "no crash" only.
 8. Expected Results MUST name the observable target (function/event/file/path) and how it is verified (args/counts/existence).
+8. Expected Results SHOULD include the exact assertion form you will write (e.g., \`assert.strictEqual(x, null)\`, \`assert.deepStrictEqual(obj, expected)\`, \`assert.throws(() => fn(), /message/)\`). This prevents “assertion drift” and accidental coercion.
 8. Avoid tests with no concrete assertions (e.g., \`assert.ok(true)\`); every case must assert at least one specific outcome.
 9. Ensure 1 case = 1 branch + 1 expected result. Do not combine multiple branches into one case.
 9. Do not swallow failures in tests (e.g., try/catch that ignores errors). If unavoidable, record the reason and an alternative verification in \`Notes\`.
 10. For external dependencies, document mock verification points (call args, counts, output paths) in \`Expected Result\`.
 11. Split major branches into separate cases (e.g., worktree/local/skip/cancel/cleanup failure).
-12. Do not bundle multiple input conditions in a single case. Split by runner type and by missing-field kind (null vs empty vs whitespace) when outcomes differ.
+12. Do not bundle multiple input conditions in a single case. Split by runner type and by missing-field kind (undefined vs null vs empty vs whitespace) when outcomes differ.
 13. Expected Results must be concrete and observable (exact label text, field values, lines). Avoid vague wording like "as expected" or "correct".
 14. Only include boundary values that are relevant to the diff/behavior being changed. Omit unrelated extremes and explain why in \`Notes\`.
 15. For report artifacts, Expected Results must point to the exact section/label/value to assert (not just "report is generated").
@@ -84,11 +85,22 @@ assert.ok(fs.existsSync(reportPath));
    - Primary error paths
    - Document uncovered branches with reasons in \`Notes\` or PR description.
 
+### Assertion Precision & Semantics (null vs undefined)
+
+1. **Do NOT transform the observed value before asserting it**, unless the behavior under test is that transformation.
+   - Avoid \`String(x)\`, \`Boolean(x)\`, \`Number(x)\`, \`JSON.stringify(x)\` on the value under test.
+2. **Never coerce \`null\` into \`undefined\` (or vice versa) in assertions.**
+   - **Forbidden**: \`x ?? undefined\`, \`x || undefined\`, \`(x ?? undefined) === null\`
+   - **Preferred**: \`assert.strictEqual(x, null)\`, \`assert.strictEqual(x, undefined)\`
+3. If you already asserted existence (e.g., \`assert.ok(obj)\`), **avoid redundant optional chaining** in subsequent assertions:
+   - Prefer \`obj.prop\` over \`obj?.prop\` after the existence check.
+4. When expected outcomes differ, **test \`undefined\`, \`null\`, empty string, and whitespace as separate cases** (do not normalize them in tests).
+
 ### Test Categories Checklist
 
 - [ ] Normal cases (main scenarios)
 - [ ] Error cases (validation errors, exception paths)
-- [ ] Boundary values (0, min, max, ±1, empty, null)
+- [ ] Boundary values (0, min, max, ±1, empty, null, undefined)
 - [ ] Invalid type/format inputs
 - [ ] External dependency failures (API, DB, messaging) if applicable
 - [ ] Exception types AND error messages
@@ -186,7 +198,7 @@ Before completing a test task, verify:
 - [ ] Failure cases ≥ success cases
 - [ ] Given/When/Then comments on every test
 - [ ] Exception types AND messages are verified
-- [ ] Boundary values are covered (0, min, max, ±1, empty, null)
+- [ ] Boundary values are covered (0, min, max, ±1, empty, null, undefined)
 - [ ] Localized strings avoid strict matching unless required; no raw key/placeholder leaks
 - [ ] Test execution command is documented
 - [ ] Coverage is reviewed

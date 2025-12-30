@@ -54,6 +54,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.registerWebviewViewProvider(TestGenControlPanelViewProvider.viewId, controlPanelProvider, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
+    controlPanelProvider, // リスナー解除のため dispose 対象に追加
   );
 
   context.subscriptions.push(

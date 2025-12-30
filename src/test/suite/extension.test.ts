@@ -5,6 +5,12 @@ import * as fs from 'fs';
 import { createMockExtensionContext } from './testUtils/vscodeMocks';
 import { initializeProgressTreeView, _resetForTesting as resetProgressTreeView } from '../../ui/progressTreeView';
 import { initializeOutputTreeView } from '../../ui/outputTreeView';
+import { activate } from '../../extension';
+import { TestGenControlPanelViewProvider } from '../../ui/controlPanel';
+import { taskManager } from '../../core/taskManager';
+import * as statusBarModule from '../../ui/statusBar';
+import * as progressTreeViewModule from '../../ui/progressTreeView';
+import * as outputTreeViewModule from '../../ui/outputTreeView';
 
 suite('src/extension.ts', () => {
   suite('Extension Activation', () => {
@@ -31,6 +37,179 @@ suite('src/extension.ts', () => {
 
       // Then: Extension is active without import errors
       assert.ok(ext.isActive, 'Extension should be active');
+    });
+
+    test('TC-EXT-N-01: activate() registers controlPanelProvider for disposal and removes its taskManager listener on context dispose', () => {
+      // Case ID: TC-EXT-N-01
+      // Given: A mock ExtensionContext and stubbed VS Code registrations
+      taskManager.cancelAll();
+
+      const listeners = (taskManager as unknown as { listeners?: unknown }).listeners;
+      assert.ok(listeners instanceof Set, 'Expected taskManager to hold an internal Set named listeners');
+      const baseListenerCount = (listeners as Set<unknown>).size;
+
+      const context = createMockExtensionContext();
+
+      const originalRegisterWebviewViewProvider = vscode.window.registerWebviewViewProvider;
+      const originalRegisterCommand = vscode.commands.registerCommand;
+      const originalInitStatusBar = statusBarModule.initializeTestGenStatusBar;
+      const originalInitProgressTreeView = progressTreeViewModule.initializeProgressTreeView;
+      const originalInitOutputTreeView = outputTreeViewModule.initializeOutputTreeView;
+
+      (vscode.window as unknown as { registerWebviewViewProvider: typeof vscode.window.registerWebviewViewProvider }).registerWebviewViewProvider =
+        (() => ({ dispose: () => {} })) as unknown as typeof vscode.window.registerWebviewViewProvider;
+      (vscode.commands as unknown as { registerCommand: typeof vscode.commands.registerCommand }).registerCommand =
+        (() => ({ dispose: () => {} })) as unknown as typeof vscode.commands.registerCommand;
+
+      (statusBarModule as unknown as { initializeTestGenStatusBar: typeof statusBarModule.initializeTestGenStatusBar }).initializeTestGenStatusBar =
+        () => {};
+      (progressTreeViewModule as unknown as { initializeProgressTreeView: typeof progressTreeViewModule.initializeProgressTreeView }).initializeProgressTreeView =
+        () => ({ dispose: () => {} }) as unknown as ReturnType<typeof initializeProgressTreeView>;
+      (outputTreeViewModule as unknown as { initializeOutputTreeView: typeof outputTreeViewModule.initializeOutputTreeView }).initializeOutputTreeView =
+        () => {};
+
+      try {
+        // When: activate(context) is called
+        activate(context);
+
+        // Then: A control panel provider listener is registered (listener count +1)
+        const afterActivateCount = (listeners as Set<unknown>).size;
+        assert.strictEqual(afterActivateCount, baseListenerCount + 1);
+
+        // When: Disposing all context subscriptions
+        for (const d of context.subscriptions) {
+          d.dispose();
+        }
+
+        // Then: The control panel provider listener is removed (back to the base count)
+        const afterDisposeCount = (listeners as Set<unknown>).size;
+        assert.strictEqual(afterDisposeCount, baseListenerCount);
+      } finally {
+        (vscode.window as unknown as { registerWebviewViewProvider: typeof originalRegisterWebviewViewProvider }).registerWebviewViewProvider =
+          originalRegisterWebviewViewProvider;
+        (vscode.commands as unknown as { registerCommand: typeof originalRegisterCommand }).registerCommand = originalRegisterCommand;
+
+        (statusBarModule as unknown as { initializeTestGenStatusBar: typeof originalInitStatusBar }).initializeTestGenStatusBar = originalInitStatusBar;
+        (progressTreeViewModule as unknown as { initializeProgressTreeView: typeof originalInitProgressTreeView }).initializeProgressTreeView =
+          originalInitProgressTreeView;
+        (outputTreeViewModule as unknown as { initializeOutputTreeView: typeof originalInitOutputTreeView }).initializeOutputTreeView =
+          originalInitOutputTreeView;
+
+        taskManager.cancelAll();
+      }
+    });
+
+    test('TC-N-EXT-01: activate() adds control panel provider to subscriptions so its taskManager listener is removed on dispose', () => {
+      // Case ID: TC-N-EXT-01
+      // Given: A mock ExtensionContext, stubbed VS Code registrations, and a spy for the provider instance
+      taskManager.cancelAll();
+
+      const listeners = (taskManager as unknown as { listeners?: unknown }).listeners;
+      assert.ok(listeners instanceof Set, 'Expected taskManager to hold an internal Set named listeners');
+      const baseListenerCount = (listeners as Set<unknown>).size;
+
+      const context = createMockExtensionContext();
+
+      const originalRegisterWebviewViewProvider = vscode.window.registerWebviewViewProvider;
+      const originalRegisterCommand = vscode.commands.registerCommand;
+      const originalInitStatusBar = statusBarModule.initializeTestGenStatusBar;
+      const originalInitProgressTreeView = progressTreeViewModule.initializeProgressTreeView;
+      const originalInitOutputTreeView = outputTreeViewModule.initializeOutputTreeView;
+
+      let capturedProvider: unknown;
+      (vscode.window as unknown as { registerWebviewViewProvider: typeof vscode.window.registerWebviewViewProvider }).registerWebviewViewProvider =
+        ((viewId: unknown, provider: unknown) => {
+          capturedProvider = provider;
+          return { dispose: () => {} };
+        }) as unknown as typeof vscode.window.registerWebviewViewProvider;
+      (vscode.commands as unknown as { registerCommand: typeof vscode.commands.registerCommand }).registerCommand =
+        (() => ({ dispose: () => {} })) as unknown as typeof vscode.commands.registerCommand;
+
+      (statusBarModule as unknown as { initializeTestGenStatusBar: typeof statusBarModule.initializeTestGenStatusBar }).initializeTestGenStatusBar =
+        () => {};
+      (progressTreeViewModule as unknown as { initializeProgressTreeView: typeof progressTreeViewModule.initializeProgressTreeView }).initializeProgressTreeView =
+        () => ({ dispose: () => {} }) as unknown as ReturnType<typeof initializeProgressTreeView>;
+      (outputTreeViewModule as unknown as { initializeOutputTreeView: typeof outputTreeViewModule.initializeOutputTreeView }).initializeOutputTreeView =
+        () => {};
+
+      // Spy on removeListener to ensure it is invoked on dispose
+      const originalRemoveListener = taskManager.removeListener.bind(taskManager);
+      let removeListenerCalls = 0;
+      (taskManager as unknown as { removeListener: typeof taskManager.removeListener }).removeListener = ((listener) => {
+        removeListenerCalls += 1;
+        originalRemoveListener(listener);
+      }) as typeof taskManager.removeListener;
+
+      try {
+        // When: activate(context) is called
+        activate(context);
+
+        // Then: Listener count increases and provider is captured
+        const afterActivateCount = (listeners as Set<unknown>).size;
+        assert.strictEqual(afterActivateCount, baseListenerCount + 1);
+        assert.ok(capturedProvider, 'Expected control panel provider to be passed to registerWebviewViewProvider');
+
+        // Then: Provider is included in subscriptions (dispose reachable via subscriptions)
+        assert.strictEqual(context.subscriptions.includes(capturedProvider as vscode.Disposable), true);
+
+        // When: Disposing subscriptions (including the provider)
+        for (const d of context.subscriptions) {
+          d.dispose();
+        }
+
+        // Then: Provider listener is removed and subsequent notifications cannot invoke it (not present in the listeners Set)
+        const afterDisposeCount = (listeners as Set<unknown>).size;
+        assert.strictEqual(afterDisposeCount, baseListenerCount);
+        assert.strictEqual(removeListenerCalls >= 1, true);
+
+        // Then: Triggering TaskManager notifications does not re-add the removed listener
+        taskManager.register('x', 'Label', { taskId: 'x', dispose: () => {} });
+        taskManager.unregister('x');
+        assert.strictEqual((listeners as Set<unknown>).size, baseListenerCount);
+      } finally {
+        (vscode.window as unknown as { registerWebviewViewProvider: typeof originalRegisterWebviewViewProvider }).registerWebviewViewProvider =
+          originalRegisterWebviewViewProvider;
+        (vscode.commands as unknown as { registerCommand: typeof originalRegisterCommand }).registerCommand = originalRegisterCommand;
+        (statusBarModule as unknown as { initializeTestGenStatusBar: typeof originalInitStatusBar }).initializeTestGenStatusBar = originalInitStatusBar;
+        (progressTreeViewModule as unknown as { initializeProgressTreeView: typeof originalInitProgressTreeView }).initializeProgressTreeView =
+          originalInitProgressTreeView;
+        (outputTreeViewModule as unknown as { initializeOutputTreeView: typeof originalInitOutputTreeView }).initializeOutputTreeView =
+          originalInitOutputTreeView;
+        (taskManager as unknown as { removeListener: typeof originalRemoveListener }).removeListener = originalRemoveListener;
+        taskManager.cancelAll();
+      }
+    });
+
+    test('TC-E-EXT-02: TestGenControlPanelViewProvider.dispose() is idempotent (removeListener called once)', () => {
+      // Case ID: TC-E-EXT-02
+      // Given: A provider instance and a spy for taskManager.removeListener
+      taskManager.cancelAll();
+
+      const context: vscode.ExtensionContext = {
+        subscriptions: [],
+        extensionUri: vscode.Uri.file('/'),
+      } as unknown as vscode.ExtensionContext;
+
+      const originalRemoveListener = taskManager.removeListener.bind(taskManager);
+      let removeCount = 0;
+      (taskManager as unknown as { removeListener: typeof taskManager.removeListener }).removeListener = ((listener) => {
+        removeCount += 1;
+        originalRemoveListener(listener);
+      }) as typeof taskManager.removeListener;
+
+      try {
+        const provider = new TestGenControlPanelViewProvider(context, { executeCommand: async () => {} });
+
+        // When: dispose() is called twice
+        provider.dispose();
+        provider.dispose();
+
+        // Then: removeListener is called exactly once and no exception is thrown
+        assert.strictEqual(removeCount, 1);
+      } finally {
+        (taskManager as unknown as { removeListener: typeof taskManager.removeListener }).removeListener = originalRemoveListener;
+        taskManager.cancelAll();
+      }
     });
 
     // TC-E-01: Old extension ID lookup fails
@@ -574,12 +753,12 @@ suite('src/extension.ts', () => {
       assert.ok(packageJson.version, 'package.json version should be defined');
       const semverPattern = /^\d+\.\d+\.\d+$/;
       assert.ok(semverPattern.test(packageJson.version), `Version "${packageJson.version}" should be semantic version format (x.y.z)`);
-    const expectedVersion = packageJson.version;
+      const expectedVersion = packageJson.version;
       assert.ok(packageLockJson.version, 'package-lock.json version should be defined');
       assert.ok(semverPattern.test(packageLockJson.version), `Lock file version "${packageLockJson.version}" should be semantic version format (x.y.z)`);
-    assert.strictEqual(packageLockJson.version, expectedVersion, 'Version numbers should be synchronized');
+      assert.strictEqual(packageLockJson.version, expectedVersion, 'Version numbers should be synchronized');
       if (packageLockJson.packages && packageLockJson.packages['']) {
-      assert.strictEqual(packageLockJson.packages[''].version, expectedVersion, 'Version number should be synchronized in lock file packages[""]');
+        assert.strictEqual(packageLockJson.packages[''].version, expectedVersion, 'Version number should be synchronized in lock file packages[""]');
       }
     });
 

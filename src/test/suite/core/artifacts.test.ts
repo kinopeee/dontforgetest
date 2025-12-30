@@ -404,87 +404,46 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes(`- ${t('artifact.perspectiveTable.targetFiles')}:\n- ${t('artifact.none')}`), '対象ファイルなしの表示が正しいこと');
   });
 
-    // TC-ART-08: 実行レポートMarkdown生成（正常）
-    test('TC-ART-08: 実行レポートMarkdownが正しく生成される（正常系）', () => {
-      // Given: 正常終了時の結果
-      const md = buildTestExecutionArtifactMarkdown({
-        generatedAtMs: Date.now(),
-        generationLabel: 'Label',
-        targetPaths: ['b.ts'],
-        result: {
-          command: 'cmd',
-          cwd: '/tmp',
-          exitCode: 0,
-          signal: null,
-          durationMs: 50,
-          stdout: 'out',
-          stderr: 'err',
-          extensionLog: '[INFO] Extension Log',
-        },
-      });
+  // TC-ART-08: 実行レポートMarkdown生成（正常）
+  test('TC-ART-08: 実行レポートMarkdownが正しく生成される（正常系）', () => {
+    // Given: 正常終了時の結果
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['b.ts'],
+      result: {
+        command: 'cmd',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 50,
+        stdout: 'out',
+        stderr: 'err',
+        extensionLog: '[INFO] Extension Log',
+      },
+    });
   
-      // Then: フォーマットが正しく、終了コードや出力が含まれること
-      assert.ok(md.includes(`# ${t('artifact.executionReport.title')}`), 'タイトルが含まれること');
-      assert.ok(md.includes('exitCode: 0'), 'exitCodeが含まれること');
-      assert.ok(md.includes(`## ${t('artifact.executionReport.testSummary')}`), 'サマリーセクションが含まれること');
-      assert.ok(md.indexOf(`## ${t('artifact.executionReport.executionInfo')}`) < md.indexOf(`## ${t('artifact.executionReport.testSummary')}`), '実行情報がサマリーより前に出力されること');
-      assert.ok(md.includes(`${t('artifact.executionReport.status')}: ${t('artifact.executionReport.statusExecuted')}`), 'status: executed が含まれること');
-      assert.ok(md.includes(`<summary>${t('artifact.executionReport.extensionLog')}${t('artifact.executionReport.clickToExpand')}</summary>`), '実行ログセクションが含まれること');
-      assert.ok(md.includes('[INFO] Extension Log'), '拡張機能ログが含まれること');
-      // Added: model未指定時のデフォルト表示確認
-      assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`), 'model未指定時は (auto) と表示されること');
-    });
+    // Then: フォーマットが正しく、終了コードや出力が含まれること
+    assert.ok(md.includes(`# ${t('artifact.executionReport.title')}`), 'タイトルが含まれること');
+    assert.ok(md.includes('exitCode: 0'), 'exitCodeが含まれること');
+    assert.ok(md.includes(`## ${t('artifact.executionReport.testSummary')}`), 'サマリーセクションが含まれること');
+    assert.ok(md.indexOf(`## ${t('artifact.executionReport.executionInfo')}`) < md.indexOf(`## ${t('artifact.executionReport.testSummary')}`), '実行情報がサマリーより前に出力されること');
+    assert.ok(md.includes(`${t('artifact.executionReport.status')}: ${t('artifact.executionReport.statusExecuted')}`), 'status: executed が含まれること');
+    assert.ok(md.includes(`<summary>${t('artifact.executionReport.extensionLog')}${t('artifact.executionReport.clickToExpand')}</summary>`), '実行ログセクションが含まれること');
+    assert.ok(md.includes('[INFO] Extension Log'), '拡張機能ログが含まれること');
+    // Added: model未指定時のデフォルト表示確認
+    assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`), 'model未指定時は (auto) と表示されること');
+  });
 
-    // TC-ART-16: 実行レポートMarkdown生成（モデル指定あり）
-    test('TC-ART-16: modelが指定されている場合、レポートにそのモデル名が表示される', () => {
-      // Given: model指定あり
-      const md = buildTestExecutionArtifactMarkdown({
-        generatedAtMs: Date.now(),
-        generationLabel: 'Label',
-        targetPaths: ['h.ts'],
-        model: 'gpt-4-custom',
-        result: {
-          command: 'cmd',
-          cwd: '/tmp',
-          exitCode: 0,
-          signal: null,
-          durationMs: 10,
-          stdout: '',
-          stderr: '',
-          extensionLog: '',
-        },
-      });
-
-      // Then: モデル名が含まれること
-      assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: gpt-4-custom`), '指定されたモデル名が表示されること');
-    });
-
-    // TC-ART-17: 実行レポートMarkdown生成（モデル空文字）
-    test('TC-ART-17: modelが空文字の場合、(auto) と表示される', () => {
-      // Given: modelが空文字
-      const md = buildTestExecutionArtifactMarkdown({
-        generatedAtMs: Date.now(),
-        generationLabel: 'Label',
-        targetPaths: ['i.ts'],
-        model: '   ', // 空白のみ
-        result: {
-          command: 'cmd',
-          cwd: '/tmp',
-          exitCode: 0,
-          signal: null,
-          durationMs: 10,
-          stdout: '',
-          stderr: '',
-          extensionLog: '',
-        },
-      });
-
-      // Then: (auto) と表示されること
-      assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`), 'modelが空白のみの場合は (auto) と表示されること');
-    });
-
-    suite('execution report (runner / version / testResultPath / truncation)', () => {
-      const baseResult = (): TestExecutionResult => ({
+  // TC-ART-16: 実行レポートMarkdown生成（モデル指定あり）
+  test('TC-ART-16: modelが指定されている場合、レポートにそのモデル名が表示される', () => {
+    // Given: model指定あり
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['h.ts'],
+      model: 'gpt-4-custom',
+      result: {
         command: 'cmd',
         cwd: '/tmp',
         exitCode: 0,
@@ -492,256 +451,297 @@ suite('core/artifacts.ts', () => {
         durationMs: 10,
         stdout: '',
         stderr: '',
-      });
-
-      const buildMd = (overrides: Partial<TestExecutionResult>): string => {
-        return buildTestExecutionArtifactMarkdown({
-          generatedAtMs: Date.now(),
-          generationLabel: 'Label',
-          targetPaths: [],
-          result: { ...baseResult(), ...overrides },
-        });
-      };
-
-      const buildTruncationLine = (streamLabelKey: string, captureStatusKey: string, reportStatusKey: string): string => {
-        return `- ${t(streamLabelKey)}: ${t('artifact.executionReport.truncation.capture')}=${t(captureStatusKey)}, ${t('artifact.executionReport.truncation.report')}=${t(reportStatusKey)}`;
-      };
-
-      test('TC-ART-RUNNER-N-EXT-01: executionRunner=extension is rendered as the localized extension label', () => {
-        // Given: A result with executionRunner=extension
-        const md = buildMd({ executionRunner: 'extension' });
-
-        // When: Rendering the execution report markdown
-        // Then: The executionRunner line uses the extension label
-        assert.ok(
-          md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.executionRunner.extension')}`),
-          'Expected executionRunner line to show the extension label',
-        );
-      });
-
-      test('TC-ART-RUNNER-N-CA-01: executionRunner=cursorAgent is rendered as the localized cursorAgent label', () => {
-        // Given: A result with executionRunner=cursorAgent
-        const md = buildMd({ executionRunner: 'cursorAgent' });
-
-        // When: Rendering the execution report markdown
-        // Then: The executionRunner line uses the cursorAgent label
-        assert.ok(
-          md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.executionRunner.cursorAgent')}`),
-          'Expected executionRunner line to show the cursorAgent label',
-        );
-      });
-
-      test('TC-ART-RUNNER-B-UNDEF-01: executionRunner=undefined is rendered as unknown', () => {
-        // Given: A result with executionRunner undefined (boundary)
-        const md = buildMd({ executionRunner: undefined });
-
-        // When: Rendering the execution report markdown
-        // Then: The executionRunner line uses unknown
-        assert.ok(
-          md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.unknown')}`),
-          'Expected executionRunner line to show unknown',
-        );
-      });
-
-      test('TC-ART-EXTVER-N-01: extensionVersion is rendered when provided', () => {
-        // Given: A result with extensionVersion
-        const md = buildMd({ extensionVersion: '0.0.103' });
-
-        // When: Rendering the execution report markdown
-        // Then: The extensionVersion line includes the provided version
-        assert.ok(
-          md.includes(`- ${t('artifact.executionReport.extensionVersion')}: 0.0.103`),
-          'Expected extensionVersion to be rendered',
-        );
-      });
-
-      test('TC-ART-EXTVER-B-EMPTY-01: extensionVersion="" is rendered as unknown', () => {
-        // Given: A result with extensionVersion empty string (boundary)
-        const md = buildMd({ extensionVersion: '' });
-
-        // When: Rendering the execution report markdown
-        // Then: The extensionVersion line uses unknown
-        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
-      });
-
-      test('TC-ART-EXTVER-B-WS-01: extensionVersion=" " is rendered as unknown', () => {
-        // Given: A result with extensionVersion whitespace-only (boundary)
-        const md = buildMd({ extensionVersion: ' ' });
-
-        // When: Rendering the execution report markdown
-        // Then: The extensionVersion line uses unknown
-        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
-      });
-
-      test('TC-ART-EXTVER-B-UNDEF-01: extensionVersion=undefined is rendered as unknown', () => {
-        // Given: A result with extensionVersion undefined (boundary)
-        const md = buildMd({ extensionVersion: undefined });
-
-        // When: Rendering the execution report markdown
-        // Then: The extensionVersion line uses unknown
-        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
-      });
-
-      test('TC-ART-EXTVER-B-NULL-01: extensionVersion=null (injected) is rendered as unknown', () => {
-        // Given: A result with extensionVersion injected as null (boundary)
-        const md = buildMd({ extensionVersion: null as unknown as string | undefined });
-
-        // When: Rendering the execution report markdown
-        // Then: The extensionVersion line uses unknown (robust against unexpected null)
-        assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
-      });
-
-      test('TC-ART-TRP-N-01: testResultPath is rendered as a code-formatted path when provided', () => {
-        // Given: A result with testResultPath
-        const testResultPath = '/tmp/.vscode-test/test-result.json';
-        const md = buildMd({ testResultPath });
-
-        // When: Rendering the execution report markdown
-        // Then: The testResultPath line includes the code-formatted path
-        assert.ok(
-          md.includes(`- ${t('artifact.executionReport.testResultPath')}: \`${testResultPath}\``),
-          'Expected testResultPath to be rendered with backticks',
-        );
-      });
-
-      test('TC-ART-TRP-B-EMPTY-01: testResultPath="" is rendered as unknown', () => {
-        // Given: A result with testResultPath empty string (boundary)
-        const md = buildMd({ testResultPath: '' });
-
-        // When: Rendering the execution report markdown
-        // Then: The testResultPath line uses unknown
-        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
-      });
-
-      test('TC-ART-TRP-B-WS-01: testResultPath=" " is rendered as unknown', () => {
-        // Given: A result with testResultPath whitespace-only (boundary)
-        const md = buildMd({ testResultPath: ' ' });
-
-        // When: Rendering the execution report markdown
-        // Then: The testResultPath line uses unknown
-        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
-      });
-
-      test('TC-ART-TRP-B-UNDEF-01: testResultPath=undefined is rendered as unknown', () => {
-        // Given: A result with testResultPath undefined (boundary)
-        const md = buildMd({ testResultPath: undefined });
-
-        // When: Rendering the execution report markdown
-        // Then: The testResultPath line uses unknown
-        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
-      });
-
-      test('TC-ART-TRP-B-NULL-01: testResultPath=null (injected) is rendered as unknown', () => {
-        // Given: A result with testResultPath injected as null (boundary)
-        const md = buildMd({ testResultPath: null as unknown as string | undefined });
-
-        // When: Rendering the execution report markdown
-        // Then: The testResultPath line uses unknown (robust against unexpected null)
-        assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
-      });
-
-      test('TC-ART-TRUNC-STDOUT-B-ZERO-01: stdout="" and stdoutTruncated=false yields capture=not truncated, report=not truncated', () => {
-        // Given: Empty stdout with stdoutTruncated=false (boundary: 0)
-        const md = buildMd({ stdout: '', stdoutTruncated: false, stderr: '', stderrTruncated: false });
-
-        // When: Rendering the execution report markdown
-        // Then: The stdout truncation line shows capture=not truncated and report=not truncated
-        const expected = buildTruncationLine(
-          'artifact.executionReport.truncation.stdout',
-          'artifact.executionReport.truncation.notTruncated',
-          'artifact.executionReport.truncation.notTruncated',
-        );
-        assert.ok(md.includes(expected));
-      });
-
-      test('TC-ART-TRUNC-STDOUT-B-MAX-01: stdout length==200000 yields report=not truncated', () => {
-        // Given: stdout length exactly at the report cap (boundary: max)
-        const maxLogChars = 200_000;
-        const md = buildMd({ stdout: 'a'.repeat(maxLogChars), stdoutTruncated: false, stderr: '', stderrTruncated: false });
-
-        // When: Rendering the execution report markdown
-        // Then: report is not truncated
-        const expected = buildTruncationLine(
-          'artifact.executionReport.truncation.stdout',
-          'artifact.executionReport.truncation.notTruncated',
-          'artifact.executionReport.truncation.notTruncated',
-        );
-        assert.ok(md.includes(expected));
-      });
-
-      test('TC-ART-TRUNC-STDOUT-B-MAXP1-01: stdout length==200001 yields report=truncated', () => {
-        // Given: stdout length just above the report cap (boundary: max+1)
-        const maxLogChars = 200_000;
-        const md = buildMd({ stdout: 'a'.repeat(maxLogChars + 1), stdoutTruncated: false, stderr: '', stderrTruncated: false });
-
-        // When: Rendering the execution report markdown
-        // Then: report is truncated
-        const expected = buildTruncationLine(
-          'artifact.executionReport.truncation.stdout',
-          'artifact.executionReport.truncation.notTruncated',
-          'artifact.executionReport.truncation.truncated',
-        );
-        assert.ok(md.includes(expected));
-      });
-
-      test('TC-ART-TRUNC-STDOUT-N-CAPTRUE-01: stdoutTruncated=true yields capture=truncated while report can be not truncated', () => {
-        // Given: capture truncation flagged true and short stdout (equivalence)
-        const md = buildMd({ stdout: 'out', stdoutTruncated: true, stderr: '', stderrTruncated: false });
-
-        // When: Rendering the execution report markdown
-        // Then: capture is truncated and report is not truncated
-        const expected = buildTruncationLine(
-          'artifact.executionReport.truncation.stdout',
-          'artifact.executionReport.truncation.truncated',
-          'artifact.executionReport.truncation.notTruncated',
-        );
-        assert.ok(md.includes(expected));
-      });
-
-      test('TC-ART-TRUNC-STDOUT-B-CAPUNDEF-01: stdoutTruncated=undefined yields capture=unknown while report can be not truncated', () => {
-        // Given: capture truncation flag is undefined (boundary) and short stdout
-        const md = buildMd({ stdout: 'out', stdoutTruncated: undefined, stderr: '', stderrTruncated: false });
-
-        // When: Rendering the execution report markdown
-        // Then: capture is unknown and report is not truncated
-        const expected = buildTruncationLine(
-          'artifact.executionReport.truncation.stdout',
-          'artifact.executionReport.unknown',
-          'artifact.executionReport.truncation.notTruncated',
-        );
-        assert.ok(md.includes(expected));
-      });
-
-      test('TC-ART-TRUNC-STDERR-B-MINUS1-01: stderr length==199999 yields report=not truncated', () => {
-        // Given: stderr length one below the report cap (boundary: max-1)
-        const maxLogChars = 200_000;
-        const md = buildMd({ stderr: 'a'.repeat(maxLogChars - 1), stderrTruncated: false, stdout: '', stdoutTruncated: false });
-
-        // When: Rendering the execution report markdown
-        // Then: report is not truncated
-        const expected = buildTruncationLine(
-          'artifact.executionReport.truncation.stderr',
-          'artifact.executionReport.truncation.notTruncated',
-          'artifact.executionReport.truncation.notTruncated',
-        );
-        assert.ok(md.includes(expected));
-      });
-
-      test('TC-ART-TRUNC-STDERR-B-MAXP1-01: stderr length==200001 and stderrTruncated=true yields capture=truncated, report=truncated', () => {
-        // Given: stderr is long enough to be report-truncated and capture flag is true (boundary: max+1)
-        const maxLogChars = 200_000;
-        const md = buildMd({ stderr: 'a'.repeat(maxLogChars + 1), stderrTruncated: true, stdout: '', stdoutTruncated: false });
-
-        // When: Rendering the execution report markdown
-        // Then: capture is truncated and report is truncated
-        const expected = buildTruncationLine(
-          'artifact.executionReport.truncation.stderr',
-          'artifact.executionReport.truncation.truncated',
-          'artifact.executionReport.truncation.truncated',
-        );
-        assert.ok(md.includes(expected));
-      });
+        extensionLog: '',
+      },
     });
+
+    // Then: モデル名が含まれること
+    assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: gpt-4-custom`), '指定されたモデル名が表示されること');
+  });
+
+  // TC-ART-17: 実行レポートMarkdown生成（モデル空文字）
+  test('TC-ART-17: modelが空文字の場合、(auto) と表示される', () => {
+    // Given: modelが空文字
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['i.ts'],
+      model: '   ', // 空白のみ
+      result: {
+        command: 'cmd',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 10,
+        stdout: '',
+        stderr: '',
+        extensionLog: '',
+      },
+    });
+
+    // Then: (auto) と表示されること
+    assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`), 'modelが空白のみの場合は (auto) と表示されること');
+  });
+
+  suite('execution report (runner / version / testResultPath / truncation)', () => {
+    const baseResult = (): TestExecutionResult => ({
+      command: 'cmd',
+      cwd: '/tmp',
+      exitCode: 0,
+      signal: null,
+      durationMs: 10,
+      stdout: '',
+      stderr: '',
+    });
+
+    const buildMd = (overrides: Partial<TestExecutionResult>): string => {
+      return buildTestExecutionArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        generationLabel: 'Label',
+        targetPaths: [],
+        result: { ...baseResult(), ...overrides },
+      });
+    };
+
+    const buildTruncationLine = (streamLabelKey: string, captureStatusKey: string, reportStatusKey: string): string => {
+      return `- ${t(streamLabelKey)}: ${t('artifact.executionReport.truncation.capture')}=${t(captureStatusKey)}, ${t('artifact.executionReport.truncation.report')}=${t(reportStatusKey)}`;
+    };
+
+    test('TC-ART-RUNNER-N-EXT-01: executionRunner=extension is rendered as the localized extension label', () => {
+      // Given: A result with executionRunner=extension
+      const md = buildMd({ executionRunner: 'extension' });
+
+      // When: Rendering the execution report markdown
+      // Then: The executionRunner line uses the extension label
+      assert.ok(
+        md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.executionRunner.extension')}`),
+        'Expected executionRunner line to show the extension label',
+      );
+    });
+
+    test('TC-ART-RUNNER-N-CA-01: executionRunner=cursorAgent is rendered as the localized cursorAgent label', () => {
+      // Given: A result with executionRunner=cursorAgent
+      const md = buildMd({ executionRunner: 'cursorAgent' });
+
+      // When: Rendering the execution report markdown
+      // Then: The executionRunner line uses the cursorAgent label
+      assert.ok(
+        md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.executionRunner.cursorAgent')}`),
+        'Expected executionRunner line to show the cursorAgent label',
+      );
+    });
+
+    test('TC-ART-RUNNER-B-UNDEF-01: executionRunner=undefined is rendered as unknown', () => {
+      // Given: A result with executionRunner undefined (boundary)
+      const md = buildMd({ executionRunner: undefined });
+
+      // When: Rendering the execution report markdown
+      // Then: The executionRunner line uses unknown
+      assert.ok(
+        md.includes(`- ${t('artifact.executionReport.executionRunner')}: ${t('artifact.executionReport.unknown')}`),
+        'Expected executionRunner line to show unknown',
+      );
+    });
+
+    test('TC-ART-EXTVER-N-01: extensionVersion is rendered when provided', () => {
+      // Given: A result with extensionVersion
+      const md = buildMd({ extensionVersion: '0.0.103' });
+
+      // When: Rendering the execution report markdown
+      // Then: The extensionVersion line includes the provided version
+      assert.ok(
+        md.includes(`- ${t('artifact.executionReport.extensionVersion')}: 0.0.103`),
+        'Expected extensionVersion to be rendered',
+      );
+    });
+
+    test('TC-ART-EXTVER-B-EMPTY-01: extensionVersion="" is rendered as unknown', () => {
+      // Given: A result with extensionVersion empty string (boundary)
+      const md = buildMd({ extensionVersion: '' });
+
+      // When: Rendering the execution report markdown
+      // Then: The extensionVersion line uses unknown
+      assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+    });
+
+    test('TC-ART-EXTVER-B-WS-01: extensionVersion=" " is rendered as unknown', () => {
+      // Given: A result with extensionVersion whitespace-only (boundary)
+      const md = buildMd({ extensionVersion: ' ' });
+
+      // When: Rendering the execution report markdown
+      // Then: The extensionVersion line uses unknown
+      assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+    });
+
+    test('TC-ART-EXTVER-B-UNDEF-01: extensionVersion=undefined is rendered as unknown', () => {
+      // Given: A result with extensionVersion undefined (boundary)
+      const md = buildMd({ extensionVersion: undefined });
+
+      // When: Rendering the execution report markdown
+      // Then: The extensionVersion line uses unknown
+      assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+    });
+
+    test('TC-ART-EXTVER-B-NULL-01: extensionVersion=null (injected) is rendered as unknown', () => {
+      // Given: A result with extensionVersion injected as null (boundary)
+      const md = buildMd({ extensionVersion: null as unknown as string | undefined });
+
+      // When: Rendering the execution report markdown
+      // Then: The extensionVersion line uses unknown (robust against unexpected null)
+      assert.ok(md.includes(`- ${t('artifact.executionReport.extensionVersion')}: ${t('artifact.executionReport.unknown')}`));
+    });
+
+    test('TC-ART-TRP-N-01: testResultPath is rendered as a code-formatted path when provided', () => {
+      // Given: A result with testResultPath
+      const testResultPath = '/tmp/.vscode-test/test-result.json';
+      const md = buildMd({ testResultPath });
+
+      // When: Rendering the execution report markdown
+      // Then: The testResultPath line includes the code-formatted path
+      assert.ok(
+        md.includes(`- ${t('artifact.executionReport.testResultPath')}: \`${testResultPath}\``),
+        'Expected testResultPath to be rendered with backticks',
+      );
+    });
+
+    test('TC-ART-TRP-B-EMPTY-01: testResultPath="" is rendered as unknown', () => {
+      // Given: A result with testResultPath empty string (boundary)
+      const md = buildMd({ testResultPath: '' });
+
+      // When: Rendering the execution report markdown
+      // Then: The testResultPath line uses unknown
+      assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+    });
+
+    test('TC-ART-TRP-B-WS-01: testResultPath=" " is rendered as unknown', () => {
+      // Given: A result with testResultPath whitespace-only (boundary)
+      const md = buildMd({ testResultPath: ' ' });
+
+      // When: Rendering the execution report markdown
+      // Then: The testResultPath line uses unknown
+      assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+    });
+
+    test('TC-ART-TRP-B-UNDEF-01: testResultPath=undefined is rendered as unknown', () => {
+      // Given: A result with testResultPath undefined (boundary)
+      const md = buildMd({ testResultPath: undefined });
+
+      // When: Rendering the execution report markdown
+      // Then: The testResultPath line uses unknown
+      assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+    });
+
+    test('TC-ART-TRP-B-NULL-01: testResultPath=null (injected) is rendered as unknown', () => {
+      // Given: A result with testResultPath injected as null (boundary)
+      const md = buildMd({ testResultPath: null as unknown as string | undefined });
+
+      // When: Rendering the execution report markdown
+      // Then: The testResultPath line uses unknown (robust against unexpected null)
+      assert.ok(md.includes(`- ${t('artifact.executionReport.testResultPath')}: ${t('artifact.executionReport.unknown')}`));
+    });
+
+    test('TC-ART-TRUNC-STDOUT-B-ZERO-01: stdout="" and stdoutTruncated=false yields capture=not truncated, report=not truncated', () => {
+      // Given: Empty stdout with stdoutTruncated=false (boundary: 0)
+      const md = buildMd({ stdout: '', stdoutTruncated: false, stderr: '', stderrTruncated: false });
+
+      // When: Rendering the execution report markdown
+      // Then: The stdout truncation line shows capture=not truncated and report=not truncated
+      const expected = buildTruncationLine(
+        'artifact.executionReport.truncation.stdout',
+        'artifact.executionReport.truncation.notTruncated',
+        'artifact.executionReport.truncation.notTruncated',
+      );
+      assert.ok(md.includes(expected));
+    });
+
+    test('TC-ART-TRUNC-STDOUT-B-MAX-01: stdout length==200000 yields report=not truncated', () => {
+      // Given: stdout length exactly at the report cap (boundary: max)
+      const maxLogChars = 200_000;
+      const md = buildMd({ stdout: 'a'.repeat(maxLogChars), stdoutTruncated: false, stderr: '', stderrTruncated: false });
+
+      // When: Rendering the execution report markdown
+      // Then: report is not truncated
+      const expected = buildTruncationLine(
+        'artifact.executionReport.truncation.stdout',
+        'artifact.executionReport.truncation.notTruncated',
+        'artifact.executionReport.truncation.notTruncated',
+      );
+      assert.ok(md.includes(expected));
+    });
+
+    test('TC-ART-TRUNC-STDOUT-B-MAXP1-01: stdout length==200001 yields report=truncated', () => {
+      // Given: stdout length just above the report cap (boundary: max+1)
+      const maxLogChars = 200_000;
+      const md = buildMd({ stdout: 'a'.repeat(maxLogChars + 1), stdoutTruncated: false, stderr: '', stderrTruncated: false });
+
+      // When: Rendering the execution report markdown
+      // Then: report is truncated
+      const expected = buildTruncationLine(
+        'artifact.executionReport.truncation.stdout',
+        'artifact.executionReport.truncation.notTruncated',
+        'artifact.executionReport.truncation.truncated',
+      );
+      assert.ok(md.includes(expected));
+    });
+
+    test('TC-ART-TRUNC-STDOUT-N-CAPTRUE-01: stdoutTruncated=true yields capture=truncated while report can be not truncated', () => {
+      // Given: capture truncation flagged true and short stdout (equivalence)
+      const md = buildMd({ stdout: 'out', stdoutTruncated: true, stderr: '', stderrTruncated: false });
+
+      // When: Rendering the execution report markdown
+      // Then: capture is truncated and report is not truncated
+      const expected = buildTruncationLine(
+        'artifact.executionReport.truncation.stdout',
+        'artifact.executionReport.truncation.truncated',
+        'artifact.executionReport.truncation.notTruncated',
+      );
+      assert.ok(md.includes(expected));
+    });
+
+    test('TC-ART-TRUNC-STDOUT-B-CAPUNDEF-01: stdoutTruncated=undefined yields capture=unknown while report can be not truncated', () => {
+      // Given: capture truncation flag is undefined (boundary) and short stdout
+      const md = buildMd({ stdout: 'out', stdoutTruncated: undefined, stderr: '', stderrTruncated: false });
+
+      // When: Rendering the execution report markdown
+      // Then: capture is unknown and report is not truncated
+      const expected = buildTruncationLine(
+        'artifact.executionReport.truncation.stdout',
+        'artifact.executionReport.unknown',
+        'artifact.executionReport.truncation.notTruncated',
+      );
+      assert.ok(md.includes(expected));
+    });
+
+    test('TC-ART-TRUNC-STDERR-B-MINUS1-01: stderr length==199999 yields report=not truncated', () => {
+      // Given: stderr length one below the report cap (boundary: max-1)
+      const maxLogChars = 200_000;
+      const md = buildMd({ stderr: 'a'.repeat(maxLogChars - 1), stderrTruncated: false, stdout: '', stdoutTruncated: false });
+
+      // When: Rendering the execution report markdown
+      // Then: report is not truncated
+      const expected = buildTruncationLine(
+        'artifact.executionReport.truncation.stderr',
+        'artifact.executionReport.truncation.notTruncated',
+        'artifact.executionReport.truncation.notTruncated',
+      );
+      assert.ok(md.includes(expected));
+    });
+
+    test('TC-ART-TRUNC-STDERR-B-MAXP1-01: stderr length==200001 and stderrTruncated=true yields capture=truncated, report=truncated', () => {
+      // Given: stderr is long enough to be report-truncated and capture flag is true (boundary: max+1)
+      const maxLogChars = 200_000;
+      const md = buildMd({ stderr: 'a'.repeat(maxLogChars + 1), stderrTruncated: true, stdout: '', stdoutTruncated: false });
+
+      // When: Rendering the execution report markdown
+      // Then: capture is truncated and report is truncated
+      const expected = buildTruncationLine(
+        'artifact.executionReport.truncation.stderr',
+        'artifact.executionReport.truncation.truncated',
+        'artifact.executionReport.truncation.truncated',
+      );
+      assert.ok(md.includes(expected));
+    });
+  });
 
   // TC-ART-09: 実行レポートMarkdown生成（エラー）
   test('TC-ART-09: エラーメッセージがある場合レポートに含まれる', () => {
@@ -7022,180 +7022,180 @@ suite('core/artifacts.ts', () => {
       });
     });
 
-  suite('additional coverage: findLatestArtifact and parsing edge cases', () => {
-    test('TC-ART-LATEST-N-01: findLatestArtifact returns newest matching artifact by timestamp', async () => {
+    suite('additional coverage: findLatestArtifact and parsing edge cases', () => {
+      test('TC-ART-LATEST-N-01: findLatestArtifact returns newest matching artifact by timestamp', async () => {
       // Given: A temp directory with multiple files (some matching, some not)
-      const tempRoot = path.join(workspaceRoot, 'out', 'test-findLatestArtifact-n01');
-      const prefix = 'test-perspectives_';
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
+        const tempRoot = path.join(workspaceRoot, 'out', 'test-findLatestArtifact-n01');
+        const prefix = 'test-perspectives_';
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
 
-      const older = `${prefix}20250101_000000.md`;
-      const newer = `${prefix}20251231_235959.md`;
-      const unrelated = `other_${prefix}20251231_235959.md`;
-      const wrongExt = `${prefix}20251231_235959.txt`;
+        const older = `${prefix}20250101_000000.md`;
+        const newer = `${prefix}20251231_235959.md`;
+        const unrelated = `other_${prefix}20251231_235959.md`;
+        const wrongExt = `${prefix}20251231_235959.txt`;
 
-      try {
+        try {
         // When: Writing files and calling findLatestArtifact
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, older)), Buffer.from('old', 'utf8'));
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, newer)), Buffer.from('new', 'utf8'));
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, unrelated)), Buffer.from('x', 'utf8'));
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, wrongExt)), Buffer.from('x', 'utf8'));
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, older)), Buffer.from('old', 'utf8'));
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, newer)), Buffer.from('new', 'utf8'));
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, unrelated)), Buffer.from('x', 'utf8'));
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, wrongExt)), Buffer.from('x', 'utf8'));
 
-        const latest = await findLatestArtifact(workspaceRoot, tempRoot, prefix);
+          const latest = await findLatestArtifact(workspaceRoot, tempRoot, prefix);
 
-        // Then: The newest timestamp file path is returned
-        assert.strictEqual(latest, path.join(tempRoot, newer));
-      } finally {
+          // Then: The newest timestamp file path is returned
+          assert.strictEqual(latest, path.join(tempRoot, newer));
+        } finally {
         // Cleanup
-        await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
-      }
-    });
-
-    test('TC-ART-LATEST-E-01: findLatestArtifact returns undefined when no valid matching files exist', async () => {
-      // Given: A temp directory with only invalid candidates
-      const tempRoot = path.join(workspaceRoot, 'out', 'test-findLatestArtifact-e01');
-      const prefix = 'test-perspectives_';
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
-
-      const wrongPrefix = `test-execution_20251231_235959.md`;
-      const invalidTsLen = `${prefix}20251231_23595.md`; // length mismatch
-      const invalidTsPattern = `${prefix}20251231235959.md`; // missing underscore
-      const wrongExt = `${prefix}20251231_235959.txt`;
-
-      try {
-        // When: Writing files and calling findLatestArtifact
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, wrongPrefix)), Buffer.from('x', 'utf8'));
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, invalidTsLen)), Buffer.from('x', 'utf8'));
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, invalidTsPattern)), Buffer.from('x', 'utf8'));
-        await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, wrongExt)), Buffer.from('x', 'utf8'));
-
-        const latest = await findLatestArtifact(workspaceRoot, tempRoot, prefix);
-
-        // Then: No artifact is found
-        assert.strictEqual(latest, undefined);
-      } finally {
-        // Cleanup
-        await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
-      }
-    });
-
-    test('TC-ART-LATEST-E-02: findLatestArtifact returns undefined when directory does not exist', async () => {
-      // Given: A non-existent directory
-      const tempRoot = path.join(workspaceRoot, 'out', 'test-findLatestArtifact-e02-does-not-exist');
-      const prefix = 'test-perspectives_';
-
-      // Ensure it does not exist (best-effort)
-      try {
-        await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
-      } catch {
-        // ignore
-      }
-
-      // When: Calling findLatestArtifact
-      const latest = await findLatestArtifact(workspaceRoot, tempRoot, prefix);
-
-      // Then: Returns undefined (does not throw)
-      assert.strictEqual(latest, undefined);
-    });
-
-    test('TC-ART-PATH-B-01: saveTestPerspectiveTable returns relativePath undefined when reportDir is outside workspaceRoot', async () => {
-      // Given: workspaceRoot parameter points to a subdirectory, while reportDir is outside it (but still inside repo workspace)
-      const base = path.join(workspaceRoot, 'out', 'test-saveTestPerspectiveTable-outside-root');
-      const fakeWorkspaceRoot = path.join(base, 'workspaceRoot');
-      const reportDir = path.join(base, 'outside');
-
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(fakeWorkspaceRoot));
-
-      try {
-        // When: Saving the artifact to an absolute reportDir outside fakeWorkspaceRoot
-        const saved = await saveTestPerspectiveTable({
-          workspaceRoot: fakeWorkspaceRoot,
-          targetLabel: 'label',
-          targetPaths: ['a.ts'],
-          perspectiveMarkdown: '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |\n|---|---|---|---|---|\n| X | - | - | - | - |',
-          reportDir,
-          timestamp: '20251229_000000',
-        });
-
-        // Then: absolutePath is in reportDir and relativePath is undefined
-        assert.strictEqual(saved.absolutePath, path.join(reportDir, 'test-perspectives_20251229_000000.md'));
-        assert.strictEqual(saved.relativePath, undefined);
-
-        const stat = await vscode.workspace.fs.stat(vscode.Uri.file(saved.absolutePath));
-        assert.ok(stat.size >= 0, 'Saved file should exist');
-      } finally {
-        // Cleanup
-        await vscode.workspace.fs.delete(vscode.Uri.file(base), { recursive: true, useTrash: false });
-      }
-    });
-
-    test('TC-ART-PARSE-PERSPECTIVE-E-01: parsePerspectiveJsonV1 returns invalid-json for unterminated JSON string', () => {
-      // Given: An unterminated JSON string that starts with a quote (no JSON object in the text)
-      const raw = '"abc';
-
-      // When: parsePerspectiveJsonV1 is called
-      const result = parsePerspectiveJsonV1(raw);
-
-      // Then: Returns ok=false with error starting with invalid-json:
-      assert.ok(!result.ok, 'Returns ok=false');
-      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
-    });
-
-    test('TC-ART-PARSE-PERSPECTIVE-N-01: parsePerspectiveJsonV1 handles non-fence backticks prefix and still parses JSON object', () => {
-      // Given: Text starts with backticks but is not a valid fenced block (edge case)
-      const raw = '``````\n{"version":1,"cases":[]}';
-
-      // When: parsePerspectiveJsonV1 is called
-      const result = parsePerspectiveJsonV1(raw);
-
-      // Then: JSON object inside text is parsed successfully
-      assert.ok(result.ok, 'Expected ok=true');
-      if (!result.ok) {
-        return;
-      }
-      assert.strictEqual(result.value.version, 1);
-      assert.deepStrictEqual(result.value.cases, []);
-    });
-
-    test('TC-ART-PARSE-EXEC-E-01: parseTestExecutionJsonV1 returns invalid-json for unterminated JSON string', () => {
-      // Given: An unterminated JSON string that starts with a quote (no JSON object in the text)
-      const raw = '"abc';
-
-      // When: parseTestExecutionJsonV1 is called
-      const result = parseTestExecutionJsonV1(raw);
-
-      // Then: Returns ok=false with error starting with invalid-json:
-      assert.ok(!result.ok, 'Returns ok=false');
-      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
-    });
-
-    test('TC-ART-PARSE-RESULT-B-01: parseTestResultFile ignores non-object failedTests entries', () => {
-      // Given: failedTests contains a non-object entry and a valid object entry
-      const raw = JSON.stringify({
-        failedTests: [
-          123,
-          {
-            title: 'T',
-            fullTitle: 'Suite T',
-            error: 'boom',
-          },
-        ],
+          await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+        }
       });
 
-      // When: parseTestResultFile is called
-      const result = parseTestResultFile(raw);
+      test('TC-ART-LATEST-E-01: findLatestArtifact returns undefined when no valid matching files exist', async () => {
+      // Given: A temp directory with only invalid candidates
+        const tempRoot = path.join(workspaceRoot, 'out', 'test-findLatestArtifact-e01');
+        const prefix = 'test-perspectives_';
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
 
-      // Then: Non-object entry is ignored and object entry is kept
-      assert.ok(result.ok, 'Expected ok=true');
-      if (!result.ok) {
-        return;
-      }
-      assert.strictEqual(result.value.failedTests?.length, 1);
-      assert.strictEqual(result.value.failedTests?.[0]?.title, 'T');
-      assert.strictEqual(result.value.failedTests?.[0]?.fullTitle, 'Suite T');
-      assert.strictEqual(result.value.failedTests?.[0]?.error, 'boom');
+        const wrongPrefix = `test-execution_20251231_235959.md`;
+        const invalidTsLen = `${prefix}20251231_23595.md`; // length mismatch
+        const invalidTsPattern = `${prefix}20251231235959.md`; // missing underscore
+        const wrongExt = `${prefix}20251231_235959.txt`;
+
+        try {
+        // When: Writing files and calling findLatestArtifact
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, wrongPrefix)), Buffer.from('x', 'utf8'));
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, invalidTsLen)), Buffer.from('x', 'utf8'));
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, invalidTsPattern)), Buffer.from('x', 'utf8'));
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(path.join(tempRoot, wrongExt)), Buffer.from('x', 'utf8'));
+
+          const latest = await findLatestArtifact(workspaceRoot, tempRoot, prefix);
+
+          // Then: No artifact is found
+          assert.strictEqual(latest, undefined);
+        } finally {
+        // Cleanup
+          await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+        }
+      });
+
+      test('TC-ART-LATEST-E-02: findLatestArtifact returns undefined when directory does not exist', async () => {
+      // Given: A non-existent directory
+        const tempRoot = path.join(workspaceRoot, 'out', 'test-findLatestArtifact-e02-does-not-exist');
+        const prefix = 'test-perspectives_';
+
+        // Ensure it does not exist (best-effort)
+        try {
+          await vscode.workspace.fs.delete(vscode.Uri.file(tempRoot), { recursive: true, useTrash: false });
+        } catch {
+        // ignore
+        }
+
+        // When: Calling findLatestArtifact
+        const latest = await findLatestArtifact(workspaceRoot, tempRoot, prefix);
+
+        // Then: Returns undefined (does not throw)
+        assert.strictEqual(latest, undefined);
+      });
+
+      test('TC-ART-PATH-B-01: saveTestPerspectiveTable returns relativePath undefined when reportDir is outside workspaceRoot', async () => {
+      // Given: workspaceRoot parameter points to a subdirectory, while reportDir is outside it (but still inside repo workspace)
+        const base = path.join(workspaceRoot, 'out', 'test-saveTestPerspectiveTable-outside-root');
+        const fakeWorkspaceRoot = path.join(base, 'workspaceRoot');
+        const reportDir = path.join(base, 'outside');
+
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(fakeWorkspaceRoot));
+
+        try {
+        // When: Saving the artifact to an absolute reportDir outside fakeWorkspaceRoot
+          const saved = await saveTestPerspectiveTable({
+            workspaceRoot: fakeWorkspaceRoot,
+            targetLabel: 'label',
+            targetPaths: ['a.ts'],
+            perspectiveMarkdown: '| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |\n|---|---|---|---|---|\n| X | - | - | - | - |',
+            reportDir,
+            timestamp: '20251229_000000',
+          });
+
+          // Then: absolutePath is in reportDir and relativePath is undefined
+          assert.strictEqual(saved.absolutePath, path.join(reportDir, 'test-perspectives_20251229_000000.md'));
+          assert.strictEqual(saved.relativePath, undefined);
+
+          const stat = await vscode.workspace.fs.stat(vscode.Uri.file(saved.absolutePath));
+          assert.ok(stat.size >= 0, 'Saved file should exist');
+        } finally {
+        // Cleanup
+          await vscode.workspace.fs.delete(vscode.Uri.file(base), { recursive: true, useTrash: false });
+        }
+      });
+
+      test('TC-ART-PARSE-PERSPECTIVE-E-01: parsePerspectiveJsonV1 returns invalid-json for unterminated JSON string', () => {
+      // Given: An unterminated JSON string that starts with a quote (no JSON object in the text)
+        const raw = '"abc';
+
+        // When: parsePerspectiveJsonV1 is called
+        const result = parsePerspectiveJsonV1(raw);
+
+        // Then: Returns ok=false with error starting with invalid-json:
+        assert.ok(!result.ok, 'Returns ok=false');
+        assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+      });
+
+      test('TC-ART-PARSE-PERSPECTIVE-N-01: parsePerspectiveJsonV1 handles non-fence backticks prefix and still parses JSON object', () => {
+      // Given: Text starts with backticks but is not a valid fenced block (edge case)
+        const raw = '``````\n{"version":1,"cases":[]}';
+
+        // When: parsePerspectiveJsonV1 is called
+        const result = parsePerspectiveJsonV1(raw);
+
+        // Then: JSON object inside text is parsed successfully
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.version, 1);
+        assert.deepStrictEqual(result.value.cases, []);
+      });
+
+      test('TC-ART-PARSE-EXEC-E-01: parseTestExecutionJsonV1 returns invalid-json for unterminated JSON string', () => {
+      // Given: An unterminated JSON string that starts with a quote (no JSON object in the text)
+        const raw = '"abc';
+
+        // When: parseTestExecutionJsonV1 is called
+        const result = parseTestExecutionJsonV1(raw);
+
+        // Then: Returns ok=false with error starting with invalid-json:
+        assert.ok(!result.ok, 'Returns ok=false');
+        assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+      });
+
+      test('TC-ART-PARSE-RESULT-B-01: parseTestResultFile ignores non-object failedTests entries', () => {
+      // Given: failedTests contains a non-object entry and a valid object entry
+        const raw = JSON.stringify({
+          failedTests: [
+            123,
+            {
+              title: 'T',
+              fullTitle: 'Suite T',
+              error: 'boom',
+            },
+          ],
+        });
+
+        // When: parseTestResultFile is called
+        const result = parseTestResultFile(raw);
+
+        // Then: Non-object entry is ignored and object entry is kept
+        assert.ok(result.ok, 'Expected ok=true');
+        if (!result.ok) {
+          return;
+        }
+        assert.strictEqual(result.value.failedTests?.length, 1);
+        assert.strictEqual(result.value.failedTests?.[0]?.title, 'T');
+        assert.strictEqual(result.value.failedTests?.[0]?.fullTitle, 'Suite T');
+        assert.strictEqual(result.value.failedTests?.[0]?.error, 'boom');
+      });
     });
-  });
 
     suite('buildTestExecutionArtifactMarkdown (failure details section)', () => {
       test('TC-ART-FAILSEC-N-01: includes "Failure Details" section with message/code/expected/actual/stack blocks when failedTests exist', () => {

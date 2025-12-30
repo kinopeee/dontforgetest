@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import * as vm from 'vm';
 import { TestGenControlPanelViewProvider } from '../../../ui/controlPanel';
 import { taskManager } from '../../../core/taskManager';
 import { type RunningTask } from '../../../providers/provider';
@@ -78,6 +79,8 @@ suite('src/ui/controlPanel.ts', () => {
   teardown(() => {
     // テスト後のクリーンアップ
     taskManager.cancelAll();
+    // プロバイダーのリスナーを解除（リスナー蓄積を防ぐ）
+    provider.dispose();
   });
 
   // Helper function: call resolveWebviewView
@@ -87,6 +90,81 @@ suite('src/ui/controlPanel.ts', () => {
       {} as vscode.WebviewViewResolveContext,
       { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) } as vscode.CancellationToken
     );
+  }
+
+  function extractInlineScriptFromHtml(html: string): string {
+    const match = html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
+    assert.ok(match, 'Expected one inline <script nonce="..."> block in webview HTML');
+    return match?.[1] ?? '';
+  }
+
+  function createWebviewScriptHarness(html: string): {
+    runBtn: { textContent: string; classList: { contains: (c: string) => boolean } };
+    dispatchStateUpdate: (msg: { isRunning: boolean; taskCount?: number; phaseLabel?: unknown }) => void;
+  } {
+    const script = extractInlineScriptFromHtml(html);
+
+    const classes = new Set<string>();
+    const runBtn = {
+      textContent: '',
+      classList: {
+        add: (c: string) => {
+          classes.add(c);
+        },
+        remove: (c: string) => {
+          classes.delete(c);
+        },
+        contains: (c: string) => classes.has(c),
+      },
+      addEventListener: () => {},
+    };
+
+    const sourceSelect = { disabled: false, value: 'latestCommit', addEventListener: () => {} };
+    const runLocationSelect = { disabled: false, value: 'local', addEventListener: () => {} };
+    const outputSelect = { disabled: false, value: 'full', addEventListener: () => {} };
+    const helpLine = { textContent: '', style: { display: 'none' } };
+
+    const elements = new Map<string, unknown>([
+      ['runBtn', runBtn],
+      ['sourceSelect', sourceSelect],
+      ['runLocationSelect', runLocationSelect],
+      ['outputSelect', outputSelect],
+      ['helpLine', helpLine],
+    ]);
+
+    let messageHandler: ((event: { data: unknown }) => void) | undefined;
+    const windowStub = {
+      addEventListener: (type: string, cb: unknown) => {
+        if (type === 'message') {
+          messageHandler = cb as (event: { data: unknown }) => void;
+        }
+      },
+    };
+
+    const documentStub = {
+      getElementById: (id: string) => (elements.get(id) ?? null) as unknown,
+    };
+
+    const posted: unknown[] = [];
+    const vscodeApi = { postMessage: (msg: unknown) => posted.push(msg) };
+    const acquireVsCodeApi = () => vscodeApi;
+
+    const context = vm.createContext({
+      window: windowStub,
+      document: documentStub,
+      acquireVsCodeApi,
+      console,
+    });
+
+    vm.runInContext(script, context);
+    assert.ok(typeof messageHandler === 'function', 'Expected script to register a window "message" handler');
+
+    return {
+      runBtn,
+      dispatchStateUpdate: (msg: { isRunning: boolean; taskCount?: number; phaseLabel?: unknown }) => {
+        messageHandler?.({ data: { type: 'stateUpdate', ...msg } });
+      },
+    };
   }
 
   // --- Test Perspectives Table Implementation ---
@@ -720,10 +798,11 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Then: stateUpdate message sent
     assert.strictEqual(postedMessages.length, 1, 'One message posted');
-    const msg = postedMessages[0] as { type: string; isRunning: boolean; taskCount: number };
+    const msg = postedMessages[0] as { type: string; isRunning: boolean; taskCount: number; phaseLabel?: unknown };
     assert.strictEqual(msg.type, 'stateUpdate', 'Message type is stateUpdate');
     assert.strictEqual(msg.isRunning, false, 'isRunning is false');
     assert.strictEqual(msg.taskCount, 0, 'taskCount is 0');
+    assert.strictEqual(msg.phaseLabel, undefined, 'phaseLabel is undefined');
   });
 
   test('CP-N-READY-0: ready posts stateUpdate with isRunning=false and taskCount=0', async () => {
@@ -736,7 +815,7 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Then: One stateUpdate is posted with count=0
     assert.strictEqual(postedMessages.length, 1);
-    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: false, taskCount: 0 });
+    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: false, taskCount: 0, phaseLabel: undefined });
   });
 
   // TC-N-27: Ready message sends running state
@@ -756,10 +835,11 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Then: stateUpdate message sent with isRunning=true
     assert.strictEqual(postedMessages.length, 1, 'One message posted');
-    const msg = postedMessages[0] as { type: string; isRunning: boolean; taskCount: number };
+    const msg = postedMessages[0] as { type: string; isRunning: boolean; taskCount: number; phaseLabel?: unknown };
     assert.strictEqual(msg.type, 'stateUpdate', 'Message type is stateUpdate');
     assert.strictEqual(msg.isRunning, true, 'isRunning is true');
     assert.strictEqual(msg.taskCount, 1, 'taskCount is 1');
+    assert.strictEqual(msg.phaseLabel, undefined, 'phaseLabel is undefined by default');
   });
 
   test('CP-N-READY-1: ready posts stateUpdate with isRunning=true and taskCount=1', async () => {
@@ -774,7 +854,24 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Then: One stateUpdate is posted with count=1
     assert.strictEqual(postedMessages.length, 1);
-    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1 });
+    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: undefined });
+  });
+
+  test('TC-N-11: ready posts stateUpdate including phaseLabel from taskManager', async () => {
+    // Case ID: TC-N-11
+    // Given: One running task with phaseLabel="preparing"
+    const mockTask: RunningTask = { taskId: 'phase-task', dispose: () => {} };
+    taskManager.register('phase-task', 'test', mockTask);
+    taskManager.updatePhase('phase-task', 'preparing', 'preparing');
+
+    // When: Webview is resolved and sends ready
+    resolveView();
+    postedMessages = [];
+    await webviewView.webview._onMessage?.({ type: 'ready' });
+
+    // Then: stateUpdate includes phaseLabel="preparing"
+    assert.strictEqual(postedMessages.length, 1);
+    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: 'preparing' });
   });
 
   // TC-N-28: Task registration notifies webview
@@ -792,10 +889,11 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Then: stateUpdate message sent
     assert.ok(postedMessages.length >= 1, 'At least one message posted');
-    const msg = postedMessages[postedMessages.length - 1] as { type: string; isRunning: boolean; taskCount: number };
+    const msg = postedMessages[postedMessages.length - 1] as { type: string; isRunning: boolean; taskCount: number; phaseLabel?: unknown };
     assert.strictEqual(msg.type, 'stateUpdate', 'Message type is stateUpdate');
     assert.strictEqual(msg.isRunning, true, 'isRunning is true');
     assert.strictEqual(msg.taskCount, 1, 'taskCount is 1');
+    assert.strictEqual(msg.phaseLabel, undefined, 'phaseLabel is undefined by default');
   });
 
   // TC-N-29: Task unregistration notifies webview
@@ -815,10 +913,11 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Then: stateUpdate message sent with isRunning=false
     assert.ok(postedMessages.length >= 1, 'At least one message posted');
-    const msg = postedMessages[postedMessages.length - 1] as { type: string; isRunning: boolean; taskCount: number };
+    const msg = postedMessages[postedMessages.length - 1] as { type: string; isRunning: boolean; taskCount: number; phaseLabel?: unknown };
     assert.strictEqual(msg.type, 'stateUpdate', 'Message type is stateUpdate');
     assert.strictEqual(msg.isRunning, false, 'isRunning is false');
     assert.strictEqual(msg.taskCount, 0, 'taskCount is 0');
+    assert.strictEqual(msg.phaseLabel, undefined, 'phaseLabel is undefined');
   });
 
   // TC-N-30: Cancel message cancels all tasks
@@ -890,7 +989,7 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Then: HTML contains state management code
     assert.ok(html.includes('let isRunning = false;'), 'isRunning state variable exists');
-    assert.ok(html.includes('function updateButtonState(running)'), 'updateButtonState function exists');
+    assert.ok(html.includes('function updateButtonState(running, phaseLabel)'), 'updateButtonState function exists');
     assert.ok(html.includes(t('controlPanel.generatingTests')), 'Running state button text exists');
     assert.ok(html.includes(t('controlPanel.run')), 'Run button text exists');
     assert.ok(html.includes(t('controlPanel.generateTests')), 'Full output option text exists');
@@ -908,7 +1007,7 @@ suite('src/ui/controlPanel.ts', () => {
     // Then: HTML contains message handler
     assert.ok(html.includes('window.addEventListener("message"'), 'Message event listener exists');
     assert.ok(html.includes('msg.type === "stateUpdate"'), 'stateUpdate type check exists');
-    assert.ok(html.includes('updateButtonState(msg.isRunning)'), 'updateButtonState call exists');
+    assert.ok(html.includes('updateButtonState(msg.isRunning, msg.phaseLabel)'), 'updateButtonState call exists');
   });
 
   // TC-N-34: HTML button click sends cancel when running
@@ -1027,7 +1126,7 @@ suite('src/ui/controlPanel.ts', () => {
   test('TC-N-06: HTML contains updateButtonState function with classList.add', () => {
     resolveView();
     const html = webviewView.webview.html;
-    assert.ok(html.includes('function updateButtonState(running)'), 'updateButtonState function exists');
+    assert.ok(html.includes('function updateButtonState(running, phaseLabel)'), 'updateButtonState function exists');
     assert.ok(html.includes('runBtn.classList.add("running")'), 'Function uses classList.add instead of inline styles');
   });
 
@@ -1038,20 +1137,25 @@ suite('src/ui/controlPanel.ts', () => {
   test('TC-N-07: HTML contains updateButtonState function with classList.remove', () => {
     resolveView();
     const html = webviewView.webview.html;
-    assert.ok(html.includes('function updateButtonState(running)'), 'updateButtonState function exists');
+    assert.ok(html.includes('function updateButtonState(running, phaseLabel)'), 'updateButtonState function exists');
     assert.ok(html.includes('runBtn.classList.remove("running")'), 'Function uses classList.remove instead of inline styles');
   });
 
-  // TC-N-08: HTML contains button text when running state is set
+  // TC-N-08: HTML contains dynamic button text logic when running state is set
   // Given: Provider initialized with valid context, HTML generated
   // When: HTML is generated
-  // Then: HTML contains button text 'テスト作成中 (中断)' when running state is set
+  // Then: HTML contains dynamic button text logic with phase label fallback
   test('TC-N-08: HTML contains button text when running', () => {
     resolveView();
     const html = webviewView.webview.html;
+    // 新しい実装では動的にラベルを設定するため、フォールバック用のデフォルトラベルを確認
     assert.ok(
-      html.includes(`runBtn.textContent = "${t('controlPanel.generatingTests')}"`),
-      'Button text is correct when running',
+      html.includes(`"${t('controlPanel.generatingTests')}"`),
+      'Default button text fallback is correct when running',
+    );
+    assert.ok(
+      html.includes('runBtn.textContent = label'),
+      'Button text is set dynamically based on phase',
     );
   });
 
@@ -1123,9 +1227,10 @@ suite('src/ui/controlPanel.ts', () => {
     const html = webviewView.webview.html;
     // The code should update textContent before classList operations
     // If classList.add fails, textContent should still be updated
+    // 新しい実装では動的にラベルを設定するため、ラベル設定部分を確認
     assert.ok(
-      html.includes(`runBtn.textContent = "${t('controlPanel.generatingTests')}"`),
-      'Button text is updated',
+      html.includes('runBtn.textContent = label'),
+      'Button text is updated dynamically',
     );
     assert.ok(html.includes('runBtn.classList.add("running")'), 'classList.add is called');
     // Note: Actual error handling is tested in browser environment with mocked classList
@@ -1240,7 +1345,7 @@ suite('src/ui/controlPanel.ts', () => {
     resolveView();
     const html = webviewView.webview.html;
     assert.ok(html.includes('msg.type === "stateUpdate"'), 'Message type check exists');
-    assert.ok(html.includes('updateButtonState(msg.isRunning)'), 'updateButtonState is called with isRunning value');
+    assert.ok(html.includes('updateButtonState(msg.isRunning, msg.phaseLabel)'), 'updateButtonState is called with isRunning value');
   });
 
   // TC-B-09: stateUpdate message received with isRunning=false
@@ -1251,7 +1356,7 @@ suite('src/ui/controlPanel.ts', () => {
     resolveView();
     const html = webviewView.webview.html;
     assert.ok(html.includes('msg.type === "stateUpdate"'), 'Message type check exists');
-    assert.ok(html.includes('updateButtonState(msg.isRunning)'), 'updateButtonState is called with isRunning value');
+    assert.ok(html.includes('updateButtonState(msg.isRunning, msg.phaseLabel)'), 'updateButtonState is called with isRunning value');
   });
 
   // TC-B-10: background-size set to 200% 100%
@@ -1266,5 +1371,681 @@ suite('src/ui/controlPanel.ts', () => {
     assert.ok(html.includes('var(--vscode-descriptionForeground)'), 'Gradient uses VS Code theme variable');
     assert.ok(html.includes('@keyframes progress-slide'), 'Progress-slide animation is defined for background animation');
     assert.ok(html.includes('animation: progress-slide 1.5s linear infinite;'), 'Progress-slide animation is applied to button.running::before');
+  });
+
+  suite('phaseLabel mapping in webview script', () => {
+    test('TC-N-12: stateUpdate running=true phaseLabel="preparing" sets button label to Preparing... (Cancel)', () => {
+      // Case ID: TC-N-12
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel="preparing"
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'preparing' });
+
+      // Then: Button label matches the phase-specific label
+      assert.strictEqual(harness.runBtn.textContent, 'Preparing... (Cancel)');
+    });
+
+    test('TC-N-13: stateUpdate running=true phaseLabel="perspectives" sets button label to Perspectives... (Cancel)', () => {
+      // Case ID: TC-N-13
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel="perspectives"
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'perspectives' });
+
+      // Then: Button label matches the phase-specific label
+      assert.strictEqual(harness.runBtn.textContent, 'Perspectives... (Cancel)');
+    });
+
+    test('TC-N-14: stateUpdate running=true phaseLabel="generating" sets button label to Generating... (Cancel)', () => {
+      // Case ID: TC-N-14
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel="generating"
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'generating' });
+
+      // Then: Button label matches the phase-specific label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('TC-N-15: stateUpdate running=true phaseLabel="running-tests" sets button label to Testing... (Cancel)', () => {
+      // Case ID: TC-N-15
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel="running-tests"
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'running-tests' });
+
+      // Then: Button label matches the phase-specific label
+      assert.strictEqual(harness.runBtn.textContent, 'Testing... (Cancel)');
+    });
+
+    test('TC-B-04: stateUpdate running=true phaseLabel=undefined falls back to Generating... (Cancel)', () => {
+      // Case ID: TC-B-04
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate without phaseLabel
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: undefined });
+
+      // Then: Falls back to default running label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('TC-B-05: stateUpdate running=true phaseLabel=null falls back to Generating... (Cancel)', () => {
+      // Case ID: TC-B-05
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel=null (runtime edge)
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: null });
+
+      // Then: Falls back to default running label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('TC-B-06: stateUpdate running=true phaseLabel="" falls back to Generating... (Cancel)', () => {
+      // Case ID: TC-B-06
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel=""
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: '' });
+
+      // Then: Falls back to default running label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('TC-B-07: stateUpdate running=true phaseLabel=" " falls back to Generating... (Cancel)', () => {
+      // Case ID: TC-B-07
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel=" " (truthy but unmapped)
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: ' ' });
+
+      // Then: Falls back to default running label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('TC-E-04: stateUpdate running=true phaseLabel="done" falls back to Generating... (Cancel)', () => {
+      // Case ID: TC-E-04
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with an unknown phaseLabel
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'done' });
+
+      // Then: Falls back to default running label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('TC-N-16: stateUpdate running=false ignores phaseLabel and sets button label to Generate', () => {
+      // Case ID: TC-N-16
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with isRunning=false
+      harness.dispatchStateUpdate({ isRunning: false, phaseLabel: 'preparing' });
+
+      // Then: Button label is the idle label
+      assert.strictEqual(harness.runBtn.textContent, 'Generate');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), false);
+    });
+  });
+
+  suite('provided table cases (CP-* / WV-*)', () => {
+    test('CP-N-01: on {type:"ready"} posts stateUpdate with isRunning=false, taskCount=0, phaseLabel=undefined', async () => {
+      // Case ID: CP-N-01
+      // Given: ControlPanel provider is resolved; taskManager has 0 tasks
+      resolveView();
+      postedMessages = [];
+
+      // When: Receiving the ready message from webview
+      await webviewView.webview._onMessage?.({ type: 'ready' });
+
+      // Then: Provider posts the exact stateUpdate message with phaseLabel=undefined
+      assert.strictEqual(postedMessages.length, 1);
+      assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: false, taskCount: 0, phaseLabel: undefined });
+    });
+
+    test('CP-B-01: on {type:"ready"} posts stateUpdate with isRunning=true, taskCount=1, phaseLabel=undefined', async () => {
+      // Case ID: CP-B-01
+      // Given: ControlPanel provider is resolved; taskManager has exactly 1 task with no phaseLabel
+      const mockTask: RunningTask = { taskId: 'T1', dispose: () => {} };
+      taskManager.register('T1', 'Label', mockTask);
+      resolveView();
+      postedMessages = [];
+
+      // When: Receiving the ready message from webview
+      await webviewView.webview._onMessage?.({ type: 'ready' });
+
+      // Then: Provider posts the exact stateUpdate message with phaseLabel=undefined
+      assert.strictEqual(postedMessages.length, 1);
+      assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: undefined });
+    });
+
+    test('CP-N-02: on {type:"ready"} includes phaseLabel from taskManager.getCurrentPhaseLabel()', async () => {
+      // Case ID: CP-N-02
+      // Given: ControlPanel provider is resolved; one task has phaseLabel="preparing"
+      const mockTask: RunningTask = { taskId: 'phase-task', dispose: () => {} };
+      taskManager.register('phase-task', 'Label', mockTask);
+      taskManager.updatePhase('phase-task', 'preparing', 'preparing');
+      resolveView();
+      postedMessages = [];
+
+      // When: Receiving the ready message from webview
+      await webviewView.webview._onMessage?.({ type: 'ready' });
+
+      // Then: Provider posts phaseLabel="preparing"
+      assert.strictEqual(postedMessages.length, 1);
+      assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: 'preparing' });
+    });
+
+    test('CP-N-03: after resolve, taskManager.register triggers a stateUpdate forwarding phaseLabel=undefined', () => {
+      // Case ID: CP-N-03
+      // Given: ControlPanel provider is resolved
+      resolveView();
+      postedMessages = [];
+
+      // When: A task is registered
+      const mockTask: RunningTask = { taskId: 'new-task', dispose: () => {} };
+      taskManager.register('new-task', 'Label', mockTask);
+
+      // Then: A stateUpdate is posted with phaseLabel=undefined
+      assert.ok(postedMessages.length >= 1);
+      assert.deepStrictEqual(postedMessages[postedMessages.length - 1], {
+        type: 'stateUpdate',
+        isRunning: true,
+        taskCount: 1,
+        phaseLabel: undefined,
+      });
+    });
+
+    test('CP-N-04: after resolve, taskManager.unregister triggers a stateUpdate with isRunning=false, taskCount=0, phaseLabel=undefined', () => {
+      // Case ID: CP-N-04
+      // Given: ControlPanel provider is resolved and a task is registered
+      const mockTask: RunningTask = { taskId: 'running-task', dispose: () => {} };
+      taskManager.register('running-task', 'Label', mockTask);
+      resolveView();
+      postedMessages = [];
+
+      // When: The task is unregistered
+      taskManager.unregister('running-task');
+
+      // Then: A stateUpdate is posted with count=0 and phaseLabel=undefined
+      assert.ok(postedMessages.length >= 1);
+      assert.deepStrictEqual(postedMessages[postedMessages.length - 1], {
+        type: 'stateUpdate',
+        isRunning: false,
+        taskCount: 0,
+        phaseLabel: undefined,
+      });
+    });
+
+    test('CP-E-01: without resolveWebviewView (view undefined), state updates do not post messages', () => {
+      // Case ID: CP-E-01
+      // Given: ControlPanel provider exists but resolveWebviewView has NOT been called
+      postedMessages = [];
+
+      // When: taskManager state changes (register triggers notifyListeners)
+      const mockTask: RunningTask = { taskId: 'no-view', dispose: () => {} };
+      taskManager.register('no-view', 'Label', mockTask);
+
+      // Then: No webview.postMessage call happens
+      assert.strictEqual(postedMessages.length, 0);
+    });
+
+    test('WV-N-01: stateUpdate running=true phaseLabel="preparing" sets run button text to Preparing... (Cancel)', () => {
+      // Case ID: WV-N-01
+      // Given: Webview script is executed
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving {type:"stateUpdate", isRunning:true, phaseLabel:"preparing"}
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'preparing' });
+
+      // Then: run button label is mapped by phaseButtonLabels.preparing
+      assert.strictEqual(harness.runBtn.textContent, 'Preparing... (Cancel)');
+    });
+
+    test('WV-N-02: stateUpdate running=true phaseLabel="perspectives" sets run button text to Perspectives... (Cancel)', () => {
+      // Case ID: WV-N-02
+      // Given: Webview script is executed
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving {type:"stateUpdate", isRunning:true, phaseLabel:"perspectives"}
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'perspectives' });
+
+      // Then: run button label is mapped by phaseButtonLabels.perspectives
+      assert.strictEqual(harness.runBtn.textContent, 'Perspectives... (Cancel)');
+    });
+
+    test('WV-N-03: stateUpdate running=true phaseLabel="generating" sets run button text to Generating... (Cancel)', () => {
+      // Case ID: WV-N-03
+      // Given: Webview script is executed
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving {type:"stateUpdate", isRunning:true, phaseLabel:"generating"}
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'generating' });
+
+      // Then: run button label is mapped by phaseButtonLabels.generating
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('WV-N-04: stateUpdate running=true phaseLabel="running-tests" sets run button text to Testing... (Cancel)', () => {
+      // Case ID: WV-N-04
+      // Given: Webview script is executed
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving {type:"stateUpdate", isRunning:true, phaseLabel:"running-tests"}
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'running-tests' });
+
+      // Then: run button label is mapped by phaseButtonLabels["running-tests"]
+      assert.strictEqual(harness.runBtn.textContent, 'Testing... (Cancel)');
+    });
+
+    test('WV-B-01: stateUpdate running=true phaseLabel=undefined falls back to controlPanel.generatingTests', () => {
+      // Case ID: WV-B-01
+      // Given: Webview script is executed
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving {type:"stateUpdate", isRunning:true, phaseLabel:undefined}
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: undefined });
+
+      // Then: run button text uses the fallback label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('WV-B-02: stateUpdate running=true phaseLabel=null falls back to controlPanel.generatingTests', () => {
+      // Case ID: WV-B-02
+      // Given: Webview script is executed
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving {type:"stateUpdate", isRunning:true, phaseLabel:null}
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: null });
+
+      // Then: run button text uses the fallback label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('WV-B-03: stateUpdate running=true phaseLabel="" falls back to controlPanel.generatingTests', () => {
+      // Case ID: WV-B-03
+      // Given: Webview script is executed
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving {type:"stateUpdate", isRunning:true, phaseLabel:""}
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: '' });
+
+      // Then: run button text uses the fallback label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('WV-B-04: stateUpdate running=true phaseLabel=" " falls back to controlPanel.generatingTests', () => {
+      // Case ID: WV-B-04
+      // Given: Webview script is executed
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving {type:"stateUpdate", isRunning:true, phaseLabel:" "}
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: ' ' });
+
+      // Then: run button text uses the fallback label (unmapped phase)
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('WV-E-01: stateUpdate running=true phaseLabel="done" falls back to controlPanel.generatingTests', () => {
+      // Case ID: WV-E-01
+      // Given: Webview script is executed
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving {type:"stateUpdate", isRunning:true, phaseLabel:"done"}
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'done' });
+
+      // Then: run button text uses the fallback label (unknown phase)
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('WV-N-05: stateUpdate running=false ignores phaseLabel and sets idle label + removes running class', () => {
+      // Case ID: WV-N-05
+      // Given: Webview script is executed
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving {type:"stateUpdate", isRunning:false, phaseLabel:"preparing"}
+      harness.dispatchStateUpdate({ isRunning: false, phaseLabel: 'preparing' });
+
+      // Then: run button text is idle label and "running" class is absent
+      assert.strictEqual(harness.runBtn.textContent, 'Generate');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), false);
+    });
+  });
+
+  suite('provided table cases (TC-CP-*)', () => {
+    function getTaskManagerListenerCount(): number {
+      const listeners = (taskManager as unknown as { listeners?: unknown }).listeners;
+      assert.ok(listeners instanceof Set, 'Expected taskManager to hold an internal Set named listeners');
+      return (listeners as Set<unknown>).size;
+    }
+
+    test('TC-CP-N-01: stateUpdate {isRunning:true, phaseLabel:"preparing"} maps to "Preparing... (Cancel)" and adds running class', () => {
+      // Case ID: TC-CP-N-01
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving stateUpdate with phaseLabel="preparing"
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'preparing' });
+
+      // Then: Run button text and class match the expected running state
+      assert.strictEqual(harness.runBtn.textContent, 'Preparing... (Cancel)');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), true);
+    });
+
+    test('TC-CP-N-02: stateUpdate {isRunning:true, phaseLabel:"perspectives"} maps to "Perspectives... (Cancel)" and adds running class', () => {
+      // Case ID: TC-CP-N-02
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving stateUpdate with phaseLabel="perspectives"
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'perspectives' });
+
+      // Then: Run button text and class match the expected running state
+      assert.strictEqual(harness.runBtn.textContent, 'Perspectives... (Cancel)');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), true);
+    });
+
+    test('TC-CP-N-03: stateUpdate {isRunning:true, phaseLabel:"generating"} maps to "Generating... (Cancel)" and adds running class', () => {
+      // Case ID: TC-CP-N-03
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving stateUpdate with phaseLabel="generating"
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'generating' });
+
+      // Then: Run button text and class match the expected running state
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), true);
+    });
+
+    test('TC-CP-N-04: stateUpdate {isRunning:true, phaseLabel:"running-tests"} maps to "Testing... (Cancel)" and adds running class', () => {
+      // Case ID: TC-CP-N-04
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving stateUpdate with phaseLabel="running-tests"
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'running-tests' });
+
+      // Then: Run button text and class match the expected running state
+      assert.strictEqual(harness.runBtn.textContent, 'Testing... (Cancel)');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), true);
+    });
+
+    test('TC-CP-B-01: stateUpdate {isRunning:true, phaseLabel:undefined} falls back to "Generating... (Cancel)"', () => {
+      // Case ID: TC-CP-B-01
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving stateUpdate with phaseLabel undefined
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: undefined });
+
+      // Then: It falls back to the default running label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), true);
+    });
+
+    test('TC-CP-B-02: stateUpdate {isRunning:true, phaseLabel:""} falls back to "Generating... (Cancel)"', () => {
+      // Case ID: TC-CP-B-02
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving stateUpdate with empty-string phaseLabel
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: '' });
+
+      // Then: It falls back to the default running label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), true);
+    });
+
+    test('TC-CP-B-03: stateUpdate {isRunning:true, phaseLabel:"unknown-phase"} falls back to "Generating... (Cancel)"', () => {
+      // Case ID: TC-CP-B-03
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving stateUpdate with an unknown phaseLabel
+      harness.dispatchStateUpdate({ isRunning: true, phaseLabel: 'unknown-phase' });
+
+      // Then: It falls back to the default running label
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), true);
+    });
+
+    test('TC-CP-E-01: without resolveWebviewView (view undefined), no postMessage occurs on taskManager notification', () => {
+      // Case ID: TC-CP-E-01
+      // Given: A provider exists but resolveWebviewView has not been called (view is undefined)
+      postedMessages = [];
+
+      // When: taskManager triggers a state change
+      const mockTask: RunningTask = { taskId: 'no-view-case', dispose: () => {} };
+      taskManager.register('no-view-case', 'Label', mockTask);
+
+      // Then: No postMessage is sent and no exception is thrown
+      assert.strictEqual(postedMessages.length, 0);
+    });
+
+    test('TC-CP-N-05: provider dispose removes taskManager listener and stops future stateUpdate posts', () => {
+      // Case ID: TC-CP-N-05
+      // Given: A fresh provider is created and its webview is resolved
+      const baseCount = getTaskManagerListenerCount();
+
+      const deps = {
+        executeCommand: async () => {},
+      };
+      const localProvider = new TestGenControlPanelViewProvider(context, deps);
+      const countAfterCreate = getTaskManagerListenerCount();
+      assert.strictEqual(countAfterCreate, baseCount + 1);
+
+      const localWebviewView: MockWebviewView = {
+        webview: {
+          options: {},
+          html: '',
+          onDidReceiveMessage: () => {},
+          postMessage: async (msg: unknown) => {
+            postedMessages.push(msg);
+            return true;
+          },
+          cspSource: 'vscode-webview-resource:',
+        },
+        visible: true,
+        onDidDispose: () => {},
+      };
+      localProvider.resolveWebviewView(
+        localWebviewView as unknown as vscode.WebviewView,
+        {} as vscode.WebviewViewResolveContext,
+        { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) } as vscode.CancellationToken,
+      );
+
+      // When: The provider is disposed once, then taskManager notifies listeners
+      localProvider.dispose();
+      const countAfterDispose = getTaskManagerListenerCount();
+
+      postedMessages = [];
+      const mockTask: RunningTask = { taskId: 'after-dispose', dispose: () => {} };
+      taskManager.register('after-dispose', 'Label', mockTask);
+
+      // Then: listener count is decremented and no messages are posted after dispose
+      assert.strictEqual(countAfterDispose, baseCount);
+      assert.strictEqual(postedMessages.length, 0);
+    });
+
+    test('TC-CP-B-04: dispose() is idempotent (removeListener called at most once)', () => {
+      // Case ID: TC-CP-B-04
+      // Given: A fresh provider is created and taskManager.removeListener is wrapped
+      const originalRemoveListener = taskManager.removeListener.bind(taskManager);
+      let removeCount = 0;
+      (taskManager as unknown as { removeListener: typeof taskManager.removeListener }).removeListener = ((listener) => {
+        removeCount += 1;
+        originalRemoveListener(listener);
+      }) as typeof taskManager.removeListener;
+
+      try {
+        const localProvider = new TestGenControlPanelViewProvider(context, { executeCommand: async () => {} });
+
+        // When: dispose() is called twice
+        localProvider.dispose();
+        localProvider.dispose();
+
+        // Then: removeListener is called exactly once and no exception occurs
+        assert.strictEqual(removeCount, 1);
+      } finally {
+        (taskManager as unknown as { removeListener: typeof taskManager.removeListener }).removeListener = originalRemoveListener;
+      }
+    });
+
+    test('TC-CP-B-05: stateUpdate {isRunning:false, taskCount:0} sets idle label "Generate" and removes running class', () => {
+      // Case ID: TC-CP-B-05
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving stateUpdate with isRunning=false
+      harness.dispatchStateUpdate({ isRunning: false, phaseLabel: 'preparing' });
+
+      // Then: Button label is idle and running class is removed
+      assert.strictEqual(harness.runBtn.textContent, 'Generate');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), false);
+    });
+  });
+
+  suite('provided perspectives table cases (TC-*-CP-*)', () => {
+    test('TC-N-CP-01: stateUpdate {isRunning:true, taskCount:1, phaseLabel:"preparing"} sets label + running class', () => {
+      // Case ID: TC-N-CP-01
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel="preparing"
+      harness.dispatchStateUpdate({ isRunning: true, taskCount: 1, phaseLabel: 'preparing' });
+
+      // Then: Run button text becomes "Preparing... (Cancel)" and has running class
+      assert.strictEqual(harness.runBtn.textContent, 'Preparing... (Cancel)');
+      assert.strictEqual(harness.runBtn.classList.contains('running'), true);
+    });
+
+    test('TC-N-CP-02: stateUpdate {isRunning:true, taskCount:1, phaseLabel:"perspectives"} sets label', () => {
+      // Case ID: TC-N-CP-02
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel="perspectives"
+      harness.dispatchStateUpdate({ isRunning: true, taskCount: 1, phaseLabel: 'perspectives' });
+
+      // Then: Run button text becomes "Perspectives... (Cancel)"
+      assert.strictEqual(harness.runBtn.textContent, 'Perspectives... (Cancel)');
+    });
+
+    test('TC-N-CP-03: stateUpdate {isRunning:true, taskCount:1, phaseLabel:"generating"} sets label', () => {
+      // Case ID: TC-N-CP-03
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel="generating"
+      harness.dispatchStateUpdate({ isRunning: true, taskCount: 1, phaseLabel: 'generating' });
+
+      // Then: Run button text becomes "Generating... (Cancel)"
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('TC-N-CP-04: stateUpdate {isRunning:true, taskCount:1, phaseLabel:"running-tests"} sets label', () => {
+      // Case ID: TC-N-CP-04
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with phaseLabel="running-tests"
+      harness.dispatchStateUpdate({ isRunning: true, taskCount: 1, phaseLabel: 'running-tests' });
+
+      // Then: Run button text becomes "Testing... (Cancel)"
+      assert.strictEqual(harness.runBtn.textContent, 'Testing... (Cancel)');
+    });
+
+    test('TC-E-CP-05: stateUpdate {isRunning:true, taskCount:1, phaseLabel:"unknown-phase"} falls back to default running label', () => {
+      // Case ID: TC-E-CP-05
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with an unknown phaseLabel
+      harness.dispatchStateUpdate({ isRunning: true, taskCount: 1, phaseLabel: 'unknown-phase' });
+
+      // Then: Run button text falls back to "Generating... (Cancel)"
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('TC-B-CP-06: stateUpdate {isRunning:true, taskCount:1} (phaseLabel omitted) falls back to default running label', () => {
+      // Case ID: TC-B-CP-06
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with no phaseLabel field
+      harness.dispatchStateUpdate({ isRunning: true, taskCount: 1 });
+
+      // Then: Run button text falls back to "Generating... (Cancel)"
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('TC-B-CP-07: stateUpdate {isRunning:true, taskCount:1, phaseLabel:""} falls back to default running label', () => {
+      // Case ID: TC-B-CP-07
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with empty-string phaseLabel
+      harness.dispatchStateUpdate({ isRunning: true, taskCount: 1, phaseLabel: '' });
+
+      // Then: Run button text falls back to "Generating... (Cancel)"
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+
+    test('TC-B-CP-08: stateUpdate {isRunning:true, taskCount:1, phaseLabel:" "} falls back to default running label', () => {
+      // Case ID: TC-B-CP-08
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Receiving a stateUpdate with whitespace phaseLabel (truthy but unmapped)
+      harness.dispatchStateUpdate({ isRunning: true, taskCount: 1, phaseLabel: ' ' });
+
+      // Then: Run button text falls back to "Generating... (Cancel)"
+      assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
   });
 });

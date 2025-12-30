@@ -209,6 +209,7 @@ export class TestGenerationSession {
     handleTestGenEventForProgressView(
       emitPhaseEvent(this.options.generationTaskId, 'preparing', t('progressTreeView.phase.preparing')),
     );
+    taskManager.updatePhase(this.options.generationTaskId, 'preparing', 'preparing');
 
     if (this.runLocation === 'worktree') {
       if (!this.options.extensionContext) {
@@ -259,6 +260,7 @@ export class TestGenerationSession {
     handleTestGenEventForProgressView(
       emitPhaseEvent(this.options.generationTaskId, 'perspectives', t('progressTreeView.phase.perspectives')),
     );
+    taskManager.updatePhase(this.options.generationTaskId, 'perspectives', 'perspectives');
 
     const perspectiveResult = await runPerspectiveTableStep({
       provider: this.options.provider,
@@ -334,6 +336,7 @@ export class TestGenerationSession {
     handleTestGenEventForProgressView(
       emitPhaseEvent(this.options.generationTaskId, 'generating', t('progressTreeView.phase.generating')),
     );
+    taskManager.updatePhase(this.options.generationTaskId, 'generating', 'generating');
 
     let finalPrompt = this.options.generationPrompt;
     if (perspectiveMarkdown) {
@@ -419,6 +422,7 @@ export class TestGenerationSession {
     handleTestGenEventForProgressView(
       emitPhaseEvent(this.options.generationTaskId, 'running-tests', t('progressTreeView.phase.runningTests')),
     );
+    taskManager.updatePhase(this.options.generationTaskId, 'running-tests', 'running-tests');
 
     const extensionVersion = this.resolveExtensionVersion();
     const trimmedTestCommand = this.settings.testCommand.trim();

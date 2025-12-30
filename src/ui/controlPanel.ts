@@ -15,7 +15,7 @@ type WebviewMessage =
 
 /** 拡張機能からWebviewへのメッセージ */
 type ExtensionMessage =
-  | { type: 'stateUpdate'; isRunning: boolean; taskCount: number };
+  | { type: 'stateUpdate'; isRunning: boolean; taskCount: number; phaseLabel?: string };
 
 type AllowedCommand =
   | 'dontforgetest.generateTest'
@@ -38,12 +38,13 @@ interface ControlPanelDeps {
  * - UI は最小構成（既存コマンド呼び出しに寄せる）
  * - 設定はビュータイトルバーのギアアイコンから開く
  */
-export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvider {
+export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   public static readonly viewId = 'dontforgetest.controlPanel';
 
   private view?: vscode.WebviewView;
   private readonly deps: ControlPanelDeps;
-  private readonly stateListener: (isRunning: boolean, taskCount: number) => void;
+  private readonly stateListener: (isRunning: boolean, taskCount: number, phaseLabel?: string) => void;
+  private disposed = false;
 
   public constructor(
     private readonly context: vscode.ExtensionContext,
@@ -52,20 +53,33 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
     this.deps = { ...createDefaultDeps(), ...deps };
 
     // タスク状態変更を監視してWebviewに通知
-    this.stateListener = (isRunning, taskCount) => {
-      this.sendStateUpdate(isRunning, taskCount);
+    this.stateListener = (isRunning, taskCount, phaseLabel) => {
+      this.sendStateUpdate(isRunning, taskCount, phaseLabel);
     };
     taskManager.addListener(this.stateListener);
   }
 
   /**
+   * リソースを解放する。
+   * taskManager のリスナーを解除し、再利用を防ぐ。
+   */
+  public dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    taskManager.removeListener(this.stateListener);
+    this.view = undefined;
+  }
+
+  /**
    * Webviewに状態更新を送信する。
    */
-  private sendStateUpdate(isRunning: boolean, taskCount: number): void {
+  private sendStateUpdate(isRunning: boolean, taskCount: number, phaseLabel?: string): void {
     if (!this.view) {
       return;
     }
-    const message: ExtensionMessage = { type: 'stateUpdate', isRunning, taskCount };
+    const message: ExtensionMessage = { type: 'stateUpdate', isRunning, taskCount, phaseLabel };
     void this.view.webview.postMessage(message);
   }
 
@@ -96,7 +110,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
 
     if (msg.type === 'ready') {
       // 現在の状態を送信
-      this.sendStateUpdate(taskManager.isRunning(), taskManager.getRunningCount());
+      this.sendStateUpdate(taskManager.isRunning(), taskManager.getRunningCount(), taskManager.getCurrentPhaseLabel());
       return;
     }
 
@@ -457,11 +471,21 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '      updateHelpLine();',
       '    }',
       '',
+      '    // フェーズ別のボタンラベル',
+      `    const phaseButtonLabels = {`,
+      `      preparing: "${t('controlPanel.button.preparing')}",`,
+      `      perspectives: "${t('controlPanel.button.perspectives')}",`,
+      `      generating: "${t('controlPanel.button.generating')}",`,
+      `      "running-tests": "${t('controlPanel.button.runningTests')}",`,
+      `    };`,
+      '',
       '    // ボタンとプルダウンの表示を更新',
-      '    function updateButtonState(running) {',
+      '    function updateButtonState(running, phaseLabel) {',
       '      isRunning = running;',
       `      if (running) {`,
-      `        runBtn.textContent = "${t('controlPanel.generatingTests')}";`,
+      `        // フェーズラベルがあれば対応するボタンテキストを使用、なければデフォルト`,
+      `        const label = phaseLabel && phaseButtonLabels[phaseLabel] ? phaseButtonLabels[phaseLabel] : "${t('controlPanel.generatingTests')}";`,
+      `        runBtn.textContent = label;`,
       `        runBtn.classList.add("running");`,
       `        sourceSelect.disabled = true;`,
       `        runLocationSelect.disabled = true;`,
@@ -512,7 +536,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '    window.addEventListener("message", (event) => {',
       '      const msg = event.data;',
       '      if (msg && msg.type === "stateUpdate") {',
-      '        updateButtonState(msg.isRunning);',
+      '        updateButtonState(msg.isRunning, msg.phaseLabel);',
       '      }',
       '    });',
       '',

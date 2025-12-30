@@ -81,8 +81,8 @@ suite('src/extension.ts command handlers (high priority coverage)', () => {
     let callCount = 0;
     (generateFromWorkingTreeModule as unknown as { generateTestFromWorkingTree: typeof generateFromWorkingTreeModule.generateTestFromWorkingTree })
       .generateTestFromWorkingTree = async () => {
-      callCount += 1;
-    };
+        callCount += 1;
+      };
 
     try {
       // When: Executing the command
@@ -101,8 +101,8 @@ suite('src/extension.ts command handlers (high priority coverage)', () => {
     const expectedMessage = 'boom-generateFromWorkingTree';
     (generateFromWorkingTreeModule as unknown as { generateTestFromWorkingTree: typeof generateFromWorkingTreeModule.generateTestFromWorkingTree })
       .generateTestFromWorkingTree = async () => {
-      throw new Error(expectedMessage);
-    };
+        throw new Error(expectedMessage);
+      };
 
     try {
       // When / Then: The command rejects with the expected error message

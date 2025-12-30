@@ -1,4 +1,5 @@
 import { type RunningTask } from '../providers/provider';
+import { type TestGenPhase } from './event';
 
 /**
  * 実行中タスクの情報。
@@ -10,9 +11,13 @@ export interface ManagedTask {
   startedAt: number;
   /** キャンセルされたかどうか */
   cancelled: boolean;
+  /** 現在のフェーズ */
+  currentPhase?: TestGenPhase;
+  /** 現在のフェーズラベル（ボタン表示用） */
+  phaseLabel?: string;
 }
 
-type TaskStateListener = (isRunning: boolean, taskCount: number) => void;
+type TaskStateListener = (isRunning: boolean, taskCount: number, phaseLabel?: string) => void;
 
 /**
  * 実行中タスクを一元管理するマネージャー。
@@ -92,6 +97,32 @@ class TaskManager {
   }
 
   /**
+   * 指定したタスクのフェーズを更新する。
+   * UIにフェーズ変更を通知するために使用。
+   */
+  public updatePhase(taskId: string, phase: TestGenPhase, phaseLabel: string): void {
+    const task = this.tasks.get(taskId);
+    if (task) {
+      task.currentPhase = phase;
+      task.phaseLabel = phaseLabel;
+      this.notifyListeners();
+    }
+  }
+
+  /**
+   * 現在アクティブなフェーズラベルを取得する。
+   * 複数タスク実行中の場合は最初のタスクのラベルを返す。
+   */
+  public getCurrentPhaseLabel(): string | undefined {
+    for (const task of this.tasks.values()) {
+      if (task.phaseLabel) {
+        return task.phaseLabel;
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * 実行中のすべてのタスクをキャンセルする。
    */
   public cancelAll(): number {
@@ -142,9 +173,10 @@ class TaskManager {
   private notifyListeners(): void {
     const isRunning = this.isRunning();
     const taskCount = this.tasks.size;
+    const phaseLabel = this.getCurrentPhaseLabel();
     for (const listener of this.listeners) {
       try {
-        listener(isRunning, taskCount);
+        listener(isRunning, taskCount, phaseLabel);
       } catch {
         // リスナーのエラーは無視
       }

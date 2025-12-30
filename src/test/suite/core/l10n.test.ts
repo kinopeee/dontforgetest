@@ -25,10 +25,264 @@ suite('l10n key consistency', () => {
     bundleJa = JSON.parse(fs.readFileSync(bundleJaPath, 'utf8')) as Record<string, unknown>;
   });
 
+  function withStubbedVsCodeL10nT<T>(impl: typeof vscode.l10n.t, fn: () => T): T {
+    const original = vscode.l10n.t;
+    (vscode.l10n as unknown as { t: typeof vscode.l10n.t }).t = impl;
+    try {
+      return fn();
+    } finally {
+      (vscode.l10n as unknown as { t: typeof vscode.l10n.t }).t = original;
+    }
+  }
+
   function assertNonEmptyL10nValue(bundle: Record<string, unknown>, key: string): void {
     const value = bundle[key];
     assert.ok(typeof value === 'string' && value.trim().length > 0, `Expected non-empty value for ${key}`);
   }
+
+  suite('provided table cases (TC-L10N-*)', () => {
+    test('TC-L10N-N-01: Locale=en; t("controlPanel.generatingTests") returns "Generating... (Cancel)"', () => {
+      // Case ID: TC-L10N-N-01
+      // Given: VS Code default locale behavior where vscode.l10n.t returns the raw key (English fallback path)
+      const key = 'controlPanel.generatingTests';
+
+      // When: Resolving via t(key)
+      const actual = withStubbedVsCodeL10nT(((message: string) => message) as unknown as typeof vscode.l10n.t, () => t(key));
+
+      // Then: It matches the English bundle literal and is not the raw key
+      assert.strictEqual(actual, 'Generating... (Cancel)');
+      assert.notStrictEqual(actual, key);
+    });
+
+    test('TC-L10N-N-02: Locale=ja; t("controlPanel.generatingTests") returns "生成中...（中断）"', () => {
+      // Case ID: TC-L10N-N-02
+      // Given: VS Code localized behavior where vscode.l10n.t resolves from the Japanese bundle
+      const key = 'controlPanel.generatingTests';
+      const jaValue = String(bundleJa[key]);
+
+      // When: Resolving via t(key)
+      const actual = withStubbedVsCodeL10nT(
+        ((message: string) => (message === key ? jaValue : message)) as unknown as typeof vscode.l10n.t,
+        () => t(key),
+      );
+
+      // Then: It matches the expected Japanese literal and is not the raw key
+      assert.strictEqual(actual, '生成中...（中断）');
+      assert.notStrictEqual(actual, key);
+    });
+
+    test('TC-L10N-N-03: Locale=en; t("controlPanel.button.preparing") returns "Preparing... (Cancel)"', () => {
+      // Case ID: TC-L10N-N-03
+      // Given: English fallback path (vscode.l10n.t returns raw key)
+      const key = 'controlPanel.button.preparing';
+
+      // When: Resolving via t(key)
+      const actual = withStubbedVsCodeL10nT(((message: string) => message) as unknown as typeof vscode.l10n.t, () => t(key));
+
+      // Then: It matches the English literal
+      assert.strictEqual(actual, 'Preparing... (Cancel)');
+      assert.notStrictEqual(actual, key);
+    });
+
+    test('TC-L10N-N-04: Locale=en; t("controlPanel.button.perspectives") returns "Perspectives... (Cancel)"', () => {
+      // Case ID: TC-L10N-N-04
+      // Given: English fallback path (vscode.l10n.t returns raw key)
+      const key = 'controlPanel.button.perspectives';
+
+      // When: Resolving via t(key)
+      const actual = withStubbedVsCodeL10nT(((message: string) => message) as unknown as typeof vscode.l10n.t, () => t(key));
+
+      // Then: It matches the English literal
+      assert.strictEqual(actual, 'Perspectives... (Cancel)');
+      assert.notStrictEqual(actual, key);
+    });
+
+    test('TC-L10N-N-05: Locale=en; t("controlPanel.button.generating") returns "Generating... (Cancel)"', () => {
+      // Case ID: TC-L10N-N-05
+      // Given: English fallback path (vscode.l10n.t returns raw key)
+      const key = 'controlPanel.button.generating';
+
+      // When: Resolving via t(key)
+      const actual = withStubbedVsCodeL10nT(((message: string) => message) as unknown as typeof vscode.l10n.t, () => t(key));
+
+      // Then: It matches the English literal
+      assert.strictEqual(actual, 'Generating... (Cancel)');
+      assert.notStrictEqual(actual, key);
+    });
+
+    test('TC-L10N-N-06: Locale=en; t("controlPanel.button.runningTests") returns "Testing... (Cancel)"', () => {
+      // Case ID: TC-L10N-N-06
+      // Given: English fallback path (vscode.l10n.t returns raw key)
+      const key = 'controlPanel.button.runningTests';
+
+      // When: Resolving via t(key)
+      const actual = withStubbedVsCodeL10nT(((message: string) => message) as unknown as typeof vscode.l10n.t, () => t(key));
+
+      // Then: It matches the English literal
+      assert.strictEqual(actual, 'Testing... (Cancel)');
+      assert.notStrictEqual(actual, key);
+    });
+
+    test('TC-L10N-N-07: Locale=ja; t("controlPanel.button.preparing") returns "準備中...（中断）"', () => {
+      // Case ID: TC-L10N-N-07
+      // Given: Japanese localized behavior
+      const key = 'controlPanel.button.preparing';
+      const jaValue = String(bundleJa[key]);
+
+      // When: Resolving via t(key)
+      const actual = withStubbedVsCodeL10nT(
+        ((message: string) => (message === key ? jaValue : message)) as unknown as typeof vscode.l10n.t,
+        () => t(key),
+      );
+
+      // Then: It matches the Japanese literal
+      assert.strictEqual(actual, '準備中...（中断）');
+      assert.notStrictEqual(actual, key);
+    });
+
+    test('TC-L10N-N-08: Locale=ja; t("controlPanel.button.perspectives") returns "観点表生成中...（中断）"', () => {
+      // Case ID: TC-L10N-N-08
+      // Given: Japanese localized behavior
+      const key = 'controlPanel.button.perspectives';
+      const jaValue = String(bundleJa[key]);
+
+      // When: Resolving via t(key)
+      const actual = withStubbedVsCodeL10nT(
+        ((message: string) => (message === key ? jaValue : message)) as unknown as typeof vscode.l10n.t,
+        () => t(key),
+      );
+
+      // Then: It matches the Japanese literal
+      assert.strictEqual(actual, '観点表生成中...（中断）');
+      assert.notStrictEqual(actual, key);
+    });
+
+    test('TC-L10N-N-09: Locale=ja; t("controlPanel.button.generating") returns "テスト生成中...（中断）"', () => {
+      // Case ID: TC-L10N-N-09
+      // Given: Japanese localized behavior
+      const key = 'controlPanel.button.generating';
+      const jaValue = String(bundleJa[key]);
+
+      // When: Resolving via t(key)
+      const actual = withStubbedVsCodeL10nT(
+        ((message: string) => (message === key ? jaValue : message)) as unknown as typeof vscode.l10n.t,
+        () => t(key),
+      );
+
+      // Then: It matches the Japanese literal
+      assert.strictEqual(actual, 'テスト生成中...（中断）');
+      assert.notStrictEqual(actual, key);
+    });
+
+    test('TC-L10N-N-10: Locale=ja; t("controlPanel.button.runningTests") returns "テスト実行中...（中断）"', () => {
+      // Case ID: TC-L10N-N-10
+      // Given: Japanese localized behavior
+      const key = 'controlPanel.button.runningTests';
+      const jaValue = String(bundleJa[key]);
+
+      // When: Resolving via t(key)
+      const actual = withStubbedVsCodeL10nT(
+        ((message: string) => (message === key ? jaValue : message)) as unknown as typeof vscode.l10n.t,
+        () => t(key),
+      );
+
+      // Then: It matches the Japanese literal
+      assert.strictEqual(actual, 'テスト実行中...（中断）');
+      assert.notStrictEqual(actual, key);
+    });
+  });
+
+  suite('provided perspectives table cases (TC-*-L10N-*)', () => {
+    test('TC-N-L10N-01: bundle.l10n.json defines controlPanel.generatingTests exactly', () => {
+      // Case ID: TC-N-L10N-01
+      // Given: bundle.l10n.json is loaded
+      // When: Reading the key directly
+      const value = bundleEn['controlPanel.generatingTests'];
+      // Then: It matches the expected English literal exactly
+      assert.strictEqual(value, 'Generating... (Cancel)');
+    });
+
+    test('TC-N-L10N-02: bundle.l10n.ja.json defines controlPanel.generatingTests exactly', () => {
+      // Case ID: TC-N-L10N-02
+      // Given: bundle.l10n.ja.json is loaded
+      // When: Reading the key directly
+      const value = bundleJa['controlPanel.generatingTests'];
+      // Then: It matches the expected Japanese literal exactly
+      assert.strictEqual(value, '生成中...（中断）');
+    });
+
+    test('TC-N-L10N-03: bundle.l10n.json defines controlPanel.button.preparing exactly', () => {
+      // Case ID: TC-N-L10N-03
+      // Given: bundle.l10n.json is loaded
+      // When: Reading the key directly
+      const value = bundleEn['controlPanel.button.preparing'];
+      // Then: It matches the expected English literal exactly
+      assert.strictEqual(value, 'Preparing... (Cancel)');
+    });
+
+    test('TC-N-L10N-04: bundle.l10n.json defines controlPanel.button.perspectives exactly', () => {
+      // Case ID: TC-N-L10N-04
+      // Given: bundle.l10n.json is loaded
+      // When: Reading the key directly
+      const value = bundleEn['controlPanel.button.perspectives'];
+      // Then: It matches the expected English literal exactly
+      assert.strictEqual(value, 'Perspectives... (Cancel)');
+    });
+
+    test('TC-N-L10N-05: bundle.l10n.json defines controlPanel.button.generating exactly', () => {
+      // Case ID: TC-N-L10N-05
+      // Given: bundle.l10n.json is loaded
+      // When: Reading the key directly
+      const value = bundleEn['controlPanel.button.generating'];
+      // Then: It matches the expected English literal exactly
+      assert.strictEqual(value, 'Generating... (Cancel)');
+    });
+
+    test('TC-N-L10N-06: bundle.l10n.json defines controlPanel.button.runningTests exactly', () => {
+      // Case ID: TC-N-L10N-06
+      // Given: bundle.l10n.json is loaded
+      // When: Reading the key directly
+      const value = bundleEn['controlPanel.button.runningTests'];
+      // Then: It matches the expected English literal exactly
+      assert.strictEqual(value, 'Testing... (Cancel)');
+    });
+
+    test('TC-N-L10N-07: bundle.l10n.ja.json defines controlPanel.button.preparing exactly', () => {
+      // Case ID: TC-N-L10N-07
+      // Given: bundle.l10n.ja.json is loaded
+      // When: Reading the key directly
+      const value = bundleJa['controlPanel.button.preparing'];
+      // Then: It matches the expected Japanese literal exactly
+      assert.strictEqual(value, '準備中...（中断）');
+    });
+
+    test('TC-N-L10N-08: bundle.l10n.ja.json defines controlPanel.button.perspectives exactly', () => {
+      // Case ID: TC-N-L10N-08
+      // Given: bundle.l10n.ja.json is loaded
+      // When: Reading the key directly
+      const value = bundleJa['controlPanel.button.perspectives'];
+      // Then: It matches the expected Japanese literal exactly
+      assert.strictEqual(value, '観点表生成中...（中断）');
+    });
+
+    test('TC-N-L10N-09: bundle.l10n.ja.json defines controlPanel.button.generating exactly', () => {
+      // Case ID: TC-N-L10N-09
+      // Given: bundle.l10n.ja.json is loaded
+      // When: Reading the key directly
+      const value = bundleJa['controlPanel.button.generating'];
+      // Then: It matches the expected Japanese literal exactly
+      assert.strictEqual(value, 'テスト生成中...（中断）');
+    });
+
+    test('TC-N-L10N-10: bundle.l10n.ja.json defines controlPanel.button.runningTests exactly', () => {
+      // Case ID: TC-N-L10N-10
+      // Given: bundle.l10n.ja.json is loaded
+      // When: Reading the key directly
+      const value = bundleJa['controlPanel.button.runningTests'];
+      // Then: It matches the expected Japanese literal exactly
+      assert.strictEqual(value, 'テスト実行中...（中断）');
+    });
+  });
 
   test('L10N-N-KEYS-01: new runMode/controlPanel keys resolve to non-empty localized strings', () => {
     // Given: Keys added for runMode selection and control panel labels
@@ -80,6 +334,66 @@ suite('l10n key consistency', () => {
     // Then: Placeholder is resolved and path is included
     assert.ok(actual.includes(p), 'Expected output to include the provided path');
     assert.ok(!actual.includes('{0}'), 'Expected no unresolved {0} placeholder');
+  });
+
+  test('TC-N-17: bundle.l10n.json defines controlPanel.generatingTests with the updated exact value', () => {
+    // Case ID: TC-N-17
+    // Given: The English l10n bundle is loaded
+    // When: Reading the key directly
+    const value = bundleEn['controlPanel.generatingTests'];
+
+    // Then: It matches the intended literal
+    assert.strictEqual(value, 'Generating... (Cancel)');
+  });
+
+  test('TC-N-18: bundle.l10n.ja.json defines controlPanel.generatingTests with the updated exact value', () => {
+    // Case ID: TC-N-18
+    // Given: The Japanese l10n bundle is loaded
+    // When: Reading the key directly
+    const value = bundleJa['controlPanel.generatingTests'];
+
+    // Then: It matches the intended literal
+    assert.strictEqual(value, '生成中...（中断）');
+  });
+
+  test('TC-N-19: bundle.l10n.json defines controlPanel.button.preparing with the exact value', () => {
+    // Case ID: TC-N-19
+    // Given: The English l10n bundle is loaded
+    // When: Reading the key directly
+    const value = bundleEn['controlPanel.button.preparing'];
+
+    // Then: It matches the intended literal
+    assert.strictEqual(value, 'Preparing... (Cancel)');
+  });
+
+  test('TC-N-20: bundle.l10n.json defines controlPanel.button.perspectives with the exact value', () => {
+    // Case ID: TC-N-20
+    // Given: The English l10n bundle is loaded
+    // When: Reading the key directly
+    const value = bundleEn['controlPanel.button.perspectives'];
+
+    // Then: It matches the intended literal
+    assert.strictEqual(value, 'Perspectives... (Cancel)');
+  });
+
+  test('TC-N-21: bundle.l10n.json defines controlPanel.button.runningTests with the exact value', () => {
+    // Case ID: TC-N-21
+    // Given: The English l10n bundle is loaded
+    // When: Reading the key directly
+    const value = bundleEn['controlPanel.button.runningTests'];
+
+    // Then: It matches the intended literal
+    assert.strictEqual(value, 'Testing... (Cancel)');
+  });
+
+  test('TC-N-22: bundle.l10n.ja.json defines controlPanel.button.runningTests with the exact value', () => {
+    // Case ID: TC-N-22
+    // Given: The Japanese l10n bundle is loaded
+    // When: Reading the key directly
+    const value = bundleJa['controlPanel.button.runningTests'];
+
+    // Then: It matches the intended literal
+    assert.strictEqual(value, 'テスト実行中...（中断）');
   });
 
   test('TC-L10N-N-01: bundle.l10n.json defines artifact.executionReport.envSource with non-empty value', () => {
