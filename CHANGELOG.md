@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.0.112
+
+### Changed
+
+- UI labels: unified and simplified labels across the extension:
+  - Output view: **Perspective Table** → **Perspective**, **Execution Report** → **Test report**, **Manual Merge** → **Manual merge** (Sentence case)
+  - Control Panel button: **Run** → **Generate**
+  - Output selection: **Perspective + tests** → **Perspective + test** (singular form)
+  - Command names: **Open Latest Perspective Table** → **Open Latest Perspective**, **Open Latest Execution Report** → **Open Latest Test Report**
+- Documentation: updated usage documentation to reflect the new UI labels.
+
+---
+
+## 0.0.112（日本語）
+
+### 変更
+
+- UIラベル: 拡張機能全体でラベルを統一・簡略化しました：
+  - 出力ビュー: **観点表**（維持）、**実行レポート** → **テストレポート**、**手動マージ**（維持）
+  - 操作パネルボタン: **実行** → **生成**
+  - 出力選択肢: **観点表+テスト生成** → **観点表+テスト**
+  - コマンド名: **最新の実行レポートを開く** → **最新のテストレポートを開く**
+- ドキュメント: 新しいUIラベルに合わせて使用ドキュメントを更新しました。
+
+---
+
 ## 0.0.111
 
 ### Added
