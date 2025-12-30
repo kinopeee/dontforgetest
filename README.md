@@ -4,7 +4,7 @@
 
 Powered by Cursor CLI (`cursor-agent`), this extension automatically generates test code from commit diffs and selections.
 
-- Japanese docs: `README.ja.md`, `docs/usage.ja.md`
+- Japanese docs: [README.ja.md](README.ja.md), [docs/usage.ja.md](docs/usage.ja.md)
 
 ## Key features
 
@@ -31,11 +31,11 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 
 ### Test execution report
 
-![Test execution report](docs/images/fig1.png)
+![Test execution report](https://raw.githubusercontent.com/kinopeee/dontforgetest/main/docs/images/fig1.png)
 
 ### Test perspective table
 
-![Test perspective table](docs/images/fig2.png)
+![Test perspective table](https://raw.githubusercontent.com/kinopeee/dontforgetest/main/docs/images/fig2.png)
 
 > **Important**: `cursor-agent` is executed with **`--force`**.  
 > **Local** modifies real files in your workspace.  
@@ -44,9 +44,9 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 
 ## Documentation
 
-- Docs index: `docs/README.md`
-- Usage: `docs/usage.md`
-- Built-in default strategy: `src/core/defaultTestStrategy.ts` (used when the setting is empty)
+- Docs index: [docs/README.md](docs/README.md)
+- Usage: [docs/usage.md](docs/usage.md)
+- Built-in default strategy: [src/core/defaultTestStrategy.ts](src/core/defaultTestStrategy.ts) (used when the setting is empty)
 
 ## Requirements
 
