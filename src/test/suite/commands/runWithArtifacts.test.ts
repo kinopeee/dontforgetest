@@ -1450,16 +1450,16 @@ suite('commands/runWithArtifacts.ts', () => {
         
         // 完了させるために結果を返す
         options.onEvent({
-            type: 'log',
-            taskId: options.taskId,
-            level: 'info',
-            message: [
-              '<!-- BEGIN TEST EXECUTION RESULT -->',
-              'exitCode: 0',
-              'durationMs: 0',
-              '<!-- END TEST EXECUTION RESULT -->',
-            ].join('\n'),
-            timestampMs: Date.now(),
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: [
+            '<!-- BEGIN TEST EXECUTION RESULT -->',
+            'exitCode: 0',
+            'durationMs: 0',
+            '<!-- END TEST EXECUTION RESULT -->',
+          ].join('\n'),
+          timestampMs: Date.now(),
         });
       }
     });

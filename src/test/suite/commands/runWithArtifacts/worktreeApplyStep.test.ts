@@ -123,14 +123,14 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
         () => filteredTestPaths;
       (mergeAssistanceModule as unknown as { buildMergeAssistancePromptText: typeof mergeAssistanceModule.buildMergeAssistancePromptText })
         .buildMergeAssistancePromptText = (params) => {
-        promptParamsCalls.push(params);
-        return 'PROMPT_TEXT';
-      };
+          promptParamsCalls.push(params);
+          return 'PROMPT_TEXT';
+        };
       (mergeAssistanceModule as unknown as { buildMergeAssistanceInstructionMarkdown: typeof mergeAssistanceModule.buildMergeAssistanceInstructionMarkdown })
         .buildMergeAssistanceInstructionMarkdown = (params) => {
-        instructionParamsCalls.push(params);
-        return 'INSTRUCTION_MD';
-      };
+          instructionParamsCalls.push(params);
+          return 'INSTRUCTION_MD';
+        };
       (outputChannelModule as unknown as { appendEventToOutput: typeof outputChannelModule.appendEventToOutput }).appendEventToOutput = (
         event,
       ) => {
@@ -578,8 +578,8 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       const originalPromptBuilder = mergeAssistanceModule.buildMergeAssistancePromptText;
       (mergeAssistanceModule as unknown as { buildMergeAssistancePromptText: typeof mergeAssistanceModule.buildMergeAssistancePromptText })
         .buildMergeAssistancePromptText = () => {
-        throw new Error('prompt build failed');
-      };
+          throw new Error('prompt build failed');
+        };
 
       try {
         // When: applyWorktreeTestChanges を呼び出す（本体は例外にしない）

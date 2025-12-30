@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { TestGenerationSession, __test__ } from '../../../../commands/runWithArtifacts/testGenerationSession';
+import { taskManager } from '../../../../core/taskManager';
 
 suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
   const workspaceRoots: string[] = [];
@@ -984,6 +985,906 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
         worktreeApplyStep.applyWorktreeTestChanges = originalApply;
         artifacts.saveTestExecutionReport = originalSave;
       }
+    });
+  });
+
+  suite('phase updates (taskManager.updatePhase)', () => {
+    const dummyProvider = {
+      id: 'dummy',
+      displayName: 'dummy',
+      run: () => ({ taskId: 'dummy-task', dispose: () => {} }),
+    };
+
+    const createSession = (params: {
+      workspaceRoot: string;
+      generationTaskId: string;
+      runMode: 'full' | 'perspectiveOnly';
+      includeTestPerspectiveTable: boolean;
+      testCommand: string;
+    }): TestGenerationSession => {
+      return new TestGenerationSession({
+        provider: dummyProvider,
+        workspaceRoot: params.workspaceRoot,
+        cursorAgentCommand: 'cursor-agent',
+        testStrategyPath: '',
+        generationLabel: 'Label',
+        targetPaths: [],
+        generationPrompt: 'prompt',
+        perspectiveReferenceText: 'ref',
+        model: undefined,
+        generationTaskId: params.generationTaskId,
+        runLocation: 'local',
+        runMode: params.runMode,
+        settingsOverride: {
+          includeTestPerspectiveTable: params.includeTestPerspectiveTable,
+          testExecutionRunner: 'extension',
+          testCommand: params.testCommand,
+          enablePreTestCheck: false,
+        },
+        // Minimal ExtensionContext stub (not required for local runLocation)
+        extensionContext: { extension: { packageJSON: { version: '0.0.0' } } } as unknown as vscode.ExtensionContext,
+      });
+    };
+
+    setup(() => {
+      taskManager.cancelAll();
+      process.env.VSCODE_TEST_RUNNER = '1';
+    });
+
+    teardown(() => {
+      taskManager.cancelAll();
+      delete process.env.VSCODE_TEST_RUNNER;
+    });
+
+    test('TC-N-TGS-01: run() calls taskManager.updatePhase(taskId,"preparing","preparing") during prepare()', async () => {
+      // Case ID: TC-N-TGS-01
+      // Given: A full-mode session in local runLocation and patched dependencies
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+      workspaceRoots.push(workspaceRoot);
+      const taskId = 'phase-preparing';
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const runToCompletion = require('../../../../providers/runToCompletion') as typeof import('../../../../providers/runToCompletion');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const cleanupStep = require('../../../../commands/runWithArtifacts/cleanupStep') as typeof import('../../../../commands/runWithArtifacts/cleanupStep');
+
+      const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+      const originalRunProviderToCompletion = runToCompletion.runProviderToCompletion;
+      const originalSave = artifacts.saveTestExecutionReport;
+      const originalRunTest = testRunner.runTestCommand;
+      const originalCleanup = cleanupStep.cleanupUnexpectedPerspectiveFiles;
+
+      const calls: Array<{ taskId: string; phase: string; phaseLabel: string }> = [];
+      (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+        calls.push({ taskId: id, phase, phaseLabel });
+        originalUpdatePhase(id, phase, phaseLabel);
+      }) as typeof taskManager.updatePhase;
+
+      runToCompletion.runProviderToCompletion = (async () => 0) as unknown as typeof runToCompletion.runProviderToCompletion;
+      cleanupStep.cleanupUnexpectedPerspectiveFiles = (async () => []) as unknown as typeof cleanupStep.cleanupUnexpectedPerspectiveFiles;
+      testRunner.runTestCommand = (async () => {
+        return { command: 'npm test', cwd: workspaceRoot, exitCode: 0, signal: null, durationMs: 1, stdout: '', stderr: '' };
+      }) as unknown as typeof testRunner.runTestCommand;
+      artifacts.saveTestExecutionReport = (async () => ({ absolutePath: '/tmp/report.md', relativePath: 'docs/report.md' })) as unknown as typeof artifacts.saveTestExecutionReport;
+
+      const session = createSession({
+        workspaceRoot,
+        generationTaskId: taskId,
+        runMode: 'full',
+        includeTestPerspectiveTable: false,
+        testCommand: '',
+      });
+
+      try {
+        // When: run() is executed
+        await session.run();
+
+        // Then: updatePhase is called with preparing exactly once for the taskId
+        const preparingCalls = calls.filter((c) => c.taskId === taskId && c.phase === 'preparing' && c.phaseLabel === 'preparing');
+        assert.strictEqual(preparingCalls.length, 1);
+      } finally {
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+        runToCompletion.runProviderToCompletion = originalRunProviderToCompletion;
+        artifacts.saveTestExecutionReport = originalSave;
+        testRunner.runTestCommand = originalRunTest;
+        cleanupStep.cleanupUnexpectedPerspectiveFiles = originalCleanup;
+      }
+    });
+
+    test('TC-N-TGS-02: generatePerspectives() updates phase before runPerspectiveTableStep and calls updatePhase even if extraction fails', async () => {
+      // Case ID: TC-N-TGS-02
+      // Given: A full-mode session with includeTestPerspectiveTable=true and a stubbed runPerspectiveTableStep
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+      workspaceRoots.push(workspaceRoot);
+      const taskId = 'phase-perspectives';
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const perspectiveStep = require('../../../../commands/runWithArtifacts/perspectiveStep') as typeof import('../../../../commands/runWithArtifacts/perspectiveStep');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const runToCompletion = require('../../../../providers/runToCompletion') as typeof import('../../../../providers/runToCompletion');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const cleanupStep = require('../../../../commands/runWithArtifacts/cleanupStep') as typeof import('../../../../commands/runWithArtifacts/cleanupStep');
+
+      const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+      const originalPerspective = perspectiveStep.runPerspectiveTableStep;
+      const originalRunProviderToCompletion = runToCompletion.runProviderToCompletion;
+      const originalSave = artifacts.saveTestExecutionReport;
+      const originalRunTest = testRunner.runTestCommand;
+      const originalCleanup = cleanupStep.cleanupUnexpectedPerspectiveFiles;
+
+      let seenPerspectivesPhase = false;
+      const calls: Array<{ phase: string; phaseLabel: string }> = [];
+      (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+        if (id === taskId && phase === 'perspectives' && phaseLabel === 'perspectives') {
+          seenPerspectivesPhase = true;
+        }
+        calls.push({ phase, phaseLabel });
+        originalUpdatePhase(id, phase, phaseLabel);
+      }) as typeof taskManager.updatePhase;
+
+      perspectiveStep.runPerspectiveTableStep = (async () => {
+        assert.strictEqual(seenPerspectivesPhase, true, 'Expected updatePhase(perspectives) before runPerspectiveTableStep');
+        return {
+          saved: { absolutePath: '/tmp/p.md', relativePath: 'docs/test-perspectives/p.md' },
+          extracted: false,
+          markdown: 'ignored',
+        };
+      }) as unknown as typeof perspectiveStep.runPerspectiveTableStep;
+
+      runToCompletion.runProviderToCompletion = (async () => 0) as unknown as typeof runToCompletion.runProviderToCompletion;
+      cleanupStep.cleanupUnexpectedPerspectiveFiles = (async () => []) as unknown as typeof cleanupStep.cleanupUnexpectedPerspectiveFiles;
+      testRunner.runTestCommand = (async () => {
+        return { command: 'npm test', cwd: workspaceRoot, exitCode: 0, signal: null, durationMs: 1, stdout: '', stderr: '' };
+      }) as unknown as typeof testRunner.runTestCommand;
+      artifacts.saveTestExecutionReport = (async () => ({ absolutePath: '/tmp/report.md', relativePath: 'docs/report.md' })) as unknown as typeof artifacts.saveTestExecutionReport;
+
+      const session = createSession({
+        workspaceRoot,
+        generationTaskId: taskId,
+        runMode: 'full',
+        includeTestPerspectiveTable: true,
+        testCommand: '',
+      });
+
+      try {
+        // When: run() is executed (generatePerspectives runs)
+        await session.run();
+
+        // Then: updatePhase was called for perspectives at least once
+        const perspectiveCalls = calls.filter((c) => c.phase === 'perspectives' && c.phaseLabel === 'perspectives');
+        assert.strictEqual(perspectiveCalls.length, 1);
+      } finally {
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+        perspectiveStep.runPerspectiveTableStep = originalPerspective;
+        runToCompletion.runProviderToCompletion = originalRunProviderToCompletion;
+        artifacts.saveTestExecutionReport = originalSave;
+        testRunner.runTestCommand = originalRunTest;
+        cleanupStep.cleanupUnexpectedPerspectiveFiles = originalCleanup;
+      }
+    });
+
+    test('TC-E-TGS-03: generatePerspectives() does not update phase when includeTestPerspectiveTable=false in full mode', async () => {
+      // Case ID: TC-E-TGS-03
+      // Given: A full-mode session with includeTestPerspectiveTable=false
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+      workspaceRoots.push(workspaceRoot);
+      const taskId = 'phase-no-perspectives';
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const runToCompletion = require('../../../../providers/runToCompletion') as typeof import('../../../../providers/runToCompletion');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const cleanupStep = require('../../../../commands/runWithArtifacts/cleanupStep') as typeof import('../../../../commands/runWithArtifacts/cleanupStep');
+
+      const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+      const originalRunProviderToCompletion = runToCompletion.runProviderToCompletion;
+      const originalSave = artifacts.saveTestExecutionReport;
+      const originalRunTest = testRunner.runTestCommand;
+      const originalCleanup = cleanupStep.cleanupUnexpectedPerspectiveFiles;
+
+      const phases: string[] = [];
+      (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+        if (id === taskId) {
+          phases.push(`${phase}:${phaseLabel}`);
+        }
+        originalUpdatePhase(id, phase, phaseLabel);
+      }) as typeof taskManager.updatePhase;
+
+      runToCompletion.runProviderToCompletion = (async () => 0) as unknown as typeof runToCompletion.runProviderToCompletion;
+      cleanupStep.cleanupUnexpectedPerspectiveFiles = (async () => []) as unknown as typeof cleanupStep.cleanupUnexpectedPerspectiveFiles;
+      testRunner.runTestCommand = (async () => {
+        return { command: 'npm test', cwd: workspaceRoot, exitCode: 0, signal: null, durationMs: 1, stdout: '', stderr: '' };
+      }) as unknown as typeof testRunner.runTestCommand;
+      artifacts.saveTestExecutionReport = (async () => ({ absolutePath: '/tmp/report.md', relativePath: 'docs/report.md' })) as unknown as typeof artifacts.saveTestExecutionReport;
+
+      const session = createSession({
+        workspaceRoot,
+        generationTaskId: taskId,
+        runMode: 'full',
+        includeTestPerspectiveTable: false,
+        testCommand: '',
+      });
+
+      try {
+        // When: run() is executed
+        await session.run();
+
+        // Then: No perspectives phase update occurs for this task
+        assert.strictEqual(phases.some((p) => p === 'perspectives:perspectives'), false);
+      } finally {
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+        runToCompletion.runProviderToCompletion = originalRunProviderToCompletion;
+        artifacts.saveTestExecutionReport = originalSave;
+        testRunner.runTestCommand = originalRunTest;
+        cleanupStep.cleanupUnexpectedPerspectiveFiles = originalCleanup;
+      }
+    });
+
+    test('TC-N-03: perspectiveOnly run never updates phase "generating"', async () => {
+      // Case ID: TC-N-03
+      // Given: A perspectiveOnly-mode session
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+      workspaceRoots.push(workspaceRoot);
+      const taskId = 'phase-po-no-generating';
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const perspectiveStep = require('../../../../commands/runWithArtifacts/perspectiveStep') as typeof import('../../../../commands/runWithArtifacts/perspectiveStep');
+
+      const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+      const originalPerspective = perspectiveStep.runPerspectiveTableStep;
+
+      const phases: string[] = [];
+      (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+        if (id === taskId) {
+          phases.push(`${phase}:${phaseLabel}`);
+        }
+        originalUpdatePhase(id, phase, phaseLabel);
+      }) as typeof taskManager.updatePhase;
+
+      perspectiveStep.runPerspectiveTableStep = (async () => {
+        return {
+          saved: { absolutePath: '/tmp/p.md', relativePath: 'docs/test-perspectives/p.md' },
+          extracted: true,
+          markdown: '| table |',
+        };
+      }) as unknown as typeof perspectiveStep.runPerspectiveTableStep;
+
+      const session = createSession({
+        workspaceRoot,
+        generationTaskId: taskId,
+        runMode: 'perspectiveOnly',
+        includeTestPerspectiveTable: false,
+        testCommand: 'npm test',
+      });
+
+      try {
+        // When: run() is executed
+        await session.run();
+
+        // Then: It never emits generating phase update for the base taskId
+        assert.strictEqual(phases.some((p) => p === 'generating:generating'), false);
+      } finally {
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+        perspectiveStep.runPerspectiveTableStep = originalPerspective;
+      }
+    });
+
+    test('TC-N-04: perspectiveOnly run never updates phase "running-tests"', async () => {
+      // Case ID: TC-N-04
+      // Given: A perspectiveOnly-mode session
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+      workspaceRoots.push(workspaceRoot);
+      const taskId = 'phase-po-no-running-tests';
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const perspectiveStep = require('../../../../commands/runWithArtifacts/perspectiveStep') as typeof import('../../../../commands/runWithArtifacts/perspectiveStep');
+
+      const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+      const originalPerspective = perspectiveStep.runPerspectiveTableStep;
+
+      const phases: string[] = [];
+      (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+        if (id === taskId) {
+          phases.push(`${phase}:${phaseLabel}`);
+        }
+        originalUpdatePhase(id, phase, phaseLabel);
+      }) as typeof taskManager.updatePhase;
+
+      perspectiveStep.runPerspectiveTableStep = (async () => {
+        return {
+          saved: { absolutePath: '/tmp/p.md', relativePath: 'docs/test-perspectives/p.md' },
+          extracted: true,
+          markdown: '| table |',
+        };
+      }) as unknown as typeof perspectiveStep.runPerspectiveTableStep;
+
+      const session = createSession({
+        workspaceRoot,
+        generationTaskId: taskId,
+        runMode: 'perspectiveOnly',
+        includeTestPerspectiveTable: true,
+        testCommand: 'npm test',
+      });
+
+      try {
+        // When: run() is executed
+        await session.run();
+
+        // Then: It never emits running-tests phase update for the base taskId
+        assert.strictEqual(phases.some((p) => p === 'running-tests:running-tests'), false);
+      } finally {
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+        perspectiveStep.runPerspectiveTableStep = originalPerspective;
+      }
+    });
+
+    test('TC-N-TGS-04: generateTests() updates phase "generating" before provider run starts', async () => {
+      // Case ID: TC-N-TGS-04
+      // Given: A full-mode session and a stubbed runProviderToCompletion that asserts phase update ordering
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+      workspaceRoots.push(workspaceRoot);
+      const taskId = 'phase-generating-order';
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const runToCompletion = require('../../../../providers/runToCompletion') as typeof import('../../../../providers/runToCompletion');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const cleanupStep = require('../../../../commands/runWithArtifacts/cleanupStep') as typeof import('../../../../commands/runWithArtifacts/cleanupStep');
+
+      const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+      const originalRunProviderToCompletion = runToCompletion.runProviderToCompletion;
+      const originalSave = artifacts.saveTestExecutionReport;
+      const originalRunTest = testRunner.runTestCommand;
+      const originalCleanup = cleanupStep.cleanupUnexpectedPerspectiveFiles;
+
+      let generatingUpdated = false;
+      (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+        if (id === taskId && phase === 'generating' && phaseLabel === 'generating') {
+          generatingUpdated = true;
+        }
+        originalUpdatePhase(id, phase, phaseLabel);
+      }) as typeof taskManager.updatePhase;
+
+      runToCompletion.runProviderToCompletion = (async () => {
+        assert.strictEqual(generatingUpdated, true, 'Expected updatePhase(generating) before runProviderToCompletion');
+        return 0;
+      }) as unknown as typeof runToCompletion.runProviderToCompletion;
+
+      cleanupStep.cleanupUnexpectedPerspectiveFiles = (async () => []) as unknown as typeof cleanupStep.cleanupUnexpectedPerspectiveFiles;
+      testRunner.runTestCommand = (async () => {
+        return { command: 'npm test', cwd: workspaceRoot, exitCode: 0, signal: null, durationMs: 1, stdout: '', stderr: '' };
+      }) as unknown as typeof testRunner.runTestCommand;
+      artifacts.saveTestExecutionReport = (async () => ({ absolutePath: '/tmp/report.md', relativePath: 'docs/report.md' })) as unknown as typeof artifacts.saveTestExecutionReport;
+
+      const session = createSession({
+        workspaceRoot,
+        generationTaskId: taskId,
+        runMode: 'full',
+        includeTestPerspectiveTable: false,
+        testCommand: '',
+      });
+
+      try {
+        // When: run() is executed (generateTests runs)
+        await session.run();
+
+        // Then: generating phase update was observed
+        assert.strictEqual(generatingUpdated, true);
+      } finally {
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+        runToCompletion.runProviderToCompletion = originalRunProviderToCompletion;
+        artifacts.saveTestExecutionReport = originalSave;
+        testRunner.runTestCommand = originalRunTest;
+        cleanupStep.cleanupUnexpectedPerspectiveFiles = originalCleanup;
+      }
+    });
+
+    test('TC-N-06: runTestExecution() updates phase "running-tests" even when testCommand is empty', async () => {
+      // Case ID: TC-N-06
+      // Given: A session with empty testCommand and a stubbed saveTestExecutionReport
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+      workspaceRoots.push(workspaceRoot);
+      const taskId = 'phase-running-tests-empty';
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      const originalSave = artifacts.saveTestExecutionReport;
+      artifacts.saveTestExecutionReport = (async () => ({ absolutePath: '/tmp/report.md', relativePath: 'docs/report.md' })) as unknown as typeof artifacts.saveTestExecutionReport;
+
+      const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+      const calls: Array<{ phase: string; phaseLabel: string }> = [];
+      (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+        if (id === taskId) {
+          calls.push({ phase, phaseLabel });
+        }
+        originalUpdatePhase(id, phase, phaseLabel);
+      }) as typeof taskManager.updatePhase;
+
+      const session = createSession({
+        workspaceRoot,
+        generationTaskId: taskId,
+        runMode: 'full',
+        includeTestPerspectiveTable: false,
+        testCommand: '',
+      });
+
+      try {
+        // When: Calling runTestExecution directly
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
+        await runTestExecution(0);
+
+        // Then: running-tests phase update occurred even though execution is skipped
+        const runningTestCalls = calls.filter((c) => c.phase === 'running-tests' && c.phaseLabel === 'running-tests');
+        assert.strictEqual(runningTestCalls.length, 1);
+      } finally {
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+        artifacts.saveTestExecutionReport = originalSave;
+      }
+    });
+
+    suite('provided table cases (TC-SES-*)', () => {
+      test('TC-SES-N-01: run() updates phase to "preparing" exactly once during prepare()', async () => {
+        // Case ID: TC-SES-N-01
+        // Given: A full-mode session in local runLocation and patched dependencies
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+        workspaceRoots.push(workspaceRoot);
+        const taskId = 'tc-ses-preparing';
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const runToCompletion = require('../../../../providers/runToCompletion') as typeof import('../../../../providers/runToCompletion');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const cleanupStep = require('../../../../commands/runWithArtifacts/cleanupStep') as typeof import('../../../../commands/runWithArtifacts/cleanupStep');
+
+        const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+        const originalRunProviderToCompletion = runToCompletion.runProviderToCompletion;
+        const originalSave = artifacts.saveTestExecutionReport;
+        const originalRunTest = testRunner.runTestCommand;
+        const originalCleanup = cleanupStep.cleanupUnexpectedPerspectiveFiles;
+
+        const calls: Array<{ phase: string; phaseLabel: string }> = [];
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+          if (id === taskId) {
+            calls.push({ phase, phaseLabel });
+          }
+          originalUpdatePhase(id, phase, phaseLabel);
+        }) as typeof taskManager.updatePhase;
+
+        runToCompletion.runProviderToCompletion = (async () => 0) as unknown as typeof runToCompletion.runProviderToCompletion;
+        cleanupStep.cleanupUnexpectedPerspectiveFiles = (async () => []) as unknown as typeof cleanupStep.cleanupUnexpectedPerspectiveFiles;
+        testRunner.runTestCommand = (async () => {
+          return { command: 'npm test', cwd: workspaceRoot, exitCode: 0, signal: null, durationMs: 1, stdout: '', stderr: '' };
+        }) as unknown as typeof testRunner.runTestCommand;
+        artifacts.saveTestExecutionReport = (async () => ({ absolutePath: '/tmp/report.md', relativePath: 'docs/report.md' })) as unknown as typeof artifacts.saveTestExecutionReport;
+
+        const session = createSession({
+          workspaceRoot,
+          generationTaskId: taskId,
+          runMode: 'full',
+          includeTestPerspectiveTable: false,
+          testCommand: '',
+        });
+
+        try {
+          // When: run() is executed
+          await session.run();
+
+          // Then: updatePhase(preparing) occurs exactly once
+          const preparing = calls.filter((c) => c.phase === 'preparing' && c.phaseLabel === 'preparing');
+          assert.strictEqual(preparing.length, 1);
+        } finally {
+          (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+          runToCompletion.runProviderToCompletion = originalRunProviderToCompletion;
+          artifacts.saveTestExecutionReport = originalSave;
+          testRunner.runTestCommand = originalRunTest;
+          cleanupStep.cleanupUnexpectedPerspectiveFiles = originalCleanup;
+        }
+      });
+
+      test('TC-SES-N-02: generatePerspectives() updates phase before runPerspectiveTableStep() is awaited', async () => {
+        // Case ID: TC-SES-N-02
+        // Given: A full-mode session with includeTestPerspectiveTable=true and a stubbed runPerspectiveTableStep
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+        workspaceRoots.push(workspaceRoot);
+        const taskId = 'tc-ses-perspectives-order';
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const perspectiveStep = require('../../../../commands/runWithArtifacts/perspectiveStep') as typeof import('../../../../commands/runWithArtifacts/perspectiveStep');
+
+        const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+        const originalPerspective = perspectiveStep.runPerspectiveTableStep;
+
+        let phaseUpdated = false;
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+          if (id === taskId && phase === 'perspectives' && phaseLabel === 'perspectives') {
+            phaseUpdated = true;
+          }
+          originalUpdatePhase(id, phase, phaseLabel);
+        }) as typeof taskManager.updatePhase;
+
+        perspectiveStep.runPerspectiveTableStep = (async () => {
+          assert.strictEqual(phaseUpdated, true, 'Expected updatePhase(perspectives) before runPerspectiveTableStep()');
+          return {
+            saved: { absolutePath: '/tmp/p.md', relativePath: 'docs/test-perspectives/p.md' },
+            extracted: true,
+            markdown: '| table |',
+          };
+        }) as unknown as typeof perspectiveStep.runPerspectiveTableStep;
+
+        const session = createSession({
+          workspaceRoot,
+          generationTaskId: taskId,
+          runMode: 'full',
+          includeTestPerspectiveTable: true,
+          testCommand: '',
+        });
+
+        // Given: The task is registered so updatePhase is not a no-op
+        taskManager.register(taskId, 'Label', { taskId, dispose: () => {} });
+
+        try {
+          // When: Calling generatePerspectives() directly
+          const markdown = await (session as unknown as { generatePerspectives: () => Promise<string | undefined> }).generatePerspectives();
+
+          // Then: It returns extracted markdown and the phase update ordering check passed
+          assert.strictEqual(markdown, '| table |');
+          assert.strictEqual(phaseUpdated, true);
+        } finally {
+          (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+          perspectiveStep.runPerspectiveTableStep = originalPerspective;
+          taskManager.cancelAll();
+        }
+      });
+
+      test('TC-SES-E-01: full mode + includeTestPerspectiveTable=false skips generatePerspectives() without calling updatePhase(perspectives)', async () => {
+        // Case ID: TC-SES-E-01
+        // Given: A full-mode session with includeTestPerspectiveTable=false
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+        workspaceRoots.push(workspaceRoot);
+        const taskId = 'tc-ses-skip-perspectives';
+
+        const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+        const calls: Array<{ phase: string; phaseLabel: string }> = [];
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+          if (id === taskId) {
+            calls.push({ phase, phaseLabel });
+          }
+          originalUpdatePhase(id, phase, phaseLabel);
+        }) as typeof taskManager.updatePhase;
+
+        const session = createSession({
+          workspaceRoot,
+          generationTaskId: taskId,
+          runMode: 'full',
+          includeTestPerspectiveTable: false,
+          testCommand: '',
+        });
+
+        try {
+          // When: Calling generatePerspectives() directly
+          const result = await (session as unknown as { generatePerspectives: () => Promise<string | undefined> }).generatePerspectives();
+
+          // Then: It returns undefined and does not call updatePhase(perspectives)
+          assert.strictEqual(result, undefined);
+          assert.strictEqual(calls.some((c) => c.phase === 'perspectives' && c.phaseLabel === 'perspectives'), false);
+        } finally {
+          (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+        }
+      });
+
+      test('TC-SES-N-03: perspectiveOnly mode runs generatePerspectives() even when includeTestPerspectiveTable=false', async () => {
+        // Case ID: TC-SES-N-03
+        // Given: A perspectiveOnly-mode session with includeTestPerspectiveTable=false and a stubbed runPerspectiveTableStep
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+        workspaceRoots.push(workspaceRoot);
+        const taskId = 'tc-ses-perspective-only';
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const perspectiveStep = require('../../../../commands/runWithArtifacts/perspectiveStep') as typeof import('../../../../commands/runWithArtifacts/perspectiveStep');
+        const originalPerspective = perspectiveStep.runPerspectiveTableStep;
+        const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+
+        let calledRunPerspective = 0;
+        const phases: Array<{ phase: string; phaseLabel: string }> = [];
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+          if (id === taskId) {
+            phases.push({ phase, phaseLabel });
+          }
+          originalUpdatePhase(id, phase, phaseLabel);
+        }) as typeof taskManager.updatePhase;
+
+        perspectiveStep.runPerspectiveTableStep = (async () => {
+          calledRunPerspective += 1;
+          return {
+            saved: { absolutePath: '/tmp/p.md', relativePath: 'docs/test-perspectives/p.md' },
+            extracted: true,
+            markdown: '| table |',
+          };
+        }) as unknown as typeof perspectiveStep.runPerspectiveTableStep;
+
+        const session = createSession({
+          workspaceRoot,
+          generationTaskId: taskId,
+          runMode: 'perspectiveOnly',
+          includeTestPerspectiveTable: false,
+          testCommand: '',
+        });
+
+        // Given: The task is registered so updatePhase is not a no-op
+        taskManager.register(taskId, 'Label', { taskId, dispose: () => {} });
+
+        try {
+          // When: Calling generatePerspectives() directly
+          const result = await (session as unknown as { generatePerspectives: () => Promise<string | undefined> }).generatePerspectives();
+
+          // Then: It calls runPerspectiveTableStep and updates phase to perspectives
+          assert.strictEqual(result, '| table |');
+          assert.strictEqual(calledRunPerspective, 1);
+          assert.strictEqual(phases.some((p) => p.phase === 'perspectives' && p.phaseLabel === 'perspectives'), true);
+        } finally {
+          perspectiveStep.runPerspectiveTableStep = originalPerspective;
+          (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+          taskManager.cancelAll();
+        }
+      });
+
+      test('TC-SES-N-04: generateTests() updates phase "generating" before runProviderToCompletion()', async () => {
+        // Case ID: TC-SES-N-04
+        // Given: A full-mode session and a stubbed runProviderToCompletion that asserts ordering
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+        workspaceRoots.push(workspaceRoot);
+        const taskId = 'tc-ses-generating-order';
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const runToCompletion = require('../../../../providers/runToCompletion') as typeof import('../../../../providers/runToCompletion');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const cleanupStep = require('../../../../commands/runWithArtifacts/cleanupStep') as typeof import('../../../../commands/runWithArtifacts/cleanupStep');
+
+        const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+        const originalRunProviderToCompletion = runToCompletion.runProviderToCompletion;
+        const originalSave = artifacts.saveTestExecutionReport;
+        const originalRunTest = testRunner.runTestCommand;
+        const originalCleanup = cleanupStep.cleanupUnexpectedPerspectiveFiles;
+
+        let generatingUpdated = false;
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+          if (id === taskId && phase === 'generating' && phaseLabel === 'generating') {
+            generatingUpdated = true;
+          }
+          originalUpdatePhase(id, phase, phaseLabel);
+        }) as typeof taskManager.updatePhase;
+
+        runToCompletion.runProviderToCompletion = (async () => {
+          assert.strictEqual(generatingUpdated, true, 'Expected updatePhase(generating) before runProviderToCompletion()');
+          return 0;
+        }) as unknown as typeof runToCompletion.runProviderToCompletion;
+
+        cleanupStep.cleanupUnexpectedPerspectiveFiles = (async () => []) as unknown as typeof cleanupStep.cleanupUnexpectedPerspectiveFiles;
+        testRunner.runTestCommand = (async () => {
+          return { command: 'npm test', cwd: workspaceRoot, exitCode: 0, signal: null, durationMs: 1, stdout: '', stderr: '' };
+        }) as unknown as typeof testRunner.runTestCommand;
+        artifacts.saveTestExecutionReport = (async () => ({ absolutePath: '/tmp/report.md', relativePath: 'docs/report.md' })) as unknown as typeof artifacts.saveTestExecutionReport;
+
+        const session = createSession({
+          workspaceRoot,
+          generationTaskId: taskId,
+          runMode: 'full',
+          includeTestPerspectiveTable: false,
+          testCommand: '',
+        });
+
+        try {
+          // When: run() is executed (generateTests runs)
+          await session.run();
+
+          // Then: generating phase update was observed
+          assert.strictEqual(generatingUpdated, true);
+        } finally {
+          (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+          runToCompletion.runProviderToCompletion = originalRunProviderToCompletion;
+          artifacts.saveTestExecutionReport = originalSave;
+          testRunner.runTestCommand = originalRunTest;
+          cleanupStep.cleanupUnexpectedPerspectiveFiles = originalCleanup;
+        }
+      });
+
+      test('TC-N-TGS-05: runTestExecution() updates phase "running-tests" even when execution is skipped and a report is saved', async () => {
+        // Case ID: TC-N-TGS-05
+        // Given: A session with empty testCommand (skip path) and a stubbed saveTestExecutionReport
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+        workspaceRoots.push(workspaceRoot);
+        const taskId = 'tc-ses-running-tests-skip';
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+        const originalSave = artifacts.saveTestExecutionReport;
+        artifacts.saveTestExecutionReport = (async () => ({ absolutePath: '/tmp/report.md', relativePath: 'docs/report.md' })) as unknown as typeof artifacts.saveTestExecutionReport;
+
+        const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+        const phases: Array<string> = [];
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+          if (id === taskId) {
+            phases.push(`${phase}:${phaseLabel}`);
+          }
+          originalUpdatePhase(id, phase, phaseLabel);
+        }) as typeof taskManager.updatePhase;
+
+        const session = createSession({
+          workspaceRoot,
+          generationTaskId: taskId,
+          runMode: 'full',
+          includeTestPerspectiveTable: false,
+          testCommand: '',
+        });
+
+        try {
+          // When: Calling runTestExecution directly (skip branch)
+          const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
+          await runTestExecution(0);
+
+          // Then: running-tests phase update occurred
+          assert.strictEqual(phases.includes('running-tests:running-tests'), true);
+        } finally {
+          (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+          artifacts.saveTestExecutionReport = originalSave;
+        }
+      });
+
+      test('TC-SES-E-02: worktree run without extensionContext updates phase to preparing then aborts safely with progress completed exitCode=null', async () => {
+        // Case ID: TC-SES-E-02
+        // Given: A worktree-mode session with extensionContext missing and stubbed UI hooks
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+        workspaceRoots.push(workspaceRoot);
+        const taskId = 'tc-ses-worktree-no-context';
+
+        const session = new TestGenerationSession({
+          provider: dummyProvider,
+          workspaceRoot,
+          cursorAgentCommand: 'cursor-agent',
+          testStrategyPath: '',
+          generationLabel: 'Label',
+          targetPaths: [],
+          generationPrompt: 'prompt',
+          perspectiveReferenceText: 'ref',
+          model: undefined,
+          generationTaskId: taskId,
+          runLocation: 'worktree',
+          runMode: 'full',
+          settingsOverride: {
+            includeTestPerspectiveTable: false,
+            testExecutionRunner: 'extension',
+            testCommand: '',
+            enablePreTestCheck: false,
+          },
+          extensionContext: undefined,
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const progressTreeView = require('../../../../ui/progressTreeView') as typeof import('../../../../ui/progressTreeView');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+
+        const originalProgressHandler = progressTreeView.handleTestGenEventForProgressView;
+        const originalAppendEvent = outputChannel.appendEventToOutput;
+        const originalShowError = vscode.window.showErrorMessage;
+        const originalUpdatePhase = taskManager.updatePhase.bind(taskManager);
+
+        const progressEvents: Array<{ type: string; taskId: string; exitCode?: unknown }> = [];
+        (progressTreeView as unknown as { handleTestGenEventForProgressView: typeof progressTreeView.handleTestGenEventForProgressView }).handleTestGenEventForProgressView =
+          (event) => {
+            progressEvents.push({ type: event.type, taskId: event.taskId, exitCode: (event as unknown as { exitCode?: unknown }).exitCode });
+          };
+        (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = () => {};
+        (vscode.window as unknown as { showErrorMessage: typeof vscode.window.showErrorMessage }).showErrorMessage = async () => undefined;
+
+        const phases: Array<string> = [];
+        (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = ((id, phase, phaseLabel) => {
+          if (id === taskId) {
+            phases.push(`${phase}:${phaseLabel}`);
+          }
+          originalUpdatePhase(id, phase, phaseLabel);
+        }) as typeof taskManager.updatePhase;
+
+        try {
+          // When: run() is executed
+          await session.run();
+
+          // Then: preparing phase update occurred and progress completed has exitCode=null
+          assert.strictEqual(phases.includes('preparing:preparing'), true);
+          const completed = progressEvents.find((e) => e.type === 'completed' && e.taskId === taskId);
+          assert.ok(completed, 'Expected a progressTreeView completed event');
+          assert.strictEqual(completed?.exitCode, null);
+        } finally {
+          (progressTreeView as unknown as { handleTestGenEventForProgressView: typeof originalProgressHandler }).handleTestGenEventForProgressView =
+            originalProgressHandler;
+          (outputChannel as unknown as { appendEventToOutput: typeof originalAppendEvent }).appendEventToOutput = originalAppendEvent;
+          (vscode.window as unknown as { showErrorMessage: typeof originalShowError }).showErrorMessage = originalShowError;
+          (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+        }
+      });
+
+      test('TC-SES-B-01: checkCancelled() returns true when task is missing and emits log + progress completed exitCode=null', () => {
+        // Case ID: TC-SES-B-01
+        // Given: A session whose taskId is not registered in taskManager (isCancelled() returns true)
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+        workspaceRoots.push(workspaceRoot);
+        const taskId = 'tc-ses-cancelled-missing';
+
+        const session = createSession({
+          workspaceRoot,
+          generationTaskId: taskId,
+          runMode: 'full',
+          includeTestPerspectiveTable: false,
+          testCommand: '',
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const progressTreeView = require('../../../../ui/progressTreeView') as typeof import('../../../../ui/progressTreeView');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+        const originalProgressHandler = progressTreeView.handleTestGenEventForProgressView;
+        const originalAppendEvent = outputChannel.appendEventToOutput;
+
+        const progressEvents: Array<{ type: string; taskId: string; exitCode?: unknown }> = [];
+        const outputEvents: Array<{ type: string; taskId: string; level?: unknown; message?: unknown; exitCode?: unknown }> = [];
+
+        (progressTreeView as unknown as { handleTestGenEventForProgressView: typeof progressTreeView.handleTestGenEventForProgressView }).handleTestGenEventForProgressView =
+          (event) => {
+            progressEvents.push({ type: event.type, taskId: event.taskId, exitCode: (event as unknown as { exitCode?: unknown }).exitCode });
+          };
+        (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = (event) => {
+          outputEvents.push({
+            type: event.type,
+            taskId: event.taskId,
+            level: (event as unknown as { level?: unknown }).level,
+            message: (event as unknown as { message?: unknown }).message,
+            exitCode: (event as unknown as { exitCode?: unknown }).exitCode,
+          });
+        };
+
+        try {
+          // When: checkCancelled() is called
+          const cancelled = (session as unknown as { checkCancelled: () => boolean }).checkCancelled();
+
+          // Then: It returns true, logs task.cancelled, and emits progress completed exitCode=null
+          assert.strictEqual(cancelled, true);
+          assert.ok(
+            outputEvents.some((e) => e.type === 'log' && e.taskId === taskId && e.message === l10n.t('task.cancelled')),
+            'Expected output log message "task.cancelled"',
+          );
+          const completed = progressEvents.find((e) => e.type === 'completed' && e.taskId === taskId);
+          assert.ok(completed, 'Expected a progressTreeView completed event');
+          assert.strictEqual(completed?.exitCode, null);
+        } finally {
+          (progressTreeView as unknown as { handleTestGenEventForProgressView: typeof originalProgressHandler }).handleTestGenEventForProgressView =
+            originalProgressHandler;
+          (outputChannel as unknown as { appendEventToOutput: typeof originalAppendEvent }).appendEventToOutput = originalAppendEvent;
+        }
+      });
     });
   });
 });

@@ -3,7 +3,7 @@
 ## 概要
 
 現在のブランチに対して変更をコミットし、リモートへプッシュしたあと、Pull Request を作成するための一括実行コマンドの例です。  
-誤操作防止のため main/master での実行はテンプレート内のチェックでブロックします（詳細は `AGENTS.md`）。コミット前に実行する品質チェック（lint / test / build など）や PR 作成フロー（GitHub CLI `gh` を使う運用など）は、各プロジェクトのポリシーに応じてこのテンプレートを調整してください。
+誤操作防止のため main/master での実行はテンプレート内のチェックでブロックします（詳細は `AGENTS.md`）。コミット前に `npm run lint` を必須で実行します。
 
 ## 前提条件
 
@@ -15,7 +15,7 @@
 ## 実行手順（対話なし）
 
 1. ブランチ確認（main/master 直プッシュ防止）
-2. 必要に応じて品質チェック（lint / test / build など）を実行
+2. 品質チェック（lint）
 3. 変更のステージング（`git add -A`）
 4. コミット（引数または環境変数のメッセージ使用）
 5. プッシュ（`git push -u origin <current-branch>`）
@@ -32,14 +32,12 @@
 MSG="fix: 不要なデバッグログ出力を削除"
 
 # 一括実行
-BRANCH=$(git branch --show-current) && \
-if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then \
-  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1; \
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
-# 任意の品質チェック（必要な場合のみ）
-# 例:
-# ./scripts/lint.sh && ./scripts/test.sh && ./scripts/build.sh || exit 1
+npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
 
 git add -A && \
 git commit -m "$MSG" && \
@@ -75,13 +73,12 @@ EOF
 # PR本文に変数を含めたい場合は、<<EOF (引用符なし) を使用してください。
 
 # 一括実行
-BRANCH=$(git branch --show-current) && \
-if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then \
-  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1; \
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+  echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
-# 任意の品質チェック（必要な場合のみ）
-# ./scripts/quality-check.sh || exit 1
+npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
 
 git add -A && \
 git commit -m "$MSG" && \
@@ -103,10 +100,8 @@ fi
 echo "変更されたファイル:"
 git status --short
 
-# 3) 任意のローカル品質チェック（必要に応じて追加）
-# 例:
-# echo "品質チェック実行中..."
-# ./scripts/lint.sh && ./scripts/test.sh && ./scripts/build.sh || exit 1
+# 3) 品質チェック（lint）
+npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
 
 # 4) 変更をステージング
 git add -A
@@ -187,8 +182,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
-# 任意の品質チェック（必要な場合のみ）
-# ./scripts/quality-check.sh || exit 1
+npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
 
 git add -A && git commit -m "$MSG" && git push -u origin "$BRANCH" && gh pr create --fill --base main
 ```

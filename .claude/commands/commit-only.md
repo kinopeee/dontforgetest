@@ -3,7 +3,7 @@
 ## 概要
 
 現在のブランチに対して、ローカルの変更をコミットだけ行うためのシンプルなコマンドです。  
-リモートへのプッシュは扱わず、**コミットメッセージ規約に沿ったコミット**だけを行います。誤操作防止のため、main/master での実行はチェックでブロックします（詳細は `AGENTS.md`）。
+リモートへのプッシュは扱わず、**コミットメッセージ規約に沿ったコミット**だけを行います。誤操作防止のため、main/master での実行はチェックでブロックします（詳細は `AGENTS.md`）。コミット前に `npm run lint` を必須で実行します。
 
 ## 前提条件
 
@@ -15,8 +15,9 @@
 
 1. ブランチ確認（main/master 直コミット防止）
 2. 未コミット差分を確認し、コミットメッセージの内容を検討する（例：`git diff` や `git diff --cached`）
-3. 変更のステージング（`git add -A`）
-4. コミット（環境変数または引数でメッセージを渡す）
+3. 品質チェック（lint）
+4. 変更のステージング（`git add -A`）
+5. コミット（環境変数または引数でメッセージを渡す）
 
 ### A) 安全な一括実行（メッセージ引数版）
 
@@ -26,6 +27,8 @@ BRANCH=$(git branch --show-current)
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   echo "⚠️ main/master での直接コミットは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
+
+npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
 
 git add -A && \
 git commit -m "$MSG"
@@ -40,6 +43,8 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   echo "⚠️ main/master での直接コミットは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
+npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
+
 git add -A && \
 git commit -m "$MSG"
 ```
@@ -47,20 +52,23 @@ git commit -m "$MSG"
 ### B) ステップ実行（読みやすさ重視）
 
 ```bash
-# 0) ブランチ確認（main/master 直コミット防止）
+# 1) ブランチ確認（main/master 直コミット防止）
 BRANCH=$(git branch --show-current)
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   echo "⚠️ main/master での直接コミットは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
-# 1) 差分を確認
+# 2) 差分を確認
 git status
 git diff
 
-# 2) 変更をステージング
+# 3) 品質チェック（lint）
+npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
+
+# 4) 変更をステージング
 git add -A
 
-# 3) コミット（メッセージを編集）
+# 5) コミット（メッセージを編集）
 git commit -m "<Prefix>: <サマリ（命令形/簡潔に）>"
 ```
 

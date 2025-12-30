@@ -25,11 +25,11 @@ export function analyzeGitUnifiedDiff(diffText: string): GitDiffAnalysis {
 
   let current:
     | {
-        aPath: string;
-        bPath: string;
-        changeType: GitChangeType;
-        oldPath?: string;
-      }
+      aPath: string;
+      bPath: string;
+      changeType: GitChangeType;
+      oldPath?: string;
+    }
     | undefined;
 
   const pushCurrent = () => {
