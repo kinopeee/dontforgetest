@@ -1,1 +1,1 @@
-Always respond in Japanese.
+Write a summary in Japanese.
