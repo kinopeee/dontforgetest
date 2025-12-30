@@ -4,7 +4,7 @@
 
 Cursor CLI（`cursor-agent`）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する Cursor 拡張機能です。
 
-- English docs: `README.md`, `docs/usage.md`
+- English docs: [README.md](https://github.com/kinopeee/dontforgetest/blob/main/README.md), [docs/usage.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.md)
 
 ## Requirements
 
@@ -32,11 +32,11 @@ Cursor CLI（`cursor-agent`）をヘッドレスで呼び出し、コミット�
 
 ### テスト実行レポート
 
-![テスト実行レポート](docs/images/fig1.png)
+![テスト実行レポート](https://raw.githubusercontent.com/kinopeee/dontforgetest/main/docs/images/fig1.png)
 
 ### テスト観点表
 
-![テスト観点表](docs/images/fig2.png)
+![テスト観点表](https://raw.githubusercontent.com/kinopeee/dontforgetest/main/docs/images/fig2.png)
 
 > **注意（重要）**: `cursor-agent` は **`--force` で実行**されます。  
 > **Local** は実ファイル（現在のワークスペース）へ書き込みます。  
@@ -45,9 +45,9 @@ Cursor CLI（`cursor-agent`）をヘッドレスで呼び出し、コミット�
 
 ## ドキュメント
 
-- 目次: `docs/README.ja.md`
-- 操作手順: `docs/usage.ja.md`
-- 内蔵デフォルト戦略: `src/core/defaultTestStrategy.ts`（設定が空の場合に使用）
+- 目次: [docs/README.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/README.ja.md)
+- 操作手順: [docs/usage.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.ja.md)
+- 内蔵デフォルト戦略: [src/core/defaultTestStrategy.ts](https://github.com/kinopeee/dontforgetest/blob/main/src/core/defaultTestStrategy.ts)（設定が空の場合に使用）
 
 ## 開発（このリポジトリを開発する場合）
 
@@ -91,6 +91,6 @@ DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<Cursor 実行ファイルのパス>" npm 
 
 このプロジェクトは **GPL-3.0**（GNU General Public License v3.0）ライセンスの下で公開されています。
 
-詳細は [LICENSE](LICENSE) ファイルをご確認ください。
+詳細は [LICENSE](https://github.com/kinopeee/dontforgetest/blob/main/LICENSE) ファイルをご確認ください。
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
