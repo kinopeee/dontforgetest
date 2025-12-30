@@ -9,7 +9,8 @@
     "vscode": "^1.105.0"
   },
   "categories": [
-    "Other"
+    "Testing",
+    "AI"
   ],
   "main": "./out/extension.js",
   "l10n": "./l10n",
