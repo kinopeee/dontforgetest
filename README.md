@@ -4,7 +4,7 @@
 
 Powered by Cursor CLI (`cursor-agent`), this extension automatically generates test code from commit diffs and selections.
 
-- Japanese docs: [README.ja.md](README.ja.md), [docs/usage.ja.md](docs/usage.ja.md)
+- Japanese docs: [README.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/README.ja.md), [docs/usage.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.ja.md)
 
 ## Key features
 
@@ -44,9 +44,9 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 
 ## Documentation
 
-- Docs index: [docs/README.md](docs/README.md)
-- Usage: [docs/usage.md](docs/usage.md)
-- Built-in default strategy: [src/core/defaultTestStrategy.ts](src/core/defaultTestStrategy.ts) (used when the setting is empty)
+- Docs index: [docs/README.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/README.md)
+- Usage: [docs/usage.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.md)
+- Built-in default strategy: [src/core/defaultTestStrategy.ts](https://github.com/kinopeee/dontforgetest/blob/main/src/core/defaultTestStrategy.ts) (used when the setting is empty)
 
 ## Requirements
 
@@ -95,6 +95,6 @@ DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<path to Cursor executable>" npm test
 
 This project is licensed under **GPL-3.0** (GNU General Public License v3.0).
 
-See [LICENSE](LICENSE) for details.
+See [LICENSE](https://github.com/kinopeee/dontforgetest/blob/main/LICENSE) for details.
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)

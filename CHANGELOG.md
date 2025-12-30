@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.0.113 / 0.0.114
+
+### Added
+
+- Control Panel: show **generation phase** during execution.
+
+### Changed
+
+- TaskManager: track phase labels and notify the UI.
+- Control Panel: switch the run button label depending on the current phase.
+- l10n: add labels per generation phase.
+- Tests: expanded test coverage and strengthened assertions (e.g., exact l10n literals and TaskManager notification payloads, plus edge cases such as missing taskId).
+- ESLint: added indentation rules.
+- Extension category (marketplace metadata):
+  - Added: **Testing**, **Machine Learning**
+  - Removed: **Other**
+
+### Fixed
+
+- Documentation: fixed broken links in `README.md` (Japanese docs links, docs index/usage links, and image links).
+- Documentation: changed Japanese doc/image links to GitHub absolute URLs to fix broken links on Open VSX.
+
+---
+
+## 0.0.113 / 0.0.114（日本語）
+
+### 追加
+
+- 操作パネル: 実行中に **生成フェーズ** を表示するようにしました。
+
+### 変更
+
+- TaskManager: フェーズラベルを追跡し、UIへ通知するようにしました。
+- 操作パネル: 現在のフェーズに応じて実行ボタンの表示（ラベル）を切り替えるようにしました。
+- l10n: フェーズ別ラベルを追加しました。
+- テスト: テストケースを拡充し、アサーションも強化しました（例: l10nの文言を完全一致で検証、TaskManagerの通知ペイロードを完全一致で検証、missing taskId の no-op など境界条件の追加）。
+- ESLint: インデントルールを追加しました。
+- 拡張機能カテゴリ（マーケットプレイス向けメタデータ）:
+  - 追加: **Testing**, **Machine Learning**
+  - 削除: **Other**
+
+### 修正
+
+- ドキュメント: `README.md` のリンク切れを修正しました（日本語ドキュメント、docs index/usage、画像リンクなど）。
+- ドキュメント: Open VSX上で切れていた日本語ドキュメント/画像リンクをGitHub絶対URLへ変更しました。
+
+---
+
 ## 0.0.112
 
 ### Changed
