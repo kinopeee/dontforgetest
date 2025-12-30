@@ -64,6 +64,19 @@ npm run lint
 # テスト（事前に compile が走る: pretest）
 npm test
 
+# テスト（ロケール指定）
+npm run test:ja
+npm run test:en
+
+# カバレッジ
+npm run coverage
+
+# テスト（mocha 直実行: デバッグ/切り分け用）
+npm run test:runTest
+
+# カバレッジ（mocha 直実行: デバッグ/切り分け用）
+npm run coverage:runTest
+
 # VSIX生成（ローカルで配布/動作確認したい場合）
 npm run vsix:build
 
