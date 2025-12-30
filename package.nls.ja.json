@@ -14,7 +14,7 @@
   "command.selectDefaultModel.title": "Dontforgetest: デフォルトモデルを選択",
   "command.openSettings.title": "Dontforgetest: 設定を開く",
   "command.openLatestPerspective.title": "Dontforgetest: 最新の観点表を開く",
-  "command.openLatestExecutionReport.title": "Dontforgetest: 最新の実行レポートを開く",
+  "command.openLatestExecutionReport.title": "Dontforgetest: 最新のテストレポートを開く",
   "command.openLatestMergeInstruction.title": "Dontforgetest: 手動マージ支援を開く（最新）",
   "configuration.title": "Dontforgetest",
   "configuration.cursorAgentPath.description": "cursor-agent コマンドのパス（未指定の場合は PATH から解決）",
