@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.113
+## 0.0.113 / 0.0.114
 
 ### Added
 
@@ -20,10 +20,11 @@
 ### Fixed
 
 - Documentation: fixed broken links in `README.md` (Japanese docs links, docs index/usage links, and image links).
+- Documentation: changed Japanese doc/image links to GitHub absolute URLs to fix broken links on Open VSX.
 
 ---
 
-## 0.0.113（日本語）
+## 0.0.113 / 0.0.114（日本語）
 
 ### 追加
 
@@ -43,6 +44,7 @@
 ### 修正
 
 - ドキュメント: `README.md` のリンク切れを修正しました（日本語ドキュメント、docs index/usage、画像リンクなど）。
+- ドキュメント: Open VSX上で切れていた日本語ドキュメント/画像リンクをGitHub絶対URLへ変更しました。
 
 ---
 
