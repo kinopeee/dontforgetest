@@ -12,7 +12,7 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 - Generate from:
   - Latest commit diff
   - Commit range diff
-  - Uncommitted diff (staged / unstaged)
+  - Uncommitted diff (staged / unstaged / both)
 - Select output:
   - **Perspective table + Generate tests (default)** / **Generate perspective table only**
 - Choose execution target (diff-based sources):
