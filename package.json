@@ -10,7 +10,7 @@
   },
   "categories": [
     "Testing",
-    "AI"
+    "Machine Learning"
   ],
   "main": "./out/extension.js",
   "l10n": "./l10n",
