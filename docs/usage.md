@@ -128,7 +128,6 @@ Run from the side panel (**`Dontforgetest: Open Panel`**).
 
 1. Command palette → **`Dontforgetest: Generate Tests (QuickPick)`**
 2. Select a **source**
-   - Current file
    - Latest commit diff
    - Commit range diff
    - Uncommitted diff

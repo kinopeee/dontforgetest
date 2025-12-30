@@ -10,7 +10,6 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 
 - Run via **QuickPick UI / Control Panel** (choose source + model)
 - Generate from:
-  - Current file
   - Latest commit diff
   - Commit range diff
   - Uncommitted diff (staged / unstaged)
