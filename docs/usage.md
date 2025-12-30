@@ -110,18 +110,18 @@ To output in Japanese, add a config comment at the top:
 Run from the side panel (**`Dontforgetest: Open Panel`**).
 
 1. Select **Output**
-   - **Perspective table + Generate tests (default)**: generates a perspective table → generates tests → (depending on settings) runs tests
-   - **Generate perspective table only**: generates only the perspective table (skips test generation/execution)
+   - **Perspective + test (default)**: generates a perspective table → generates tests → (depending on settings) runs tests
+   - **Perspective only**: generates only the perspective table (skips test generation/execution)
 2. Select **Target**
    - **Uncommitted diff / Latest commit diff / Commit range diff**
 3. Select **Location**
    - You can select **Local / Worktree** (Local may be locked depending on conditions)
    - For **uncommitted diffs**, Location is locked to **Local**
    - For **perspective-only output**, Location is locked to **Local**
-4. Click **Run**
+4. Click **Generate**
    - You can track progress in **Progress**
 5. After completion, open outputs from **Output**
-   - Click **Perspective table** / **Execution report** to open the latest one
+   - Click **Perspective** / **Test report** to open the latest one
    - If applying back to **Local** failed in Worktree, you can open the **instruction prompt file** via **Manual merge**
 
 ### 2) Run via QuickPick (Command Palette)
@@ -133,8 +133,8 @@ Run from the side panel (**`Dontforgetest: Open Panel`**).
    - Commit range diff
    - Uncommitted diff
 3. Select an **output**
-   - Perspective table + Generate tests
-   - Generate perspective table only
+   - Perspective + test
+   - Perspective only
 4. (For latest commit diff / commit range diff AND full output) select a **location**
    - **Local**: edits your current workspace directly
    - **Worktree**: generates in a temporary worktree and applies only test diffs back to local (manual merge if auto-apply is not possible)
@@ -145,10 +145,10 @@ Run from the side panel (**`Dontforgetest: Open Panel`**).
    - Progress is shown in the **Output Channel**
    - The status bar shows running tasks (click to open logs)
 
-### 3) Review outputs (perspective table / execution report)
+### 3) Review outputs (perspective / test report)
 
-- Perspective table: Command palette → **`Dontforgetest: Open Latest Perspective Table`**
-- Execution report: Command palette → **`Dontforgetest: Open Latest Execution Report`**
+- Perspective: Command palette → **`Dontforgetest: Open Latest Perspective`**
+- Test Report: Command palette → **`Dontforgetest: Open Latest Test Report`**
 - Manual merge assistance (when auto-apply fails): Command palette → **`Dontforgetest: Open Manual Merge Assistance (Latest)`**
 
 ## When to use which command

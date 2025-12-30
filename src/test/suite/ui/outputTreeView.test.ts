@@ -55,7 +55,7 @@ suite('src/ui/outputTreeView.ts', () => {
   // TC-N-15: OutputTreeViewProvider getChildren called
   // Given: OutputTreeViewProvider initialized
   // When: getChildren is called
-  // Then: Two items returned: "観点表" and "実行レポート" with correct icons and commands
+  // Then: Two items returned: "観点表" and "テストレポート" with correct icons and commands
   test('TC-N-15: OutputTreeViewProvider getChildren called', () => {
     // Given: OutputTreeView initialized
     initializeOutputTreeView(context);
@@ -64,7 +64,7 @@ suite('src/ui/outputTreeView.ts', () => {
     // When: getChildren is called
     const items = provider.getChildren();
 
-    // Then: Three items displayed: "観点表" / "実行レポート" / "手動マージ" with correct icons
+    // Then: Three items displayed: "観点表" / "テストレポート" / "手動マージ" with correct icons
     assert.strictEqual(items.length, 3, 'Three items are displayed');
     const perspectiveItem = items.find((item) => item.command?.command === 'dontforgetest.openLatestPerspective');
     const reportItem = items.find((item) => item.command?.command === 'dontforgetest.openLatestExecutionReport');
