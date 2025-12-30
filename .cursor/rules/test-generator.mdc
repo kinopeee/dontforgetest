@@ -1,0 +1,289 @@
+---
+description: テストコードの生成・追加・更新を行うルール。テスト実装が必要な場面で適用：(1) 新機能のテスト作成、(2) バグ修正に対するテスト追加、(3) 既存テストの更新、(4) テストカバレッジ向上。ユーザーが「テストを書いて」「テストを追加」「テストを生成」などと依頼した場合に発動。
+globs:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+  - "**/*.test.js"
+  - "**/*.spec.js"
+  - "**/test/**/*.ts"
+  - "**/tests/**/*.ts"
+  - "**/__tests__/**/*.ts"
+  - "**/test/**/*.py"
+  - "**/*_test.py"
+  - "**/test_*.py"
+  - "**/*_test.go"
+  - "**/*Test.java"
+alwaysApply: false
+---
+
+# テスト生成ルール
+
+テストコードを生成する際に従うべきワークフローを定義する。
+
+## ワークフロー概要
+
+1. テスト観点表を作成
+2. テストコードを実装
+3. 実行・カバレッジ確認
+
+## Step 1: テスト観点表の作成
+
+テストコード実装前に、必ず Markdown 形式の「テスト観点表」を提示する。
+
+### 必須列
+
+| 列名 | 説明 |
+|------|------|
+| Case ID | TC-N-01（正常系）、TC-A-01（異常系）形式 |
+| Input / Precondition | 入力値・前提条件 |
+| Perspective | Equivalence（等価分割）/ Boundary（境界値） |
+| Expected Result | 期待する結果 |
+| Notes | 備考（省略理由など） |
+
+### 網羅すべきケース
+
+- **正常系**: 主要シナリオ
+- **異常系**: バリデーションエラー、例外パス
+- **境界値**: 0, 最小値, 最大値, ±1, 空, NULL
+- **不正な型・形式**の入力
+- **外部依存の失敗**（API / DB 等）
+
+境界値候補のうち仕様上意味を持たないものは Notes に理由を記載し省略可。
+
+### 観点表作成ルール（詳細）
+
+1. Expected Result は**観測可能・検証可能**であること（呼び出し回数、保存されたファイル、発行されたイベントなど）。「クラッシュしない」だけは不可
+2. Expected Result には**検証対象**（関数/イベント/ファイル/パス）と**検証方法**（引数/回数/存在確認）を明記
+3. 具体的なアサーションのないテスト（例: `assert.ok(true)`）は禁止。すべてのケースで少なくとも1つの具体的な結果を検証
+4. **1ケース = 1分岐 + 1期待結果**。複数の分岐を1ケースにまとめない
+5. テスト内で失敗を握りつぶさない（try/catchでエラーを無視など）。やむを得ない場合は Notes に理由と代替検証方法を記載
+6. 外部依存のモック検証ポイント（呼び出し引数、回数、出力パス）を Expected Result に記載
+7. 主要な分岐は別ケースに分割（例: worktree/local/skip/cancel/cleanup failure）
+8. 複数の入力条件を1ケースにまとめない。ランナー種別ごと、欠損フィールドの種類（null / 空文字 / 空白）ごとに結果が異なる場合は分割
+9. Expected Result は**具体的かつ観測可能**に（正確なラベルテキスト、フィールド値、行数など）。「期待通り」「正しい」などの曖昧な表現は禁止
+10. 境界値は**差分/変更される振る舞いに関連するもののみ**含める。無関係な極値は Notes に理由を記載して省略
+11. レポート成果物については、アサート対象の**具体的なセクション/ラベル/値**を Expected Result に記載（「レポートが生成される」だけは不可）
+
+### テスト観点表テンプレート
+
+| Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+|---------|----------------------|--------------------------------------|-----------------|-------|
+| TC-N-01 | 有効な入力 A | Equivalence – normal | 期待値を返す; レポートファイルを保存 | 保存先パスを検証 |
+| TC-E-01 | NULL 入力 | Boundary – null | ValidationError をスロー（メッセージ含む） | 型とメッセージを検証 |
+| TC-E-02 | 空文字 | Boundary – empty | バリデーションエラーイベントを発行 | イベントペイロードを検証 |
+| TC-B-01 | value = 0 | Boundary – zero | 依存関数が value=0 で正確に1回呼ばれる | 呼び出し回数と引数を検証 |
+| TC-B-02 | value = MAX_INT | Boundary – max | 正しく処理; オーバーフローなし | 結果とエラーなしを検証 |
+| TC-B-03 | value = MAX_INT + 1 | Boundary – overflow | RangeError をスロー（メッセージ含む） | 型とメッセージを検証 |
+| TC-A-01 | 外部API失敗 | External dependency failure | ExternalServiceError をスロー; リトライ1回 | モック呼び出し回数を検証 |
+
+### Case ID 命名規則
+
+| プレフィックス | 意味 | 例 |
+|---------------|------|-----|
+| TC-N-XX | 正常系 (Normal) | TC-N-01 |
+| TC-A-XX | 異常系 (Abnormal) | TC-A-01 |
+| TC-B-XX | 境界値 (Boundary) | TC-B-01 |
+| TC-E-XX | 例外 (Exception) | TC-E-01 |
+
+### 境界値チェックリスト
+
+以下の境界値を検討し、仕様上意味を持つものをテスト対象とする：
+
+- [ ] 0
+- [ ] 最小値
+- [ ] 最小値 - 1
+- [ ] 最大値
+- [ ] 最大値 + 1
+- [ ] 空文字 / 空配列
+- [ ] NULL / undefined
+- [ ] 負数（数値の場合）
+- [ ] 特殊文字（文字列の場合）
+
+## Step 2: テストコード実装
+
+### 実装ポリシー
+
+1. テスト観点表のケースを**すべて**自動化テストとして実装
+2. **正常系と同数以上の失敗系**を含める
+3. 分岐網羅率 100% を目標（達成困難な場合はビジネスインパクトの高い分岐を優先）
+4. 未カバー分岐がある場合は理由と影響を Notes や PR 本文に明示
+
+### テストカテゴリチェックリスト
+
+- [ ] 正常系（主要シナリオ）
+- [ ] 異常系（バリデーションエラー、例外パス）
+- [ ] 境界値（0, 最小値, 最大値, ±1, 空, NULL）
+- [ ] 不正な型・形式の入力
+- [ ] 外部依存の失敗（API, DB, メッセージングなど）該当する場合
+- [ ] 例外の**型**と**メッセージ**の両方を検証
+
+### ローカライズアサーション（t(...)）
+
+1. ローカライズ出力に対しては、リテラルが意図的に固定されている場合を除き、厳密な文字列一致を避ける
+2. ローカライズ値が空でなく、生のキーと一致しないことを確認することを優先
+3. プレースホルダーが解決されていることを確認（例: `{0}` や `${...}` が残っていない）
+
+### Given / When / Then コメント
+
+各テストケースに以下のコメントを付与：
+
+```text
+// Given: 前提条件
+// When:  実行する操作
+// Then:  期待する結果/検証
+```
+
+### 例外・エラー検証
+
+- 例外の**型**と**メッセージ**を明示的に検証
+- バリデーション系ではエラーコード・フィールド情報も確認
+- 外部依存失敗はスタブ/モックで模擬
+
+### テストコード例（TypeScript）
+
+```typescript
+describe('UserService.createUser', () => {
+  // TC-N-01: 有効なユーザー情報で作成成功
+  it('should create user with valid input', async () => {
+    // Given: 有効なユーザー情報
+    const input = { name: 'Test User', email: 'test@example.com' };
+
+    // When: ユーザー作成を実行
+    const result = await userService.createUser(input);
+
+    // Then: ユーザーが作成される
+    expect(result).toBeDefined();
+    expect(result.name).toBe(input.name);
+  });
+
+  // TC-A-01: NULLでバリデーションエラー
+  it('should throw validation error when name is null', async () => {
+    // Given: nameがnullの入力
+    const input = { name: null, email: 'test@example.com' };
+
+    // When/Then: バリデーションエラーがスローされる
+    await expect(userService.createUser(input))
+      .rejects
+      .toThrow(ValidationError);
+  });
+
+  // TC-A-08: 外部API失敗時のエラーハンドリング
+  it('should handle external API failure gracefully', async () => {
+    // Given: 外部APIが失敗するようモック
+    jest.spyOn(externalApi, 'verify').mockRejectedValue(new Error('API Error'));
+    const input = { name: 'Test User', email: 'test@example.com' };
+
+    // When/Then: 適切なエラーがスローされる
+    await expect(userService.createUser(input))
+      .rejects
+      .toThrow(ExternalServiceError);
+  });
+});
+```
+
+### テストコード例（Python）
+
+```python
+class TestUserService:
+    # TC-N-01: 有効なユーザー情報で作成成功
+    def test_create_user_with_valid_input(self, user_service):
+        # Given: 有効なユーザー情報
+        input_data = {"name": "Test User", "email": "test@example.com"}
+
+        # When: ユーザー作成を実行
+        result = user_service.create_user(input_data)
+
+        # Then: ユーザーが作成される
+        assert result is not None
+        assert result.name == input_data["name"]
+
+    # TC-A-01: Noneでバリデーションエラー
+    def test_create_user_raises_error_when_name_is_none(self, user_service):
+        # Given: nameがNoneの入力
+        input_data = {"name": None, "email": "test@example.com"}
+
+        # When/Then: バリデーションエラーがスローされる
+        with pytest.raises(ValidationError) as exc_info:
+            user_service.create_user(input_data)
+        assert "name is required" in str(exc_info.value)
+
+    # TC-A-08: 外部API失敗時のエラーハンドリング
+    def test_create_user_handles_external_api_failure(self, user_service, mocker):
+        # Given: 外部APIが失敗するようモック
+        mocker.patch.object(
+            external_api, "verify",
+            side_effect=Exception("API Error")
+        )
+        input_data = {"name": "Test User", "email": "test@example.com"}
+
+        # When/Then: 適切なエラーがスローされる
+        with pytest.raises(ExternalServiceError):
+            user_service.create_user(input_data)
+```
+
+## Step 3: 実行・カバレッジ確認
+
+1. テスト実行コマンドを記載（例: `npm run test`, `pytest --cov=...`）
+2. ブランチカバレッジ・ステートメントカバレッジを確認
+3. カバレッジレポートの要約を可能な範囲で添付
+
+### カバレッジコマンド例
+
+#### JavaScript/TypeScript
+
+```bash
+# Jest
+npm run test -- --coverage
+
+# Vitest
+npx vitest run --coverage
+```
+
+#### Python
+
+```bash
+# pytest
+pytest --cov=src --cov-report=html
+
+# coverage.py
+coverage run -m pytest && coverage report
+```
+
+#### Go
+
+```bash
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
+## 運用ルール
+
+- 本ルールに適合しないテストはレビューで差し戻し対象
+- 外部依存がなくてもモックで失敗系をテスト
+- 仕様変更時はテスト観点表とテストコードを同時更新
+- 自動化困難なケースは理由と代替手段を明記しレビュアと合意
+- **意味のある本番コード変更（機能追加、バグ修正、振る舞いに影響するリファクタ）を含むすべてのPR**には、対応するテストの追加・更新が必須
+- テスト更新が現実的でない場合は、PR説明に理由と代替検証方法を記載
+- 振る舞い変更を意図しないリファクタでは、既存テストが変更コードをカバーしていることを確認。カバレッジ不足の場合はテストを追加
+
+## 適用除外
+
+- 既存テストの軽微な修正（メッセージ調整、期待値微修正）で新しい分岐や制約が追加されない場合は、テスト観点表の作成・更新は任意
+
+## サマリチェックリスト
+
+テストタスク完了前に確認：
+
+- [ ] テスト観点表を作成/更新済み
+- [ ] 観点表のすべてのケースをテストとして実装済み
+- [ ] 失敗系ケース ≥ 正常系ケース
+- [ ] すべてのテストに Given/When/Then コメントあり
+- [ ] 例外の**型**と**メッセージ**を検証済み
+- [ ] 境界値をカバー済み（0, 最小値, 最大値, ±1, 空, NULL）
+- [ ] ローカライズ文字列は厳密一致を避け、生キー/プレースホルダー漏れなし
+- [ ] テスト実行コマンドを記載済み
+- [ ] カバレッジを確認済み
+
+**これらのルールに従い、テスト完了前に不足している観点がないかセルフチェックすること。**
