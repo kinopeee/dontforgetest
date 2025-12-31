@@ -766,6 +766,74 @@ suite('src/ui/controlPanel.ts', () => {
     assert.deepStrictEqual(executedCommandCalls[0]?.args, [{ target: 'current' }]);
   });
 
+  test('CP-E-ANALYZE-03: analyze message (target=invalid) is ignored', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+
+    // When: An analyze message is sent with an invalid target
+    await webviewView.webview._onMessage?.({ type: 'analyze', target: 'invalid' });
+
+    // Then: No command executed
+    assert.strictEqual(executedCommandCalls.length, 0);
+  });
+
+  test('CP-E-ANALYZE-04: analyze message (target="") is ignored', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+
+    // When: An analyze message is sent with an empty-string target
+    await webviewView.webview._onMessage?.({ type: 'analyze', target: '' });
+
+    // Then: No command executed
+    assert.strictEqual(executedCommandCalls.length, 0);
+  });
+
+  test('CP-E-ANALYZE-05: analyze message (target=undefined) is ignored', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+
+    // When: An analyze message is sent with target=undefined
+    await webviewView.webview._onMessage?.({ type: 'analyze', target: undefined });
+
+    // Then: No command executed
+    assert.strictEqual(executedCommandCalls.length, 0);
+  });
+
+  test('CP-E-ANALYZE-06: analyze message (target=null) is ignored', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+
+    // When: An analyze message is sent with target=null
+    await webviewView.webview._onMessage?.({ type: 'analyze', target: null });
+
+    // Then: No command executed
+    assert.strictEqual(executedCommandCalls.length, 0);
+  });
+
+  test('CP-E-ANALYZE-07: analyze message (missing target) is ignored', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+
+    // When: An analyze message is sent without target field
+    await webviewView.webview._onMessage?.({ type: 'analyze' });
+
+    // Then: No command executed
+    assert.strictEqual(executedCommandCalls.length, 0);
+  });
+
+  test('CP-B-ANALYZE-08: analyze message tolerates extra fields when target is valid', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+
+    // When: An analyze message is sent with extra fields (malformed-but-tolerated shape)
+    await webviewView.webview._onMessage?.({ type: 'analyze', target: 'all', extra: 'x' });
+
+    // Then: executeCommand is called with the expected command and args
+    assert.strictEqual(executedCommandCalls.length, 1);
+    assert.strictEqual(executedCommandCalls[0]?.command, 'dontforgetest.analyzeTests');
+    assert.deepStrictEqual(executedCommandCalls[0]?.args, [{ target: 'all' }]);
+  });
+
   test('CP-N-RUNMODE-PO-01: run message with runMode=perspectiveOnly passes args', async () => {
     // Given: Provider initialized and resolved
     resolveView();

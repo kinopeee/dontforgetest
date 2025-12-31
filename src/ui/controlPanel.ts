@@ -144,7 +144,12 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
 
     if (msg.type === 'analyze') {
       // 分析コマンドを実行
-      await this.deps.executeCommand('dontforgetest.analyzeTests', { target: msg.target });
+      // NOTE: Webview からの入力はランタイムでは型保証されないため、妥当性チェックを行う。
+      const target = (msg as { target?: unknown }).target;
+      if (target !== 'all' && target !== 'current') {
+        return;
+      }
+      await this.deps.executeCommand('dontforgetest.analyzeTests', { target });
       return;
     }
   }
