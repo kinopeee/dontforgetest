@@ -22,6 +22,10 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 - Consolidates logs in an **Output Channel**
 - Saves **test perspective tables** and **test execution reports** (Markdown; output directories are configurable)
 - Shows running task count in the **Status Bar** (click to open logs)
+- **Test Analysis**: Analyze existing test files and suggest improvements
+  - Detects missing Given/When/Then comments
+  - Detects missing boundary value tests
+  - Detects unverified exception messages
 
 ## Screenshots
 

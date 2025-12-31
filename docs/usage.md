@@ -59,6 +59,9 @@ Search `dontforgetest.*` in Cursor Settings.
   - `cursorAgent`: `cursor-agent` runs tests and the extension extracts stdout/stderr/exitCode from the marked output
   - If `cursorAgent` refuses to run or returns an empty result, the extension performs an **automatic fallback** and runs the tests itself (a warning is logged)
 
+- **`dontforgetest.analysisReportDir`**: Output directory for test analysis reports (Default: `docs/test-analysis-reports`)
+- **`dontforgetest.analysisTestFilePattern`**: Glob pattern for test files to analyze (Default: `src/test/**/*.test.ts`)
+
 > **Note (model names)**: The model name for `dontforgetest.defaultModel` must be one of the names listed by Cursor CLI **`/model`**.
 >
 > Example (as of 2025-12-25):
@@ -144,11 +147,29 @@ Run from the side panel (**`Dontforgetest: Open Panel`**).
    - Progress is shown in the **Output Channel**
    - The status bar shows running tasks (click to open logs)
 
-### 3) Review outputs (perspective / test report)
+### 3) Review outputs (perspective / test report / analysis report)
 
 - Perspective: Command palette → **`Dontforgetest: Open Latest Perspective`**
 - Test Report: Command palette → **`Dontforgetest: Open Latest Test Report`**
+- Analysis Report: Command palette → **`Dontforgetest: Open Latest Analysis Report`**
 - Manual merge assistance (when auto-apply fails): Command palette → **`Dontforgetest: Open Manual Merge Assistance (Latest)`**
+
+### 4) Test Analysis (Suggest improvements for existing tests)
+
+You can analyze existing test files from the **Analyze** tab in the Control Panel.
+
+1. Select the **Analyze** tab in the Control Panel
+2. Select **Analysis Target**
+   - **All test files**: All files matching `analysisTestFilePattern` setting
+   - **Current file**: Only the file open in the editor
+3. Click **Analyze**
+4. After completion, the report opens automatically
+
+#### Detection items
+
+- **Missing Given/When/Then comments**: No structured comments in test functions
+- **Missing boundary value tests**: No tests for null, undefined, 0, empty string, empty array
+- **Unverified exception messages**: `assert.throws()` or `.toThrow()` without message/type verification
 
 ## When to use which command
 
@@ -165,6 +186,10 @@ Run from the side panel (**`Dontforgetest: Open Panel`**).
   - Select `staged` / `unstaged` / `both`
 - **`Dontforgetest: Show Output Logs`**
   - Opens the Output Channel
+- **`Dontforgetest: Analyze Tests`**
+  - Analyzes existing test files and suggests improvements
+- **`Dontforgetest: Open Latest Analysis Report`**
+  - Opens the latest analysis report
 
 ## Troubleshooting
 
