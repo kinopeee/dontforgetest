@@ -11,14 +11,14 @@ suite('git/worktreeManager.ts', () => {
   let isGitRepo = false;
 
   suiteSetup(async () => {
-    // Find the actual git repository root
+    // 実際の git リポジトリルートを取得する
     repoRoot = process.cwd();
-    // Verify we're in a git repo
+    // git リポジトリ配下で実行されているか確認する
     try {
       await execGitStdout(repoRoot, ['rev-parse', '--git-dir'], 1024 * 1024);
       isGitRepo = true;
     } catch {
-      // Not a git repo, tests will be skipped
+      // git リポジトリでない場合は該当テストをスキップする
       isGitRepo = false;
     }
     tempBaseDir = path.join(os.tmpdir(), `dontforgetest-test-${Date.now()}`);
@@ -26,11 +26,11 @@ suite('git/worktreeManager.ts', () => {
   });
 
   suiteTeardown(() => {
-    // Cleanup
+    // クリーンアップ
     try {
       fs.rmSync(tempBaseDir, { recursive: true, force: true });
     } catch {
-      // Ignore cleanup errors
+      // クリーンアップ失敗は無視する
     }
   });
 
@@ -129,29 +129,24 @@ suite('git/worktreeManager.ts', () => {
   });
 
   test('TC-E-14: removeTemporaryWorktree continues when git worktree prune fails (noop catch)', async () => {
-    // Given: execGitStdout throws only for "git worktree prune"
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const gitExec = require('../../../git/gitExec') as typeof import('../../../git/gitExec');
-    const originalExec = gitExec.execGitStdout;
-
+    // Given: "git worktree prune" のみ失敗する exec を用意する
     let pruneThrown = false;
-    gitExec.execGitStdout = (async (_cwd: string, args: string[], _maxBytes: number) => {
+    const execStub: typeof execGitStdout = async (_cwd: string, args: string[], _maxBytes: number) => {
       if (Array.isArray(args) && args[0] === 'worktree' && args[1] === 'prune') {
         pruneThrown = true;
         throw new Error('prune failed');
       }
       return '';
-    }) as unknown as typeof gitExec.execGitStdout;
+    };
 
     const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-worktree-prune-'));
 
     try {
       // When: removeTemporaryWorktree is called
       // Then: It resolves (no rejection) even if prune fails
-      await assert.doesNotReject(removeTemporaryWorktree(repoRoot, worktreeDir));
+      await assert.doesNotReject(removeTemporaryWorktree(repoRoot, worktreeDir, { execGitStdout: execStub }));
       assert.strictEqual(pruneThrown, true, 'Expected prune to throw and be swallowed');
     } finally {
-      gitExec.execGitStdout = originalExec;
       try {
         fs.rmSync(worktreeDir, { recursive: true, force: true });
       } catch {
@@ -161,29 +156,22 @@ suite('git/worktreeManager.ts', () => {
   });
 
   test('TC-E-15: removeTemporaryWorktree continues when fs.rm fails (noop catch)', async () => {
-    // Given: fs.promises.rm throws (simulating an OS-level deletion failure)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const gitExec = require('../../../git/gitExec') as typeof import('../../../git/gitExec');
-    const originalExec = gitExec.execGitStdout;
-    gitExec.execGitStdout = (async (_cwd: string, _args: string[], _maxBytes: number) => '') as unknown as typeof gitExec.execGitStdout;
-
-    const originalRm = fs.promises.rm;
+    // Given: OS 依存の削除失敗を模擬するため、rm が例外を投げるようにする
+    const execStub: typeof execGitStdout = async (_cwd: string, _args: string[], _maxBytes: number) => '';
     let rmThrown = false;
-    (fs.promises as unknown as { rm: typeof fs.promises.rm }).rm = (async () => {
+    const rmStub: typeof fs.promises.rm = async (_path, _options) => {
       rmThrown = true;
       throw new Error('rm failed');
-    }) as unknown as typeof fs.promises.rm;
+    };
 
     const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-worktree-rm-'));
 
     try {
       // When: removeTemporaryWorktree is called
       // Then: It resolves (no rejection) even if fs.rm fails
-      await assert.doesNotReject(removeTemporaryWorktree(repoRoot, worktreeDir));
+      await assert.doesNotReject(removeTemporaryWorktree(repoRoot, worktreeDir, { execGitStdout: execStub, rm: rmStub }));
       assert.strictEqual(rmThrown, true, 'Expected fs.promises.rm to throw and be swallowed');
     } finally {
-      gitExec.execGitStdout = originalExec;
-      (fs.promises as unknown as { rm: typeof originalRm }).rm = originalRm;
       try {
         fs.rmSync(worktreeDir, { recursive: true, force: true });
       } catch {

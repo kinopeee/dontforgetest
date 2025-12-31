@@ -14,7 +14,24 @@
   ],
   "main": "./out/extension.js",
   "l10n": "./l10n",
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:dontforgetest.controlPanel",
+    "onView:dontforgetest.progressView",
+    "onView:dontforgetest.outputView",
+    "onCommand:dontforgetest.generateTest",
+    "onCommand:dontforgetest.openPanel",
+    "onCommand:dontforgetest.generateTestFromCommit",
+    "onCommand:dontforgetest.generateTestFromCommitRange",
+    "onCommand:dontforgetest.generateTestFromWorkingTree",
+    "onCommand:dontforgetest.showTestGeneratorOutput",
+    "onCommand:dontforgetest.selectDefaultModel",
+    "onCommand:dontforgetest.openSettings",
+    "onCommand:dontforgetest.openLatestPerspective",
+    "onCommand:dontforgetest.openLatestExecutionReport",
+    "onCommand:dontforgetest.openLatestMergeInstruction",
+    "onCommand:dontforgetest.analyzeTests",
+    "onCommand:dontforgetest.openLatestAnalysisReport"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [

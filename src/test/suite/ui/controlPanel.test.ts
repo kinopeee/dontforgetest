@@ -2161,6 +2161,15 @@ suite('src/ui/controlPanel.ts', () => {
   });
 
   suite('analyze button and tab switching in webview script', () => {
+    function normalizePostedMessage(value: unknown): Record<string, unknown> {
+      // vm コンテキスト由来のオブジェクトはプロトタイプが異なるため、そのまま deepStrictEqual すると失敗し得る。
+      // ここでは enumerable なプロパティだけを plain object にコピーして比較する。
+      if (!value || typeof value !== 'object') {
+        return { value };
+      }
+      return { ...(value as Record<string, unknown>) };
+    }
+
     test('WV-N-ANALYZE-01: clicking Analyze posts {type:"analyze", target:"all"} by default', () => {
       // Given: The webview HTML/script is loaded (default analysisTargetSelect.value="all")
       resolveView();
@@ -2171,7 +2180,7 @@ suite('src/ui/controlPanel.ts', () => {
 
       // Then: One analyze message is posted with target="all"
       assert.strictEqual(harness.postedMessages.length, 2, 'Expected ready + analyze messages to be posted');
-      assert.deepStrictEqual(harness.postedMessages[1], { type: 'analyze', target: 'all' });
+      assert.deepStrictEqual(normalizePostedMessage(harness.postedMessages[1]), { type: 'analyze', target: 'all' });
     });
 
     test('WV-N-ANALYZE-02: clicking Analyze posts {type:"analyze", target:"current"} when selection is changed', () => {
@@ -2185,7 +2194,7 @@ suite('src/ui/controlPanel.ts', () => {
 
       // Then: Posted analyze message uses the selected target
       assert.strictEqual(harness.postedMessages.length, 2, 'Expected ready + analyze messages to be posted');
-      assert.deepStrictEqual(harness.postedMessages[1], { type: 'analyze', target: 'current' });
+      assert.deepStrictEqual(normalizePostedMessage(harness.postedMessages[1]), { type: 'analyze', target: 'current' });
     });
 
     test('WV-N-TAB-01: clicking Analyze tab activates analyze content and deactivates generate content', () => {

@@ -37,7 +37,7 @@ export async function analyzeTestsCommand(target?: AnalysisTarget): Promise<void
   }
 
   // 3. 分析実行
-  let result: AnalysisResult;
+  let result: AnalysisResult | undefined;
 
   await vscode.window.withProgress(
     {
@@ -62,8 +62,8 @@ export async function analyzeTestsCommand(target?: AnalysisTarget): Promise<void
     },
   );
 
-  // result が undefined の場合（エラーや早期リターン）
-  if (!result!) {
+  // result が undefined の場合（アクティブエディタなし等により分析が実行されなかったケース）
+  if (!result) {
     return;
   }
 
