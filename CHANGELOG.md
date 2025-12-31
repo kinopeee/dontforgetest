@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.0.115
+
+### Added
+
+- **Test Analysis Feature (Phase 1)**: Analyze existing test files and suggest improvements
+  - Detects missing Given/When/Then comments
+  - Detects missing boundary value tests (null, undefined, 0, empty string, empty array)
+  - Detects unverified exception messages (assert.throws / toThrow without message verification)
+  - Generates Markdown analysis reports
+- Control Panel: Added **tab UI** to switch between "Generate" and "Analyze"
+- New command: **`Dontforgetest: Analyze Tests`**
+- New command: **`Dontforgetest: Open Latest Analysis Report`**
+- New settings:
+  - `dontforgetest.analysisReportDir`: Output directory for analysis reports (Default: `docs/test-analysis-reports`)
+  - `dontforgetest.analysisTestFilePattern`: Glob pattern for test files to analyze (Default: `src/test/**/*.test.ts`)
+
+### Fixed
+
+- Test analyzer: Fixed false positives for multi-line `assert.throws()` calls where the second argument is on a subsequent line
+
+---
+
+## 0.0.115（日本語）
+
+### 追加
+
+- **テスト分析機能（Phase 1）**: 既存テストファイルを分析し、改善点を提案
+  - Given/When/Then コメント不足を検出
+  - 境界値テスト不足を検出（null, undefined, 0, 空文字列, 空配列）
+  - 例外メッセージ未検証を検出（assert.throws / toThrow でメッセージ検証なし）
+  - Markdown形式の分析レポートを生成
+- 操作パネル: **タブUI**を追加（「生成」と「分析」を切り替え）
+- 新コマンド: **`Dontforgetest: テストを分析`**
+- 新コマンド: **`Dontforgetest: 最新の分析レポートを開く`**
+- 新設定:
+  - `dontforgetest.analysisReportDir`: 分析レポートの保存先（既定: `docs/test-analysis-reports`）
+  - `dontforgetest.analysisTestFilePattern`: 分析対象テストファイルのパターン（既定: `src/test/**/*.test.ts`）
+
+### 修正
+
+- テスト分析: 複数行にまたがる `assert.throws()` 呼び出しで第2引数が次行にある場合の誤検知を修正
+
+---
+
 ## 0.0.113 / 0.0.114
 
 ### Added

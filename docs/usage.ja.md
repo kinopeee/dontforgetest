@@ -59,6 +59,9 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
   - `cursorAgent`: `cursor-agent` に実行させ、マーカー付きの結果から stdout/stderr/exitCode を抽出してレポート化
   - `cursorAgent` が実行拒否/空結果になる場合は、拡張機能側で **自動フォールバック**して実行します（警告ログが出ます）
 
+- **`dontforgetest.analysisReportDir`**: テスト分析レポートの保存先（既定: `docs/test-analysis-reports`）
+- **`dontforgetest.analysisTestFilePattern`**: 分析対象テストファイルのパターン（既定: `src/test/**/*.test.ts`）
+
 > **補足（モデル名）**: `dontforgetest.defaultModel` に指定するモデル名は、Cursor CLI の **`/model`** コマンドでリストされる名前を使用してください。
 >
 > 例（2025.12.25 時点）:
@@ -133,7 +136,6 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 
 1. コマンドパレット → **`Dontforgetest: テスト生成（QuickPick）`**
 2. **実行ソース**を選択
-   - **現在のファイル**
    - **最新コミット差分**
    - **コミット範囲差分**
    - **未コミット差分**
@@ -150,11 +152,29 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
    - **Output Channel** に進捗ログが出ます
    - **ステータスバー**に「実行中」が表示されます（クリックでログ表示）
 
-### 3) 結果確認（観点表/テストレポート）
+### 3) 結果確認（観点表/テストレポート/分析レポート）
 
 - 観点表: コマンドパレット → **`Dontforgetest: 最新の観点表を開く`**
 - テストレポート: コマンドパレット → **`Dontforgetest: 最新のテストレポートを開く`**
+- 分析レポート: コマンドパレット → **`Dontforgetest: 最新の分析レポートを開く`**
 - 手動マージ支援（自動適用に失敗した場合）: コマンドパレット → **`Dontforgetest: 手動マージ支援を開く（最新）`**
+
+### 4) テスト分析（既存テストの改善提案）
+
+操作パネルの「**分析**」タブから既存テストファイルを分析できます。
+
+1. 操作パネルで「**分析**」タブを選択
+2. **分析対象**を選択
+   - **全テストファイル**: 設定の `analysisTestFilePattern` に一致するすべてのファイル
+   - **現在のファイル**: エディタで開いているファイルのみ
+3. **「分析」**ボタンをクリック
+4. 分析完了後、レポートが自動的に開きます
+
+#### 検出項目
+
+- **Given/When/Then コメント不足**: テスト関数内に構造化されたコメントがない
+- **境界値テスト不足**: null, undefined, 0, 空文字列, 空配列のテストがない
+- **例外メッセージ未検証**: `assert.throws()` や `.toThrow()` でメッセージ/型を検証していない
 
 ## 個別コマンドの使い分け
 
@@ -171,6 +191,10 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
   - `staged` / `unstaged` / `両方` を選択
 - **`Dontforgetest: 出力ログを表示`**
   - Output Channel を開く
+- **`Dontforgetest: テストを分析`**
+  - 既存テストファイルを分析して改善点を提案
+- **`Dontforgetest: 最新の分析レポートを開く`**
+  - 最新の分析レポートを開く
 
 ## トラブルシュート
 

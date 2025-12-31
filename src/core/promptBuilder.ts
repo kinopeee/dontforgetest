@@ -11,7 +11,7 @@ export interface TestGenLanguageConfig {
 
 export interface BuildPromptOptions {
   workspaceRoot: string;
-  /** 対象の説明（例: 現在のファイル、最新コミット差分） */
+  /** 対象の説明（例: 最新コミット差分、コミット範囲差分） */
   targetLabel: string;
   /** エージェントに読ませたい対象ファイル（ワークスペース相対でも可） */
   targetPaths: string[];

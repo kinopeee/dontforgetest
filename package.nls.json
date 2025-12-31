@@ -31,5 +31,9 @@
   "configuration.allowUnsafeTestCommand.description": "(Kept for compatibility) Previously, when testExecutionRunner=extension, test commands that might launch VS Code in a separate process were skipped. Now tests are always executed due to improvements, so this setting is basically ignored.",
   "configuration.cursorAgentForceForTestExecution.description": "Add --force to cursor-agent for test execution (bypasses command execution approval, but also allows file editing, so default is false, enable explicitly only when needed)",
   "configuration.enablePreTestCheck.description": "Run type checking/Lint after test code generation and attempt automatic fixes if errors are found",
-  "configuration.preTestCheckCommand.description": "Type checking/Lint command to run after generation (e.g., npm run compile, npm run lint, tsc --noEmit)"
+  "configuration.preTestCheckCommand.description": "Type checking/Lint command to run after generation (e.g., npm run compile, npm run lint, tsc --noEmit)",
+  "configuration.analysisReportDir.description": "Directory to save test analysis reports (auto-generated) (workspace-relative or absolute)",
+  "configuration.analysisTestFilePattern.description": "Glob pattern for test files to analyze (e.g., src/test/**/*.test.ts)",
+  "command.analyzeTests.title": "Dontforgetest: Analyze Tests",
+  "command.openLatestAnalysisReport.title": "Dontforgetest: Open Latest Analysis Report"
 }

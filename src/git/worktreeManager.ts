@@ -17,6 +17,13 @@ export interface TemporaryWorktree {
   worktreeDir: string;
 }
 
+export type RemoveTemporaryWorktreeDeps = {
+  /** テスト用: git 実行関数を差し替える */
+  execGitStdout?: typeof execGitStdout;
+  /** テスト用: ディレクトリ削除関数を差し替える */
+  rm?: typeof fs.promises.rm;
+};
+
 /**
  * 一時worktree（detached）を作成する。
  *
@@ -44,24 +51,31 @@ export async function createTemporaryWorktree(params: CreateTemporaryWorktreePar
  * - git 管理情報の削除（worktree remove/prune）と、ディレクトリ実体の削除を試みる
  * - 失敗しても「残留しない」ことを優先し、最後に fs.rm で強制削除を試す
  */
-export async function removeTemporaryWorktree(repoRoot: string, worktreeDir: string): Promise<void> {
+export async function removeTemporaryWorktree(
+  repoRoot: string,
+  worktreeDir: string,
+  deps: RemoveTemporaryWorktreeDeps = {},
+): Promise<void> {
+  const exec = deps.execGitStdout ?? execGitStdout;
+  const rm = deps.rm ?? fs.promises.rm;
+
   // 1) git 側の管理情報を削除
   try {
-    await execGitStdout(repoRoot, ['worktree', 'remove', '--force', worktreeDir], 10 * 1024 * 1024);
+    await exec(repoRoot, ['worktree', 'remove', '--force', worktreeDir], 10 * 1024 * 1024);
   } catch {
     // noop（次へ）
   }
 
   // 2) worktree の参照を掃除（不要な参照が残るのを防ぐ）
   try {
-    await execGitStdout(repoRoot, ['worktree', 'prune'], 10 * 1024 * 1024);
+    await exec(repoRoot, ['worktree', 'prune'], 10 * 1024 * 1024);
   } catch {
     // noop
   }
 
   // 3) 実体ディレクトリの削除（最後の砦）
   try {
-    await fs.promises.rm(worktreeDir, { recursive: true, force: true });
+    await rm(worktreeDir, { recursive: true, force: true });
   } catch {
     // noop
   }

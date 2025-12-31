@@ -7,7 +7,9 @@ import { generateTestFromLatestCommit } from './commands/generateFromCommit';
 import { generateTestFromCommitRange } from './commands/generateFromCommitRange';
 import { generateTestFromWorkingTree } from './commands/generateFromWorkingTree';
 import { selectDefaultModel } from './commands/selectDefaultModel';
+import { analyzeTestsCommand, type AnalysisTarget } from './commands/analyzeTests';
 import { type TestGenerationRunMode } from './commands/runWithArtifacts';
+import { getAnalysisSettings } from './core/testAnalyzer';
 import { CursorAgentProvider } from './providers/cursorAgentProvider';
 import { TestGenControlPanelViewProvider } from './ui/controlPanel';
 import { showTestGenOutput } from './ui/outputChannel';
@@ -201,6 +203,35 @@ export function activate(context: vscode.ExtensionContext) {
 
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latest.fullPath));
       await vscode.window.showTextDocument(doc, { preview: true });
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('dontforgetest.analyzeTests', async (args?: { target?: AnalysisTarget }) => {
+      const target = args?.target === 'current' ? 'current' : args?.target === 'all' ? 'all' : undefined;
+      await analyzeTestsCommand(target);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('dontforgetest.openLatestAnalysisReport', async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        await vscode.window.showWarningMessage(t('workspace.notOpen'));
+        return;
+      }
+
+      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+      const settings = getAnalysisSettings();
+      const latestPath = await findLatestArtifact(workspaceRoot, settings.reportDir, 'test-analysis_');
+
+      if (!latestPath) {
+        await vscode.window.showInformationMessage(t('analysis.latestReport.notFound'));
+        return;
+      }
+
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latestPath));
+      await vscode.window.showTextDocument(doc);
     }),
   );
 }

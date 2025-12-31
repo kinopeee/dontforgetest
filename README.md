@@ -10,10 +10,9 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 
 - Run via **QuickPick UI / Control Panel** (choose source + model)
 - Generate from:
-  - Current file
   - Latest commit diff
   - Commit range diff
-  - Uncommitted diff (staged / unstaged)
+  - Uncommitted diff (staged / unstaged / both)
 - Select output:
   - **Perspective table + Generate tests (default)** / **Generate perspective table only**
 - Choose execution target (diff-based sources):
@@ -23,6 +22,10 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 - Consolidates logs in an **Output Channel**
 - Saves **test perspective tables** and **test execution reports** (Markdown; output directories are configurable)
 - Shows running task count in the **Status Bar** (click to open logs)
+- **Test Analysis**: Analyze existing test files and suggest improvements
+  - Detects missing Given/When/Then comments
+  - Detects missing boundary value tests
+  - Detects unverified exception messages
 
 ## Screenshots
 

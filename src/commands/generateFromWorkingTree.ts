@@ -26,7 +26,7 @@ export interface GenerateFromWorkingTreeDeps {
 }
 
 /**
- * 未コミット差分（staged / unstaged）に対してテスト生成を実行する。
+ * 未コミット差分（staged / unstaged / both）に対してテスト生成を実行する。
  */
 export async function generateTestFromWorkingTree(
   provider: AgentProvider,

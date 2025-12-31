@@ -11,14 +11,14 @@ suite('git/worktreeManager.ts', () => {
   let isGitRepo = false;
 
   suiteSetup(async () => {
-    // Find the actual git repository root
+    // 実際の git リポジトリルートを取得する
     repoRoot = process.cwd();
-    // Verify we're in a git repo
+    // git リポジトリ配下で実行されているか確認する
     try {
       await execGitStdout(repoRoot, ['rev-parse', '--git-dir'], 1024 * 1024);
       isGitRepo = true;
     } catch {
-      // Not a git repo, tests will be skipped
+      // git リポジトリでない場合は該当テストをスキップする
       isGitRepo = false;
     }
     tempBaseDir = path.join(os.tmpdir(), `dontforgetest-test-${Date.now()}`);
@@ -26,11 +26,11 @@ suite('git/worktreeManager.ts', () => {
   });
 
   suiteTeardown(() => {
-    // Cleanup
+    // クリーンアップ
     try {
       fs.rmSync(tempBaseDir, { recursive: true, force: true });
     } catch {
-      // Ignore cleanup errors
+      // クリーンアップ失敗は無視する
     }
   });
 
@@ -126,6 +126,58 @@ suite('git/worktreeManager.ts', () => {
       removeTemporaryWorktree(repoRoot, nonExistentWorktreeDir),
       'Should handle non-existent worktree gracefully',
     );
+  });
+
+  test('TC-E-14: removeTemporaryWorktree continues when git worktree prune fails (noop catch)', async () => {
+    // Given: "git worktree prune" のみ失敗する exec を用意する
+    let pruneThrown = false;
+    const execStub: typeof execGitStdout = async (_cwd: string, args: string[], _maxBytes: number) => {
+      if (Array.isArray(args) && args[0] === 'worktree' && args[1] === 'prune') {
+        pruneThrown = true;
+        throw new Error('prune failed');
+      }
+      return '';
+    };
+
+    const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-worktree-prune-'));
+
+    try {
+      // When: removeTemporaryWorktree is called
+      // Then: It resolves (no rejection) even if prune fails
+      await assert.doesNotReject(removeTemporaryWorktree(repoRoot, worktreeDir, { execGitStdout: execStub }));
+      assert.strictEqual(pruneThrown, true, 'Expected prune to throw and be swallowed');
+    } finally {
+      try {
+        fs.rmSync(worktreeDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  });
+
+  test('TC-E-15: removeTemporaryWorktree continues when fs.rm fails (noop catch)', async () => {
+    // Given: OS 依存の削除失敗を模擬するため、rm が例外を投げるようにする
+    const execStub: typeof execGitStdout = async (_cwd: string, _args: string[], _maxBytes: number) => '';
+    let rmThrown = false;
+    const rmStub: typeof fs.promises.rm = async (_path, _options) => {
+      rmThrown = true;
+      throw new Error('rm failed');
+    };
+
+    const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-worktree-rm-'));
+
+    try {
+      // When: removeTemporaryWorktree is called
+      // Then: It resolves (no rejection) even if fs.rm fails
+      await assert.doesNotReject(removeTemporaryWorktree(repoRoot, worktreeDir, { execGitStdout: execStub, rm: rmStub }));
+      assert.strictEqual(rmThrown, true, 'Expected fs.promises.rm to throw and be swallowed');
+    } finally {
+      try {
+        fs.rmSync(worktreeDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   });
 
   // TC-B-13: createTemporaryWorktree called with empty taskId
