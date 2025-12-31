@@ -304,6 +304,25 @@ test('throws error with message', () => {
         assert.strictEqual(exceptionIssues.length, 0);
       });
 
+      test('does not report issue when assert.throws has message parameter in multi-line call', () => {
+        // Given: assert.throws の第2引数が改行後に続く（一般的な整形）
+        const content = `
+test('throws error with message', () => {
+  assert.throws(
+    () => badFunction(),
+    /expected error/,
+  );
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-exception-message の問題は検出されない
+        const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
+        assert.strictEqual(exceptionIssues.length, 0);
+      });
+
       test('does not report issue when toThrow has message parameter', () => {
         // Given: toThrow() でメッセージを検証しているコード
         const content = `

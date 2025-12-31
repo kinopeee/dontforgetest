@@ -318,43 +318,268 @@ function checkExceptionMessageVerification(
   content: string,
 ): AnalysisIssue[] {
   const issues: AnalysisIssue[] = [];
-  const lines = content.split('\n');
+  const lineStartIndices = buildLineStartIndices(content);
 
-  // assert.throws(...) で第2引数がないかどうかをチェック
-  // 行に assert.throws があり、その行にカンマが含まれていなければ第2引数なしとみなす
-  // 例: assert.throws(() => fn());  -> 検出（カンマなし = 第2引数なし）
-  // 例: assert.throws(() => fn(), /message/); -> 検出しない（カンマあり = 第2引数あり）
-
-  // expect(...).toThrow() で引数がないパターン
-  // 例: expect(() => fn()).toThrow();
-  const expectToThrowPattern = /\.toThrow\s*\(\s*\)/;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // assert.throws を含む行でカンマがなければ第2引数なしとみなす
-    const hasAssertThrows = /assert\.throws\s*\(/.test(line);
-    const hasComma = line.includes(',');
-    if (hasAssertThrows && !hasComma) {
+  // assert.throws(...) の第2引数（メッセージ/型）未指定を検出する
+  // ポイント: よくある整形（第2引数が改行後に続く）でも誤検知しないよう、呼び出し全体を解析する
+  // 例: assert.throws(() => fn()); -> 検出（第2引数なし）
+  // 例: assert.throws(() => fn(), /message/); -> 検出しない（第2引数あり）
+  // 例: assert.throws(
+  //       () => fn(),
+  //       /message/,
+  //     ); -> 検出しない（複数行だが第2引数あり）
+  const assertThrowsCalls = findAssertThrowsCalls(content, lineStartIndices);
+  for (const call of assertThrowsCalls) {
+    if (!call.hasSecondArg) {
       issues.push({
         type: 'missing-exception-message',
         file: relativePath,
-        line: i + 1,
+        line: call.line,
         detail: t('analysis.detail.assertThrowsNoMessage'),
-      });
-    }
-
-    if (expectToThrowPattern.test(line)) {
-      issues.push({
-        type: 'missing-exception-message',
-        file: relativePath,
-        line: i + 1,
-        detail: t('analysis.detail.toThrowNoMessage'),
       });
     }
   }
 
+  // expect(...).toThrow() で引数がないパターン（複数行も含めて検出）
+  // 例: expect(() => fn()).toThrow();
+  const expectToThrowPattern = /\.toThrow\s*\(\s*\)/g;
+  for (const match of content.matchAll(expectToThrowPattern)) {
+    const index = match.index;
+    if (index === undefined) {
+      continue;
+    }
+    issues.push({
+      type: 'missing-exception-message',
+      file: relativePath,
+      line: indexToLineNumber(lineStartIndices, index),
+      detail: t('analysis.detail.toThrowNoMessage'),
+    });
+  }
+
   return issues;
+}
+
+function buildLineStartIndices(content: string): number[] {
+  // 1-based 行番号の逆引き用に、各行の開始インデックスを保持する
+  const indices: number[] = [0];
+  for (let i = 0; i < content.length; i++) {
+    if (content[i] === '\n') {
+      indices.push(i + 1);
+    }
+  }
+  return indices;
+}
+
+function indexToLineNumber(lineStartIndices: number[], index: number): number {
+  // lineStartIndices は昇順なので二分探索
+  let low = 0;
+  let high = lineStartIndices.length - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const start = lineStartIndices[mid];
+    const nextStart =
+      mid + 1 < lineStartIndices.length ? lineStartIndices[mid + 1] : Number.POSITIVE_INFINITY;
+    if (start <= index && index < nextStart) {
+      return mid + 1; // 1-based
+    }
+    if (index < start) {
+      high = mid - 1;
+      continue;
+    }
+    low = mid + 1;
+  }
+  return 1;
+}
+
+type AssertThrowsCallInfo = {
+  line: number;
+  hasSecondArg: boolean;
+};
+
+function findAssertThrowsCalls(content: string, lineStartIndices: number[]): AssertThrowsCallInfo[] {
+  const result: AssertThrowsCallInfo[] = [];
+  const needle = 'assert.throws';
+  let cursor = 0;
+
+  while (cursor < content.length) {
+    const found = content.indexOf(needle, cursor);
+    if (found === -1) {
+      break;
+    }
+
+    // "assert.throws" の直後から "(" まで進める（空白を許容）
+    let i = found + needle.length;
+    while (i < content.length && /\s/.test(content[i])) {
+      i++;
+    }
+    if (i >= content.length || content[i] !== '(') {
+      cursor = found + needle.length;
+      continue;
+    }
+
+    const openParenIndex = i;
+    const parsed = parseCallArgsForTopLevelComma(content, openParenIndex);
+    result.push({
+      line: indexToLineNumber(lineStartIndices, found),
+      hasSecondArg: parsed.hasTopLevelComma,
+    });
+
+    cursor = parsed.endIndex + 1;
+  }
+
+  return result;
+}
+
+type ParseCallArgsResult = {
+  endIndex: number;
+  hasTopLevelComma: boolean;
+};
+
+function parseCallArgsForTopLevelComma(content: string, openParenIndex: number): ParseCallArgsResult {
+  // openParenIndex は "(" の位置
+  let parenDepth = 1;
+  let braceDepth = 0;
+  let bracketDepth = 0;
+
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inTemplate = false;
+  let inRegex = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  let escaped = false;
+  let hasTopLevelComma = false;
+
+  for (let i = openParenIndex + 1; i < content.length; i++) {
+    const ch = content[i];
+    const next = i + 1 < content.length ? content[i + 1] : '';
+
+    if (inLineComment) {
+      if (ch === '\n') {
+        inLineComment = false;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+
+    if (inSingleQuote || inDoubleQuote || inTemplate) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (inSingleQuote && ch === "'") {
+        inSingleQuote = false;
+        continue;
+      }
+      if (inDoubleQuote && ch === '"') {
+        inDoubleQuote = false;
+        continue;
+      }
+      if (inTemplate && ch === '`') {
+        inTemplate = false;
+        continue;
+      }
+      continue;
+    }
+
+    if (inRegex) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === '/') {
+        inRegex = false;
+      }
+      continue;
+    }
+
+    // コメント開始
+    if (ch === '/' && next === '/') {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      inBlockComment = true;
+      i++;
+      continue;
+    }
+
+    // 文字列開始
+    if (ch === "'") {
+      inSingleQuote = true;
+      continue;
+    }
+    if (ch === '"') {
+      inDoubleQuote = true;
+      continue;
+    }
+    if (ch === '`') {
+      inTemplate = true;
+      continue;
+    }
+
+    // 正規表現開始（厳密ではないが、assert.throws 引数内では実用上十分）
+    if (ch === '/' && next !== '/' && next !== '*') {
+      inRegex = true;
+      continue;
+    }
+
+    // ネスト管理
+    if (ch === '(') {
+      parenDepth++;
+      continue;
+    }
+    if (ch === ')') {
+      parenDepth--;
+      if (parenDepth === 0) {
+        return { endIndex: i, hasTopLevelComma };
+      }
+      continue;
+    }
+    if (ch === '{') {
+      braceDepth++;
+      continue;
+    }
+    if (ch === '}') {
+      braceDepth = Math.max(0, braceDepth - 1);
+      continue;
+    }
+    if (ch === '[') {
+      bracketDepth++;
+      continue;
+    }
+    if (ch === ']') {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      continue;
+    }
+
+    // トップレベルの引数区切り（外側の () の直下）
+    if (ch === ',' && parenDepth === 1 && braceDepth === 0 && bracketDepth === 0) {
+      hasTopLevelComma = true;
+      // ここで早期returnしてもよいが、終端インデックスも欲しいので継続
+      continue;
+    }
+  }
+
+  // ) が見つからない場合は、最後まで走査した扱いにする
+  return { endIndex: content.length - 1, hasTopLevelComma };
 }
 
 /**
