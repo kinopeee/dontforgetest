@@ -5,22 +5,19 @@ globs:
   - "**/*.test.tsx"
   - "**/*.spec.ts"
   - "**/*.spec.tsx"
-  - "**/*.test.js"
-  - "**/*.spec.js"
   - "**/test/**/*.ts"
   - "**/tests/**/*.ts"
   - "**/__tests__/**/*.ts"
-  - "**/test/**/*.py"
-  - "**/*_test.py"
-  - "**/test_*.py"
-  - "**/*_test.go"
-  - "**/*Test.java"
+  - "src/test/**/*.ts"
+  - "src/test/**/*.tsx"
 alwaysApply: false
 ---
 
 # テスト生成ルール
 
 テストコードを生成する際に従うべきワークフローを定義する。
+
+※本リポジトリは **TypeScript のみ**を対象とする。Python / Go / Java のテスト生成・サンプル・カバレッジ手順は本ルールの対象外。
 
 ## ワークフロー概要
 
@@ -183,79 +180,41 @@ describe('UserService.createUser', () => {
 });
 ```
 
-### テストコード例（Python）
-
-```python
-class TestUserService:
-    # TC-N-01: 有効なユーザー情報で作成成功
-    def test_create_user_with_valid_input(self, user_service):
-        # Given: 有効なユーザー情報
-        input_data = {"name": "Test User", "email": "test@example.com"}
-
-        # When: ユーザー作成を実行
-        result = user_service.create_user(input_data)
-
-        # Then: ユーザーが作成される
-        assert result is not None
-        assert result.name == input_data["name"]
-
-    # TC-A-01: Noneでバリデーションエラー
-    def test_create_user_raises_error_when_name_is_none(self, user_service):
-        # Given: nameがNoneの入力
-        input_data = {"name": None, "email": "test@example.com"}
-
-        # When/Then: バリデーションエラーがスローされる
-        with pytest.raises(ValidationError) as exc_info:
-            user_service.create_user(input_data)
-        assert "name is required" in str(exc_info.value)
-
-    # TC-A-08: 外部API失敗時のエラーハンドリング
-    def test_create_user_handles_external_api_failure(self, user_service, mocker):
-        # Given: 外部APIが失敗するようモック
-        mocker.patch.object(
-            external_api, "verify",
-            side_effect=Exception("API Error")
-        )
-        input_data = {"name": "Test User", "email": "test@example.com"}
-
-        # When/Then: 適切なエラーがスローされる
-        with pytest.raises(ExternalServiceError):
-            user_service.create_user(input_data)
-```
-
 ## Step 3: 実行・カバレッジ確認
 
-1. テスト実行コマンドを記載（例: `npm run test`, `pytest --cov=...`）
-2. ブランチカバレッジ・ステートメントカバレッジを確認
-3. カバレッジレポートの要約を可能な範囲で添付
+### 実施すること（必須）
 
-### カバレッジコマンド例
+1. **PR本文**の「テスト内容」に、実行したコマンドを記載（例: `npm test`, `npm run coverage`）
+2. `c8` の出力を確認し、**ステートメント/ブランチ**を中心にカバレッジを確認
+   - 目標値（目安）: **Statements 80%+ / Branches 80%+**
+   - 既存が未達の場合: **このPRで低下させない**ことを最低要件とする
+3. **PR本文**に、カバレッジの要約（数値）を貼り付ける（CIログのみで完結させない）
+4. 低下/未達の場合は、PR本文に **理由・影響範囲・代替検証方法・フォローアップ（Issue等）** を明記する
 
-#### JavaScript/TypeScript
+### カバレッジコマンド例（本リポジトリ）
 
 ```bash
-# Jest
-npm run test -- --coverage
+# 通常実行（pretest で compile が走る）
+npm test
 
-# Vitest
-npx vitest run --coverage
+# カバレッジ（text + lcov）
+npm run coverage
+
+# runTest 単体のカバレッジ（text + lcov）
+npm run coverage:runTest
+
+# HTML レポートが欲しい場合（任意）
+npx c8 -r html npm test
 ```
 
-#### Python
+### PR本文への貼り付け例
 
-```bash
-# pytest
-pytest --cov=src --cov-report=html
-
-# coverage.py
-coverage run -m pytest && coverage report
-```
-
-#### Go
-
-```bash
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
+```text
+## テスト内容
+- テスト: npm test
+- カバレッジ: npm run coverage
+  - Statements: xx% / Branches: yy% / Functions: zz% / Lines: aa%
+  - lcov: coverage/lcov.info（CI成果物 or ローカル生成）
 ```
 
 ## 運用ルール
@@ -264,9 +223,20 @@ go tool cover -html=coverage.out
 - 外部依存がなくてもモックで失敗系をテスト
 - 仕様変更時はテスト観点表とテストコードを同時更新
 - 自動化困難なケースは理由と代替手段を明記しレビュアと合意
-- **意味のある本番コード変更（機能追加、バグ修正、振る舞いに影響するリファクタ）を含むすべてのPR**には、対応するテストの追加・更新が必須
+- **意味のある本番コード変更**（下記「判断基準」参照）を含むすべてのPRには、対応するテストの追加・更新が必須
 - テスト更新が現実的でない場合は、PR説明に理由と代替検証方法を記載
 - 振る舞い変更を意図しないリファクタでは、既存テストが変更コードをカバーしていることを確認。カバレッジ不足の場合はテストを追加
+
+### 「意味のある本番コード変更」判断基準（チェックリスト）
+
+以下のいずれかに該当すれば「意味のある変更」とみなし、テストの追加/更新が必須：
+
+- [ ] ユーザーの操作/表示/生成物（ログ、レポート、ファイル、WebView/TreeView表示）が変わる
+- [ ] コマンド/設定/公開API（`package.json` の contributes や設定項目、ID、既定値）に変更がある
+- [ ] エラー処理（例外種別/メッセージ/フォールバック）、リトライ、タイムアウト、キャンセル挙動が変わる
+- [ ] 外部コマンド実行（cursor-agent / git 等）やファイルI/Oのパス、引数、権限、サニタイズ挙動が変わる
+- [ ] 並列度、リソース管理、処理時間に影響する変更（パフォーマンス/安定性/セキュリティ）
+- [ ] 既存のバグ回避コードや互換性維持ロジックに変更がある
 
 ## 適用除外
 
