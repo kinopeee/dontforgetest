@@ -14,6 +14,8 @@ docs/test-execution-reports/*
 !docs/test-execution-reports/.gitkeep
 docs/test-perspectives/*
 !docs/test-perspectives/.gitkeep
+docs/test-analysis-reports/*
+!docs/test-analysis-reports/.gitkeep
 docs/test-perspective-tables/
 coverage/
 .nyc_output/
