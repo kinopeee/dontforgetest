@@ -3,7 +3,7 @@
   "publisher": "kinopeee",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.114",
+  "version": "0.0.115",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.105.0"
@@ -14,6 +14,7 @@
   ],
   "main": "./out/extension.js",
   "l10n": "./l10n",
+  "activationEvents": [],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -88,6 +89,14 @@
       {
         "command": "dontforgetest.openLatestMergeInstruction",
         "title": "%command.openLatestMergeInstruction.title%"
+      },
+      {
+        "command": "dontforgetest.analyzeTests",
+        "title": "%command.analyzeTests.title%"
+      },
+      {
+        "command": "dontforgetest.openLatestAnalysisReport",
+        "title": "%command.openLatestAnalysisReport.title%"
       }
     ],
     "menus": {
@@ -184,6 +193,16 @@
           "type": "string",
           "default": "npm run compile",
           "description": "%configuration.preTestCheckCommand.description%"
+        },
+        "dontforgetest.analysisReportDir": {
+          "type": "string",
+          "default": "docs/test-analysis-reports",
+          "description": "%configuration.analysisReportDir.description%"
+        },
+        "dontforgetest.analysisTestFilePattern": {
+          "type": "string",
+          "default": "src/test/**/*.test.ts",
+          "description": "%configuration.analysisTestFilePattern.description%"
         }
       }
     }

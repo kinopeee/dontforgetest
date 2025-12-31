@@ -9,6 +9,7 @@ import * as quickPickModule from '../../../ui/quickPick';
 import * as outputChannelModule from '../../../ui/outputChannel';
 import * as generateFromWorkingTreeModule from '../../../commands/generateFromWorkingTree';
 import * as selectDefaultModelModule from '../../../commands/selectDefaultModel';
+import * as analyzeTestsModule from '../../../commands/analyzeTests';
 
 type ExecuteCommand = typeof vscode.commands.executeCommand;
 
@@ -21,6 +22,23 @@ const assertRejectsWithErrorMessage = async (fn: () => Promise<unknown>, expecte
 };
 
 suite('src/extension.ts command handlers (high priority coverage)', () => {
+  const setWorkspaceFolders = (folders: vscode.WorkspaceFolder[] | undefined): (() => void) => {
+    const workspaceObj = vscode.workspace as unknown as { workspaceFolders?: vscode.WorkspaceFolder[] };
+    const hadOwn = Object.prototype.hasOwnProperty.call(workspaceObj, 'workspaceFolders');
+    const originalDesc = Object.getOwnPropertyDescriptor(workspaceObj, 'workspaceFolders');
+    Object.defineProperty(workspaceObj, 'workspaceFolders', {
+      configurable: true,
+      get: () => folders,
+    });
+    return () => {
+      if (hadOwn && originalDesc) {
+        Object.defineProperty(workspaceObj, 'workspaceFolders', originalDesc);
+        return;
+      }
+      delete workspaceObj.workspaceFolders;
+    };
+  };
+
   suiteSetup(async () => {
     // Given: The extension is installed
     const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
@@ -267,6 +285,38 @@ suite('src/extension.ts command handlers (high priority coverage)', () => {
     }
   });
 
+  test('TC-EXTCMD-E-11: dontforgetest.openLatestPerspective shows warning when workspace is not open', async () => {
+    // Given: workspaceFolders is undefined
+    const restoreWorkspaceFolders = setWorkspaceFolders(undefined);
+
+    const originalShowWarn = vscode.window.showWarningMessage;
+    const warnings: string[] = [];
+    (vscode.window as unknown as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = async (message: string) => {
+      warnings.push(message);
+      return undefined;
+    };
+
+    const originalFindLatest = artifactsModule.findLatestArtifact;
+    let findCalled = false;
+    (artifactsModule as unknown as { findLatestArtifact: typeof artifactsModule.findLatestArtifact }).findLatestArtifact = async () => {
+      findCalled = true;
+      return undefined;
+    };
+
+    try {
+      // When: Executing the command
+      await vscode.commands.executeCommand('dontforgetest.openLatestPerspective');
+
+      // Then: It warns and returns early (no findLatestArtifact call)
+      assert.deepStrictEqual(warnings, [t('workspace.notOpen')]);
+      assert.strictEqual(findCalled, false);
+    } finally {
+      restoreWorkspaceFolders();
+      (vscode.window as unknown as { showWarningMessage: typeof originalShowWarn }).showWarningMessage = originalShowWarn;
+      (artifactsModule as unknown as { findLatestArtifact: typeof originalFindLatest }).findLatestArtifact = originalFindLatest;
+    }
+  });
+
   test('TC-EXTCMD-N-07: dontforgetest.openLatestPerspective opens the path returned by findLatestArtifact', async () => {
     // Given: findLatestArtifact returns a deterministic file path and openTextDocument/showTextDocument are stubbed
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
@@ -328,6 +378,177 @@ suite('src/extension.ts command handlers (high priority coverage)', () => {
     } finally {
       (artifactsModule as unknown as { findLatestArtifact: typeof originalFindLatest }).findLatestArtifact = originalFindLatest;
       (vscode.window as unknown as { showInformationMessage: typeof originalShowInfo }).showInformationMessage = originalShowInfo;
+    }
+  });
+
+  test('TC-EXTCMD-E-12: dontforgetest.openLatestExecutionReport shows warning when workspace is not open', async () => {
+    // Given: workspaceFolders is an empty array
+    const restoreWorkspaceFolders = setWorkspaceFolders([]);
+
+    const originalShowWarn = vscode.window.showWarningMessage;
+    const warnings: string[] = [];
+    (vscode.window as unknown as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = async (message: string) => {
+      warnings.push(message);
+      return undefined;
+    };
+
+    const originalFindLatest = artifactsModule.findLatestArtifact;
+    let findCalled = false;
+    (artifactsModule as unknown as { findLatestArtifact: typeof artifactsModule.findLatestArtifact }).findLatestArtifact = async () => {
+      findCalled = true;
+      return undefined;
+    };
+
+    try {
+      // When: Executing the command
+      await vscode.commands.executeCommand('dontforgetest.openLatestExecutionReport');
+
+      // Then: It warns and returns early (no findLatestArtifact call)
+      assert.deepStrictEqual(warnings, [t('workspace.notOpen')]);
+      assert.strictEqual(findCalled, false);
+    } finally {
+      restoreWorkspaceFolders();
+      (vscode.window as unknown as { showWarningMessage: typeof originalShowWarn }).showWarningMessage = originalShowWarn;
+      (artifactsModule as unknown as { findLatestArtifact: typeof originalFindLatest }).findLatestArtifact = originalFindLatest;
+    }
+  });
+
+  test('TC-EXTCMD-E-13: dontforgetest.openLatestAnalysisReport shows warning when workspace is not open', async () => {
+    // Given: workspaceFolders is undefined
+    const restoreWorkspaceFolders = setWorkspaceFolders(undefined);
+
+    const originalShowWarn = vscode.window.showWarningMessage;
+    const warnings: string[] = [];
+    (vscode.window as unknown as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = async (message: string) => {
+      warnings.push(message);
+      return undefined;
+    };
+
+    const originalFindLatest = artifactsModule.findLatestArtifact;
+    let findCalled = false;
+    (artifactsModule as unknown as { findLatestArtifact: typeof artifactsModule.findLatestArtifact }).findLatestArtifact = async () => {
+      findCalled = true;
+      return undefined;
+    };
+
+    try {
+      // When: Executing the command
+      await vscode.commands.executeCommand('dontforgetest.openLatestAnalysisReport');
+
+      // Then: It warns and returns early (no findLatestArtifact call)
+      assert.deepStrictEqual(warnings, [t('workspace.notOpen')]);
+      assert.strictEqual(findCalled, false);
+    } finally {
+      restoreWorkspaceFolders();
+      (vscode.window as unknown as { showWarningMessage: typeof originalShowWarn }).showWarningMessage = originalShowWarn;
+      (artifactsModule as unknown as { findLatestArtifact: typeof originalFindLatest }).findLatestArtifact = originalFindLatest;
+    }
+  });
+
+  test('TC-EXTCMD-E-14: dontforgetest.openLatestAnalysisReport shows info when latest artifact is not found', async () => {
+    // Given: findLatestArtifact returns undefined
+    const originalFindLatest = artifactsModule.findLatestArtifact;
+    (artifactsModule as unknown as { findLatestArtifact: typeof artifactsModule.findLatestArtifact }).findLatestArtifact = async () => undefined;
+
+    const originalShowInfo = vscode.window.showInformationMessage;
+    const messages: string[] = [];
+    (vscode.window as unknown as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = async (
+      message: string,
+    ) => {
+      messages.push(message);
+      return undefined;
+    };
+
+    try {
+      // When: Executing the command
+      await vscode.commands.executeCommand('dontforgetest.openLatestAnalysisReport');
+
+      // Then: It shows the localized "not found" message exactly once
+      assert.deepStrictEqual(messages, [t('analysis.latestReport.notFound')]);
+    } finally {
+      (artifactsModule as unknown as { findLatestArtifact: typeof originalFindLatest }).findLatestArtifact = originalFindLatest;
+      (vscode.window as unknown as { showInformationMessage: typeof originalShowInfo }).showInformationMessage = originalShowInfo;
+    }
+  });
+
+  test('TC-EXTCMD-N-10: dontforgetest.openLatestAnalysisReport opens the path returned by findLatestArtifact', async () => {
+    // Given: findLatestArtifact returns a deterministic file path and openTextDocument/showTextDocument are stubbed
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const fakePath = path.join(workspaceRoot, 'docs', 'test-analysis-reports', 'test-analysis_20990101_000000.md');
+
+    const originalFindLatest = artifactsModule.findLatestArtifact;
+    const workspaceAny = vscode.workspace as unknown as { openTextDocument: unknown };
+    const originalOpenTextDocument = workspaceAny.openTextDocument as typeof vscode.workspace.openTextDocument;
+    const originalShowTextDocument = vscode.window.showTextDocument;
+
+    let openedPath: string | undefined;
+    let capturedPrefix: string | undefined;
+    let capturedWorkspaceRoot: string | undefined;
+    let capturedReportDir: string | undefined;
+
+    (artifactsModule as unknown as { findLatestArtifact: typeof artifactsModule.findLatestArtifact }).findLatestArtifact = async (
+      root: string,
+      reportDir: string,
+      prefix: string,
+    ) => {
+      capturedWorkspaceRoot = root;
+      capturedReportDir = reportDir;
+      capturedPrefix = prefix;
+      return fakePath;
+    };
+
+    workspaceAny.openTextDocument = (async (...args: unknown[]) => {
+      const first = args[0];
+      if (first instanceof vscode.Uri) {
+        openedPath = first.fsPath;
+      } else if (typeof first === 'string') {
+        openedPath = first;
+      }
+      return {} as unknown as vscode.TextDocument;
+    }) as unknown;
+    (vscode.window as unknown as { showTextDocument: typeof vscode.window.showTextDocument }).showTextDocument = async () => {
+      return {} as unknown as vscode.TextEditor;
+    };
+
+    try {
+      // When: Executing the command
+      await vscode.commands.executeCommand('dontforgetest.openLatestAnalysisReport');
+
+      // Then: It queries for test-analysis_ artifacts and opens the returned path
+      assert.strictEqual(capturedWorkspaceRoot, workspaceRoot);
+      assert.ok(typeof capturedReportDir === 'string' && capturedReportDir.length > 0, 'Expected reportDir to be a non-empty string');
+      assert.strictEqual(capturedPrefix, 'test-analysis_');
+      assert.strictEqual(openedPath, fakePath);
+    } finally {
+      (artifactsModule as unknown as { findLatestArtifact: typeof originalFindLatest }).findLatestArtifact = originalFindLatest;
+      workspaceAny.openTextDocument = originalOpenTextDocument as unknown;
+      (vscode.window as unknown as { showTextDocument: typeof originalShowTextDocument }).showTextDocument = originalShowTextDocument;
+    }
+  });
+
+  test('TC-EXTCMD-N-11: dontforgetest.analyzeTests normalizes args.target and calls analyzeTestsCommand', async () => {
+    // Given: analyzeTestsCommand is stubbed to capture the normalized target
+    const originalAnalyze = analyzeTestsModule.analyzeTestsCommand;
+    const received: Array<unknown> = [];
+    (analyzeTestsModule as unknown as { analyzeTestsCommand: typeof analyzeTestsModule.analyzeTestsCommand }).analyzeTestsCommand = async (
+      target,
+    ) => {
+      received.push(target);
+    };
+
+    try {
+      // When: Executing the command with different args.target shapes
+      await vscode.commands.executeCommand('dontforgetest.analyzeTests');
+      await vscode.commands.executeCommand('dontforgetest.analyzeTests', { target: 'all' });
+      await vscode.commands.executeCommand('dontforgetest.analyzeTests', { target: 'current' });
+      await vscode.commands.executeCommand('dontforgetest.analyzeTests', { target: 'invalid' });
+      await vscode.commands.executeCommand('dontforgetest.analyzeTests', { target: undefined });
+      await vscode.commands.executeCommand('dontforgetest.analyzeTests', {});
+
+      // Then: target is normalized to 'all' | 'current' | undefined
+      assert.deepStrictEqual(received, [undefined, 'all', 'current', undefined, undefined, undefined]);
+    } finally {
+      (analyzeTestsModule as unknown as { analyzeTestsCommand: typeof originalAnalyze }).analyzeTestsCommand = originalAnalyze;
     }
   });
 

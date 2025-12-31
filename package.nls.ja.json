@@ -31,5 +31,9 @@
   "configuration.allowUnsafeTestCommand.description": "（互換性のため残置）以前は testExecutionRunner=extension の場合に、VS Code を別プロセスで起動しそうなテストコマンドをスキップしていました。現在は改善策により常に実行するため、本設定は基本的に無視されます。",
   "configuration.cursorAgentForceForTestExecution.description": "cursor-agent の `--force` をテスト実行時にも付与するか。`--force` はコマンド実行の承認を省略できる一方、ファイル編集も可能にするため、既定は false とし、必要な場合のみ明示的に有効化する。",
   "configuration.enablePreTestCheck.description": "テストコード生成後に型チェック/Lintを実行し、エラーがあれば自動修正を試みる",
-  "configuration.preTestCheckCommand.description": "生成後に実行する型チェック/Lintコマンド（例: npm run compile, npm run lint, tsc --noEmit）"
+  "configuration.preTestCheckCommand.description": "生成後に実行する型チェック/Lintコマンド（例: npm run compile, npm run lint, tsc --noEmit）",
+  "configuration.analysisReportDir.description": "テスト分析レポート（自動生成）の保存先ディレクトリ（ワークスペース相対または絶対）",
+  "configuration.analysisTestFilePattern.description": "分析対象のテストファイルパターン（glob形式。例: src/test/**/*.test.ts）",
+  "command.analyzeTests.title": "Dontforgetest: テストを分析",
+  "command.openLatestAnalysisReport.title": "Dontforgetest: 最新の分析レポートを開く"
 }

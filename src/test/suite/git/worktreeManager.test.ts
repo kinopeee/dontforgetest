@@ -128,6 +128,70 @@ suite('git/worktreeManager.ts', () => {
     );
   });
 
+  test('TC-E-14: removeTemporaryWorktree continues when git worktree prune fails (noop catch)', async () => {
+    // Given: execGitStdout throws only for "git worktree prune"
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const gitExec = require('../../../git/gitExec') as typeof import('../../../git/gitExec');
+    const originalExec = gitExec.execGitStdout;
+
+    let pruneThrown = false;
+    gitExec.execGitStdout = (async (_cwd: string, args: string[], _maxBytes: number) => {
+      if (Array.isArray(args) && args[0] === 'worktree' && args[1] === 'prune') {
+        pruneThrown = true;
+        throw new Error('prune failed');
+      }
+      return '';
+    }) as unknown as typeof gitExec.execGitStdout;
+
+    const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-worktree-prune-'));
+
+    try {
+      // When: removeTemporaryWorktree is called
+      // Then: It resolves (no rejection) even if prune fails
+      await assert.doesNotReject(removeTemporaryWorktree(repoRoot, worktreeDir));
+      assert.strictEqual(pruneThrown, true, 'Expected prune to throw and be swallowed');
+    } finally {
+      gitExec.execGitStdout = originalExec;
+      try {
+        fs.rmSync(worktreeDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  });
+
+  test('TC-E-15: removeTemporaryWorktree continues when fs.rm fails (noop catch)', async () => {
+    // Given: fs.promises.rm throws (simulating an OS-level deletion failure)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const gitExec = require('../../../git/gitExec') as typeof import('../../../git/gitExec');
+    const originalExec = gitExec.execGitStdout;
+    gitExec.execGitStdout = (async (_cwd: string, _args: string[], _maxBytes: number) => '') as unknown as typeof gitExec.execGitStdout;
+
+    const originalRm = fs.promises.rm;
+    let rmThrown = false;
+    (fs.promises as unknown as { rm: typeof fs.promises.rm }).rm = (async () => {
+      rmThrown = true;
+      throw new Error('rm failed');
+    }) as unknown as typeof fs.promises.rm;
+
+    const worktreeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-worktree-rm-'));
+
+    try {
+      // When: removeTemporaryWorktree is called
+      // Then: It resolves (no rejection) even if fs.rm fails
+      await assert.doesNotReject(removeTemporaryWorktree(repoRoot, worktreeDir));
+      assert.strictEqual(rmThrown, true, 'Expected fs.promises.rm to throw and be swallowed');
+    } finally {
+      gitExec.execGitStdout = originalExec;
+      (fs.promises as unknown as { rm: typeof originalRm }).rm = originalRm;
+      try {
+        fs.rmSync(worktreeDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  });
+
   // TC-B-13: createTemporaryWorktree called with empty taskId
   test('TC-B-13: createTemporaryWorktree sanitizes empty taskId to default', async function () {
     if (!isGitRepo) {

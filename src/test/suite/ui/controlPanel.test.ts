@@ -37,7 +37,7 @@ suite('src/ui/controlPanel.ts', () => {
     executedCommandCalls = [];
     postedMessages = [];
 
-    // タスクマネージャーをクリーンアップ
+    // Cleanup task manager state between tests
     taskManager.cancelAll();
 
     // Mock Context
@@ -77,9 +77,9 @@ suite('src/ui/controlPanel.ts', () => {
   });
 
   teardown(() => {
-    // テスト後のクリーンアップ
+    // Cleanup after each test
     taskManager.cancelAll();
-    // プロバイダーのリスナーを解除（リスナー蓄積を防ぐ）
+    // Dispose provider to avoid listener accumulation across tests
     provider.dispose();
   });
 
@@ -101,6 +101,13 @@ suite('src/ui/controlPanel.ts', () => {
   function createWebviewScriptHarness(html: string): {
     runBtn: { textContent: string; classList: { contains: (c: string) => boolean } };
     dispatchStateUpdate: (msg: { isRunning: boolean; taskCount?: number; phaseLabel?: unknown }) => void;
+    postedMessages: unknown[];
+    clickAnalyze: () => void;
+    setAnalysisTarget: (value: string) => void;
+    clickTabAnalyze: () => void;
+    clickTabGenerate: () => void;
+    isTabActive: (tab: 'generate' | 'analyze') => boolean;
+    isContentActive: (tab: 'generate' | 'analyze') => boolean;
   } {
     const script = extractInlineScriptFromHtml(html);
 
@@ -123,6 +130,60 @@ suite('src/ui/controlPanel.ts', () => {
     const runLocationSelect = { disabled: false, value: 'local', addEventListener: () => {} };
     const outputSelect = { disabled: false, value: 'full', addEventListener: () => {} };
     const helpLine = { textContent: '', style: { display: 'none' } };
+    const analysisTargetSelect = { disabled: false, value: 'all', addEventListener: () => {} };
+    let analyzeClickHandler: (() => void) | undefined;
+    const analyzeBtn = {
+      textContent: '',
+      addEventListener: (type: string, cb: unknown) => {
+        if (type === 'click') {
+          analyzeClickHandler = cb as () => void;
+        }
+      },
+    };
+
+    // Tab elements
+    const tabClasses = { generate: new Set<string>(['active']), analyze: new Set<string>() };
+    let tabGenerateClickHandler: (() => void) | undefined;
+    const tabGenerate = {
+      classList: {
+        add: (c: string) => tabClasses.generate.add(c),
+        remove: (c: string) => tabClasses.generate.delete(c),
+        contains: (c: string) => tabClasses.generate.has(c),
+      },
+      addEventListener: (type: string, cb: unknown) => {
+        if (type === 'click') {
+          tabGenerateClickHandler = cb as () => void;
+        }
+      },
+    };
+    let tabAnalyzeClickHandler: (() => void) | undefined;
+    const tabAnalyze = {
+      classList: {
+        add: (c: string) => tabClasses.analyze.add(c),
+        remove: (c: string) => tabClasses.analyze.delete(c),
+        contains: (c: string) => tabClasses.analyze.has(c),
+      },
+      addEventListener: (type: string, cb: unknown) => {
+        if (type === 'click') {
+          tabAnalyzeClickHandler = cb as () => void;
+        }
+      },
+    };
+    const contentClasses = { generate: new Set<string>(['active']), analyze: new Set<string>() };
+    const contentGenerate = {
+      classList: {
+        add: (c: string) => contentClasses.generate.add(c),
+        remove: (c: string) => contentClasses.generate.delete(c),
+        contains: (c: string) => contentClasses.generate.has(c),
+      },
+    };
+    const contentAnalyze = {
+      classList: {
+        add: (c: string) => contentClasses.analyze.add(c),
+        remove: (c: string) => contentClasses.analyze.delete(c),
+        contains: (c: string) => contentClasses.analyze.has(c),
+      },
+    };
 
     const elements = new Map<string, unknown>([
       ['runBtn', runBtn],
@@ -130,6 +191,12 @@ suite('src/ui/controlPanel.ts', () => {
       ['runLocationSelect', runLocationSelect],
       ['outputSelect', outputSelect],
       ['helpLine', helpLine],
+      ['analysisTargetSelect', analysisTargetSelect],
+      ['analyzeBtn', analyzeBtn],
+      ['tabGenerate', tabGenerate],
+      ['tabAnalyze', tabAnalyze],
+      ['contentGenerate', contentGenerate],
+      ['contentAnalyze', contentAnalyze],
     ]);
 
     let messageHandler: ((event: { data: unknown }) => void) | undefined;
@@ -164,6 +231,24 @@ suite('src/ui/controlPanel.ts', () => {
       dispatchStateUpdate: (msg: { isRunning: boolean; taskCount?: number; phaseLabel?: unknown }) => {
         messageHandler?.({ data: { type: 'stateUpdate', ...msg } });
       },
+      postedMessages: posted,
+      clickAnalyze: () => {
+        assert.ok(typeof analyzeClickHandler === 'function', 'Expected analyzeBtn click handler to be registered');
+        analyzeClickHandler?.();
+      },
+      setAnalysisTarget: (value: string) => {
+        analysisTargetSelect.value = value;
+      },
+      clickTabAnalyze: () => {
+        assert.ok(typeof tabAnalyzeClickHandler === 'function', 'Expected tabAnalyze click handler to be registered');
+        tabAnalyzeClickHandler?.();
+      },
+      clickTabGenerate: () => {
+        assert.ok(typeof tabGenerateClickHandler === 'function', 'Expected tabGenerate click handler to be registered');
+        tabGenerateClickHandler?.();
+      },
+      isTabActive: (tab: 'generate' | 'analyze') => tabClasses[tab].has('active'),
+      isContentActive: (tab: 'generate' | 'analyze') => contentClasses[tab].has('active'),
     };
   }
 
@@ -653,6 +738,32 @@ suite('src/ui/controlPanel.ts', () => {
     assert.strictEqual(executedCommandCalls.length, 1);
     assert.strictEqual(executedCommandCalls[0]?.command, 'dontforgetest.generateTestFromCommit');
     assert.deepStrictEqual(executedCommandCalls[0]?.args, [{ runLocation: 'local', runMode: 'full' }]);
+  });
+
+  test('CP-N-ANALYZE-01: analyze message (target=all) calls dontforgetest.analyzeTests with args', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+
+    // When: An analyze message is sent with target="all"
+    await webviewView.webview._onMessage?.({ type: 'analyze', target: 'all' });
+
+    // Then: executeCommand is called once with the expected command and args
+    assert.strictEqual(executedCommandCalls.length, 1);
+    assert.strictEqual(executedCommandCalls[0]?.command, 'dontforgetest.analyzeTests');
+    assert.deepStrictEqual(executedCommandCalls[0]?.args, [{ target: 'all' }]);
+  });
+
+  test('CP-N-ANALYZE-02: analyze message (target=current) calls dontforgetest.analyzeTests with args', async () => {
+    // Given: Provider initialized and resolved
+    resolveView();
+
+    // When: An analyze message is sent with target="current"
+    await webviewView.webview._onMessage?.({ type: 'analyze', target: 'current' });
+
+    // Then: executeCommand is called once with the expected command and args
+    assert.strictEqual(executedCommandCalls.length, 1);
+    assert.strictEqual(executedCommandCalls[0]?.command, 'dontforgetest.analyzeTests');
+    assert.deepStrictEqual(executedCommandCalls[0]?.args, [{ target: 'current' }]);
   });
 
   test('CP-N-RUNMODE-PO-01: run message with runMode=perspectiveOnly passes args', async () => {
@@ -2046,6 +2157,70 @@ suite('src/ui/controlPanel.ts', () => {
 
       // Then: Run button text falls back to "Generating... (Cancel)"
       assert.strictEqual(harness.runBtn.textContent, 'Generating... (Cancel)');
+    });
+  });
+
+  suite('analyze button and tab switching in webview script', () => {
+    test('WV-N-ANALYZE-01: clicking Analyze posts {type:"analyze", target:"all"} by default', () => {
+      // Given: The webview HTML/script is loaded (default analysisTargetSelect.value="all")
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+
+      // When: Clicking the analyze button
+      harness.clickAnalyze();
+
+      // Then: One analyze message is posted with target="all"
+      assert.strictEqual(harness.postedMessages.length, 2, 'Expected ready + analyze messages to be posted');
+      assert.deepStrictEqual(harness.postedMessages[1], { type: 'analyze', target: 'all' });
+    });
+
+    test('WV-N-ANALYZE-02: clicking Analyze posts {type:"analyze", target:"current"} when selection is changed', () => {
+      // Given: The webview HTML/script is loaded
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+      harness.setAnalysisTarget('current');
+
+      // When: Clicking the analyze button
+      harness.clickAnalyze();
+
+      // Then: Posted analyze message uses the selected target
+      assert.strictEqual(harness.postedMessages.length, 2, 'Expected ready + analyze messages to be posted');
+      assert.deepStrictEqual(harness.postedMessages[1], { type: 'analyze', target: 'current' });
+    });
+
+    test('WV-N-TAB-01: clicking Analyze tab activates analyze content and deactivates generate content', () => {
+      // Given: The webview HTML/script is loaded (Generate tab active by default)
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+      assert.strictEqual(harness.isTabActive('generate'), true);
+      assert.strictEqual(harness.isContentActive('generate'), true);
+      assert.strictEqual(harness.isTabActive('analyze'), false);
+      assert.strictEqual(harness.isContentActive('analyze'), false);
+
+      // When: Clicking the Analyze tab
+      harness.clickTabAnalyze();
+
+      // Then: Analyze tab/content become active and Generate tab/content become inactive
+      assert.strictEqual(harness.isTabActive('generate'), false);
+      assert.strictEqual(harness.isContentActive('generate'), false);
+      assert.strictEqual(harness.isTabActive('analyze'), true);
+      assert.strictEqual(harness.isContentActive('analyze'), true);
+    });
+
+    test('WV-N-TAB-02: clicking Generate tab switches back to generate content', () => {
+      // Given: The webview HTML/script is loaded and switched to Analyze tab
+      resolveView();
+      const harness = createWebviewScriptHarness(webviewView.webview.html);
+      harness.clickTabAnalyze();
+
+      // When: Clicking the Generate tab
+      harness.clickTabGenerate();
+
+      // Then: Generate tab/content become active and Analyze tab/content become inactive
+      assert.strictEqual(harness.isTabActive('generate'), true);
+      assert.strictEqual(harness.isContentActive('generate'), true);
+      assert.strictEqual(harness.isTabActive('analyze'), false);
+      assert.strictEqual(harness.isContentActive('analyze'), false);
     });
   });
 });
