@@ -57,6 +57,14 @@ interface TestFunction {
   startLine: number;
   endLine: number;
   content: string;
+  /**
+   * test/it の直前に書かれた連続コメント（空行で区切られる）を保持する。
+   *
+   * NOTE:
+   * - テスト観点として Given/When/Then を「テスト本文内」だけでなく「直前コメント」に書く運用もあるため、
+   *   解析では両方を許容する（レポートの誤検知を避ける）。
+   */
+  leadingComments: string;
 }
 
 /**
@@ -152,7 +160,11 @@ export function analyzeFileContent(relativePath: string, content: string): Analy
 
   // 1. Given/When/Then コメントのチェック（厳格: 全て必須）
   for (const testFn of testFunctions) {
-    const gwtResult = checkGivenWhenThenStrict(testFn.content);
+    // テスト本文 + 直前コメントを対象に判定する
+    const gwtSearchText = testFn.leadingComments
+      ? `${testFn.leadingComments}\n${testFn.content}`
+      : testFn.content;
+    const gwtResult = checkGivenWhenThenStrict(gwtSearchText);
     if (!gwtResult.valid) {
       issues.push({
         type: 'missing-gwt',
@@ -211,17 +223,47 @@ function extractTestFunctions(content: string, codeOnlyContent: string): TestFun
       // テスト関数の終了を探す（codeOnlyLines を使ってブレースカウント）
       const endLine = findFunctionEnd(codeOnlyLines, i);
       const testContent = lines.slice(i, endLine).join('\n');
+      const leadingComments = extractLeadingComments(lines, i);
 
       functions.push({
         name: testName,
         startLine,
         endLine,
         content: testContent,
+        leadingComments,
       });
     }
   }
 
   return functions;
+}
+
+/**
+ * test/it の直前にある「連続コメントブロック」を抽出する。
+ *
+ * ルール:
+ * - test/it の直前行から上に向かって走査する
+ * - 空行が出たら終了（コメントの関連付けを曖昧にしない）
+ * - コメント行（// ...）およびブロックコメント断片（/*, *, *\/）のみを連結する
+ * - それ以外のコード行が出たら終了
+ */
+function extractLeadingComments(lines: string[], testStartIndex: number): string {
+  const collected: string[] = [];
+  for (let j = testStartIndex - 1; j >= 0; j--) {
+    const line = lines[j] ?? '';
+    const trimmed = line.trim();
+    if (trimmed === '') {
+      break;
+    }
+    const isLineComment = trimmed.startsWith('//');
+    const isBlockCommentFragment =
+      trimmed.startsWith('/*') || trimmed.startsWith('*') || trimmed.startsWith('*/');
+    if (!isLineComment && !isBlockCommentFragment) {
+      break;
+    }
+    collected.push(line);
+  }
+  return collected.reverse().join('\n');
 }
 
 /**
@@ -268,9 +310,13 @@ interface GwtCheckResult {
  * ガイドラインに従い、Given/When/Then 全てが必須。
  */
 function checkGivenWhenThenStrict(content: string): GwtCheckResult {
-  const givenPattern = /\/\/\s*Given\s*:/i;
-  const whenPattern = /\/\/\s*When\s*:/i;
-  const thenPattern = /\/\/\s*Then\s*:/i;
+  // NOTE:
+  // - テストによっては「// When/Then: ...」のように複数ラベルを1行にまとめる運用がある。
+  // - 厳格性（全て必須）は維持しつつ、「同一行にラベル語 + ":" が含まれていれば存在」と判定する。
+  // - 行単位で判定することで、別行に跨る曖昧マッチは避ける（. は改行にマッチしない）。
+  const givenPattern = /\/\/[^\n]*\bGiven\b[^\n]*:/i;
+  const whenPattern = /\/\/[^\n]*\bWhen\b[^\n]*:/i;
+  const thenPattern = /\/\/[^\n]*\bThen\b[^\n]*:/i;
 
   const hasGiven = givenPattern.test(content);
   const hasWhen = whenPattern.test(content);

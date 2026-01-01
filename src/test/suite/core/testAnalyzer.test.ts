@@ -104,6 +104,26 @@ ${testFn}('should return true', () => {
         assert.ok(gwtIssues[0].detail.includes('Given'));
       });
 
+      test('does not report issue when Given/When/Then exist in leading comments right above test', () => {
+        // Given: テスト本文内には Given/When/Then がないが、test の直前コメントに全てある
+        const content = `
+// Given: some precondition
+// When: action
+// Then: expected outcome
+${testFn}('should return true', () => {
+  const result = someFunction();
+  assert.strictEqual(result, true);
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-gwt の問題は検出されない
+        const gwtIssues = issues.filter((i) => i.type === 'missing-gwt');
+        assert.strictEqual(gwtIssues.length, 0);
+      });
+
       test('detects missing Given/When/Then in it() function', () => {
         // Given: it() で定義されたテストに Given/When/Then がない
         const content = `
@@ -163,6 +183,26 @@ ${testFn}('case insensitive test', () => {
   const y = x + 1;
   // tHen: mixed case result
   assert.ok(y === 2);
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-gwt の問題は検出されない
+        const gwtIssues = issues.filter((i) => i.type === 'missing-gwt');
+        assert.strictEqual(gwtIssues.length, 0);
+      });
+
+      test('treats combined label line like "// When/Then: ..." as both When and Then', () => {
+        // Given: When/Then を1行にまとめたコメントがある
+        const content = `
+${testFn}('combined label test', () => {
+  // Given: setup
+  const x = 1;
+
+  // When/Then: action and assertion
+  assert.ok(x === 1);
 });
 `;
 
@@ -522,6 +562,35 @@ ${testFn}('throws error with validator', () => {
     (err) => {
       assert.ok(err instanceof Error);
       assert.ok(err.message.includes('expected'));
+      return true;
+    },
+  );
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-exception-message の問題は検出されない
+        const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
+        assert.strictEqual(exceptionIssues.length, 0);
+      });
+
+      test('does not report issue when assert.throws validator checks message using /\\S/ regex (regression)', () => {
+        // Given: assert.throws のバリデータ内で /\S/ を使ってメッセージの非空を検証している
+        // NOTE:
+        // - 正規表現リテラルの開始判定が誤ると、引数解析が壊れて「メッセージ検証なし」と誤判定されうるため回帰テストにする。
+        const content = `
+${testFn}('throws error with validator and non-empty regex', () => {
+  // Given: setup
+  // When: calling bad function
+  // Then: throws error with message validation
+  assert.throws(
+    () => badFunction(),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      const message = err instanceof Error ? err.message : String(err);
+      assert.ok(/\\S/.test(message), 'メッセージが空ではないこと');
       return true;
     },
   );
