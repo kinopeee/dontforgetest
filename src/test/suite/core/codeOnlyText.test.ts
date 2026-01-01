@@ -142,6 +142,21 @@ suite('codeOnlyText', () => {
       assert.ok(!result.includes('value is'));
     });
 
+    test('does not leak template suffix text after ${...} expression', () => {
+      // Given: ${...} の後にテンプレート文字列が続き、その後に通常コードが続く
+      const content = 'const x = `prefix ${y + 1} suffix`; const z = 3;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: ${...} 内のコードは保持され、テンプレート文字列部分は空白化される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(result.includes('y + 1'));
+      assert.ok(result.includes('const z = 3'));
+      assert.ok(!result.includes('prefix'));
+      assert.ok(!result.includes('suffix'));
+    });
+
     test('handles complex nested structures', () => {
       // Given: 複雑なネスト構造
       const content = `

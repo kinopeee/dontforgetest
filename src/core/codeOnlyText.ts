@@ -169,8 +169,14 @@ export function buildCodeOnlyContent(content: string): string {
           escaped = true;
         } else if (ch === '$' && next === '{' && templateBraceDepth === 0) {
           // ${...} 開始
+          // NOTE:
+          // - "${" の "{" を次ループでカウントしてしまうと二重カウントになる。
+          // - ここで開始ブレース分を templateBraceDepth=1 として反映し、
+          //   次の "{" はテンプレート構文として空白にしてスキップする。
           templateBraceDepth = 1;
-          result[result.length - 1] = ' '; // '$' は空白に
+          result[result.length - 1] = ' '; // '$' は空白に（明示）
+          result.push(' '); // '{' は空白に（テンプレート構文）
+          i++; // '{' をスキップして二重カウントを防ぐ
         } else if (ch === '`' && templateBraceDepth === 0) {
           state = 'code';
         }
