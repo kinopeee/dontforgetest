@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-Cursor CLI（cursor-agent）をヘッドレスモードで非同期呼び出しし、コミット差分や選択範囲からテストコードを自動生成する VS Code拡張機能。TypeScriptで記述され、VS Code Extension APIを使用。
+Cursor CLI（cursor-agent）をヘッドレスモードで非同期呼び出しし、コミット差分や選択範囲からテストコードを自動生成する VS Code拡張機能「Dontforgetest」。TypeScriptで記述され、VS Code Extension APIを使用。
 
 ## 技術スタック
 
