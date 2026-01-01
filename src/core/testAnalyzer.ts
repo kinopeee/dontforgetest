@@ -705,10 +705,6 @@ function parseCallArgsWithRanges(content: string, openParenIndex: number): Parse
             state = ctx.resumeState;
             // テンプレートリテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
             lastNonWsChar = '`';
-            // ネストしたテンプレートから戻る場合は outer が残っているため template を維持
-            if (state === 'template' && templateStack.length === 0) {
-              state = 'code';
-            }
             continue;
           }
 
