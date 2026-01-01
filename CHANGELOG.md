@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.0.117
+
+### Changed
+
+- Control Panel: Improved tab UI contrast by adopting a segmented-control style (clearer active/inactive state, better hover feedback)
+
+### Fixed
+
+- Test analyzer: Improved Given/When/Then detection (now also checks leading comments right before `test`/`it`, and supports combined comments such as `// When/Then:`)
+
+---
+
+## 0.0.117（日本語）
+
+### 変更
+
+- 操作パネル: タブUIをセグメントコントロール形式に改善し、アクティブ/非アクティブのコントラストとホバー時フィードバックを向上
+
+### 修正
+
+- テスト分析: Given/When/Then 検知を改善（`test`/`it` 直前コメントも判定対象に追加、`// When/Then:` のような複合コメントも検知）
+
+---
+
 ## 0.0.116
 
 ### Fixed
