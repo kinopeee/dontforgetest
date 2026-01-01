@@ -251,7 +251,7 @@ suite('core/promptBuilder.ts', () => {
     // TC-PB-03: Options Priority (True > Config False)
     test('TC-PB-03: Optionsでtrueを指定すればConfigがfalseでも有効になる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceRoot) return;
+      if (!workspaceRoot) { assert.fail('No workspace'); return; }
 
       // Configをfalseに設定
       const config = vscode.workspace.getConfiguration('dontforgetest');
@@ -281,7 +281,7 @@ suite('core/promptBuilder.ts', () => {
     // TC-PB-04: Options Priority (False > Config True)
     test('TC-PB-04: Optionsでfalseを指定すればConfigがtrueでも無効になる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceRoot) return;
+      if (!workspaceRoot) { assert.fail('No workspace'); return; }
 
       // Configをtrueに設定
       const config = vscode.workspace.getConfiguration('dontforgetest');
@@ -309,7 +309,7 @@ suite('core/promptBuilder.ts', () => {
     // TC-PB-05: Empty Command -> Disable
     test('TC-PB-05: コマンドが空文字の場合、flag=trueでも無効になる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceRoot) return;
+      if (!workspaceRoot) { assert.fail('No workspace'); return; }
 
       // 内蔵デフォルト戦略を使用（空文字）
       const options = {
@@ -331,7 +331,7 @@ suite('core/promptBuilder.ts', () => {
     // TC-PB-06: Whitespace Command -> Disable
     test('TC-PB-06: コマンドが空白のみの場合、無効になる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceRoot) return;
+      if (!workspaceRoot) { assert.fail('No workspace'); return; }
 
       // 内蔵デフォルト戦略を使用（空文字）
       const options = {
@@ -353,7 +353,7 @@ suite('core/promptBuilder.ts', () => {
     // TC-PB-07: Option undefined -> Use Config
     test('TC-PB-07: Optionsで未指定(undefined)の場合、Configの値が使用される', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceRoot) return;
+      if (!workspaceRoot) { assert.fail('No workspace'); return; }
 
       // Config setup
       const config = vscode.workspace.getConfiguration('dontforgetest');

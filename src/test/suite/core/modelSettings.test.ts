@@ -69,14 +69,12 @@ suite('core/modelSettings.ts', () => {
     test('TC-B-02: User settings define ONLY old testgen-agent keys (Verify Isolation)', async () => {
       // Given: dontforgetest.defaultModel を未設定にし、旧キーのみが存在する状況を想定する
       const config = vscode.workspace.getConfiguration('dontforgetest');
-      // Ensure defaultModel is clear
       await config.update('defaultModel', undefined, vscode.ConfigurationTarget.Global);
 
       // When: getModelSettings を呼び出す
       const settings = getModelSettings();
 
-      // Then: dontforgetest.defaultModel は未設定（undefined）のまま
-      // dontforgetest.defaultModel should be undefined (default)
+      // Then: dontforgetest.defaultModel は未設定のまま（default状態を確認）
       assert.strictEqual(settings.defaultModel, undefined);
     });
   });
