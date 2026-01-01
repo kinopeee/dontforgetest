@@ -88,7 +88,9 @@ suite('core/promptBuilder.ts', () => {
       assert.strictEqual(result3, undefined, 'すべてのフィールドが欠如');
     });
 
-    // TC-B-03: Target file contains ONLY old `<!-- testgen-agent-config: ... -->`
+    // Given: 旧形式の testgen-agent-config のみを含むテキスト
+    // When: parseLanguageConfig を呼び出す
+    // Then: 旧形式は無視され undefined が返る
     test('TC-B-03: 旧形式の testgen-agent-config は無視される', () => {
       const text = '<!-- testgen-agent-config: {"answerLanguage":"ja","commentLanguage":"ja","perspectiveTableLanguage":"ja"} -->';
       const result = parseLanguageConfig(text);
@@ -197,6 +199,9 @@ suite('core/promptBuilder.ts', () => {
       assert.ok(result.prompt.includes('対象ファイル:'), '対象ファイルセクションが含まれている');
     });
 
+    // Given: enablePreTestCheck=true かつ preTestCheckCommand が有効
+    // When: buildTestGenPrompt を呼び出す
+    // Then: PreTestCheck フロー（型チェック/Lint とコマンド）が含まれる
     // TC-PB-01: enablePreTestCheck=true (Options)
     test('TC-PB-01: enablePreTestCheck=true かつコマンドありの場合、プロンプトにPreTestCheckフローが含まれる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -218,6 +223,9 @@ suite('core/promptBuilder.ts', () => {
       assert.ok(result.prompt.includes('許可されたコマンドのみ実行可能'), 'ツール制約が含まれる');
     });
 
+    // Given: enablePreTestCheck=false
+    // When: buildTestGenPrompt を呼び出す
+    // Then: 標準フローとなり、型チェック/Lint への言及は含まれない
     // TC-PB-02: enablePreTestCheck=false (Options)
     test('TC-PB-02: enablePreTestCheck=false の場合、標準フローになる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -237,6 +245,9 @@ suite('core/promptBuilder.ts', () => {
       assert.ok(result.prompt.includes('shell（コマンド実行）ツールは使用禁止'), '標準のツール制約が含まれる');
     });
 
+    // Given: Config.enablePreTestCheck=false だが Options.enablePreTestCheck=true を指定
+    // When: buildTestGenPrompt を呼び出す
+    // Then: Options が優先され、PreTestCheck フローが有効になる
     // TC-PB-03: Options Priority (True > Config False)
     test('TC-PB-03: Optionsでtrueを指定すればConfigがfalseでも有効になる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -264,6 +275,9 @@ suite('core/promptBuilder.ts', () => {
       }
     });
 
+    // Given: Config.enablePreTestCheck=true だが Options.enablePreTestCheck=false を指定
+    // When: buildTestGenPrompt を呼び出す
+    // Then: Options が優先され、PreTestCheck フローが無効になる
     // TC-PB-04: Options Priority (False > Config True)
     test('TC-PB-04: Optionsでfalseを指定すればConfigがtrueでも無効になる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -289,6 +303,9 @@ suite('core/promptBuilder.ts', () => {
       }
     });
 
+    // Given: enablePreTestCheck=true だが preTestCheckCommand が空文字
+    // When: buildTestGenPrompt を呼び出す
+    // Then: PreTestCheck は無効になり、型チェック/Lint への言及は含まれない
     // TC-PB-05: Empty Command -> Disable
     test('TC-PB-05: コマンドが空文字の場合、flag=trueでも無効になる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -308,6 +325,9 @@ suite('core/promptBuilder.ts', () => {
       assert.ok(!result.prompt.includes('型チェック/Lint'), 'コマンドが空なら無効になる');
     });
 
+    // Given: enablePreTestCheck=true だが preTestCheckCommand が空白のみ
+    // When: buildTestGenPrompt を呼び出す
+    // Then: PreTestCheck は無効になり、型チェック/Lint への言及は含まれない
     // TC-PB-06: Whitespace Command -> Disable
     test('TC-PB-06: コマンドが空白のみの場合、無効になる', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -327,6 +347,9 @@ suite('core/promptBuilder.ts', () => {
       assert.ok(!result.prompt.includes('型チェック/Lint'), 'コマンドが空白なら無効になる');
     });
 
+    // Given: Options で enablePreTestCheck / preTestCheckCommand を未指定（undefined）
+    // When: buildTestGenPrompt を呼び出す
+    // Then: Config の値が使用される
     // TC-PB-07: Option undefined -> Use Config
     test('TC-PB-07: Optionsで未指定(undefined)の場合、Configの値が使用される', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
