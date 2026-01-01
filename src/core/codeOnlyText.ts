@@ -490,6 +490,8 @@ export function hasEmptyStringLiteralInCode(content: string): boolean {
           if (ch === '`') {
             templateStack.pop();
             state = ctx.resumeState;
+            // テンプレートリテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+            lastNonWsChar = '`';
             break;
           }
           break;
@@ -557,6 +559,8 @@ export function hasEmptyStringLiteralInCode(content: string): boolean {
           }
           i = j - 1;
           state = resumeState;
+          // 正規表現リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+          lastNonWsChar = '/';
         }
         break;
     }
