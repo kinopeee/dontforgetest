@@ -561,172 +561,345 @@ function parseCallArgsWithRanges(content: string, openParenIndex: number): Parse
   let braceDepth = 0;
   let bracketDepth = 0;
 
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  let inTemplate = false;
-  let inRegex = false;
-  let inLineComment = false;
-  let inBlockComment = false;
+  type LexerState =
+    | 'code'
+    | 'lineComment'
+    | 'blockComment'
+    | 'singleQuote'
+    | 'doubleQuote'
+    | 'template'
+    | 'regex';
 
+  type ResumeState = 'code' | 'template';
+
+  type TemplateContext = {
+    /** `${...}` の `{` ネスト深さ（`${` 開始時点で 1）。0 の場合はテンプレート文字列部分。 */
+    exprBraceDepth: number;
+    /** テンプレート文字列部分でのエスケープ（\` や \${ を誤検出しないため） */
+    escaped: boolean;
+    /** 対応する `...` を閉じたときに戻る状態 */
+    resumeState: ResumeState;
+  };
+
+  let state: LexerState = 'code';
+  let resumeState: ResumeState = 'code';
+  // 文字列/正規表現でのエスケープ
   let escaped = false;
+  // テンプレートリテラルのネスト管理（`${...}` 内のネストしたテンプレートも追跡する）
+  const templateStack: TemplateContext[] = [];
+
   let argStart = openParenIndex + 1;
   // 正規表現開始判定（除算との誤判定を避けるため、前の非空白文字を追跡）
   let lastNonWsChar = '';
+
+  const pushArgRange = (endIndexExclusive: number): void => {
+    if (endIndexExclusive <= argStart) {
+      return;
+    }
+    const trimmedStart = skipWhitespace(content, argStart);
+    const trimmedEnd = skipWhitespaceReverse(content, endIndexExclusive);
+    if (trimmedEnd > trimmedStart) {
+      args.push({ start: trimmedStart, end: trimmedEnd });
+    }
+  };
 
   for (let i = openParenIndex + 1; i < content.length; i++) {
     const ch = content[i];
     const next = i + 1 < content.length ? content[i + 1] : '';
 
-    if (inLineComment) {
-      if (ch === '\n') {
-        inLineComment = false;
-      }
-      continue;
-    }
-
-    if (inBlockComment) {
-      if (ch === '*' && next === '/') {
-        inBlockComment = false;
-        i++;
-      }
-      continue;
-    }
-
-    if (inSingleQuote || inDoubleQuote || inTemplate) {
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (ch === '\\') {
-        escaped = true;
-        continue;
-      }
-      if (inSingleQuote && ch === "'") {
-        inSingleQuote = false;
-        // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
-        lastNonWsChar = "'";
-        continue;
-      }
-      if (inDoubleQuote && ch === '"') {
-        inDoubleQuote = false;
-        // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
-        lastNonWsChar = '"';
-        continue;
-      }
-      if (inTemplate && ch === '`') {
-        inTemplate = false;
-        // テンプレートリテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
-        lastNonWsChar = '`';
-        continue;
-      }
-      continue;
-    }
-
-    if (inRegex) {
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (ch === '\\') {
-        escaped = true;
-        continue;
-      }
-      if (ch === '/') {
-        inRegex = false;
-      }
-      continue;
-    }
-
-    // コメント開始
-    if (ch === '/' && next === '/') {
-      inLineComment = true;
-      i++;
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      inBlockComment = true;
-      i++;
-      continue;
-    }
-
-    // 文字列開始
-    if (ch === "'") {
-      inSingleQuote = true;
-      continue;
-    }
-    if (ch === '"') {
-      inDoubleQuote = true;
-      continue;
-    }
-    if (ch === '`') {
-      inTemplate = true;
-      continue;
-    }
-
-    // 正規表現開始（ヒューリスティック）
-    if (ch === '/' && next !== '/' && next !== '*' && isRegexStart(lastNonWsChar)) {
-      inRegex = true;
-      lastNonWsChar = '/';
-      continue;
-    }
-
-    // ネスト管理
-    if (ch === '(') {
-      parenDepth++;
-      lastNonWsChar = '(';
-      continue;
-    }
-    if (ch === ')') {
-      parenDepth--;
-      if (parenDepth === 0) {
-        // 最後の引数を追加
-        if (i > argStart) {
-          const trimmedStart = skipWhitespace(content, argStart);
-          const trimmedEnd = skipWhitespaceReverse(content, i);
-          if (trimmedEnd > trimmedStart) {
-            args.push({ start: trimmedStart, end: trimmedEnd });
-          }
+    switch (state) {
+      case 'lineComment': {
+        if (ch === '\n') {
+          state = resumeState;
         }
-        return { endIndex: i, args };
+        continue;
       }
-      lastNonWsChar = ')';
-      continue;
-    }
-    if (ch === '{') {
-      braceDepth++;
-      lastNonWsChar = '{';
-      continue;
-    }
-    if (ch === '}') {
-      braceDepth = Math.max(0, braceDepth - 1);
-      lastNonWsChar = '}';
-      continue;
-    }
-    if (ch === '[') {
-      bracketDepth++;
-      lastNonWsChar = '[';
-      continue;
-    }
-    if (ch === ']') {
-      bracketDepth = Math.max(0, bracketDepth - 1);
-      lastNonWsChar = ']';
-      continue;
-    }
-
-    // トップレベルの引数区切り
-    if (ch === ',' && parenDepth === 1 && braceDepth === 0 && bracketDepth === 0) {
-      const trimmedStart = skipWhitespace(content, argStart);
-      const trimmedEnd = skipWhitespaceReverse(content, i);
-      if (trimmedEnd > trimmedStart) {
-        args.push({ start: trimmedStart, end: trimmedEnd });
+      case 'blockComment': {
+        if (ch === '*' && next === '/') {
+          state = resumeState;
+          i++;
+        }
+        continue;
       }
-      argStart = i + 1;
-      lastNonWsChar = ',';
-      continue;
-    }
+      case 'singleQuote': {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (ch === "'") {
+          state = resumeState;
+          // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+          lastNonWsChar = "'";
+        }
+        continue;
+      }
+      case 'doubleQuote': {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (ch === '"') {
+          state = resumeState;
+          // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+          lastNonWsChar = '"';
+        }
+        continue;
+      }
+      case 'regex': {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (ch === '/') {
+          state = resumeState;
+          // 正規表現リテラル終了は「式の終端」として扱う
+          lastNonWsChar = '/';
+        }
+        continue;
+      }
+      case 'template': {
+        const ctx = templateStack.length > 0 ? templateStack[templateStack.length - 1] : undefined;
+        if (!ctx) {
+          // 異常系（スタック不整合）: 安全側でコード状態に戻す
+          state = 'code';
+          continue;
+        }
 
-    if (!/\s/.test(ch)) {
-      lastNonWsChar = ch;
+        // 1) `${...}` の外側（テンプレート文字列部分）
+        if (ctx.exprBraceDepth === 0) {
+          if (ctx.escaped) {
+            ctx.escaped = false;
+            continue;
+          }
+          if (ch === '\\') {
+            ctx.escaped = true;
+            continue;
+          }
+
+          if (ch === '$' && next === '{') {
+            // ${...} 開始
+            // NOTE:
+            // - `${` の "{" を次ループでカウントしてしまうと二重カウントになるため、ここでまとめて処理する。
+            ctx.exprBraceDepth = 1;
+            braceDepth++;
+            lastNonWsChar = '{';
+            i++; // '{' をスキップ
+            continue;
+          }
+
+          if (ch === '`') {
+            // テンプレートリテラル終了（ネスト対応）
+            templateStack.pop();
+            state = ctx.resumeState;
+            // テンプレートリテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+            lastNonWsChar = '`';
+            // ネストしたテンプレートから戻る場合は outer が残っているため template を維持
+            if (state === 'template' && templateStack.length === 0) {
+              state = 'code';
+            }
+            continue;
+          }
+
+          // 文字列部分は引数解析に影響しないため、それ以外は無視
+          continue;
+        }
+
+        // 2) `${...}` の内側（式部分）: code と同様に扱う
+        if (ch === '/' && next === '/') {
+          state = 'lineComment';
+          resumeState = 'template';
+          i++;
+          continue;
+        }
+        if (ch === '/' && next === '*') {
+          state = 'blockComment';
+          resumeState = 'template';
+          i++;
+          continue;
+        }
+        if (ch === "'") {
+          state = 'singleQuote';
+          escaped = false;
+          resumeState = 'template';
+          continue;
+        }
+        if (ch === '"') {
+          state = 'doubleQuote';
+          escaped = false;
+          resumeState = 'template';
+          continue;
+        }
+        if (ch === '`') {
+          // ネストしたテンプレートリテラル開始
+          templateStack.push({ exprBraceDepth: 0, escaped: false, resumeState: 'template' });
+          state = 'template';
+          continue;
+        }
+        // 正規表現開始（ヒューリスティック）
+        if (ch === '/' && next !== '/' && next !== '*' && isRegexStart(lastNonWsChar)) {
+          state = 'regex';
+          escaped = false;
+          resumeState = 'template';
+          lastNonWsChar = '/';
+          continue;
+        }
+
+        // ネスト管理（テンプレート式内でも paren/brace/bracket を追跡）
+        if (ch === '(') {
+          parenDepth++;
+          lastNonWsChar = '(';
+          continue;
+        }
+        if (ch === ')') {
+          parenDepth--;
+          if (parenDepth === 0) {
+            pushArgRange(i);
+            return { endIndex: i, args };
+          }
+          lastNonWsChar = ')';
+          continue;
+        }
+        if (ch === '{') {
+          braceDepth++;
+          ctx.exprBraceDepth++;
+          lastNonWsChar = '{';
+          continue;
+        }
+        if (ch === '}') {
+          braceDepth = Math.max(0, braceDepth - 1);
+          ctx.exprBraceDepth = Math.max(0, ctx.exprBraceDepth - 1);
+          lastNonWsChar = '}';
+          continue;
+        }
+        if (ch === '[') {
+          bracketDepth++;
+          lastNonWsChar = '[';
+          continue;
+        }
+        if (ch === ']') {
+          bracketDepth = Math.max(0, bracketDepth - 1);
+          lastNonWsChar = ']';
+          continue;
+        }
+
+        // トップレベルの引数区切り
+        if (ch === ',' && parenDepth === 1 && braceDepth === 0 && bracketDepth === 0) {
+          pushArgRange(i);
+          argStart = i + 1;
+          lastNonWsChar = ',';
+          continue;
+        }
+
+        if (!/\s/.test(ch)) {
+          lastNonWsChar = ch;
+        }
+        continue;
+      }
+      case 'code': {
+        // コメント開始
+        if (ch === '/' && next === '/') {
+          state = 'lineComment';
+          resumeState = 'code';
+          i++;
+          continue;
+        }
+        if (ch === '/' && next === '*') {
+          state = 'blockComment';
+          resumeState = 'code';
+          i++;
+          continue;
+        }
+
+        // 文字列開始
+        if (ch === "'") {
+          state = 'singleQuote';
+          escaped = false;
+          resumeState = 'code';
+          continue;
+        }
+        if (ch === '"') {
+          state = 'doubleQuote';
+          escaped = false;
+          resumeState = 'code';
+          continue;
+        }
+        if (ch === '`') {
+          // テンプレートリテラル開始（ネスト対応）
+          state = 'template';
+          templateStack.push({ exprBraceDepth: 0, escaped: false, resumeState: 'code' });
+          continue;
+        }
+
+        // 正規表現開始（ヒューリスティック）
+        if (ch === '/' && next !== '/' && next !== '*' && isRegexStart(lastNonWsChar)) {
+          state = 'regex';
+          escaped = false;
+          resumeState = 'code';
+          lastNonWsChar = '/';
+          continue;
+        }
+
+        // ネスト管理
+        if (ch === '(') {
+          parenDepth++;
+          lastNonWsChar = '(';
+          continue;
+        }
+        if (ch === ')') {
+          parenDepth--;
+          if (parenDepth === 0) {
+            pushArgRange(i);
+            return { endIndex: i, args };
+          }
+          lastNonWsChar = ')';
+          continue;
+        }
+        if (ch === '{') {
+          braceDepth++;
+          lastNonWsChar = '{';
+          continue;
+        }
+        if (ch === '}') {
+          braceDepth = Math.max(0, braceDepth - 1);
+          lastNonWsChar = '}';
+          continue;
+        }
+        if (ch === '[') {
+          bracketDepth++;
+          lastNonWsChar = '[';
+          continue;
+        }
+        if (ch === ']') {
+          bracketDepth = Math.max(0, bracketDepth - 1);
+          lastNonWsChar = ']';
+          continue;
+        }
+
+        // トップレベルの引数区切り
+        if (ch === ',' && parenDepth === 1 && braceDepth === 0 && bracketDepth === 0) {
+          pushArgRange(i);
+          argStart = i + 1;
+          lastNonWsChar = ',';
+          continue;
+        }
+
+        if (!/\s/.test(ch)) {
+          lastNonWsChar = ch;
+        }
+        continue;
+      }
     }
   }
 
