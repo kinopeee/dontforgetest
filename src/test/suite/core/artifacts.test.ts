@@ -377,6 +377,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-06: 観点表Markdown生成（正常）
   test('TC-ART-06: 観点表Markdownが正しく生成される（正常系）', () => {
     // Given: 入力パラメータ
+    // When: buildTestPerspectiveArtifactMarkdown を呼び出す
     const md = buildTestPerspectiveArtifactMarkdown({
       generatedAtMs: Date.now(),
       targetLabel: 'Label',
@@ -393,6 +394,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-07: 観点表Markdown生成（対象なし）
   test('TC-ART-07: 対象ファイルがない場合「(なし)」と表示される', () => {
     // Given: ターゲットリストが空
+    // When: buildTestPerspectiveArtifactMarkdown を呼び出す
     const md = buildTestPerspectiveArtifactMarkdown({
       generatedAtMs: Date.now(),
       targetLabel: 'Label',
@@ -407,6 +409,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-08: 実行レポートMarkdown生成（正常）
   test('TC-ART-08: 実行レポートMarkdownが正しく生成される（正常系）', () => {
     // Given: 正常終了時の結果
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -438,6 +441,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-16: 実行レポートMarkdown生成（モデル指定あり）
   test('TC-ART-16: modelが指定されている場合、レポートにそのモデル名が表示される', () => {
     // Given: model指定あり
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -462,6 +466,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-17: 実行レポートMarkdown生成（モデル空文字）
   test('TC-ART-17: modelが空文字の場合、(auto) と表示される', () => {
     // Given: modelが空文字
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -746,6 +751,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-09: 実行レポートMarkdown生成（エラー）
   test('TC-ART-09: エラーメッセージがある場合レポートに含まれる', () => {
     // Given: エラー時の結果
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -769,6 +775,7 @@ suite('core/artifacts.ts', () => {
   // TC-N-21: buildTestExecutionArtifactMarkdown with all parameters provided
   test('TC-N-21: buildTestExecutionArtifactMarkdown generates markdown with sections in order: title, execution info, summary, details, detailed logs', () => {
     // Given: All parameters provided
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -807,6 +814,7 @@ suite('core/artifacts.ts', () => {
   // TC-N-22: buildTestExecutionArtifactMarkdown with empty targetPaths array
   test('TC-N-22: buildTestExecutionArtifactMarkdown generates markdown with "- (なし)" for target files when targetPaths is empty', () => {
     // Given: Empty targetPaths array
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -829,6 +837,7 @@ suite('core/artifacts.ts', () => {
   // TC-N-23: buildTestExecutionArtifactMarkdown with skipped result
   test('TC-N-23: buildTestExecutionArtifactMarkdown generates markdown with "- status: skipped" and skipReason if provided', () => {
     // Given: Skipped result
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -854,6 +863,7 @@ suite('core/artifacts.ts', () => {
   // TC-N-24: buildTestExecutionArtifactMarkdown with errorMessage in result
   test('TC-N-24: buildTestExecutionArtifactMarkdown generates markdown with "- spawn error: <message>" line', () => {
     // Given: Error message in result
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -877,6 +887,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-10: 実行レポートMarkdown生成（空出力）
   test('TC-ART-10: 出力が空の場合は折りたたみセクションが省略される', () => {
     // Given: 出力が空の結果
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -903,6 +914,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-20: 実行レポートMarkdown生成（stdoutパース失敗でも固定フォーマット）
   test('TC-ART-20: Mocha出力のパースに失敗してもサマリー表とテスト詳細表が必ず生成される', () => {
     // Given: stdout が Mocha 形式でない結果
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -930,6 +942,7 @@ suite('core/artifacts.ts', () => {
   // TC-REPORT-N-01: TestExecutionResult with parsed Mocha output
   test('TC-REPORT-N-01: buildTestExecutionArtifactMarkdown generates report with summary and details tables for parsed Mocha output', () => {
     // Given: TestExecutionResult with parsed Mocha output
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -959,6 +972,7 @@ suite('core/artifacts.ts', () => {
   // TC-REPORT-N-05: TestExecutionResult with failedTests details
   test('TC-REPORT-N-05: buildTestExecutionArtifactMarkdown includes failure details section when failedTests are present', () => {
     // Given: testResult.failedTests を含む TestExecutionResult
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -1003,6 +1017,7 @@ suite('core/artifacts.ts', () => {
   // TC-REPORT-N-03: TestExecutionResult with empty test cases array
   test('TC-REPORT-N-03: buildTestExecutionArtifactMarkdown generates report with empty details table when test cases array is empty', () => {
     // Given: TestExecutionResult with empty test cases (parsed but no cases)
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -1030,6 +1045,7 @@ suite('core/artifacts.ts', () => {
   // TC-REPORT-N-06: TestExecutionResult with structured pending counts
   test('TC-REPORT-N-06: buildTestExecutionArtifactMarkdown uses structured counts including pending when testResult is available', () => {
     // Given: Structured testResult with pending counts
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2189,6 +2205,7 @@ suite('core/artifacts.ts', () => {
   // TC-REPORT-N-04: TestExecutionResult with parsed=false
   test('TC-REPORT-N-04: buildTestExecutionArtifactMarkdown generates report with summary table showing "-" for all counts when parsed=false', () => {
     // Given: TestExecutionResult with unparseable stdout (parsed=false)
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2651,6 +2668,7 @@ suite('core/artifacts.ts', () => {
   // TC-B-07: buildTestExecutionArtifactMarkdown with durationMs = 0
   test('TC-B-07: buildTestExecutionArtifactMarkdown generates report with durationSec="0.0" for zero duration', () => {
     // Given: TestExecutionResult with durationMs=0
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2673,6 +2691,7 @@ suite('core/artifacts.ts', () => {
   // TC-B-08: buildTestExecutionArtifactMarkdown with exitCode = null
   test('TC-B-08: buildTestExecutionArtifactMarkdown generates report showing "null" for exitCode when exitCode is null', () => {
     // Given: TestExecutionResult with exitCode=null
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2695,6 +2714,7 @@ suite('core/artifacts.ts', () => {
   // TC-B-09: buildTestExecutionArtifactMarkdown with empty stdout and stderr
   test('TC-B-09: buildTestExecutionArtifactMarkdown generates report without stdout/stderr collapsible sections when empty', () => {
     // Given: TestExecutionResult with empty stdout and stderr
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2718,6 +2738,7 @@ suite('core/artifacts.ts', () => {
   // TC-B-10: buildTestExecutionArtifactMarkdown with extensionLog = empty string
   test('TC-B-10: buildTestExecutionArtifactMarkdown generates report without extension log collapsible section when empty', () => {
     // Given: TestExecutionResult with extensionLog = empty string
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2741,6 +2762,7 @@ suite('core/artifacts.ts', () => {
   // TC-REPORT-B-01: TestExecutionResult with durationMs=0
   test('TC-REPORT-B-01: buildTestExecutionArtifactMarkdown generates report with durationSec="0.0" for zero duration', () => {
     // Given: TestExecutionResult with durationMs=0
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2764,6 +2786,7 @@ suite('core/artifacts.ts', () => {
   test('TC-REPORT-B-02: buildTestExecutionArtifactMarkdown generates report with large durationSec value for very large durationMs', () => {
     // Given: TestExecutionResult with very large durationMs
     const largeDurationMs = 3600000; // 1 hour
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2786,6 +2809,7 @@ suite('core/artifacts.ts', () => {
   // TC-REPORT-B-03: TestExecutionResult with exitCode=null
   test('TC-REPORT-B-03: buildTestExecutionArtifactMarkdown generates report showing "null" for exitCode when exitCode is null', () => {
     // Given: TestExecutionResult with exitCode=null
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2808,6 +2832,7 @@ suite('core/artifacts.ts', () => {
   // TC-REPORT-B-04: TestExecutionResult with passed=0, failed=0
   test('TC-REPORT-B-04: buildTestExecutionArtifactMarkdown generates report with total=0 when passed=0 and failed=0', () => {
     // Given: TestExecutionResult with passed=0, failed=0 (parsed but no tests)
+    // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2832,6 +2857,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-13: 実行レポートMarkdown生成（スキップ）
   test('TC-ART-13: スキップ時は status と skipReason、extensionLog がレポートに含まれる', () => {
     // Given: スキップされた結果（ログあり）
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2862,6 +2888,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-14: 実行レポートMarkdown生成（ログなし）
   test('TC-ART-14: extensionLog が未定義の場合、折りたたみセクションが省略される', () => {
     // Given: extensionLog が undefined の結果
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2947,6 +2974,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-15: 実行レポートMarkdown生成（ログ空文字）
   test('TC-ART-15: extensionLog が空文字の場合、折りたたみセクションが省略される', () => {
     // Given: extensionLog が '' の結果
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Label',
@@ -2971,6 +2999,7 @@ suite('core/artifacts.ts', () => {
   test('TC-ART-18: レポート生成時にANSIエスケープシーケンスが除去される', () => {
     // Given: ANSIカラーコードを含む出力
     const ansiText = '\u001b[31mRed Error\u001b[0m';
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'ANSI Check',
@@ -2996,6 +3025,7 @@ suite('core/artifacts.ts', () => {
   test('TC-ART-19: レポート生成時に長大な出力は切り詰められる', () => {
     // Given: 制限(200,000文字)を超える出力
     const longText = 'a'.repeat(200_100);
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Truncate Check',
@@ -3216,6 +3246,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-27: 詳細テーブル生成
   test('TC-ART-27: レポートに詳細テーブルが含まれる', () => {
     // Given: パース可能な結果を含むデータ
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Detail Check',
@@ -3241,6 +3272,7 @@ suite('core/artifacts.ts', () => {
   // TC-ART-28: パイプ文字エスケープ
   test('TC-ART-28: テスト名にパイプが含まれる場合エスケープされる', () => {
     // Given: パイプを含むテスト名
+    // When: buildTestExecutionArtifactMarkdown を呼び出す
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
       generationLabel: 'Pipe Check',
@@ -5565,6 +5597,7 @@ suite('core/artifacts.ts', () => {
       // Instead, we test that non-finite numbers are handled
       // Actually, JSON doesn't support NaN, so this test documents expected behavior
       const raw = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"p","expectedResult":"ok","notes":"-"}]}';
+      // When: parsePerspectiveJsonV1 is called
       const result = parsePerspectiveJsonV1(raw);
 
       // Then: Function completes successfully (NaN cannot appear in JSON)
@@ -7465,6 +7498,7 @@ suite('core/artifacts.ts', () => {
 
       test('TC-REP-B-01: falls back to "(unknown)" when both fullTitle and title are empty', () => {
         // Given: Missing/empty titles
+        // When: buildTestExecutionArtifactMarkdown is called
         const md = buildTestExecutionArtifactMarkdown({
           generatedAtMs: Date.now(),
           generationLabel: 'Label',
@@ -7488,6 +7522,7 @@ suite('core/artifacts.ts', () => {
       test('TC-REP-B-02: normalizes ANSI/newlines/spaces in failure message', () => {
         // Given: A message with ANSI and newlines/spaces
         const message = `\u001b[31mError:\u001b[0m line1\n\n   line2`;
+        // When: buildTestExecutionArtifactMarkdown is called
         const md = buildTestExecutionArtifactMarkdown({
           generatedAtMs: Date.now(),
           generationLabel: 'Label',
@@ -7511,6 +7546,7 @@ suite('core/artifacts.ts', () => {
 
       test('TC-REP-B-03: normalizes CRLF in expected/actual and renders as fenced code blocks', () => {
         // Given: CRLF multiline details
+        // When: buildTestExecutionArtifactMarkdown is called
         const md = buildTestExecutionArtifactMarkdown({
           generatedAtMs: Date.now(),
           generationLabel: 'Label',
@@ -7545,6 +7581,7 @@ suite('core/artifacts.ts', () => {
       test('TC-REP-B-04: does not truncate when expected length is exactly 20000', () => {
         // Given: expected length exactly at the max threshold
         const expected = 'a'.repeat(20_000);
+        // When: buildTestExecutionArtifactMarkdown is called
         const md = buildTestExecutionArtifactMarkdown({
           generatedAtMs: Date.now(),
           generationLabel: 'Label',
@@ -7568,6 +7605,7 @@ suite('core/artifacts.ts', () => {
       test('TC-REP-B-05: truncates when expected length is 20001 (max+1) and includes marker', () => {
         // Given: expected length just above the max threshold
         const expected = 'a'.repeat(20_001);
+        // When: buildTestExecutionArtifactMarkdown is called
         const md = buildTestExecutionArtifactMarkdown({
           generatedAtMs: Date.now(),
           generationLabel: 'Label',
@@ -7590,6 +7628,7 @@ suite('core/artifacts.ts', () => {
 
       test('TC-REP-A-01: omits Code line when code is empty/whitespace-only', () => {
         // Given: Empty/whitespace-only "code"
+        // When: buildTestExecutionArtifactMarkdown is called
         const md = buildTestExecutionArtifactMarkdown({
           generatedAtMs: Date.now(),
           generationLabel: 'Label',

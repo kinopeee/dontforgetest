@@ -364,7 +364,8 @@ suite('core/taskManager.ts', () => {
     // When: registerを呼び出す
     // Then: 登録される（IDの検証はしない）
     test('TC-B-02: 空文字のタスクIDでも登録できる', () => {
-      // Given/When: 空文字IDで登録
+      // Given: 空文字のタスクID
+      // When: 空文字IDで register する
       const { runningTask } = createMockRunningTask('');
       taskManager.register('', 'テスト', runningTask);
 

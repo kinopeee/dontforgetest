@@ -1438,6 +1438,7 @@ suite('providers/cursorAgentProvider.ts', () => {
         wireOutput(child, options);
 
         fakeNow = 0;
+        // When: thinking と不正イベントを受信し、かつ silenceMs が閾値未満の状態で interval を進める
         stdout.emit('data', Buffer.from([JSON.stringify({ type: 'thinking' }), JSON.stringify({}), ''].join('\n')));
 
         // NOTE: silenceログが先に出ると ignored-summary が抑制されるため、
@@ -1448,6 +1449,7 @@ suite('providers/cursorAgentProvider.ts', () => {
         fakeNow = 30_000;
         timers.fireAllIntervals();
 
+        // Then: ignored-summary のログが last=unknown を含んで出力される
         const summary = events.find(
           (e) =>
             e.type === 'log' &&

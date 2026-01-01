@@ -2575,6 +2575,7 @@ suite('test/runTest.ts', () => {
 
       try {
         // When: stageExtensionToTemp を呼ぶ
+        // Then: 任意コピーの失敗は例外になる
         await assert.rejects(
           () => stageExtensionToTemp({ sourceExtensionRoot: sourceDir, stageExtensionRoot: stageDir }),
           (err: Error) => err.message.includes('copy failed'),
