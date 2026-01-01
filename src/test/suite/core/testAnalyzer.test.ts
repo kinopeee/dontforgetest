@@ -433,6 +433,9 @@ ${testFn}('throws error with message object', () => {
         // Given: assert.throws でバリデータ関数がメッセージを検証しているコード
         const content = `
 ${testFn}('throws error with validator', () => {
+  // Given: setup
+  // When: calling bad function
+  // Then: throws error with message validation
   assert.throws(
     () => badFunction(),
     (err) => {
@@ -528,7 +531,7 @@ ${testFn}('test with string containing assert.throws', () => {
   // Given: setup
   // When: action
   // Then: result
-  const docs = 'Use ${assertThrowsStr}() to test exceptions';
+  const docs = \`Use ${assertThrowsStr}() to test exceptions\`;
   assert.ok(docs);
 });
 `;

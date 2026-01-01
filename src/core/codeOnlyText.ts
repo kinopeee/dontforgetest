@@ -31,10 +31,23 @@ export function buildCodeOnlyContent(content: string): string {
     | 'template'
     | 'regex';
 
+  type ResumeState = 'code' | 'template';
+
+  type TemplateContext = {
+    /** `${...}` の `{` ネスト深さ（`${` 開始時点で 1） */
+    braceDepth: number;
+    /** テンプレート文字列部分でのエスケープ（\` など） */
+    escaped: boolean;
+    /** 対応する `...` を閉じたときに戻る状態 */
+    resumeState: ResumeState;
+  };
+
   let state: LexerState = 'code';
   let escaped = false;
-  // テンプレートリテラル内の ${...} のネスト管理用
-  let templateBraceDepth = 0;
+  // 文字列/コメント/正規表現から復帰する状態
+  let resumeState: ResumeState = 'code';
+  // テンプレートリテラルのネスト管理用（`...` ごとに braceDepth を保持）
+  const templateStack: TemplateContext[] = [];
   // 正規表現の開始判定ヒューリスティック用（前の非空白文字を追跡）
   let lastNonWsChar = '';
 
@@ -50,31 +63,35 @@ export function buildCodeOnlyContent(content: string): string {
           // ラインコメント開始
           result.push(' ');
           state = 'lineComment';
+          resumeState = 'code';
         } else if (ch === '/' && next === '*') {
           // ブロックコメント開始
           result.push(' ');
           state = 'blockComment';
+          resumeState = 'code';
         } else if (ch === "'") {
           // シングルクォート文字列開始
           result.push(' ');
           state = 'singleQuote';
           escaped = false;
+          resumeState = 'code';
         } else if (ch === '"') {
           // ダブルクォート文字列開始
           result.push(' ');
           state = 'doubleQuote';
           escaped = false;
+          resumeState = 'code';
         } else if (ch === '`') {
           // テンプレートリテラル開始
           result.push(' ');
           state = 'template';
-          escaped = false;
-          templateBraceDepth = 0;
+          templateStack.push({ braceDepth: 0, escaped: false, resumeState: 'code' });
         } else if (ch === '/' && isRegexStart(lastNonWsChar)) {
           // 正規表現リテラル開始（ヒューリスティック）
           result.push(' ');
           state = 'regex';
           escaped = false;
+          resumeState = 'code';
         } else if (ch === '\n') {
           // 改行は保持
           result.push('\n');
@@ -91,7 +108,7 @@ export function buildCodeOnlyContent(content: string): string {
         // ラインコメント内: 改行まで空白に置き換え
         if (ch === '\n') {
           result.push('\n');
-          state = 'code';
+          state = resumeState;
         } else {
           result.push(' ');
         }
@@ -107,7 +124,7 @@ export function buildCodeOnlyContent(content: string): string {
         } else if (content[i - 1] === '*' && ch === '/') {
           // '*/' の '/' の処理
           result.push(' ');
-          state = 'code';
+          state = resumeState;
         } else {
           result.push(' ');
         }
@@ -125,7 +142,7 @@ export function buildCodeOnlyContent(content: string): string {
         } else if (ch === '\\') {
           escaped = true;
         } else if (ch === "'") {
-          state = 'code';
+          state = resumeState;
         }
         break;
 
@@ -141,44 +158,130 @@ export function buildCodeOnlyContent(content: string): string {
         } else if (ch === '\\') {
           escaped = true;
         } else if (ch === '"') {
-          state = 'code';
+          state = resumeState;
         }
         break;
 
       case 'template':
-        // テンプレートリテラル内（${...} のネストを追跡）
-        if (ch === '\n') {
-          result.push('\n');
-        } else if (templateBraceDepth > 0) {
-          // ${...} 内はコードとして扱う
-          result.push(ch);
-          if (ch === '{') {
-            templateBraceDepth++;
-          } else if (ch === '}') {
-            templateBraceDepth--;
+        // テンプレートリテラル内（ネスト対応。templateStack の先頭が現在の `...`）
+        {
+          const ctx = templateStack.length > 0 ? templateStack[templateStack.length - 1] : undefined;
+          if (!ctx) {
+            // 異常系（スタック不整合）: 安全側でコードに戻す
+            state = 'code';
+            result.push(ch === '\n' ? '\n' : ' ');
+            break;
           }
+
+          // 1) `${...}` の外側（テンプレート文字列部分）
+          if (ctx.braceDepth === 0) {
+            if (ch === '\n') {
+              result.push('\n');
+            } else {
+              result.push(' ');
+            }
+
+            if (ctx.escaped) {
+              ctx.escaped = false;
+              break;
+            }
+            if (ch === '\\') {
+              ctx.escaped = true;
+              break;
+            }
+
+            if (ch === '$' && next === '{') {
+              // ${...} 開始
+              // NOTE:
+              // - "${" の "{" を次ループでカウントしてしまうと二重カウントになる。
+              // - ここで開始ブレース分を braceDepth=1 として反映し、
+              //   次の "{" はテンプレート構文として空白にしてスキップする。
+              ctx.braceDepth = 1;
+              result[result.length - 1] = ' '; // '$' は空白に（明示）
+              result.push(' '); // '{' は空白に（テンプレート構文）
+              i++; // '{' をスキップして二重カウントを防ぐ
+              break;
+            }
+
+            if (ch === '`') {
+              // テンプレートリテラル終了
+              templateStack.pop();
+              state = ctx.resumeState;
+              break;
+            }
+
+            break;
+          }
+
+          // 2) `${...}` の内側（式部分）: 基本的に code と同様に扱うが、式の終端 `}` は空白化する
+          if (ch === '/' && next === '/') {
+            result.push(' ');
+            state = 'lineComment';
+            resumeState = 'template';
+            break;
+          }
+          if (ch === '/' && next === '*') {
+            result.push(' ');
+            state = 'blockComment';
+            resumeState = 'template';
+            break;
+          }
+          if (ch === "'") {
+            result.push(' ');
+            state = 'singleQuote';
+            escaped = false;
+            resumeState = 'template';
+            break;
+          }
+          if (ch === '"') {
+            result.push(' ');
+            state = 'doubleQuote';
+            escaped = false;
+            resumeState = 'template';
+            break;
+          }
+          if (ch === '`') {
+            // ネストしたテンプレートリテラル開始
+            result.push(' ');
+            templateStack.push({ braceDepth: 0, escaped: false, resumeState: 'template' });
+            state = 'template';
+            break;
+          }
+          if (ch === '/' && isRegexStart(lastNonWsChar)) {
+            result.push(' ');
+            state = 'regex';
+            escaped = false;
+            resumeState = 'template';
+            break;
+          }
+          if (ch === '\n') {
+            result.push('\n');
+            break;
+          }
+
+          if (ch === '{') {
+            ctx.braceDepth++;
+            result.push('{');
+            lastNonWsChar = '{';
+            break;
+          }
+          if (ch === '}') {
+            ctx.braceDepth--;
+            if (ctx.braceDepth === 0) {
+              // `${...}` の閉じ `}` はテンプレート構文なので空白化する（ブレースカウントの整合性維持）
+              result.push(' ');
+            } else {
+              result.push('}');
+              lastNonWsChar = '}';
+            }
+            break;
+          }
+
+          // 通常のコード文字
+          result.push(ch);
           if (!/\s/.test(ch)) {
             lastNonWsChar = ch;
           }
-        } else {
-          result.push(' ');
-        }
-        if (escaped) {
-          escaped = false;
-        } else if (ch === '\\') {
-          escaped = true;
-        } else if (ch === '$' && next === '{' && templateBraceDepth === 0) {
-          // ${...} 開始
-          // NOTE:
-          // - "${" の "{" を次ループでカウントしてしまうと二重カウントになる。
-          // - ここで開始ブレース分を templateBraceDepth=1 として反映し、
-          //   次の "{" はテンプレート構文として空白にしてスキップする。
-          templateBraceDepth = 1;
-          result[result.length - 1] = ' '; // '$' は空白に（明示）
-          result.push(' '); // '{' は空白に（テンプレート構文）
-          i++; // '{' をスキップして二重カウントを防ぐ
-        } else if (ch === '`' && templateBraceDepth === 0) {
-          state = 'code';
         }
         break;
 
@@ -187,7 +290,7 @@ export function buildCodeOnlyContent(content: string): string {
         if (ch === '\n') {
           // 正規表現は通常改行を含まない。改行があれば終了とみなす
           result.push('\n');
-          state = 'code';
+          state = resumeState;
         } else {
           result.push(' ');
         }
@@ -203,7 +306,7 @@ export function buildCodeOnlyContent(content: string): string {
             j++;
           }
           i = j - 1; // ループの i++ で j になる
-          state = 'code';
+          state = resumeState;
         }
         break;
     }

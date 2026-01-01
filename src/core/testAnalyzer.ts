@@ -380,9 +380,12 @@ function checkExceptionMessageVerificationStrict(
       continue;
     }
     // 元の content で実際の引数を確認
-    const toThrowStartInContent = index + match[0].length;
-    const hasArg = checkToThrowHasArgument(content, toThrowStartInContent);
-    if (!hasArg) {
+    // NOTE:
+    // - ネストした括弧が含まれる場合があるため、簡易スキャンではなく parseCallArgsWithRanges を使う。
+    // - match[0] は ".toThrow   (" まで含むので、最後の "(" の位置に戻す。
+    const openParenIndex = index + match[0].length - 1;
+    const parsed = parseCallArgsWithRanges(content, openParenIndex);
+    if (parsed.args.length === 0) {
       issues.push({
         type: 'missing-exception-message',
         file: relativePath,
@@ -393,30 +396,6 @@ function checkExceptionMessageVerificationStrict(
   }
 
   return issues;
-}
-
-/**
- * .toThrow( の直後に引数があるかどうかを判定する。
- *
- * @param content 元のソースコード
- * @param startIndex '(' の直後の位置
- * @returns 引数がある場合 true
- */
-function checkToThrowHasArgument(content: string, startIndex: number): boolean {
-  // '(' の直後から ')' までの間に空白以外の文字があれば引数あり
-  for (let i = startIndex; i < content.length; i++) {
-    const ch = content[i];
-    if (ch === ')') {
-      // ')' に達した = 引数なし
-      return false;
-    }
-    if (!/\s/.test(ch)) {
-      // 空白以外の文字 = 引数あり
-      return true;
-    }
-  }
-  // ')' が見つからなかった（構文エラー）= 安全側で引数ありとみなす
-  return true;
 }
 
 function buildLineStartIndices(content: string): number[] {
@@ -579,6 +558,8 @@ function parseCallArgsWithRanges(content: string, openParenIndex: number): Parse
 
   let escaped = false;
   let argStart = openParenIndex + 1;
+  // 正規表現開始判定（除算との誤判定を避けるため、前の非空白文字を追跡）
+  let lastNonWsChar = '';
 
   for (let i = openParenIndex + 1; i < content.length; i++) {
     const ch = content[i];
@@ -661,18 +642,21 @@ function parseCallArgsWithRanges(content: string, openParenIndex: number): Parse
     }
     if (ch === '`') {
       inTemplate = true;
+      lastNonWsChar = '`';
       continue;
     }
 
     // 正規表現開始（ヒューリスティック）
-    if (ch === '/' && next !== '/' && next !== '*') {
+    if (ch === '/' && next !== '/' && next !== '*' && isRegexStartFromLastNonWsChar(lastNonWsChar)) {
       inRegex = true;
+      lastNonWsChar = '/';
       continue;
     }
 
     // ネスト管理
     if (ch === '(') {
       parenDepth++;
+      lastNonWsChar = '(';
       continue;
     }
     if (ch === ')') {
@@ -688,22 +672,27 @@ function parseCallArgsWithRanges(content: string, openParenIndex: number): Parse
         }
         return { endIndex: i, args };
       }
+      lastNonWsChar = ')';
       continue;
     }
     if (ch === '{') {
       braceDepth++;
+      lastNonWsChar = '{';
       continue;
     }
     if (ch === '}') {
       braceDepth = Math.max(0, braceDepth - 1);
+      lastNonWsChar = '}';
       continue;
     }
     if (ch === '[') {
       bracketDepth++;
+      lastNonWsChar = '[';
       continue;
     }
     if (ch === ']') {
       bracketDepth = Math.max(0, bracketDepth - 1);
+      lastNonWsChar = ']';
       continue;
     }
 
@@ -715,12 +704,50 @@ function parseCallArgsWithRanges(content: string, openParenIndex: number): Parse
         args.push({ start: trimmedStart, end: trimmedEnd });
       }
       argStart = i + 1;
+      lastNonWsChar = ',';
       continue;
+    }
+
+    if (!/\s/.test(ch)) {
+      lastNonWsChar = ch;
     }
   }
 
   // ) が見つからない場合
   return { endIndex: content.length - 1, args };
+}
+
+/**
+ * 正規表現リテラルの開始かどうかをヒューリスティックに判定する（簡易）。
+ *
+ * `parseCallArgsWithRanges` 内では、主に除算演算子 `/` との誤判定を避けるために使う。
+ */
+function isRegexStartFromLastNonWsChar(lastNonWsChar: string): boolean {
+  if (lastNonWsChar === '') {
+    return true;
+  }
+  const preceding = new Set([
+    '(',
+    '[',
+    '{',
+    ',',
+    ';',
+    ':',
+    '=',
+    '!',
+    '&',
+    '|',
+    '?',
+    '+',
+    '-',
+    '*',
+    '%',
+    '<',
+    '>',
+    '~',
+    '^',
+  ]);
+  return preceding.has(lastNonWsChar);
 }
 
 function skipWhitespace(content: string, index: number): number {
