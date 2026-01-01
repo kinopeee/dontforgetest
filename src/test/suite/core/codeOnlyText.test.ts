@@ -142,6 +142,63 @@ suite('codeOnlyText', () => {
       assert.strictEqual(result, content);
     });
 
+    test('does not treat division after single-quote string literal as regex (regression)', () => {
+      // Given: 文字列リテラル直後に除算があり、同一行に続けてコードが存在する
+      const content = "const x = 'hello' / 2 + null + undefined;";
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 文字列は空白化されるが、除算 '/' と後続コード（null/undefined）は維持される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(!result.includes('hello'));
+
+      const slashIndex = content.indexOf('/');
+      assert.ok(slashIndex >= 0, "入力に '/' が含まれていること");
+      assert.strictEqual(result[slashIndex], '/', "除算演算子 '/' が空白化されないこと");
+
+      assert.ok(result.includes('null'));
+      assert.ok(result.includes('undefined'));
+    });
+
+    test('does not treat division after double-quote string literal as regex (regression)', () => {
+      // Given: ダブルクォート文字列リテラル直後に除算があり、同一行に続けてコードが存在する
+      const content = 'const x = "hello" / 2 + null + undefined;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 文字列は空白化されるが、除算 '/' と後続コード（null/undefined）は維持される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(!result.includes('hello'));
+
+      const slashIndex = content.indexOf('/');
+      assert.ok(slashIndex >= 0, "入力に '/' が含まれていること");
+      assert.strictEqual(result[slashIndex], '/', "除算演算子 '/' が空白化されないこと");
+
+      assert.ok(result.includes('null'));
+      assert.ok(result.includes('undefined'));
+    });
+
+    test('does not treat division after template literal as regex (regression)', () => {
+      // Given: テンプレートリテラル直後に除算があり、同一行に続けてコードが存在する
+      const content = 'const x = `hello` / 2 + null + undefined;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: テンプレート文字列部分は空白化されるが、除算 '/' と後続コード（null/undefined）は維持される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(!result.includes('hello'));
+
+      const slashIndex = content.indexOf('/');
+      assert.ok(slashIndex >= 0, "入力に '/' が含まれていること");
+      assert.strictEqual(result[slashIndex], '/', "除算演算子 '/' が空白化されないこと");
+
+      assert.ok(result.includes('null'));
+      assert.ok(result.includes('undefined'));
+    });
+
     test('handles template literal with expressions', () => {
       // Given: 式を含むテンプレートリテラル
       const content = 'const x = `value is ${y + 1}`;';
@@ -406,6 +463,28 @@ function test() {
         // Given: テンプレート式 ${...} 内に空文字リテラルがある
         // NOTE: テスト内容が文字列として誤検出されないよう、組み立てる
         const content = "const x = `prefix ${fn('')} suffix`;";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: true が返される
+        assert.strictEqual(result, true);
+      });
+
+      test('detects empty string even after division following single-quote string literal (regression)', () => {
+        // Given: 文字列リテラル直後の除算の後に空文字リテラルがある
+        const content = "const x = 'hello' / 2 + '';";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: true が返される
+        assert.strictEqual(result, true);
+      });
+
+      test('detects empty string even after division following double-quote string literal (regression)', () => {
+        // Given: ダブルクォート文字列リテラル直後の除算の後に空文字リテラルがある
+        const content = 'const x = "hello" / 2 + "";';
 
         // When: 空文字リテラルをチェックする
         const result = hasEmptyStringLiteralInCode(content);

@@ -143,6 +143,8 @@ export function buildCodeOnlyContent(content: string): string {
           escaped = true;
         } else if (ch === "'") {
           state = resumeState;
+          // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+          lastNonWsChar = "'";
         }
         break;
 
@@ -159,6 +161,8 @@ export function buildCodeOnlyContent(content: string): string {
           escaped = true;
         } else if (ch === '"') {
           state = resumeState;
+          // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+          lastNonWsChar = '"';
         }
         break;
 
@@ -207,6 +211,8 @@ export function buildCodeOnlyContent(content: string): string {
               // テンプレートリテラル終了
               templateStack.pop();
               state = ctx.resumeState;
+              // テンプレートリテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+              lastNonWsChar = '`';
               break;
             }
 
@@ -307,6 +313,8 @@ export function buildCodeOnlyContent(content: string): string {
           }
           i = j - 1; // ループの i++ で j になる
           state = resumeState;
+          // 正規表現リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+          lastNonWsChar = '/';
         }
         break;
     }
@@ -440,6 +448,8 @@ export function hasEmptyStringLiteralInCode(content: string): boolean {
           escaped = true;
         } else if (ch === "'") {
           state = resumeState as LexerState;
+          // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+          lastNonWsChar = "'";
         }
         break;
 
@@ -450,6 +460,8 @@ export function hasEmptyStringLiteralInCode(content: string): boolean {
           escaped = true;
         } else if (ch === '"') {
           state = resumeState as LexerState;
+          // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+          lastNonWsChar = '"';
         }
         break;
 
