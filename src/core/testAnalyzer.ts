@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { formatTimestamp, resolveDirAbsolute } from './artifacts';
-import { buildCodeOnlyContent } from './codeOnlyText';
+import { buildCodeOnlyContent, hasEmptyStringLiteralInCode } from './codeOnlyText';
 import { nowMs } from './event';
 import { t } from './l10n';
 
@@ -163,8 +163,8 @@ export function analyzeFileContent(relativePath: string, content: string): Analy
     }
   }
 
-  // 2. 境界値テストのチェック（ファイル単位、codeOnlyContent を使用）
-  const boundaryIssue = checkBoundaryValueTests(relativePath, codeOnlyContent);
+  // 2. 境界値テストのチェック（ファイル単位、codeOnlyContent と content を使用）
+  const boundaryIssue = checkBoundaryValueTests(relativePath, content, codeOnlyContent);
   if (boundaryIssue) {
     issues.push(boundaryIssue);
   }
@@ -303,10 +303,19 @@ function checkGivenWhenThenStrict(content: string): GwtCheckResult {
  * - '' または "" または ``（空文字列）
  * - [] （空配列）
  *
+ * NOTE:
+ * - codeOnlyContent では文字列リテラルが空白化されるため、空文字リテラルは検出できない。
+ * - 空文字リテラルのみ、元の content を軽量 lexer で走査して検出する。
+ *
  * @param relativePath ファイルの相対パス
+ * @param content 元のソースコード
  * @param codeOnlyContent コード領域のみのテキスト（文字列/コメント除外済み）
  */
-function checkBoundaryValueTests(relativePath: string, codeOnlyContent: string): AnalysisIssue | null {
+function checkBoundaryValueTests(
+  relativePath: string,
+  content: string,
+  codeOnlyContent: string,
+): AnalysisIssue | null {
   // テスト関数が存在しない場合はスキップ
   const hasTestFunctions = /(?:test|it)\s*\(/.test(codeOnlyContent);
   if (!hasTestFunctions) {
@@ -321,9 +330,12 @@ function checkBoundaryValueTests(relativePath: string, codeOnlyContent: string):
     /\[\s*\]/, // 空配列 []
   ];
 
-  const hasBoundaryTest = patterns.some((pattern) => pattern.test(codeOnlyContent));
+  const hasBoundaryTestInCodeOnly = patterns.some((pattern) => pattern.test(codeOnlyContent));
 
-  if (!hasBoundaryTest) {
+  // 空文字リテラルは codeOnlyContent では消えるため、元の content から lexer で検出
+  const hasEmptyStringBoundary = hasEmptyStringLiteralInCode(content);
+
+  if (!hasBoundaryTestInCodeOnly && !hasEmptyStringBoundary) {
     return {
       type: 'missing-boundary',
       file: relativePath,

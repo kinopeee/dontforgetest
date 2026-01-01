@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.116
+
+### Fixed
+
+- Test analyzer: Fixed false negatives for empty-string boundary tests — empty string literals (`''`/`""`/``` `` ```) are now correctly detected from the original source code (previously invisible in `codeOnlyContent`)
+
+---
+
+## 0.0.116（日本語）
+
+### 修正
+
+- テスト分析: 空文字リテラル（`''`/`""`/``` `` ```）が境界値テストとして検出されず誤って不足扱いになる問題を修正（元ソースから字句解析で検出するよう変更）
+
+---
+
 ## 0.0.115
 
 ### Added

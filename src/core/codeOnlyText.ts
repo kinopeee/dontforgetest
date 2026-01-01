@@ -316,6 +316,244 @@ export function buildCodeOnlyContent(content: string): string {
 }
 
 /**
+ * コード領域内に空文字リテラル（`''`/`""`/``` `` ```）が存在するかを判定する。
+ *
+ * 目的:
+ * - `buildCodeOnlyContent` では文字列リテラルが空白化されるため、空文字リテラルを検出できない。
+ * - 境界値テストの分析で空文字を検出するために、元の `content` を軽量 lexer で走査する。
+ *
+ * 設計:
+ * - コメント・正規表現リテラル内の `''`/`""`/``` `` ``` は除外する。
+ * - 非空文字列リテラル（`'x'` など）内の連続クォート（`"''"` など）も除外する。
+ * - テンプレートリテラルの `${...}` 式部分はコードとして扱い、そこでの空文字も検出対象にする。
+ *
+ * @param content ソースコード全体
+ * @returns コード領域内に空文字リテラルが存在すれば true
+ */
+export function hasEmptyStringLiteralInCode(content: string): boolean {
+  const len = content.length;
+
+  type LexerState =
+    | 'code'
+    | 'lineComment'
+    | 'blockComment'
+    | 'singleQuote'
+    | 'doubleQuote'
+    | 'template'
+    | 'regex';
+
+  type ResumeState = 'code' | 'template';
+
+  type TemplateContext = {
+    braceDepth: number;
+    escaped: boolean;
+    resumeState: ResumeState;
+  };
+
+  let state: LexerState = 'code';
+  let escaped = false;
+  let resumeState: ResumeState = 'code';
+  const templateStack: TemplateContext[] = [];
+  let lastNonWsChar = '';
+
+  /**
+   * コード状態で空文字リテラルの開始かどうかを判定し、該当すれば true を返す。
+   * 空文字でない文字列の場合は状態を更新して処理を続行する。
+   */
+  function checkEmptyStringAndUpdateState(
+    ch: string,
+    next: string,
+    newResumeState: ResumeState,
+  ): boolean {
+    if (ch === "'") {
+      if (next === "'") {
+        // 空のシングルクォート文字列 ''
+        return true;
+      }
+      // 非空文字列: 状態を更新して読み飛ばす
+      state = 'singleQuote';
+      escaped = false;
+      resumeState = newResumeState;
+      return false;
+    }
+    if (ch === '"') {
+      if (next === '"') {
+        // 空のダブルクォート文字列 ""
+        return true;
+      }
+      state = 'doubleQuote';
+      escaped = false;
+      resumeState = newResumeState;
+      return false;
+    }
+    return false;
+  }
+
+  for (let i = 0; i < len; i++) {
+    const ch = content[i];
+    const next = i + 1 < len ? content[i + 1] : '';
+
+    switch (state) {
+      case 'code':
+        if (ch === '/' && next === '/') {
+          state = 'lineComment';
+          resumeState = 'code';
+        } else if (ch === '/' && next === '*') {
+          state = 'blockComment';
+          resumeState = 'code';
+        } else if (ch === '`') {
+          if (next === '`') {
+            // 空のテンプレートリテラル ``
+            return true;
+          }
+          state = 'template';
+          templateStack.push({ braceDepth: 0, escaped: false, resumeState: 'code' });
+        } else if (ch === '/' && isRegexStart(lastNonWsChar)) {
+          state = 'regex';
+          escaped = false;
+          resumeState = 'code';
+        } else if (checkEmptyStringAndUpdateState(ch, next, 'code')) {
+          return true;
+        } else {
+          if (!/\s/.test(ch)) {
+            lastNonWsChar = ch;
+          }
+        }
+        break;
+
+      case 'lineComment':
+        if (ch === '\n') {
+          state = resumeState;
+        }
+        break;
+
+      case 'blockComment':
+        if (content[i - 1] === '*' && ch === '/') {
+          state = resumeState;
+        }
+        break;
+
+      case 'singleQuote':
+        if (escaped) {
+          escaped = false;
+        } else if (ch === '\\') {
+          escaped = true;
+        } else if (ch === "'") {
+          state = resumeState as LexerState;
+        }
+        break;
+
+      case 'doubleQuote':
+        if (escaped) {
+          escaped = false;
+        } else if (ch === '\\') {
+          escaped = true;
+        } else if (ch === '"') {
+          state = resumeState as LexerState;
+        }
+        break;
+
+      case 'template': {
+        const ctx = templateStack.length > 0 ? templateStack[templateStack.length - 1] : undefined;
+        if (!ctx) {
+          state = 'code';
+          break;
+        }
+
+        // テンプレート文字列部分（${...} の外側）
+        if (ctx.braceDepth === 0) {
+          if (ctx.escaped) {
+            ctx.escaped = false;
+            break;
+          }
+          if (ch === '\\') {
+            ctx.escaped = true;
+            break;
+          }
+          if (ch === '$' && next === '{') {
+            ctx.braceDepth = 1;
+            i++; // '{' をスキップ
+            break;
+          }
+          if (ch === '`') {
+            templateStack.pop();
+            state = ctx.resumeState;
+            break;
+          }
+          break;
+        }
+
+        // ${...} 式部分: コードと同様に扱う
+        if (ch === '/' && next === '/') {
+          state = 'lineComment';
+          resumeState = 'template';
+          break;
+        }
+        if (ch === '/' && next === '*') {
+          state = 'blockComment';
+          resumeState = 'template';
+          break;
+        }
+        if (ch === '`') {
+          if (next === '`') {
+            // ネストしたテンプレート内での空テンプレート ``
+            return true;
+          }
+          templateStack.push({ braceDepth: 0, escaped: false, resumeState: 'template' });
+          state = 'template';
+          break;
+        }
+        if (ch === '/' && isRegexStart(lastNonWsChar)) {
+          state = 'regex';
+          escaped = false;
+          resumeState = 'template';
+          break;
+        }
+        if (checkEmptyStringAndUpdateState(ch, next, 'template')) {
+          return true;
+        }
+        if (ch === '{') {
+          ctx.braceDepth++;
+          lastNonWsChar = '{';
+          break;
+        }
+        if (ch === '}') {
+          ctx.braceDepth--;
+          if (ctx.braceDepth > 0) {
+            lastNonWsChar = '}';
+          }
+          break;
+        }
+        if (!/\s/.test(ch)) {
+          lastNonWsChar = ch;
+        }
+        break;
+      }
+
+      case 'regex':
+        if (ch === '\n') {
+          state = resumeState;
+        } else if (escaped) {
+          escaped = false;
+        } else if (ch === '\\') {
+          escaped = true;
+        } else if (ch === '/') {
+          // フラグ部分もスキップ
+          let j = i + 1;
+          while (j < len && /[a-zA-Z]/.test(content[j])) {
+            j++;
+          }
+          i = j - 1;
+          state = resumeState;
+        }
+        break;
+    }
+  }
+
+  return false;
+}
+
+/**
  * 正規表現リテラルの開始かどうかをヒューリスティックに判定する。
  *
  * `/` の前の非空白文字が以下の場合、正規表現の開始と見なす:

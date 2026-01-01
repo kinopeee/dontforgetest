@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { buildCodeOnlyContent } from '../../../core/codeOnlyText';
+import { buildCodeOnlyContent, hasEmptyStringLiteralInCode } from '../../../core/codeOnlyText';
 
 suite('codeOnlyText', () => {
   suite('buildCodeOnlyContent', () => {
@@ -351,6 +351,191 @@ function test() {
       assert.ok(result.includes('const y = 2;'));
       assert.ok(!result.includes('a '));
       assert.ok(!result.includes('b '));
+    });
+  });
+
+  suite('hasEmptyStringLiteralInCode', () => {
+    suite('Detection of empty string literals in code', () => {
+      test('detects empty single-quote string', () => {
+        // Given: コード内に空のシングルクォート文字列がある
+        const content = "const x = '';";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: true が返される
+        assert.strictEqual(result, true);
+      });
+
+      test('detects empty double-quote string', () => {
+        // Given: コード内に空のダブルクォート文字列がある
+        const content = 'const x = "";';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: true が返される
+        assert.strictEqual(result, true);
+      });
+
+      test('detects empty template literal', () => {
+        // Given: コード内に空のテンプレートリテラルがある
+        const content = 'const x = ``;';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: true が返される
+        assert.strictEqual(result, true);
+      });
+
+      test('detects empty string inside template expression', () => {
+        // Given: テンプレート式 ${...} 内に空文字リテラルがある
+        // NOTE: テスト内容が文字列として誤検出されないよう、組み立てる
+        const content = "const x = `prefix ${fn('')} suffix`;";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: true が返される
+        assert.strictEqual(result, true);
+      });
+    });
+
+    suite('Non-detection of false positives', () => {
+      test('does not detect non-empty single-quote string', () => {
+        // Given: 空でないシングルクォート文字列
+        const content = "const x = 'a';";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+
+      test('does not detect non-empty double-quote string', () => {
+        // Given: 空でないダブルクォート文字列
+        const content = 'const x = "a";';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+
+      test('does not detect whitespace-only string as empty', () => {
+        // Given: 空白のみを含む文字列（空文字ではない）
+        const content = "const x = ' ';";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+
+      test('does not detect empty quotes inside line comment', () => {
+        // Given: ラインコメント内に '' がある
+        const content = "const x = 1; // ''";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される（コメント内は無視）
+        assert.strictEqual(result, false);
+      });
+
+      test('does not detect empty quotes inside block comment', () => {
+        // Given: ブロックコメント内に '' がある
+        const content = "const x = 1; /* '' */";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+
+      test('does not detect empty quotes inside string literal', () => {
+        // Given: 文字列リテラルの内容として '' がある
+        const content = 'const x = "\'\'";';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される（文字列内容は無視）
+        assert.strictEqual(result, false);
+      });
+
+      test('does not detect empty quotes inside regex literal', () => {
+        // Given: 正規表現リテラル内に '' がある
+        const content = "const re = /''/;";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+
+      test('does not detect empty quotes inside template string part', () => {
+        // Given: テンプレートリテラルの文字列部分に '' テキストがある
+        const content = "const x = `the text is ''`;";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+    });
+
+    suite('Edge cases', () => {
+      test('returns false for empty input', () => {
+        // Given: 空のコンテンツ
+        const content = '';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+
+      test('returns false for code without any string literals', () => {
+        // Given: 文字列リテラルがないコード
+        const content = 'const x = 1 + 2;';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+
+      test('handles escaped quotes correctly', () => {
+        // Given: エスケープされたクォートを含む非空文字列
+        const content = "const x = '\\'';";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+
+      test('detects empty string after non-empty string', () => {
+        // Given: 非空文字列の後に空文字列がある
+        const content = "const x = 'hello'; const y = '';";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: true が返される
+        assert.strictEqual(result, true);
+      });
     });
   });
 });

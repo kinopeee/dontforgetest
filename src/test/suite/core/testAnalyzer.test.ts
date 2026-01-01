@@ -245,11 +245,10 @@ ${testFn}('handles zero', () => {
         assert.strictEqual(boundaryIssues.length, 0);
       });
 
-      test('detects missing boundary when only empty string exists (codeOnly limitation)', () => {
+      test('does not report issue when only empty string test exists', () => {
         // Given: 空文字列のみのテストがある
-        // NOTE: codeOnlyContent では文字列リテラルが空白に置き換えられるため、
-        //       '' という空文字列パターンは検出できない。
-        //       これは許容される制限であり、null/undefined/0/[] の検出を優先する。
+        // NOTE: hasEmptyStringLiteralInCode により空文字リテラルが検出されるため、
+        //       空文字のみでも境界値テストとして認識される。
         const content = `
 ${testFn}('handles empty string', () => {
   const result = someFunction('');
@@ -260,7 +259,42 @@ ${testFn}('handles empty string', () => {
         // When: ファイル内容を分析する
         const issues = analyzeFileContent('test.test.ts', content);
 
-        // Then: missing-boundary が検出される（空文字列のみでは境界値カバレッジとして不十分）
+        // Then: missing-boundary の問題は検出されない
+        const boundaryIssues = issues.filter((i) => i.type === 'missing-boundary');
+        assert.strictEqual(boundaryIssues.length, 0);
+      });
+
+      test('detects missing boundary when empty string exists only in comment', () => {
+        // Given: コメント内にのみ '' がある（コード内には空文字がない）
+        const content = `
+${testFn}('test without boundary', () => {
+  // Input: ''
+  const result = someFunction('valid input');
+  assert.strictEqual(result, 'expected');
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-boundary が検出される（コメント内の空文字はカウントされない）
+        const boundaryIssues = issues.filter((i) => i.type === 'missing-boundary');
+        assert.strictEqual(boundaryIssues.length, 1);
+      });
+
+      test('detects missing boundary when empty quotes exist only in string content', () => {
+        // Given: 文字列内容として '' テキストがあるだけ（空文字リテラルではない）
+        const content = `
+${testFn}('test without boundary', () => {
+  const msg = "The value is ''";
+  assert.strictEqual(msg, "expected");
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-boundary が検出される（文字列内容の '' はカウントされない）
         const boundaryIssues = issues.filter((i) => i.type === 'missing-boundary');
         assert.strictEqual(boundaryIssues.length, 1);
       });
