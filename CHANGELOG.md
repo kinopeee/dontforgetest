@@ -5,6 +5,7 @@
 ### Fixed
 
 - Test analyzer: Fixed false negatives for empty-string boundary tests — empty string literals (`''`/`""`/``` `` ```) are now correctly detected from the original source code (previously invisible in `codeOnlyContent`)
+- Test analyzer: Fixed potential argument boundary mis-detection in `assert.throws(...)` when a string/template literal is immediately followed by `/` (division) — prevents misclassifying division as a regex start
 
 ---
 
@@ -13,6 +14,7 @@
 ### 修正
 
 - テスト分析: 空文字リテラル（`''`/`""`/``` `` ```）が境界値テストとして検出されず誤って不足扱いになる問題を修正（元ソースから字句解析で検出するよう変更）
+- テスト分析: 文字列/テンプレートリテラル直後の `/`（除算）が正規表現開始として誤判定され、`assert.throws(...)` の引数境界が崩れる可能性がある問題を修正（クォート終了時に `lastNonWsChar` を更新）
 
 ---
 

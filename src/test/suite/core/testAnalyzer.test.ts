@@ -409,6 +409,53 @@ ${testFn}('throws error with message', () => {
         assert.strictEqual(exceptionIssues.length, 0);
       });
 
+      test('does not break when nested template literals exist inside callback (parseCallArgsWithRanges)', () => {
+        // Given: assert.throws の第1引数（関数本体）内に、`${...}` 式内でネストしたテンプレートリテラルがある
+        // NOTE:
+        // - これが正しく処理されないと、内側テンプレートの `)` で parenDepth が壊れ、
+        //   第2引数（/expected error/）が存在しても「メッセージ検証なし」と誤判定されうる。
+        const assertThrows = 'assert.' + 'throws';
+        const content = [
+          `${testFn}('throws error with nested template', () => {`,
+          `  ${assertThrows}(() => {`,
+          "    const msg = `outer ${`inner)`} text`;",
+          '    badFunction();',
+          '  }, /expected error/);',
+          '});',
+          '',
+        ].join('\n');
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-exception-message の問題は検出されない
+        const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
+        assert.strictEqual(exceptionIssues.length, 0);
+      });
+
+      test('does not mis-detect division after string literal as regex start in assert.throws args (regression)', () => {
+        // Given: 第1引数内に「文字列リテラル直後の /（除算）」がある assert.throws
+        // NOTE:
+        // - parseCallArgsWithRanges の正規表現開始判定が誤ると、第1引数の除算 "/" を正規表現開始と誤認し、
+        //   引数区切りの "," が無視されて第2引数（/expected/）が正しく切り出せなくなる。
+        // - その結果、メッセージ検証あり（OK）なのに missing-exception-message が誤検出されうる。
+        const content = `
+${testFn}('throws error with message and division after string', () => {
+  assert.throws(
+    () => badFunction('error' / 2),
+    /expected error/,
+  );
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-exception-message の問題は検出されない（第2引数の正規表現が正しく解析される）
+        const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
+        assert.strictEqual(exceptionIssues.length, 0);
+      });
+
       test('does not report issue when toThrow has message parameter', () => {
         // Given: toThrow() でメッセージを検証しているコード
         const content = `

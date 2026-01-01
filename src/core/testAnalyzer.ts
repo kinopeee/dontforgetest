@@ -603,14 +603,20 @@ function parseCallArgsWithRanges(content: string, openParenIndex: number): Parse
       }
       if (inSingleQuote && ch === "'") {
         inSingleQuote = false;
+        // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+        lastNonWsChar = "'";
         continue;
       }
       if (inDoubleQuote && ch === '"') {
         inDoubleQuote = false;
+        // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+        lastNonWsChar = '"';
         continue;
       }
       if (inTemplate && ch === '`') {
         inTemplate = false;
+        // テンプレートリテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+        lastNonWsChar = '`';
         continue;
       }
       continue;
@@ -654,7 +660,6 @@ function parseCallArgsWithRanges(content: string, openParenIndex: number): Parse
     }
     if (ch === '`') {
       inTemplate = true;
-      lastNonWsChar = '`';
       continue;
     }
 
