@@ -22,8 +22,11 @@ suite('providers/cursorAgentProvider.ts', () => {
     // When: idとdisplayNameを取得する
     // Then: 正しい値が返される
     test('TC-N-01: プロパティの確認', () => {
+      // Given: CursorAgentProvider を生成する
       const provider = new CursorAgentProvider();
 
+      // When: id / displayName を参照する
+      // Then: 期待値が返る
       assert.strictEqual(provider.id, 'cursor-agent');
       assert.strictEqual(provider.displayName, 'Cursor Agent');
     });
@@ -32,6 +35,7 @@ suite('providers/cursorAgentProvider.ts', () => {
     // When: runを呼び出す
     // Then: 指定されたコマンドが使用される
     test('TC-N-04: agentCommandが指定されている', async () => {
+      // Given: agentCommand を指定した AgentRunOptions
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -49,6 +53,7 @@ suite('providers/cursorAgentProvider.ts', () => {
 
       const task = provider.run(options);
 
+      // Then: RunningTask が返り、started イベントにカスタムコマンドが含まれる
       assert.ok(task !== undefined, 'RunningTaskが返される');
       assert.strictEqual(task.taskId, 'test-task-1');
 
@@ -68,6 +73,7 @@ suite('providers/cursorAgentProvider.ts', () => {
     // When: runを呼び出す
     // Then: デフォルトの 'cursor-agent' が使用される
     test('TC-N-05: agentCommandが未指定', async () => {
+      // Given: agentCommand 未指定の AgentRunOptions
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -84,6 +90,7 @@ suite('providers/cursorAgentProvider.ts', () => {
 
       const task = provider.run(options);
 
+      // Then: started イベントにデフォルトのコマンドが含まれる
       assert.ok(task !== undefined, 'RunningTaskが返される');
 
       // startedイベントが発行されることを確認
@@ -102,6 +109,7 @@ suite('providers/cursorAgentProvider.ts', () => {
     // When: runを呼び出す
     // Then: --model オプションが追加される
     test('TC-N-06: modelが指定されている', async () => {
+      // Given: model を指定した AgentRunOptions
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -119,6 +127,7 @@ suite('providers/cursorAgentProvider.ts', () => {
 
       const task = provider.run(options);
 
+      // Then: started イベントに model=... が含まれる
       // startedイベントでmodelが含まれることを確認
       const startedEvent = events.find((e) => e.type === 'started');
       if (startedEvent && startedEvent.type === 'started') {
@@ -134,6 +143,7 @@ suite('providers/cursorAgentProvider.ts', () => {
     // When: runを呼び出す
     // Then: --force オプションが追加される
     test('TC-N-07: allowWrite=true', async () => {
+      // Given: allowWrite=true の AgentRunOptions
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -150,6 +160,7 @@ suite('providers/cursorAgentProvider.ts', () => {
 
       const task = provider.run(options);
 
+      // Then: started イベントに write=on が含まれる
       // startedイベントでwrite=onが含まれることを確認
       const startedEvent = events.find((e) => e.type === 'started');
       if (startedEvent && startedEvent.type === 'started') {
@@ -165,6 +176,7 @@ suite('providers/cursorAgentProvider.ts', () => {
     // When: runを呼び出す
     // Then: --force オプションが追加されない
     test('TC-N-08: allowWrite=false', async () => {
+      // Given: allowWrite=false の AgentRunOptions
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -181,6 +193,7 @@ suite('providers/cursorAgentProvider.ts', () => {
 
       const task = provider.run(options);
 
+      // Then: started イベントに write=off が含まれる
       // startedイベントでwrite=offが含まれることを確認
       const startedEvent = events.find((e) => e.type === 'started');
       if (startedEvent && startedEvent.type === 'started') {
@@ -196,6 +209,7 @@ suite('providers/cursorAgentProvider.ts', () => {
     // When: disposeを呼び出す
     // Then: プロセスがkillされる
     test('TC-A-07: dispose呼び出し', async () => {
+      // Given: 実行中タスクを開始する
       const provider = new CursorAgentProvider();
       const events: TestGenEvent[] = [];
 
@@ -212,6 +226,8 @@ suite('providers/cursorAgentProvider.ts', () => {
 
       const task = provider.run(options);
 
+      // When: dispose を呼び出す
+      // Then: 例外なく dispose できる
       // disposeが呼び出せることを確認
       assert.doesNotThrow(() => {
         task.dispose();

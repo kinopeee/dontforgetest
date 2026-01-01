@@ -93,8 +93,13 @@ suite('test/suite/index.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => resolveSuiteFromFullTitle(fullTitle, title),
-        TypeError,
-        'Should throw TypeError when fullTitle is null'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when fullTitle is null',
       );
     });
 
@@ -108,8 +113,13 @@ suite('test/suite/index.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => resolveSuiteFromFullTitle(fullTitle, title),
-        TypeError,
-        'Should throw TypeError when title is null'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when title is null',
       );
     });
 

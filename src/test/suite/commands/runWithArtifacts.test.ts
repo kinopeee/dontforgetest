@@ -103,6 +103,7 @@ suite('commands/runWithArtifacts.ts', () => {
   // When: string 型の引数を渡して呼び出す
   // Then: コンパイルエラーにならず、正常にイベントが発行される
   test('TC-TYP-01: emit関数は string 型の入力を受け付け、正常に動作すること', async () => {
+    // Given: string 型のメッセージを受け取って記録できる状態
     let capturedMessage: string | undefined;
 
     // 型定義の確認を兼ねたProvider実装
@@ -123,6 +124,7 @@ suite('commands/runWithArtifacts.ts', () => {
       emit('test-string-message');
     });
 
+    // When: runWithArtifacts を実行する
     await runWithArtifacts({
       provider,
       workspaceRoot,
@@ -141,6 +143,7 @@ suite('commands/runWithArtifacts.ts', () => {
       }
     });
 
+    // Then: string 型のメッセージが期待通りに渡されること
     assert.strictEqual(capturedMessage, 'test-string-message', 'string型のメッセージが正常に渡されること');
   });
 
@@ -149,6 +152,7 @@ suite('commands/runWithArtifacts.ts', () => {
   // When: 数値などの非 string 型を渡そうとする
   // Then: TypeScriptコンパイラがエラーを出す（@ts-expect-errorで検証）
   test('TC-TYP-02: emit関数に非string型を渡すと型エラーになること', () => {
+    // Given: string を受け取る emit 関数
     // このテストケースは実行時のアサーションではなく、コンパイル時の型チェックを検証するもの
     // 実際にエラーになるコードを書いて @ts-expect-error を付与することで、
     // 「エラーになることが期待通り」であることを保証する
@@ -156,12 +160,14 @@ suite('commands/runWithArtifacts.ts', () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _dummyEmit = (msg: string) => {};
 
+    // When: number / object を渡そうとする
     // @ts-expect-error: Argument of type 'number' is not assignable to parameter of type 'string'.
     _dummyEmit(123);
 
     // @ts-expect-error: Argument of type '{ text: string; }' is not assignable to parameter of type 'string'.
     _dummyEmit({ text: 'obj' });
     
+    // Then: @ts-expect-error によりコンパイル時に型エラーが検出されること
     assert.ok(true, '型チェックが機能している確認（コンパイルが通ればOK）');
   });
 

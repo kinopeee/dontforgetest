@@ -625,13 +625,17 @@ suite('src/ui/controlPanel.ts', () => {
     // Given: Provider initialized
     // When: resolveWebviewView is called with null
     // Then: Should throw TypeError (TypeScript type checking prevents this, but runtime check)
-    assert.throws(() => {
-      provider.resolveWebviewView(
-        null as unknown as vscode.WebviewView,
-        {} as vscode.WebviewViewResolveContext,
-        { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) } as vscode.CancellationToken
-      );
-    }, /Cannot read propert|TypeError|undefined/, 'Throws error when webviewView is null');
+    assert.throws(
+      () => {
+        provider.resolveWebviewView(
+          null as unknown as vscode.WebviewView,
+          {} as vscode.WebviewViewResolveContext,
+          { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => {} }) } as vscode.CancellationToken,
+        );
+      },
+      /Cannot read propert|TypeError|undefined/,
+      'Throws error when webviewView is null',
+    );
   });
 
   // TC-E-02: buildHtml() with webviewView.webview.html = null

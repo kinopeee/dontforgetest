@@ -18,7 +18,10 @@ suite('src/extension.ts', () => {
     // When: Getting extension by ID
     // Then: Extension object exists
     test('TC-EXT-01: Extension existence check', () => {
+      // Given: 拡張機能ID（publisher.name）
+      // When: VS Code API で拡張機能を取得する
       const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
+      // Then: 拡張機能が見つかる
       assert.ok(ext, 'Extension not found');
     });
 
@@ -237,6 +240,7 @@ suite('src/extension.ts', () => {
     // When: Querying all registered commands
     // Then: All expected command IDs are present
     test('TC-N-02: All remaining commands registered', async () => {
+      // Given: 期待するコマンドID一覧
       const expectedCommands = [
         'dontforgetest.generateTest',
         'dontforgetest.openPanel',
@@ -247,9 +251,11 @@ suite('src/extension.ts', () => {
         'dontforgetest.showTestGeneratorOutput'
       ];
 
+      // When: VS Code に登録されたコマンド一覧を取得する（組み込み含む）
       // Get all commands including built-in ones
       const allCommands = await vscode.commands.getCommands(true);
 
+      // Then: 期待するコマンドがすべて含まれる
       expectedCommands.forEach(cmd => {
         assert.ok(
           allCommands.includes(cmd),
@@ -447,8 +453,10 @@ suite('src/extension.ts', () => {
     // When: Getting values for each configuration item
     // Then: Default values are as expected
     test('TC-EXT-04: Default configuration values check (TC-B-01: Clean Install State)', () => {
+      // Given: dontforgetest 設定
       const config = vscode.workspace.getConfiguration('dontforgetest');
 
+      // When/Then: 既定値が期待通りであること
       assert.strictEqual(config.get('cursorAgentPath'), '', 'cursorAgentPath default value is incorrect');
       assert.strictEqual(config.get('maxParallelTasks'), 4, 'maxParallelTasks default value is incorrect');
       assert.strictEqual(config.get('defaultModel'), '', 'defaultModel default value is incorrect');
@@ -535,10 +543,13 @@ suite('src/extension.ts', () => {
     // When: package.json のメタデータを取得する
     // Then: ライセンスが GPL-3.0-only であること
     test('TC-META-01: ライセンス情報の確認', () => {
+      // Given: インストール済み拡張機能
       const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
 
+      // When: package.json を参照する
       const packageJSON = ext.packageJSON;
+      // Then: 期待するライセンス文字列である
       assert.strictEqual(packageJSON.license, 'GPL-3.0-only', 'ライセンスが GPL-3.0-only ではありません');
     });
 
@@ -546,15 +557,18 @@ suite('src/extension.ts', () => {
     // When: LICENSE ファイルの存在を確認する
     // Then: ファイルが存在すること
     test('TC-META-02: ライセンスファイルの存在確認', async () => {
+      // Given: インストール済み拡張機能
       const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
 
+      // When: LICENSE の stat を取得する
       const licenseUri = vscode.Uri.file(path.join(ext.extensionPath, 'LICENSE'));
       try {
         await vscode.workspace.fs.stat(licenseUri);
       } catch {
         assert.fail('LICENSE ファイルが存在しません');
       }
+      // Then: stat が成功する（例外にならない）
     });
 
     // TC-RES-01: package.json バージョン形式確認
@@ -562,12 +576,15 @@ suite('src/extension.ts', () => {
     // When: バージョンを確認する
     // Then: セマンティックバージョニング形式（x.y.z）であること
     test('TC-RES-01: パッケージバージョンの形式確認', () => {
+      // Given: インストール済み拡張機能
       const ext = vscode.extensions.getExtension('kinopeee.dontforgetest');
       assert.ok(ext, '拡張機能が見つかりません');
 
+      // When: package.json の version を取得する
       const packageJSON = ext.packageJSON;
       const version = packageJSON.version;
 
+      // Then: version が存在し、semver 形式である
       // バージョンが存在すること
       assert.ok(version, 'バージョンが定義されていません');
       assert.strictEqual(typeof version, 'string', 'バージョンは文字列である必要があります');
@@ -676,9 +693,18 @@ suite('src/extension.ts', () => {
 
       // When: Parsing invalid JSON
       // Then: JSON.parse throws SyntaxError
-      assert.throws(() => {
-        JSON.parse(invalidJson);
-      }, SyntaxError, 'Parsing invalid JSON should throw SyntaxError');
+      assert.throws(
+        () => {
+          JSON.parse(invalidJson);
+        },
+        (err: unknown) => {
+          assert.ok(err instanceof SyntaxError, 'SyntaxError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Parsing invalid JSON should throw SyntaxError',
+      );
     });
 
     // TC-PKG-06: package.json version field is missing
@@ -969,9 +995,18 @@ suite('src/extension.ts', () => {
 
       // When: Parsing invalid JSON
       // Then: JSON parse error is thrown
-      assert.throws(() => {
-        JSON.parse(invalidJson);
-      }, SyntaxError, 'Parsing invalid JSON should throw SyntaxError');
+      assert.throws(
+        () => {
+          JSON.parse(invalidJson);
+        },
+        (err: unknown) => {
+          assert.ok(err instanceof SyntaxError, 'SyntaxError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Parsing invalid JSON should throw SyntaxError',
+      );
     });
 
     // TC-E-07: package-lock.json is invalid JSON format
@@ -984,9 +1019,18 @@ suite('src/extension.ts', () => {
 
       // When: Parsing invalid JSON
       // Then: JSON parse error is thrown
-      assert.throws(() => {
-        JSON.parse(invalidJson);
-      }, SyntaxError, 'Parsing invalid JSON should throw SyntaxError');
+      assert.throws(
+        () => {
+          JSON.parse(invalidJson);
+        },
+        (err: unknown) => {
+          assert.ok(err instanceof SyntaxError, 'SyntaxError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Parsing invalid JSON should throw SyntaxError',
+      );
     });
 
     // TC-E-08: package.json version is a negative number (e.g., "-1.0.0")
