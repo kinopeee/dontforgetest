@@ -118,6 +118,19 @@ suite('codeOnlyText', () => {
       assert.ok(!result.includes('pattern'));
     });
 
+    test('handles regex literals with escaped forward slashes', () => {
+      // Given: エスケープされたスラッシュ（\/）を含む正規表現リテラル
+      const content = 'const x = /test\\/pattern/gi; const y = 1;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 正規表現内容が空白に置き換えられ、後続コードは保持される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(!result.includes('pattern'));
+      assert.ok(result.includes('const y = 1;'));
+    });
+
     test('does not treat division operator as regex', () => {
       // Given: 除算演算子
       const content = 'const x = 10 / 2;';

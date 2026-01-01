@@ -562,32 +562,33 @@ export function hasEmptyStringLiteralInCode(content: string): boolean {
  * - `return`, `typeof`, `void`, `delete`, `throw`, `new`, `in`, `of` などのキーワードの後
  *   （ただし、単純化のため1文字のみで判定する簡易版）
  */
-function isRegexStart(lastNonWsChar: string): boolean {
+const REGEX_PRECEDING_CHARS = new Set<string>([
+  '(',
+  '[',
+  '{',
+  ',',
+  ';',
+  ':',
+  '=',
+  '!',
+  '&',
+  '|',
+  '?',
+  '+',
+  '-',
+  '*',
+  '%',
+  '<',
+  '>',
+  '~',
+  '^',
+]);
+
+export function isRegexStart(lastNonWsChar: string): boolean {
   // 空文字列（行頭や開始時）は正規表現の可能性あり
   if (lastNonWsChar === '') {
     return true;
   }
   // 演算子・区切り記号の後は正規表現の可能性が高い
-  const regexPrecedingChars = new Set([
-    '(',
-    '[',
-    '{',
-    ',',
-    ';',
-    ':',
-    '=',
-    '!',
-    '&',
-    '|',
-    '?',
-    '+',
-    '-',
-    '*',
-    '%',
-    '<',
-    '>',
-    '~',
-    '^',
-  ]);
-  return regexPrecedingChars.has(lastNonWsChar);
+  return REGEX_PRECEDING_CHARS.has(lastNonWsChar);
 }

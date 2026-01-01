@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { formatTimestamp, resolveDirAbsolute } from './artifacts';
-import { buildCodeOnlyContent, hasEmptyStringLiteralInCode } from './codeOnlyText';
+import { buildCodeOnlyContent, hasEmptyStringLiteralInCode, isRegexStart } from './codeOnlyText';
 import { nowMs } from './event';
 import { t } from './l10n';
 
@@ -659,7 +659,7 @@ function parseCallArgsWithRanges(content: string, openParenIndex: number): Parse
     }
 
     // 正規表現開始（ヒューリスティック）
-    if (ch === '/' && next !== '/' && next !== '*' && isRegexStartFromLastNonWsChar(lastNonWsChar)) {
+    if (ch === '/' && next !== '/' && next !== '*' && isRegexStart(lastNonWsChar)) {
       inRegex = true;
       lastNonWsChar = '/';
       continue;
@@ -729,39 +729,6 @@ function parseCallArgsWithRanges(content: string, openParenIndex: number): Parse
   return { endIndex: content.length - 1, args };
 }
 
-/**
- * 正規表現リテラルの開始かどうかをヒューリスティックに判定する（簡易）。
- *
- * `parseCallArgsWithRanges` 内では、主に除算演算子 `/` との誤判定を避けるために使う。
- */
-function isRegexStartFromLastNonWsChar(lastNonWsChar: string): boolean {
-  if (lastNonWsChar === '') {
-    return true;
-  }
-  const preceding = new Set([
-    '(',
-    '[',
-    '{',
-    ',',
-    ';',
-    ':',
-    '=',
-    '!',
-    '&',
-    '|',
-    '?',
-    '+',
-    '-',
-    '*',
-    '%',
-    '<',
-    '>',
-    '~',
-    '^',
-  ]);
-  return preceding.has(lastNonWsChar);
-}
-
 function skipWhitespace(content: string, index: number): number {
   while (index < content.length && /\s/.test(content[index])) {
     index++;
@@ -775,8 +742,6 @@ function skipWhitespaceReverse(content: string, index: number): number {
   }
   return index;
 }
-
-
 /**
  * サマリーを計算する
  */
