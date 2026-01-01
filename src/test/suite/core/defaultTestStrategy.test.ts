@@ -186,7 +186,8 @@ suite('core/defaultTestStrategy.ts', () => {
         (err: unknown) => {
           assert.ok(err instanceof StrategyValidationError);
           assert.strictEqual(err.name, 'StrategyValidationError');
-          assert.ok(String(err.message).includes('missing Localization Assertions section'));
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/missing Localization Assertions section/.test(message));
           return true;
         },
       );
@@ -204,7 +205,8 @@ suite('core/defaultTestStrategy.ts', () => {
         (err: unknown) => {
           assert.ok(err instanceof StrategyValidationError);
           assert.strictEqual(err.name, 'StrategyValidationError');
-          assert.ok(String(err.message).includes('duplicate Localization Assertions section'));
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/duplicate Localization Assertions section/.test(message));
           return true;
         },
       );
@@ -222,7 +224,9 @@ suite('core/defaultTestStrategy.ts', () => {
         (err: unknown) => {
           assert.ok(err instanceof StrategyValidationError);
           assert.strictEqual(err.name, 'StrategyValidationError');
-          assert.ok(String(err.message).includes(`missing required line: ${CHECKLIST_LOCALIZED_STRINGS}`));
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/missing required line:/.test(message));
+          assert.ok(message.includes(CHECKLIST_LOCALIZED_STRINGS));
           return true;
         },
       );
@@ -240,7 +244,9 @@ suite('core/defaultTestStrategy.ts', () => {
         (err: unknown) => {
           assert.ok(err instanceof StrategyValidationError);
           assert.strictEqual(err.name, 'StrategyValidationError');
-          assert.ok(String(err.message).includes(`missing required line: ${RULE_AVOID_STRICT_EQUALITY}`));
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/missing required line:/.test(message));
+          assert.ok(message.includes(RULE_AVOID_STRICT_EQUALITY));
           return true;
         },
       );
@@ -258,7 +264,9 @@ suite('core/defaultTestStrategy.ts', () => {
         (err: unknown) => {
           assert.ok(err instanceof StrategyValidationError);
           assert.strictEqual(err.name, 'StrategyValidationError');
-          assert.ok(String(err.message).includes(`missing required line: ${RULE_PREFER_NON_EMPTY_AND_NOT_RAW_KEY}`));
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/missing required line:/.test(message));
+          assert.ok(message.includes(RULE_PREFER_NON_EMPTY_AND_NOT_RAW_KEY));
           return true;
         },
       );
@@ -276,7 +284,9 @@ suite('core/defaultTestStrategy.ts', () => {
         (err: unknown) => {
           assert.ok(err instanceof StrategyValidationError);
           assert.strictEqual(err.name, 'StrategyValidationError');
-          assert.ok(String(err.message).includes(`missing required line: ${RULE_PLACEHOLDERS_RESOLVED}`));
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/missing required line:/.test(message));
+          assert.ok(message.includes(RULE_PLACEHOLDERS_RESOLVED));
           return true;
         },
       );
@@ -297,7 +307,8 @@ suite('core/defaultTestStrategy.ts', () => {
         (err: unknown) => {
           assert.ok(err instanceof StrategyValidationError);
           assert.strictEqual(err.name, 'StrategyValidationError');
-          assert.ok(String(err.message).includes('expected token non-empty'));
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/expected token non-empty/.test(message));
           return true;
         },
       );
@@ -312,6 +323,8 @@ suite('core/defaultTestStrategy.ts', () => {
         () => validateLocalizationAssertionsSection(null as unknown as string),
         (err: unknown) => {
           assert.ok(err instanceof TypeError);
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message));
           return true;
         },
       );

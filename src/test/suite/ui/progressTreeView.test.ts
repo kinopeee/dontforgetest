@@ -99,9 +99,13 @@ suite('src/ui/progressTreeView.ts', () => {
       // Given: null ExtensionContext
       // When: initializeProgressTreeView is called
       // Then: TypeScript prevents this, but runtime check
-      assert.throws(() => {
-        initializeProgressTreeView(null as unknown as vscode.ExtensionContext);
-      }, /Cannot read propert|TypeError|undefined/, 'Throws error when context is null');
+      assert.throws(
+        () => {
+          initializeProgressTreeView(null as unknown as vscode.ExtensionContext);
+        },
+        /Cannot read propert|TypeError|undefined/,
+        'Throws error when context is null',
+      );
     });
   });
 

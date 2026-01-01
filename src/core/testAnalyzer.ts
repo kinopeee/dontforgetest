@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { formatTimestamp, resolveDirAbsolute } from './artifacts';
+import { buildCodeOnlyContent, hasEmptyStringLiteralInCode, isRegexStart } from './codeOnlyText';
 import { nowMs } from './event';
 import { t } from './l10n';
 
@@ -143,29 +144,33 @@ export async function analyzeFile(
 export function analyzeFileContent(relativePath: string, content: string): AnalysisIssue[] {
   const issues: AnalysisIssue[] = [];
 
-  // テスト関数を抽出
-  const testFunctions = extractTestFunctions(content);
+  // コード領域のみのテキストを生成（文字列/コメントを除外）
+  const codeOnlyContent = buildCodeOnlyContent(content);
 
-  // 1. Given/When/Then コメントのチェック
+  // テスト関数を抽出（codeOnlyContent を使って誤検出を防ぐ）
+  const testFunctions = extractTestFunctions(content, codeOnlyContent);
+
+  // 1. Given/When/Then コメントのチェック（厳格: 全て必須）
   for (const testFn of testFunctions) {
-    if (!hasGivenWhenThenComment(testFn.content)) {
+    const gwtResult = checkGivenWhenThenStrict(testFn.content);
+    if (!gwtResult.valid) {
       issues.push({
         type: 'missing-gwt',
         file: relativePath,
         line: testFn.startLine,
-        detail: testFn.name,
+        detail: `${testFn.name} (${gwtResult.missing.join(', ')} ${t('analysis.detail.missing')})`,
       });
     }
   }
 
-  // 2. 境界値テストのチェック（ファイル単位）
-  const boundaryIssue = checkBoundaryValueTests(relativePath, content);
+  // 2. 境界値テストのチェック（ファイル単位、codeOnlyContent と content を使用）
+  const boundaryIssue = checkBoundaryValueTests(relativePath, content, codeOnlyContent);
   if (boundaryIssue) {
     issues.push(boundaryIssue);
   }
 
-  // 3. 例外メッセージ未検証のチェック
-  const exceptionIssues = checkExceptionMessageVerification(relativePath, content);
+  // 3. 例外メッセージ未検証のチェック（厳格化、codeOnlyContent を使用）
+  const exceptionIssues = checkExceptionMessageVerificationStrict(relativePath, content, codeOnlyContent);
   issues.push(...exceptionIssues);
 
   return issues;
@@ -181,23 +186,30 @@ export function analyzeFileContent(relativePath: string, content: string): Analy
  * - it("name", ...)
  * - test(`name`, ...)
  * - it(`name`, ...)
+ *
+ * @param content 元のソースコード
+ * @param codeOnlyContent 文字列/コメントを除外したコード領域のみのテキスト
  */
-function extractTestFunctions(content: string): TestFunction[] {
+function extractTestFunctions(content: string, codeOnlyContent: string): TestFunction[] {
   const functions: TestFunction[] = [];
   const lines = content.split('\n');
+  const codeOnlyLines = codeOnlyContent.split('\n');
 
-  // test() または it() の開始を検出
-  const testStartPattern = /^\s*(?:test|it)\s*\(\s*(['"`])(.+?)\1/;
+  // test() または it() の開始を検出（codeOnlyLines でマッチし、元の content から名前を取得）
+  const testStartPattern = /^\s*(?:test|it)\s*\(/;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const match = testStartPattern.exec(line);
+  for (let i = 0; i < codeOnlyLines.length; i++) {
+    const codeOnlyLine = codeOnlyLines[i];
+    const match = testStartPattern.exec(codeOnlyLine);
     if (match) {
-      const testName = match[2];
+      // 元の content から実際のテスト名を取得
+      const originalLine = lines[i];
+      const nameMatch = /^\s*(?:test|it)\s*\(\s*(['"`])(.+?)\1/.exec(originalLine);
+      const testName = nameMatch ? nameMatch[2] : '<unknown>';
       const startLine = i + 1; // 1始まり
 
-      // テスト関数の終了を探す（簡易的にブレース数をカウント）
-      const endLine = findFunctionEnd(lines, i);
+      // テスト関数の終了を探す（codeOnlyLines を使ってブレースカウント）
+      const endLine = findFunctionEnd(codeOnlyLines, i);
       const testContent = lines.slice(i, endLine).join('\n');
 
       functions.push({
@@ -214,19 +226,18 @@ function extractTestFunctions(content: string): TestFunction[] {
 
 /**
  * 関数の終了行を探す（ブレースのバランスで判定）
+ *
+ * @param codeOnlyLines codeOnlyContent を行分割したもの（文字列/コメント除外済み）
+ * @param startIndex 開始行インデックス
  */
-function findFunctionEnd(lines: string[], startIndex: number): number {
+function findFunctionEnd(codeOnlyLines: string[], startIndex: number): number {
   let braceCount = 0;
   let started = false;
 
-  for (let i = startIndex; i < lines.length; i++) {
-    const line = lines[i];
+  for (let i = startIndex; i < codeOnlyLines.length; i++) {
+    const line = codeOnlyLines[i];
 
-    // 文字列リテラル内のブレースを除外するための簡易処理
-    // （完全な対応は困難なため、基本的なケースのみ対応）
-    const cleanedLine = removeStringLiterals(line);
-
-    for (const char of cleanedLine) {
+    for (const char of line) {
       if (char === '{') {
         braceCount++;
         started = true;
@@ -240,31 +251,46 @@ function findFunctionEnd(lines: string[], startIndex: number): number {
     }
   }
 
-  return lines.length;
+  return codeOnlyLines.length;
 }
 
 /**
- * 文字列リテラルを除去する（簡易版）
+ * Given/When/Then コメントの厳格チェック結果
  */
-function removeStringLiterals(line: string): string {
-  // シングルクォート、ダブルクォート、バッククォート内を除去
-  // エスケープは考慮しない簡易版
-  return line
-    .replace(/'[^']*'/g, '')
-    .replace(/"[^"]*"/g, '')
-    .replace(/`[^`]*`/g, '');
+interface GwtCheckResult {
+  valid: boolean;
+  missing: string[];
 }
 
 /**
- * Given/When/Then コメントが存在するかチェック
+ * Given/When/Then コメントが全て存在するかチェック（厳格版）
+ *
+ * ガイドラインに従い、Given/When/Then 全てが必須。
  */
-function hasGivenWhenThenComment(content: string): boolean {
-  // "// Given:" または "// When:" が存在するかチェック
-  // 大文字小文字は区別しない
+function checkGivenWhenThenStrict(content: string): GwtCheckResult {
   const givenPattern = /\/\/\s*Given\s*:/i;
   const whenPattern = /\/\/\s*When\s*:/i;
+  const thenPattern = /\/\/\s*Then\s*:/i;
 
-  return givenPattern.test(content) || whenPattern.test(content);
+  const hasGiven = givenPattern.test(content);
+  const hasWhen = whenPattern.test(content);
+  const hasThen = thenPattern.test(content);
+
+  const missing: string[] = [];
+  if (!hasGiven) {
+    missing.push('Given');
+  }
+  if (!hasWhen) {
+    missing.push('When');
+  }
+  if (!hasThen) {
+    missing.push('Then');
+  }
+
+  return {
+    valid: missing.length === 0,
+    missing,
+  };
 }
 
 /**
@@ -276,26 +302,40 @@ function hasGivenWhenThenComment(content: string): boolean {
  * - 0（数値のゼロ）
  * - '' または "" または ``（空文字列）
  * - [] （空配列）
+ *
+ * NOTE:
+ * - codeOnlyContent では文字列リテラルが空白化されるため、空文字リテラルは検出できない。
+ * - 空文字リテラルのみ、元の content を軽量 lexer で走査して検出する。
+ *
+ * @param relativePath ファイルの相対パス
+ * @param content 元のソースコード
+ * @param codeOnlyContent コード領域のみのテキスト（文字列/コメント除外済み）
  */
-function checkBoundaryValueTests(relativePath: string, content: string): AnalysisIssue | null {
+function checkBoundaryValueTests(
+  relativePath: string,
+  content: string,
+  codeOnlyContent: string,
+): AnalysisIssue | null {
   // テスト関数が存在しない場合はスキップ
-  const hasTestFunctions = /(?:test|it)\s*\(/.test(content);
+  const hasTestFunctions = /(?:test|it)\s*\(/.test(codeOnlyContent);
   if (!hasTestFunctions) {
     return null;
   }
 
-  // 境界値関連のパターンを検出
+  // 境界値関連のパターンを検出（codeOnlyContent に対して適用）
   const patterns = [
     /\bnull\b/, // null
     /\bundefined\b/, // undefined
     /(?:===?\s*0\b|\b0\s*===?)/, // 0 との比較
-    /['"]\s*['"]/, // 空文字列 '' or ""
     /\[\s*\]/, // 空配列 []
   ];
 
-  const hasBoundaryTest = patterns.some((pattern) => pattern.test(content));
+  const hasBoundaryTestInCodeOnly = patterns.some((pattern) => pattern.test(codeOnlyContent));
 
-  if (!hasBoundaryTest) {
+  // 空文字リテラルは codeOnlyContent では消えるため、元の content から lexer で検出
+  const hasEmptyStringBoundary = hasEmptyStringLiteralInCode(content);
+
+  if (!hasBoundaryTestInCodeOnly && !hasEmptyStringBoundary) {
     return {
       type: 'missing-boundary',
       file: relativePath,
@@ -307,53 +347,64 @@ function checkBoundaryValueTests(relativePath: string, content: string): Analysi
 }
 
 /**
- * 例外メッセージの検証をチェック
+ * 例外メッセージの検証をチェック（厳格版）
  *
- * 以下のパターンで例外を検証しているが、メッセージ/型を指定していない場合を検出:
- * - assert.throws(() => ...) のみ（第2引数なし）
- * - expect(...).toThrow() のみ（引数なし）
+ * 以下のパターンで例外を検証しているが、メッセージを検証していない場合を検出:
+ * - assert.throws(() => ...) のみ（第2引数なし） → NG
+ * - assert.throws(() => ..., TypeError) のみ（型だけ指定） → NG
+ * - assert.throws(() => ..., /message/) → OK（正規表現でメッセージ検証）
+ * - assert.throws(() => ..., { message: ... }) → OK
+ * - assert.throws(() => ..., (err) => { ... .message ... }) → OK
+ * - expect(...).toThrow() のみ（引数なし） → NG
+ *
+ * @param relativePath ファイルの相対パス
+ * @param content 元のソースコード
+ * @param codeOnlyContent コード領域のみのテキスト（検索に使用）
  */
-function checkExceptionMessageVerification(
+function checkExceptionMessageVerificationStrict(
   relativePath: string,
   content: string,
+  codeOnlyContent: string,
 ): AnalysisIssue[] {
   const issues: AnalysisIssue[] = [];
   const lineStartIndices = buildLineStartIndices(content);
 
-  // assert.throws(...) の第2引数（メッセージ/型）未指定を検出する
-  // ポイント: よくある整形（第2引数が改行後に続く）でも誤検知しないよう、呼び出し全体を解析する
-  // 例: assert.throws(() => fn()); -> 検出（第2引数なし）
-  // 例: assert.throws(() => fn(), /message/); -> 検出しない（第2引数あり）
-  // 例: assert.throws(
-  //       () => fn(),
-  //       /message/,
-  //     ); -> 検出しない（複数行だが第2引数あり）
-  const assertThrowsCalls = findAssertThrowsCalls(content, lineStartIndices);
+  // assert.throws(...) の検出と厳格な検証
+  const assertThrowsCalls = findAssertThrowsCallsStrict(content, codeOnlyContent, lineStartIndices);
   for (const call of assertThrowsCalls) {
-    if (!call.hasSecondArg) {
+    if (!call.hasMessageVerification) {
       issues.push({
         type: 'missing-exception-message',
         file: relativePath,
         line: call.line,
-        detail: t('analysis.detail.assertThrowsNoMessage'),
+        detail: call.reason,
       });
     }
   }
 
-  // expect(...).toThrow() で引数がないパターン（複数行も含めて検出）
-  // 例: expect(() => fn()).toThrow();
-  const expectToThrowPattern = /\.toThrow\s*\(\s*\)/g;
-  for (const match of content.matchAll(expectToThrowPattern)) {
+  // expect(...).toThrow() で引数がないパターン
+  // NOTE: codeOnlyContent で位置を見つけ、元の content で引数の有無を確認する
+  //       （codeOnlyContent では文字列引数が空白に置き換えられ誤検出になるため）
+  const toThrowLocator = /\.toThrow\s*\(/g;
+  for (const match of codeOnlyContent.matchAll(toThrowLocator)) {
     const index = match.index;
     if (index === undefined) {
       continue;
     }
-    issues.push({
-      type: 'missing-exception-message',
-      file: relativePath,
-      line: indexToLineNumber(lineStartIndices, index),
-      detail: t('analysis.detail.toThrowNoMessage'),
-    });
+    // 元の content で実際の引数を確認
+    // NOTE:
+    // - ネストした括弧が含まれる場合があるため、簡易スキャンではなく parseCallArgsWithRanges を使う。
+    // - match[0] は ".toThrow   (" まで含むので、最後の "(" の位置に戻す。
+    const openParenIndex = index + match[0].length - 1;
+    const parsed = parseCallArgsWithRanges(content, openParenIndex);
+    if (parsed.args.length === 0) {
+      issues.push({
+        type: 'missing-exception-message',
+        file: relativePath,
+        line: indexToLineNumber(lineStartIndices, index),
+        detail: t('analysis.detail.toThrowNoMessage'),
+      });
+    }
   }
 
   return issues;
@@ -391,37 +442,54 @@ function indexToLineNumber(lineStartIndices: number[], index: number): number {
   return 1;
 }
 
-type AssertThrowsCallInfo = {
+type AssertThrowsCallInfoStrict = {
   line: number;
-  hasSecondArg: boolean;
+  hasMessageVerification: boolean;
+  reason: string;
 };
 
-function findAssertThrowsCalls(content: string, lineStartIndices: number[]): AssertThrowsCallInfo[] {
-  const result: AssertThrowsCallInfo[] = [];
+/**
+ * assert.throws 呼び出しを検出し、メッセージ検証の有無を厳格に判定する。
+ *
+ * @param content 元のソースコード
+ * @param codeOnlyContent コード領域のみのテキスト（検索に使用）
+ * @param lineStartIndices 行番号逆引き用インデックス
+ */
+function findAssertThrowsCallsStrict(
+  content: string,
+  codeOnlyContent: string,
+  lineStartIndices: number[],
+): AssertThrowsCallInfoStrict[] {
+  const result: AssertThrowsCallInfoStrict[] = [];
   const needle = 'assert.throws';
   let cursor = 0;
 
-  while (cursor < content.length) {
-    const found = content.indexOf(needle, cursor);
+  while (cursor < codeOnlyContent.length) {
+    const found = codeOnlyContent.indexOf(needle, cursor);
     if (found === -1) {
       break;
     }
 
     // "assert.throws" の直後から "(" まで進める（空白を許容）
     let i = found + needle.length;
-    while (i < content.length && /\s/.test(content[i])) {
+    while (i < codeOnlyContent.length && /\s/.test(codeOnlyContent[i])) {
       i++;
     }
-    if (i >= content.length || content[i] !== '(') {
+    if (i >= codeOnlyContent.length || codeOnlyContent[i] !== '(') {
       cursor = found + needle.length;
       continue;
     }
 
     const openParenIndex = i;
-    const parsed = parseCallArgsForTopLevelComma(content, openParenIndex);
+    const parsed = parseCallArgsWithRanges(content, openParenIndex);
+    const line = indexToLineNumber(lineStartIndices, found);
+
+    // 厳格な検証
+    const verification = checkAssertThrowsMessageVerification(parsed.args, content);
     result.push({
-      line: indexToLineNumber(lineStartIndices, found),
-      hasSecondArg: parsed.hasTopLevelComma,
+      line,
+      hasMessageVerification: verification.valid,
+      reason: verification.reason,
     });
 
     cursor = parsed.endIndex + 1;
@@ -430,158 +498,424 @@ function findAssertThrowsCalls(content: string, lineStartIndices: number[]): Ass
   return result;
 }
 
-type ParseCallArgsResult = {
-  endIndex: number;
-  hasTopLevelComma: boolean;
+/**
+ * assert.throws の引数からメッセージ検証の有無を厳格に判定する。
+ */
+function checkAssertThrowsMessageVerification(
+  args: ArgumentRange[],
+  content: string,
+): { valid: boolean; reason: string } {
+  // 第2引数がない → NG
+  if (args.length < 2) {
+    return { valid: false, reason: t('analysis.detail.assertThrowsNoMessage') };
+  }
+
+  const secondArg = content.slice(args[1].start, args[1].end).trim();
+
+  // 正規表現リテラル → OK
+  if (/^\/.*\/[a-z]*$/.test(secondArg)) {
+    return { valid: true, reason: '' };
+  }
+
+  // new RegExp(...) → OK
+  if (/^new\s+RegExp\s*\(/.test(secondArg)) {
+    return { valid: true, reason: '' };
+  }
+
+  // オブジェクトリテラル { message: ... } または { name: ..., message: ... } → OK
+  if (/^\{[\s\S]*\bmessage\s*:/.test(secondArg)) {
+    return { valid: true, reason: '' };
+  }
+
+  // アロー関数または関数式で .message を参照している → OK
+  if (/(?:=>|function)/.test(secondArg) && /\.message\b/.test(secondArg)) {
+    return { valid: true, reason: '' };
+  }
+
+  // Error クラス名のみ（例: TypeError, Error, SyntaxError）→ NG
+  if (/^[A-Z][a-zA-Z]*Error$/.test(secondArg) || secondArg === 'Error') {
+    return { valid: false, reason: t('analysis.detail.assertThrowsTypeOnly') };
+  }
+
+  // その他（不明な形式）→ 安全側で OK 扱い
+  // 例: 変数参照、カスタムマッチャーなど
+  return { valid: true, reason: '' };
+}
+
+type ArgumentRange = {
+  start: number;
+  end: number;
 };
 
-function parseCallArgsForTopLevelComma(content: string, openParenIndex: number): ParseCallArgsResult {
-  // openParenIndex は "(" の位置
+type ParseCallArgsWithRangesResult = {
+  endIndex: number;
+  args: ArgumentRange[];
+};
+
+/**
+ * 関数呼び出しの引数を解析し、各引数の範囲を返す。
+ */
+function parseCallArgsWithRanges(content: string, openParenIndex: number): ParseCallArgsWithRangesResult {
+  const args: ArgumentRange[] = [];
   let parenDepth = 1;
   let braceDepth = 0;
   let bracketDepth = 0;
 
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  let inTemplate = false;
-  let inRegex = false;
-  let inLineComment = false;
-  let inBlockComment = false;
+  type LexerState =
+    | 'code'
+    | 'lineComment'
+    | 'blockComment'
+    | 'singleQuote'
+    | 'doubleQuote'
+    | 'template'
+    | 'regex';
 
+  type ResumeState = 'code' | 'template';
+
+  type TemplateContext = {
+    /** `${...}` の `{` ネスト深さ（`${` 開始時点で 1）。0 の場合はテンプレート文字列部分。 */
+    exprBraceDepth: number;
+    /** テンプレート文字列部分でのエスケープ（\` や \${ を誤検出しないため） */
+    escaped: boolean;
+    /** 対応する `...` を閉じたときに戻る状態 */
+    resumeState: ResumeState;
+  };
+
+  let state: LexerState = 'code';
+  let resumeState: ResumeState = 'code';
+  // 文字列/正規表現でのエスケープ
   let escaped = false;
-  let hasTopLevelComma = false;
+  // テンプレートリテラルのネスト管理（`${...}` 内のネストしたテンプレートも追跡する）
+  const templateStack: TemplateContext[] = [];
+
+  let argStart = openParenIndex + 1;
+  // 正規表現開始判定（除算との誤判定を避けるため、前の非空白文字を追跡）
+  let lastNonWsChar = '';
+
+  const pushArgRange = (endIndexExclusive: number): void => {
+    if (endIndexExclusive <= argStart) {
+      return;
+    }
+    const trimmedStart = skipWhitespace(content, argStart);
+    const trimmedEnd = skipWhitespaceReverse(content, endIndexExclusive);
+    if (trimmedEnd > trimmedStart) {
+      args.push({ start: trimmedStart, end: trimmedEnd });
+    }
+  };
 
   for (let i = openParenIndex + 1; i < content.length; i++) {
     const ch = content[i];
     const next = i + 1 < content.length ? content[i + 1] : '';
 
-    if (inLineComment) {
-      if (ch === '\n') {
-        inLineComment = false;
-      }
-      continue;
-    }
-
-    if (inBlockComment) {
-      if (ch === '*' && next === '/') {
-        inBlockComment = false;
-        i++;
-      }
-      continue;
-    }
-
-    if (inSingleQuote || inDoubleQuote || inTemplate) {
-      if (escaped) {
-        escaped = false;
+    switch (state) {
+      case 'lineComment': {
+        if (ch === '\n') {
+          state = resumeState;
+        }
         continue;
       }
-      if (ch === '\\') {
-        escaped = true;
+      case 'blockComment': {
+        if (ch === '*' && next === '/') {
+          state = resumeState;
+          i++;
+        }
         continue;
       }
-      if (inSingleQuote && ch === "'") {
-        inSingleQuote = false;
+      case 'singleQuote': {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (ch === "'") {
+          state = resumeState;
+          // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+          lastNonWsChar = "'";
+        }
         continue;
       }
-      if (inDoubleQuote && ch === '"') {
-        inDoubleQuote = false;
+      case 'doubleQuote': {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (ch === '"') {
+          state = resumeState;
+          // 文字列リテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+          lastNonWsChar = '"';
+        }
         continue;
       }
-      if (inTemplate && ch === '`') {
-        inTemplate = false;
+      case 'regex': {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (ch === '/') {
+          state = resumeState;
+          // 正規表現リテラル終了は「式の終端」として扱う
+          lastNonWsChar = '/';
+        }
         continue;
       }
-      continue;
-    }
+      case 'template': {
+        const ctx = templateStack.length > 0 ? templateStack[templateStack.length - 1] : undefined;
+        if (!ctx) {
+          // 異常系（スタック不整合）: 安全側でコード状態に戻す
+          state = 'code';
+          continue;
+        }
 
-    if (inRegex) {
-      if (escaped) {
-        escaped = false;
+        // 1) `${...}` の外側（テンプレート文字列部分）
+        if (ctx.exprBraceDepth === 0) {
+          if (ctx.escaped) {
+            ctx.escaped = false;
+            continue;
+          }
+          if (ch === '\\') {
+            ctx.escaped = true;
+            continue;
+          }
+
+          if (ch === '$' && next === '{') {
+            // ${...} 開始
+            // NOTE:
+            // - `${` の "{" を次ループでカウントしてしまうと二重カウントになるため、ここでまとめて処理する。
+            ctx.exprBraceDepth = 1;
+            braceDepth++;
+            lastNonWsChar = '{';
+            i++; // '{' をスキップ
+            continue;
+          }
+
+          if (ch === '`') {
+            // テンプレートリテラル終了（ネスト対応）
+            templateStack.pop();
+            state = ctx.resumeState;
+            // テンプレートリテラル終了は「式の終端」として扱う（`/` の正規表現開始判定に影響）
+            lastNonWsChar = '`';
+            continue;
+          }
+
+          // 文字列部分は引数解析に影響しないため、それ以外は無視
+          continue;
+        }
+
+        // 2) `${...}` の内側（式部分）: code と同様に扱う
+        if (ch === '/' && next === '/') {
+          state = 'lineComment';
+          resumeState = 'template';
+          i++;
+          continue;
+        }
+        if (ch === '/' && next === '*') {
+          state = 'blockComment';
+          resumeState = 'template';
+          i++;
+          continue;
+        }
+        if (ch === "'") {
+          state = 'singleQuote';
+          escaped = false;
+          resumeState = 'template';
+          continue;
+        }
+        if (ch === '"') {
+          state = 'doubleQuote';
+          escaped = false;
+          resumeState = 'template';
+          continue;
+        }
+        if (ch === '`') {
+          // ネストしたテンプレートリテラル開始
+          templateStack.push({ exprBraceDepth: 0, escaped: false, resumeState: 'template' });
+          state = 'template';
+          continue;
+        }
+        // 正規表現開始（ヒューリスティック）
+        if (ch === '/' && next !== '/' && next !== '*' && isRegexStart(lastNonWsChar)) {
+          state = 'regex';
+          escaped = false;
+          resumeState = 'template';
+          lastNonWsChar = '/';
+          continue;
+        }
+
+        // ネスト管理（テンプレート式内でも paren/brace/bracket を追跡）
+        if (ch === '(') {
+          parenDepth++;
+          lastNonWsChar = '(';
+          continue;
+        }
+        if (ch === ')') {
+          parenDepth--;
+          if (parenDepth === 0) {
+            pushArgRange(i);
+            return { endIndex: i, args };
+          }
+          lastNonWsChar = ')';
+          continue;
+        }
+        if (ch === '{') {
+          braceDepth++;
+          ctx.exprBraceDepth++;
+          lastNonWsChar = '{';
+          continue;
+        }
+        if (ch === '}') {
+          braceDepth = Math.max(0, braceDepth - 1);
+          ctx.exprBraceDepth = Math.max(0, ctx.exprBraceDepth - 1);
+          lastNonWsChar = '}';
+          continue;
+        }
+        if (ch === '[') {
+          bracketDepth++;
+          lastNonWsChar = '[';
+          continue;
+        }
+        if (ch === ']') {
+          bracketDepth = Math.max(0, bracketDepth - 1);
+          lastNonWsChar = ']';
+          continue;
+        }
+
+        // トップレベルの引数区切り
+        if (ch === ',' && parenDepth === 1 && braceDepth === 0 && bracketDepth === 0) {
+          pushArgRange(i);
+          argStart = i + 1;
+          lastNonWsChar = ',';
+          continue;
+        }
+
+        if (!/\s/.test(ch)) {
+          lastNonWsChar = ch;
+        }
         continue;
       }
-      if (ch === '\\') {
-        escaped = true;
+      case 'code': {
+        // コメント開始
+        if (ch === '/' && next === '/') {
+          state = 'lineComment';
+          resumeState = 'code';
+          i++;
+          continue;
+        }
+        if (ch === '/' && next === '*') {
+          state = 'blockComment';
+          resumeState = 'code';
+          i++;
+          continue;
+        }
+
+        // 文字列開始
+        if (ch === "'") {
+          state = 'singleQuote';
+          escaped = false;
+          resumeState = 'code';
+          continue;
+        }
+        if (ch === '"') {
+          state = 'doubleQuote';
+          escaped = false;
+          resumeState = 'code';
+          continue;
+        }
+        if (ch === '`') {
+          // テンプレートリテラル開始（ネスト対応）
+          state = 'template';
+          templateStack.push({ exprBraceDepth: 0, escaped: false, resumeState: 'code' });
+          continue;
+        }
+
+        // 正規表現開始（ヒューリスティック）
+        if (ch === '/' && next !== '/' && next !== '*' && isRegexStart(lastNonWsChar)) {
+          state = 'regex';
+          escaped = false;
+          resumeState = 'code';
+          lastNonWsChar = '/';
+          continue;
+        }
+
+        // ネスト管理
+        if (ch === '(') {
+          parenDepth++;
+          lastNonWsChar = '(';
+          continue;
+        }
+        if (ch === ')') {
+          parenDepth--;
+          if (parenDepth === 0) {
+            pushArgRange(i);
+            return { endIndex: i, args };
+          }
+          lastNonWsChar = ')';
+          continue;
+        }
+        if (ch === '{') {
+          braceDepth++;
+          lastNonWsChar = '{';
+          continue;
+        }
+        if (ch === '}') {
+          braceDepth = Math.max(0, braceDepth - 1);
+          lastNonWsChar = '}';
+          continue;
+        }
+        if (ch === '[') {
+          bracketDepth++;
+          lastNonWsChar = '[';
+          continue;
+        }
+        if (ch === ']') {
+          bracketDepth = Math.max(0, bracketDepth - 1);
+          lastNonWsChar = ']';
+          continue;
+        }
+
+        // トップレベルの引数区切り
+        if (ch === ',' && parenDepth === 1 && braceDepth === 0 && bracketDepth === 0) {
+          pushArgRange(i);
+          argStart = i + 1;
+          lastNonWsChar = ',';
+          continue;
+        }
+
+        if (!/\s/.test(ch)) {
+          lastNonWsChar = ch;
+        }
         continue;
       }
-      if (ch === '/') {
-        inRegex = false;
-      }
-      continue;
-    }
-
-    // コメント開始
-    if (ch === '/' && next === '/') {
-      inLineComment = true;
-      i++;
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      inBlockComment = true;
-      i++;
-      continue;
-    }
-
-    // 文字列開始
-    if (ch === "'") {
-      inSingleQuote = true;
-      continue;
-    }
-    if (ch === '"') {
-      inDoubleQuote = true;
-      continue;
-    }
-    if (ch === '`') {
-      inTemplate = true;
-      continue;
-    }
-
-    // 正規表現開始（厳密ではないが、assert.throws 引数内では実用上十分）
-    if (ch === '/' && next !== '/' && next !== '*') {
-      inRegex = true;
-      continue;
-    }
-
-    // ネスト管理
-    if (ch === '(') {
-      parenDepth++;
-      continue;
-    }
-    if (ch === ')') {
-      parenDepth--;
-      if (parenDepth === 0) {
-        return { endIndex: i, hasTopLevelComma };
-      }
-      continue;
-    }
-    if (ch === '{') {
-      braceDepth++;
-      continue;
-    }
-    if (ch === '}') {
-      braceDepth = Math.max(0, braceDepth - 1);
-      continue;
-    }
-    if (ch === '[') {
-      bracketDepth++;
-      continue;
-    }
-    if (ch === ']') {
-      bracketDepth = Math.max(0, bracketDepth - 1);
-      continue;
-    }
-
-    // トップレベルの引数区切り（外側の () の直下）
-    if (ch === ',' && parenDepth === 1 && braceDepth === 0 && bracketDepth === 0) {
-      hasTopLevelComma = true;
-      // ここで早期returnしてもよいが、終端インデックスも欲しいので継続
-      continue;
     }
   }
 
-  // ) が見つからない場合は、最後まで走査した扱いにする
-  return { endIndex: content.length - 1, hasTopLevelComma };
+  // ) が見つからない場合
+  return { endIndex: content.length - 1, args };
 }
 
+function skipWhitespace(content: string, index: number): number {
+  while (index < content.length && /\s/.test(content[index])) {
+    index++;
+  }
+  return index;
+}
+
+function skipWhitespaceReverse(content: string, index: number): number {
+  while (index > 0 && /\s/.test(content[index - 1])) {
+    index--;
+  }
+  return index;
+}
 /**
  * サマリーを計算する
  */

@@ -3865,27 +3865,22 @@ suite('core/artifacts.ts', () => {
     // Given: null input (passed as Date constructor parameter)
     // When: buildTestPerspectiveArtifactMarkdown is called with null converted to Date
     // Then: Throws TypeError with message "generatedAtMs must be a number"
-    assert.throws(() => {
-      buildTestPerspectiveArtifactMarkdown({
-        generatedAtMs: null as unknown as number,
-        targetLabel: 'Test',
-        targetPaths: ['test.ts'],
-        perspectiveMarkdown: 'table',
-      });
-    }, TypeError);
-    // Verify error message
-    try {
-      buildTestPerspectiveArtifactMarkdown({
-        generatedAtMs: null as unknown as number,
-        targetLabel: 'Test',
-        targetPaths: ['test.ts'],
-        perspectiveMarkdown: 'table',
-      });
-      assert.fail('Should have thrown TypeError');
-    } catch (err) {
-      assert.ok(err instanceof TypeError, 'Should throw TypeError');
-      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
-    }
+    assert.throws(
+      () => {
+        buildTestPerspectiveArtifactMarkdown({
+          generatedAtMs: null as unknown as number,
+          targetLabel: 'Test',
+          targetPaths: ['test.ts'],
+          perspectiveMarkdown: 'table',
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+        const message = err instanceof Error ? err.message : String(err);
+        assert.ok(message.includes('generatedAtMs must be a number'), 'generatedAtMs must be a number が含まれること');
+        return true;
+      },
+    );
   });
 
   // TC-E-02: formatLocalIso8601WithOffset with undefined input
@@ -3893,27 +3888,22 @@ suite('core/artifacts.ts', () => {
     // Given: undefined input
     // When: buildTestPerspectiveArtifactMarkdown is called with undefined
     // Then: Throws TypeError with message "generatedAtMs must be a number"
-    assert.throws(() => {
-      buildTestPerspectiveArtifactMarkdown({
-        generatedAtMs: undefined as unknown as number,
-        targetLabel: 'Test',
-        targetPaths: ['test.ts'],
-        perspectiveMarkdown: 'table',
-      });
-    }, TypeError);
-    // Verify error message
-    try {
-      buildTestPerspectiveArtifactMarkdown({
-        generatedAtMs: undefined as unknown as number,
-        targetLabel: 'Test',
-        targetPaths: ['test.ts'],
-        perspectiveMarkdown: 'table',
-      });
-      assert.fail('Should have thrown TypeError');
-    } catch (err) {
-      assert.ok(err instanceof TypeError, 'Should throw TypeError');
-      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
-    }
+    assert.throws(
+      () => {
+        buildTestPerspectiveArtifactMarkdown({
+          generatedAtMs: undefined as unknown as number,
+          targetLabel: 'Test',
+          targetPaths: ['test.ts'],
+          perspectiveMarkdown: 'table',
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+        const message = err instanceof Error ? err.message : String(err);
+        assert.ok(message.includes('generatedAtMs must be a number'), 'generatedAtMs must be a number が含まれること');
+        return true;
+      },
+    );
   });
 
   // TC-E-03: formatLocalIso8601WithOffset with invalid Date object
@@ -3987,14 +3977,22 @@ suite('core/artifacts.ts', () => {
     // Given: null input (indirectly through Date constructor)
     // When: buildTestPerspectiveArtifactMarkdown is called with invalid timestamp
     // Then: Throws TypeError or produces invalid output
-    assert.throws(() => {
-      buildTestPerspectiveArtifactMarkdown({
-        generatedAtMs: null as unknown as number,
-        targetLabel: 'Test',
-        targetPaths: ['test.ts'],
-        perspectiveMarkdown: 'table',
-      });
-    }, TypeError);
+    assert.throws(
+      () => {
+        buildTestPerspectiveArtifactMarkdown({
+          generatedAtMs: null as unknown as number,
+          targetLabel: 'Test',
+          targetPaths: ['test.ts'],
+          perspectiveMarkdown: 'table',
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+        const message = err instanceof Error ? err.message : String(err);
+        assert.ok(message.includes('generatedAtMs must be a number'), 'generatedAtMs must be a number が含まれること');
+        return true;
+      },
+    );
   });
 
   // TC-E-07: pad3 function with undefined input
@@ -4002,14 +4000,22 @@ suite('core/artifacts.ts', () => {
     // Given: undefined input
     // When: buildTestPerspectiveArtifactMarkdown is called with undefined
     // Then: Throws TypeError
-    assert.throws(() => {
-      buildTestPerspectiveArtifactMarkdown({
-        generatedAtMs: undefined as unknown as number,
-        targetLabel: 'Test',
-        targetPaths: ['test.ts'],
-        perspectiveMarkdown: 'table',
-      });
-    }, TypeError);
+    assert.throws(
+      () => {
+        buildTestPerspectiveArtifactMarkdown({
+          generatedAtMs: undefined as unknown as number,
+          targetLabel: 'Test',
+          targetPaths: ['test.ts'],
+          perspectiveMarkdown: 'table',
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+        const message = err instanceof Error ? err.message : String(err);
+        assert.ok(message.includes('generatedAtMs must be a number'), 'generatedAtMs must be a number が含まれること');
+        return true;
+      },
+    );
   });
 
   // TC-E-08: pad3 function with non-number input
@@ -4017,27 +4023,22 @@ suite('core/artifacts.ts', () => {
     // Given: Non-number input (string)
     // When: buildTestPerspectiveArtifactMarkdown is called with string timestamp
     // Then: Throws TypeError with message "generatedAtMs must be a number"
-    assert.throws(() => {
-      buildTestPerspectiveArtifactMarkdown({
-        generatedAtMs: 'invalid' as unknown as number,
-        targetLabel: 'Test',
-        targetPaths: ['test.ts'],
-        perspectiveMarkdown: 'table',
-      });
-    }, TypeError);
-    // Verify error message
-    try {
-      buildTestPerspectiveArtifactMarkdown({
-        generatedAtMs: 'invalid' as unknown as number,
-        targetLabel: 'Test',
-        targetPaths: ['test.ts'],
-        perspectiveMarkdown: 'table',
-      });
-      assert.fail('Should have thrown TypeError');
-    } catch (err) {
-      assert.ok(err instanceof TypeError, 'Should throw TypeError');
-      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
-    }
+    assert.throws(
+      () => {
+        buildTestPerspectiveArtifactMarkdown({
+          generatedAtMs: 'invalid' as unknown as number,
+          targetLabel: 'Test',
+          targetPaths: ['test.ts'],
+          perspectiveMarkdown: 'table',
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+        const message = err instanceof Error ? err.message : String(err);
+        assert.ok(message.includes('generatedAtMs must be a number'), 'generatedAtMs must be a number が含まれること');
+        return true;
+      },
+    );
   });
 
   // TC-E-09: buildTestPerspectiveArtifactMarkdown with generatedAtMs = 0
@@ -4461,27 +4462,22 @@ suite('core/artifacts.ts', () => {
 
     // When: buildTestExecutionArtifactMarkdown is called with null
     // Then: Throws TypeError with message "generatedAtMs must be a number"
-    assert.throws(() => {
-      buildTestExecutionArtifactMarkdown({
-        generatedAtMs: null as unknown as number,
-        generationLabel: 'Test',
-        targetPaths: ['test.ts'],
-        result: mockResult,
-      });
-    }, TypeError);
-    // Verify error message
-    try {
-      buildTestExecutionArtifactMarkdown({
-        generatedAtMs: null as unknown as number,
-        generationLabel: 'Test',
-        targetPaths: ['test.ts'],
-        result: mockResult,
-      });
-      assert.fail('Should have thrown TypeError');
-    } catch (err) {
-      assert.ok(err instanceof TypeError, 'Should throw TypeError');
-      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
-    }
+    assert.throws(
+      () => {
+        buildTestExecutionArtifactMarkdown({
+          generatedAtMs: null as unknown as number,
+          generationLabel: 'Test',
+          targetPaths: ['test.ts'],
+          result: mockResult,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+        const message = err instanceof Error ? err.message : String(err);
+        assert.ok(message.includes('generatedAtMs must be a number'), 'generatedAtMs must be a number が含まれること');
+        return true;
+      },
+    );
   });
 
   // TC-E-10: buildTestExecutionArtifactMarkdown with generatedAtMs = undefined
@@ -4499,27 +4495,22 @@ suite('core/artifacts.ts', () => {
 
     // When: buildTestExecutionArtifactMarkdown is called with undefined
     // Then: Throws TypeError with message "generatedAtMs must be a number"
-    assert.throws(() => {
-      buildTestExecutionArtifactMarkdown({
-        generatedAtMs: undefined as unknown as number,
-        generationLabel: 'Test',
-        targetPaths: ['test.ts'],
-        result: mockResult,
-      });
-    }, TypeError);
-    // Verify error message
-    try {
-      buildTestExecutionArtifactMarkdown({
-        generatedAtMs: undefined as unknown as number,
-        generationLabel: 'Test',
-        targetPaths: ['test.ts'],
-        result: mockResult,
-      });
-      assert.fail('Should have thrown TypeError');
-    } catch (err) {
-      assert.ok(err instanceof TypeError, 'Should throw TypeError');
-      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
-    }
+    assert.throws(
+      () => {
+        buildTestExecutionArtifactMarkdown({
+          generatedAtMs: undefined as unknown as number,
+          generationLabel: 'Test',
+          targetPaths: ['test.ts'],
+          result: mockResult,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+        const message = err instanceof Error ? err.message : String(err);
+        assert.ok(message.includes('generatedAtMs must be a number'), 'generatedAtMs must be a number が含まれること');
+        return true;
+      },
+    );
   });
 
   // TC-E-11: buildTestExecutionArtifactMarkdown with generatedAtMs = string
@@ -4537,27 +4528,22 @@ suite('core/artifacts.ts', () => {
 
     // When: buildTestExecutionArtifactMarkdown is called with string
     // Then: Throws TypeError with message "generatedAtMs must be a number"
-    assert.throws(() => {
-      buildTestExecutionArtifactMarkdown({
-        generatedAtMs: 'invalid' as unknown as number,
-        generationLabel: 'Test',
-        targetPaths: ['test.ts'],
-        result: mockResult,
-      });
-    }, TypeError);
-    // Verify error message
-    try {
-      buildTestExecutionArtifactMarkdown({
-        generatedAtMs: 'invalid' as unknown as number,
-        generationLabel: 'Test',
-        targetPaths: ['test.ts'],
-        result: mockResult,
-      });
-      assert.fail('Should have thrown TypeError');
-    } catch (err) {
-      assert.ok(err instanceof TypeError, 'Should throw TypeError');
-      assert.ok((err as Error).message.includes('generatedAtMs must be a number'), 'Error message should mention generatedAtMs');
-    }
+    assert.throws(
+      () => {
+        buildTestExecutionArtifactMarkdown({
+          generatedAtMs: 'invalid' as unknown as number,
+          generationLabel: 'Test',
+          targetPaths: ['test.ts'],
+          result: mockResult,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+        const message = err instanceof Error ? err.message : String(err);
+        assert.ok(message.includes('generatedAtMs must be a number'), 'generatedAtMs must be a number が含まれること');
+        return true;
+      },
+    );
   });
 
   suite('Perspective JSON -> Markdown Table', () => {
@@ -6571,7 +6557,15 @@ suite('core/artifacts.ts', () => {
 
         // When: parseTestResultFile is called with a null value
         // Then: It throws TypeError because it calls raw.trim() (this is the current behavior)
-        assert.throws(() => parseTestResultFile(raw), TypeError);
+        assert.throws(
+          () => parseTestResultFile(raw),
+          (err: unknown) => {
+            assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+            const message = err instanceof Error ? err.message : String(err);
+            assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+            return true;
+          },
+        );
       });
 
       test('TC-ART-PTRF-E-01: returns ok=false with error="empty" when raw is empty/whitespace', () => {

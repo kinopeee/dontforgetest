@@ -168,8 +168,8 @@ You can analyze existing test files from the **Analyze** tab in the Control Pane
 #### Detection items
 
 - **Missing Given/When/Then comments**: No structured comments in test functions
-- **Missing boundary value tests**: No tests for null, undefined, 0, empty string, empty array
-- **Unverified exception messages**: `assert.throws()` or `.toThrow()` without message/type verification
+- **Missing boundary value tests**: No tests for null, undefined, 0, empty string, empty array (only counts actual code usage; ignores mentions in strings/comments)
+- **Unverified exception messages**: `assert.throws()` without message verification (including type-only), or `.toThrow()` without an argument
 
 ## When to use which command
 

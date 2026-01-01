@@ -168,8 +168,13 @@ suite('test/runTest.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => resolveSuiteFromFullTitle(fullTitle, title),
-        TypeError,
-        'Should throw TypeError when fullTitle is null'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when fullTitle is null',
       );
     });
 
@@ -183,8 +188,13 @@ suite('test/runTest.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => resolveSuiteFromFullTitle(fullTitle, title),
-        TypeError,
-        'Should throw TypeError when title is null'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when title is null',
       );
     });
 
@@ -368,8 +378,13 @@ suite('test/runTest.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => resolveSuiteFromFullTitle(fullTitle, title),
-        TypeError,
-        'Should throw TypeError when fullTitle is null'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when fullTitle is null',
       );
     });
 
@@ -383,8 +398,13 @@ suite('test/runTest.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => resolveSuiteFromFullTitle(fullTitle, title),
-        TypeError,
-        'Should throw TypeError when title is null'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when title is null',
       );
     });
 
@@ -398,8 +418,13 @@ suite('test/runTest.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => resolveSuiteFromFullTitle(fullTitle, title),
-        TypeError,
-        'Should throw TypeError when fullTitle is undefined'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when fullTitle is undefined',
       );
     });
 
@@ -413,8 +438,13 @@ suite('test/runTest.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => resolveSuiteFromFullTitle(fullTitle, title),
-        TypeError,
-        'Should throw TypeError when title is undefined'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when title is undefined',
       );
     });
 
@@ -428,8 +458,13 @@ suite('test/runTest.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => resolveSuiteFromFullTitle(fullTitle, title),
-        TypeError,
-        'Should throw TypeError when fullTitle is number'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when fullTitle is number',
       );
     });
 
@@ -443,8 +478,13 @@ suite('test/runTest.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => resolveSuiteFromFullTitle(fullTitle, title),
-        TypeError,
-        'Should throw TypeError when title is number'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when title is number',
       );
     });
   });
@@ -1231,8 +1271,13 @@ suite('test/runTest.ts', () => {
       // Then: Throws TypeError
       assert.throws(
         () => printMochaLikeResultsFromTestResultFile(result),
-        TypeError,
-        'Should throw TypeError when result is null'
+        (err: unknown) => {
+          assert.ok(err instanceof TypeError, 'TypeError が投げられること');
+          const message = err instanceof Error ? err.message : String(err);
+          assert.ok(/\S/.test(message), 'メッセージが空ではないこと');
+          return true;
+        },
+        'Should throw TypeError when result is null',
       );
     });
 
