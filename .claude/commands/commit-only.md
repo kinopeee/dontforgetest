@@ -3,7 +3,7 @@
 ## 概要
 
 現在のブランチに対して、ローカルの変更をコミットだけ行うためのシンプルなコマンドです。  
-リモートへのプッシュは扱わず、**コミットメッセージ規約に沿ったコミット**だけを行います。誤操作防止のため、main/master での実行はチェックでブロックします（詳細は `AGENTS.md`）。コミット前に `npm run lint` を必須で実行します。
+リモートへのプッシュは扱わず、**コミットメッセージ規約に沿ったコミット**だけを行います。誤操作防止のため、main/master での実行はチェックでブロックします（詳細は `AGENTS.md`）。コミット前に `npm run lint` と `npm run typecheck` を必須で実行します。
 
 ## 前提条件
 
@@ -15,7 +15,7 @@
 
 1. ブランチ確認（main/master 直コミット防止）
 2. 未コミット差分を確認し、コミットメッセージの内容を検討する（例：`git diff` や `git diff --cached`）
-3. 品質チェック（lint）
+3. 品質チェック（lint、型チェック）
 4. 変更のステージング（`git add -A`）
 5. コミット（環境変数または引数でメッセージを渡す）
 
@@ -28,7 +28,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   echo "⚠️ main/master での直接コミットは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
-npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
+(npm run lint && npm run typecheck) || { echo "❌ lint/型チェックエラーがあります。修正してください。"; exit 1; }
 
 git add -A && \
 git commit -m "$MSG"
@@ -43,7 +43,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   echo "⚠️ main/master での直接コミットは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
-npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
+(npm run lint && npm run typecheck) || { echo "❌ lint/型チェックエラーがあります。修正してください。"; exit 1; }
 
 git add -A && \
 git commit -m "$MSG"
@@ -62,8 +62,8 @@ fi
 git status
 git diff
 
-# 3) 品質チェック（lint）
-npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
+# 3) 品質チェック（lint、型チェック）
+(npm run lint && npm run typecheck) || { echo "❌ lint/型チェックエラーがあります。修正してください。"; exit 1; }
 
 # 4) 変更をステージング
 git add -A

@@ -225,6 +225,7 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
     "test": "node ./out/test/runTest.js",
     "coverage": "c8 -r text -r lcov npm test",
     "coverage:check": "c8 check-coverage --lines 70 --functions 70 --branches 60 --statements 70",
