@@ -219,35 +219,40 @@ test('TC-N-10: handles another case', () => {});
   suite('isTestFilePath', () => {
     test('returns true for .test.ts files', () => {
       // Given: .test.ts 拡張子のファイル
-      // When/Then
+      // When: isTestFilePath に .test.ts / .test.tsx のパスを渡す
+      // Then: true が返る
       assert.strictEqual(isTestFilePath('src/utils.test.ts'), true);
       assert.strictEqual(isTestFilePath('components/Button.test.tsx'), true);
     });
 
     test('returns true for .spec.ts files', () => {
       // Given: .spec.ts 拡張子のファイル
-      // When/Then
+      // When: isTestFilePath に .spec.ts / .spec.tsx のパスを渡す
+      // Then: true が返る
       assert.strictEqual(isTestFilePath('src/utils.spec.ts'), true);
       assert.strictEqual(isTestFilePath('components/Button.spec.tsx'), true);
     });
 
     test('returns true for files in src/test/ directory', () => {
       // Given: src/test/ 配下のファイル
-      // When/Then
+      // When: isTestFilePath に src/test/ 配下のパスを渡す
+      // Then: true が返る
       assert.strictEqual(isTestFilePath('src/test/suite/example.ts'), true);
       assert.strictEqual(isTestFilePath('src/test/helpers.ts'), true);
     });
 
     test('returns true for files in test/ directory', () => {
       // Given: test/ 配下のファイル
-      // When/Then
+      // When: isTestFilePath に test/ 配下のパスを渡す
+      // Then: true が返る
       assert.strictEqual(isTestFilePath('test/unit/example.ts'), true);
       assert.strictEqual(isTestFilePath('packages/core/test/unit.ts'), true);
     });
 
     test('returns false for non-test files', () => {
       // Given: テストファイルではないファイル
-      // When/Then
+      // When: isTestFilePath に通常のソース/ドキュメントのパスを渡す
+      // Then: false が返る
       assert.strictEqual(isTestFilePath('src/utils.ts'), false);
       assert.strictEqual(isTestFilePath('src/components/Button.tsx'), false);
       assert.strictEqual(isTestFilePath('docs/README.md'), false);
@@ -255,7 +260,8 @@ test('TC-N-10: handles another case', () => {});
 
     test('handles Windows-style paths', () => {
       // Given: バックスラッシュのパス
-      // When/Then
+      // When: isTestFilePath に Windows 形式の区切り文字を含むパスを渡す
+      // Then: テストファイル判定が正しく行われる
       assert.strictEqual(isTestFilePath('src\\test\\suite\\example.ts'), true);
       assert.strictEqual(isTestFilePath('src\\utils.test.ts'), true);
     });
