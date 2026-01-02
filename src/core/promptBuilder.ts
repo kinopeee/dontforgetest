@@ -194,7 +194,8 @@ export async function buildTestPerspectivePrompt(
   parts.push('  - `PerspectiveCase`: `{ "caseId": string, "inputPrecondition": string, "perspective": string, "expectedResult": string, "notes": string }`');
   parts.push('- 各フィールドはできるだけ1行で書く（改行を含めない）');
   parts.push('- 最終的に拡張機能側で次の列の Markdown 表へ変換される前提で内容を埋める: `Case ID`, `Input / Precondition`, `Perspective (Equivalence / Boundary)`, `Expected Result`, `Notes`');
-  parts.push('- 正常系・異常系・境界値を網羅し、境界値は最低でも `0 / 最小値 / 最大値 / ±1 / 空 / NULL` を含める');
+  parts.push('- 正常系・異常系・境界値を網羅し、境界値は最低でも `0 / 最小値 / 最大値 / ±1 / 空 / null / undefined` を含める');
+  parts.push('- **失敗系（異常系/エラー系）のケースを、成功系と同数以上含めること**（テスト品質の基本原則）');
   parts.push('');
   parts.push('## Critical Quality Rules (MUST)');
   parts.push('- 1 case = 1 branch. Do not bundle multiple input conditions in a single case.');

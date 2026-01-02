@@ -491,6 +491,14 @@ export interface ArtifactSettings {
    * 生成後に実行する型チェック/Lintコマンド（例: npm run compile）。
    */
   preTestCheckCommand: string;
+  /**
+   * 生成後に戦略準拠チェック（G/W/T、境界値、例外メッセージ、caseID網羅）を行う。
+   */
+  enableStrategyComplianceCheck: boolean;
+  /**
+   * 戦略準拠の問題が見つかった場合の自動修正最大試行回数。0の場合は自動修正なし。
+   */
+  strategyComplianceAutoFixMaxRetries: number;
 }
 
 export interface SavedArtifact {
@@ -566,6 +574,8 @@ export function getArtifactSettings(): ArtifactSettings {
     cursorAgentForceForTestExecution: config.get<boolean>('cursorAgentForceForTestExecution', false),
     enablePreTestCheck: config.get<boolean>('enablePreTestCheck', true),
     preTestCheckCommand: (config.get<string>('preTestCheckCommand', 'npm run compile') ?? 'npm run compile').trim(),
+    enableStrategyComplianceCheck: config.get<boolean>('enableStrategyComplianceCheck', true),
+    strategyComplianceAutoFixMaxRetries: Math.max(0, Math.min(5, config.get<number>('strategyComplianceAutoFixMaxRetries', 1) ?? 1)),
   };
 }
 

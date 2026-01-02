@@ -273,5 +273,14 @@
   "analysis.latestReport.notFound": "No test analysis report found.",
   "quickPick.analysis.selectTarget": "Select analysis target",
   "quickPick.analysis.selectTargetPlaceholder": "Which files should be analyzed?",
-  "analysis.noActiveEditor": "No file is currently open."
+  "analysis.noActiveEditor": "No file is currently open.",
+  "compliance.caseIdNotImplemented": "Case ID {0} is not implemented in the test files",
+  "compliance.perspectiveTableSkipped": "Test perspective table generation was skipped (setting: dontforgetest.includeTestPerspectiveTable). Case ID coverage check was not performed.",
+  "compliance.noTestFiles": "No test files were generated. Skipping strategy compliance check.",
+  "compliance.passed": "Strategy compliance check passed. All generated tests meet quality standards.",
+  "compliance.issuesFound": "Strategy compliance check found {0} issue(s).",
+  "compliance.autoFixAttempt": "Attempting automatic fix ({0}/{1})...",
+  "compliance.autoFixLimitReached": "Automatic fix limit reached ({0} attempts). Some strategy compliance issues remain. See compliance report for details.",
+  "compliance.reportSaved": "Strategy compliance report saved: {0}",
+  "compliance.reportSaveFailed": "Failed to save compliance report: {0}"
 }

@@ -203,6 +203,18 @@
           "type": "string",
           "default": "src/test/**/*.test.ts",
           "description": "%configuration.analysisTestFilePattern.description%"
+        },
+        "dontforgetest.enableStrategyComplianceCheck": {
+          "type": "boolean",
+          "default": true,
+          "description": "%configuration.enableStrategyComplianceCheck.description%"
+        },
+        "dontforgetest.strategyComplianceAutoFixMaxRetries": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 5,
+          "description": "%configuration.strategyComplianceAutoFixMaxRetries.description%"
         }
       }
     }
