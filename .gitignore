@@ -7,6 +7,7 @@ dist
 .cursor/debug.log
 .cursor/environment.json
 .claude/settings.local.json
+.commit-msg.txt
 
 # テスト生成物
 # フォルダ自体は追跡するが、フォルダ内のファイルは無視する

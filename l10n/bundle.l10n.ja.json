@@ -273,5 +273,14 @@
     "analysis.latestReport.notFound": "テスト分析レポートが見つかりませんでした。",
     "quickPick.analysis.selectTarget": "分析対象を選択",
     "quickPick.analysis.selectTargetPlaceholder": "どのファイルを分析しますか？",
-    "analysis.noActiveEditor": "ファイルが開かれていません。"
+    "analysis.noActiveEditor": "ファイルが開かれていません。",
+    "compliance.caseIdNotImplemented": "ケースID {0} がテストファイルに実装されていません",
+    "compliance.perspectiveTableSkipped": "テスト観点表の生成がスキップされました（設定: dontforgetest.includeTestPerspectiveTable）。ケースIDの網羅チェックは実施されませんでした。",
+    "compliance.noTestFiles": "テストファイルが生成されませんでした。戦略準拠チェックをスキップします。",
+    "compliance.passed": "戦略準拠チェックに合格しました。生成されたすべてのテストが品質基準を満たしています。",
+    "compliance.issuesFound": "戦略準拠チェックで {0} 件の問題が見つかりました。",
+    "compliance.autoFixAttempt": "自動修正を試行中（{0}/{1}）...",
+    "compliance.autoFixLimitReached": "自動修正の上限に達しました（{0}回試行）。一部の戦略準拠問題が残っています。詳細は準拠レポートを確認してください。",
+    "compliance.reportSaved": "戦略準拠レポートを保存しました: {0}",
+    "compliance.reportSaveFailed": "準拠レポートの保存に失敗しました: {0}"
 }

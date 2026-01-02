@@ -35,5 +35,7 @@
   "configuration.analysisReportDir.description": "テスト分析レポート（自動生成）の保存先ディレクトリ（ワークスペース相対または絶対）",
   "configuration.analysisTestFilePattern.description": "分析対象のテストファイルパターン（glob形式。例: src/test/**/*.test.ts）",
   "command.analyzeTests.title": "Dontforgetest: テストを分析",
-  "command.openLatestAnalysisReport.title": "Dontforgetest: 最新の分析レポートを開く"
+  "command.openLatestAnalysisReport.title": "Dontforgetest: 最新の分析レポートを開く",
+  "configuration.enableStrategyComplianceCheck.description": "生成後にテストコードが戦略（Given/When/Then、境界値、例外メッセージ検証、ケースID網羅）に準拠しているかをチェックする",
+  "configuration.strategyComplianceAutoFixMaxRetries.description": "戦略準拠の問題が見つかった場合の自動修正最大試行回数（0=自動修正なし、レポートのみ）"
 }

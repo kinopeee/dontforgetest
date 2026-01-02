@@ -16,6 +16,12 @@ import {
 } from '../../core/artifacts';
 import { taskManager } from '../../core/taskManager';
 import { runTestCommand } from '../../core/testRunner';
+import {
+  runComplianceCheck,
+  formatComplianceIssuesForPrompt,
+  isTestFilePath,
+  type ComplianceCheckResult,
+} from '../../core/strategyComplianceCheck';
 import { createTemporaryWorktree, removeTemporaryWorktree } from '../../git/worktreeManager';
 import { type RunningTask } from '../../providers/provider';
 import { runProviderToCompletion } from '../../providers/runToCompletion';
@@ -81,6 +87,8 @@ export class TestGenerationSession {
   private lastPerspectiveSavedAbsolutePath: string | undefined;
   private lastPerspectiveSavedRelativePath: string | undefined;
   private lastPerspectiveExtracted: boolean = false;
+  /** 生成中に fileWrite イベントで収集されたファイルパス（絶対パス） */
+  private generatedFilePaths: string[] = [];
 
   constructor(options: RunWithArtifactsOptions) {
     this.options = options;
@@ -338,30 +346,15 @@ export class TestGenerationSession {
     );
     taskManager.updatePhase(this.options.generationTaskId, 'generating', 'generating');
 
+    // 生成したファイルパスを収集
+    this.generatedFilePaths = [];
+
     let finalPrompt = this.options.generationPrompt;
     if (perspectiveMarkdown) {
       finalPrompt = this.appendPerspectiveToPrompt(this.options.generationPrompt, perspectiveMarkdown);
     }
 
-    const genExit = await runProviderToCompletion({
-      provider: this.options.provider,
-      run: {
-        taskId: this.options.generationTaskId,
-        workspaceRoot: this.runWorkspaceRoot,
-        agentCommand: this.options.cursorAgentCommand,
-        prompt: finalPrompt,
-        model: this.options.model,
-        outputFormat: 'stream-json',
-        allowWrite: true,
-      },
-      onEvent: (event) => {
-        handleTestGenEventForStatusBar(event);
-        appendEventToOutput(event);
-      },
-      onRunningTask: (runningTask) => {
-        taskManager.updateRunningTask(this.options.generationTaskId, runningTask);
-      },
-    });
+    const genExit = await this.runGenerationWithFileCollection(finalPrompt);
 
     const cleanupResults = await cleanupUnexpectedPerspectiveFiles(this.localWorkspaceRoot);
     for (const cleanup of cleanupResults) {
@@ -384,6 +377,11 @@ export class TestGenerationSession {
       }
     }
 
+    // 生成成功時に戦略準拠チェック＋自動修正ループを実行
+    if (genExit === 0 && this.settings.enableStrategyComplianceCheck) {
+      await this.runComplianceCheckAndAutoFix(perspectiveMarkdown);
+    }
+
     const genMsg =
       genExit === 0
         ? t('testGeneration.completed', this.options.generationLabel)
@@ -400,6 +398,248 @@ export class TestGenerationSession {
     }
 
     return genExit;
+  }
+
+  /**
+   * テスト生成を実行し、fileWrite イベントからファイルパスを収集する
+   */
+  private async runGenerationWithFileCollection(prompt: string): Promise<number | null> {
+    return await runProviderToCompletion({
+      provider: this.options.provider,
+      run: {
+        taskId: this.options.generationTaskId,
+        workspaceRoot: this.runWorkspaceRoot,
+        agentCommand: this.options.cursorAgentCommand,
+        prompt,
+        model: this.options.model,
+        outputFormat: 'stream-json',
+        allowWrite: true,
+      },
+      onEvent: (event) => {
+        handleTestGenEventForStatusBar(event);
+        appendEventToOutput(event);
+        // fileWrite イベントからファイルパスを収集
+        if (event.type === 'fileWrite') {
+          const absPath = this.resolveToAbsolutePath(event.path);
+          if (!this.generatedFilePaths.includes(absPath)) {
+            this.generatedFilePaths.push(absPath);
+          }
+        }
+      },
+      onRunningTask: (runningTask) => {
+        taskManager.updateRunningTask(this.options.generationTaskId, runningTask);
+      },
+    });
+  }
+
+  /**
+   * ワークスペース相対パスまたは絶対パスを、絶対パスに正規化する
+   */
+  private resolveToAbsolutePath(filePath: string): string {
+    if (path.isAbsolute(filePath)) {
+      return filePath;
+    }
+    return path.join(this.runWorkspaceRoot, filePath);
+  }
+
+  /**
+   * 戦略準拠チェックと自動修正ループを実行する
+   */
+  private async runComplianceCheckAndAutoFix(perspectiveMarkdown: string | undefined): Promise<void> {
+    const maxRetries = this.settings.strategyComplianceAutoFixMaxRetries;
+
+    let retryCount = 0;
+    let lastResult: ComplianceCheckResult | undefined;
+
+    while (retryCount <= maxRetries) {
+      // NOTE: 自動修正（cursor-agent再実行）で新しいテストファイルが追加される可能性があるため、
+      // 各ループで最新の generatedFilePaths からテスト対象を再計算する。
+      const testFilePaths = this.generatedFilePaths.filter((absPath) => {
+        const relativePath = path.relative(this.runWorkspaceRoot, absPath);
+        return isTestFilePath(relativePath);
+      });
+
+      if (testFilePaths.length === 0) {
+        appendEventToOutput(
+          emitLogEvent(this.options.generationTaskId, 'info', t('compliance.noTestFiles')),
+        );
+        return;
+      }
+
+      const result = await runComplianceCheck({
+        workspaceRoot: this.runWorkspaceRoot,
+        testFilePaths,
+        perspectiveMarkdown,
+        includeTestPerspectiveTable: this.settings.includeTestPerspectiveTable,
+      });
+      lastResult = result;
+
+      if (result.passed) {
+        appendEventToOutput(
+          emitLogEvent(this.options.generationTaskId, 'info', t('compliance.passed')),
+        );
+        return;
+      }
+
+      const issueCount = result.analysisIssues.length + result.missingCaseIdIssues.length;
+      appendEventToOutput(
+        emitLogEvent(
+          this.options.generationTaskId,
+          'warn',
+          t('compliance.issuesFound', String(issueCount)),
+        ),
+      );
+
+      // 自動修正試行
+      if (retryCount < maxRetries) {
+        retryCount += 1;
+        appendEventToOutput(
+          emitLogEvent(
+            this.options.generationTaskId,
+            'info',
+            t('compliance.autoFixAttempt', String(retryCount), String(maxRetries)),
+          ),
+        );
+
+        const fixPrompt = this.buildAutoFixPrompt(result, perspectiveMarkdown);
+        await this.runGenerationWithFileCollection(fixPrompt);
+      } else {
+        break;
+      }
+    }
+
+    // 最大回数到達後も違反が残る場合は警告＋レポート保存
+    if (lastResult && !lastResult.passed) {
+      const warningMsg = t('compliance.autoFixLimitReached', String(maxRetries));
+      appendEventToOutput(
+        emitLogEvent(this.options.generationTaskId, 'warn', warningMsg),
+      );
+      void vscode.window.showWarningMessage(warningMsg);
+
+      // レポート保存
+      await this.saveComplianceReport(lastResult);
+    }
+  }
+
+  /**
+   * 自動修正用のプロンプトを構築する
+   */
+  private buildAutoFixPrompt(result: ComplianceCheckResult, perspectiveMarkdown: string | undefined): string {
+    const issuesText = formatComplianceIssuesForPrompt(result);
+    const parts: string[] = [
+      '## テストコード自動修正',
+      '',
+      '以下のテスト品質の問題が検出されました。各問題を修正してください。',
+      '',
+      issuesText,
+      '',
+      '## 修正ルール',
+      '',
+      '1. **Given/When/Then コメント**: 各テストケースに必ず付与',
+      '2. **境界値テスト**: 0 / 最小値 / 最大値 / ±1 / 空 / null / undefined を考慮',
+      '3. **例外メッセージ検証**: 例外の型とメッセージを明示的に検証',
+      '',
+    ];
+
+    if (perspectiveMarkdown) {
+      parts.push(
+        '## 観点表',
+        '',
+        perspectiveMarkdown,
+        '',
+        '観点表のすべてのケース（Case ID）をテストとして実装し、各テストケースに対応する Case ID をコメントで記載すること。',
+        '',
+      );
+    }
+
+    parts.push(
+      '## 重要: 編集対象ファイル',
+      '',
+      '以下のファイルのみを編集してください:',
+      '',
+    );
+    for (const absPath of this.generatedFilePaths) {
+      const relativePath = path.relative(this.runWorkspaceRoot, absPath);
+      if (isTestFilePath(relativePath)) {
+        parts.push(`- ${relativePath}`);
+      }
+    }
+    parts.push('', '**上記以外のファイル（docs/, 設定ファイル等）は編集禁止です。**');
+
+    return parts.join('\n');
+  }
+
+  /**
+   * 準拠チェック結果をレポートとして保存する
+   */
+  private async saveComplianceReport(result: ComplianceCheckResult): Promise<void> {
+    const reportDir = this.settings.testExecutionReportDir;
+    const reportContent = this.formatComplianceReportMarkdown(result);
+    const fileName = `compliance-report_${this.timestamp}.md`;
+
+    try {
+      const dirAbsolute = path.isAbsolute(reportDir)
+        ? reportDir
+        : path.join(this.localWorkspaceRoot, reportDir);
+      await fs.promises.mkdir(dirAbsolute, { recursive: true });
+      const filePath = path.join(dirAbsolute, fileName);
+      await fs.promises.writeFile(filePath, reportContent, 'utf8');
+      const relativePath = path.relative(this.localWorkspaceRoot, filePath);
+      appendEventToOutput(
+        emitLogEvent(this.options.generationTaskId, 'info', t('compliance.reportSaved', relativePath)),
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      appendEventToOutput(
+        emitLogEvent(this.options.generationTaskId, 'error', t('compliance.reportSaveFailed', message)),
+      );
+    }
+  }
+
+  /**
+   * 準拠チェック結果をMarkdown形式でフォーマットする
+   */
+  private formatComplianceReportMarkdown(result: ComplianceCheckResult): string {
+    const lines: string[] = [
+      '# Strategy Compliance Report',
+      '',
+      `**Generated**: ${new Date().toISOString()}`,
+      `**Analyzed Files**: ${result.analyzedFiles}`,
+      `**Status**: ${result.passed ? '✅ Passed' : '❌ Issues Found'}`,
+      '',
+    ];
+
+    if (result.analysisIssues.length > 0) {
+      lines.push('## Test Quality Issues');
+      lines.push('');
+      lines.push('| Type | File | Line | Detail |');
+      lines.push('|------|------|------|--------|');
+      for (const issue of result.analysisIssues) {
+        const lineInfo = issue.line !== undefined ? String(issue.line) : '-';
+        lines.push(`| ${issue.type} | ${issue.file} | ${lineInfo} | ${issue.detail} |`);
+      }
+      lines.push('');
+    }
+
+    if (result.missingCaseIdIssues.length > 0) {
+      lines.push('## Missing Case ID Implementations');
+      lines.push('');
+      lines.push('| Case ID | Detail |');
+      lines.push('|---------|--------|');
+      for (const issue of result.missingCaseIdIssues) {
+        lines.push(`| ${issue.caseId} | ${issue.detail} |`);
+      }
+      lines.push('');
+    }
+
+    if (result.perspectiveSkippedWarning) {
+      lines.push('## Warnings');
+      lines.push('');
+      lines.push(`- ${result.perspectiveSkippedWarning}`);
+      lines.push('');
+    }
+
+    return lines.join('\n');
   }
 
   private async runTestExecution(genExit: number | null): Promise<void> {
