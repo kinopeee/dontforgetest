@@ -2321,14 +2321,32 @@ suite('src/ui/controlPanel.ts', () => {
 
       // When: ready を送信
       postedMessages = [];
-      webviewView.webview._onMessage?.({ type: 'ready' });
-      await new Promise((r) => setTimeout(r, 10));
+      await webviewView.webview._onMessage?.({ type: 'ready' });
 
       // Then: lastTestReportStatus が含まれる
       assert.ok(postedMessages.length >= 1);
       const msg = postedMessages[0] as { type: string; lastTestReportStatus?: { success: boolean | null; exitCode: number | null; updatedAt: number } };
       assert.strictEqual(msg.type, 'stateUpdate');
       assert.deepStrictEqual(msg.lastTestReportStatus, { success: true, exitCode: 0, updatedAt: now });
+    });
+
+    // Given: lastTestReportStatus が設定されている（スキップ=success:null）
+    // When: ready を送る
+    // Then: stateUpdate に lastTestReportStatus が含まれる（境界値: exitCode=null / updatedAt=0）
+    test('CP-N-LTRS-04: stateUpdate includes lastTestReportStatus with success=null (skipped)', async () => {
+      // Given: スキップ状態を設定（境界値: updatedAt=0）
+      taskManager.setLastTestReportStatus({ success: null, exitCode: null, updatedAt: 0 });
+      resolveView();
+
+      // When: ready を送信
+      postedMessages = [];
+      await webviewView.webview._onMessage?.({ type: 'ready' });
+
+      // Then: スキップ状態が含まれる
+      assert.ok(postedMessages.length >= 1);
+      const msg = postedMessages[0] as { type: string; lastTestReportStatus?: { success: boolean | null; exitCode: number | null; updatedAt: number } };
+      assert.strictEqual(msg.type, 'stateUpdate');
+      assert.deepStrictEqual(msg.lastTestReportStatus, { success: null, exitCode: null, updatedAt: 0 });
     });
 
     // Given: lastTestReportStatus が未設定
@@ -2341,8 +2359,7 @@ suite('src/ui/controlPanel.ts', () => {
 
       // When: ready を送信
       postedMessages = [];
-      webviewView.webview._onMessage?.({ type: 'ready' });
-      await new Promise((r) => setTimeout(r, 10));
+      await webviewView.webview._onMessage?.({ type: 'ready' });
 
       // Then: undefined
       assert.ok(postedMessages.length >= 1);
@@ -2354,21 +2371,40 @@ suite('src/ui/controlPanel.ts', () => {
     // Given: パネル表示中に setLastTestReportStatus が呼ばれる
     // When: リスナー経由で送信される
     // Then: 最新の lastTestReportStatus が含まれる
-    test('CP-N-LTRS-03: setLastTestReportStatus triggers stateUpdate with new status', () => {
+    test('CP-N-LTRS-03: setLastTestReportStatus triggers stateUpdate with new status', async () => {
       // Given: パネル初期化済み
       resolveView();
-      webviewView.webview._onMessage?.({ type: 'ready' });
+      await webviewView.webview._onMessage?.({ type: 'ready' });
       postedMessages = [];
 
       // When: ステータスを設定
       const now = Date.now();
-      taskManager.setLastTestReportStatus({ success: false, exitCode: 2, updatedAt: now });
+      taskManager.setLastTestReportStatus({ success: false, exitCode: 1, updatedAt: now });
 
       // Then: stateUpdate が発火し、lastTestReportStatus が含まれる
       assert.ok(postedMessages.length >= 1);
       const msg = postedMessages[postedMessages.length - 1] as { type: string; lastTestReportStatus?: { success: boolean | null; exitCode: number | null; updatedAt: number } };
       assert.strictEqual(msg.type, 'stateUpdate');
-      assert.deepStrictEqual(msg.lastTestReportStatus, { success: false, exitCode: 2, updatedAt: now });
+      assert.deepStrictEqual(msg.lastTestReportStatus, { success: false, exitCode: 1, updatedAt: now });
+    });
+
+    // Given: パネル表示中に setLastTestReportStatus が呼ばれる（exitCode の境界値: -1）
+    // When: リスナー経由で送信される
+    // Then: 最新の lastTestReportStatus が含まれる
+    test('CP-N-LTRS-05: setLastTestReportStatus triggers stateUpdate with exitCode=-1', async () => {
+      // Given: パネル初期化済み
+      resolveView();
+      await webviewView.webview._onMessage?.({ type: 'ready' });
+      postedMessages = [];
+
+      // When: ステータスを設定（境界値: exitCode=-1）
+      taskManager.setLastTestReportStatus({ success: false, exitCode: -1, updatedAt: 0 });
+
+      // Then: stateUpdate が発火し、lastTestReportStatus が含まれる
+      assert.ok(postedMessages.length >= 1);
+      const msg = postedMessages[postedMessages.length - 1] as { type: string; lastTestReportStatus?: { success: boolean | null; exitCode: number | null; updatedAt: number } };
+      assert.strictEqual(msg.type, 'stateUpdate');
+      assert.deepStrictEqual(msg.lastTestReportStatus, { success: false, exitCode: -1, updatedAt: 0 });
     });
   });
 });
