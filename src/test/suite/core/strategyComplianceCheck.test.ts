@@ -102,6 +102,22 @@ test('should handle valid input', () => {
       assert.strictEqual(present, true);
     });
 
+    test('returns false when caseId is only a substring of another caseId', () => {
+      // Given: caseId が別caseIdの部分文字列としてのみ出現している（例: TC-N-1 と TC-N-10）
+      const content = `
+test('TC-N-10: should handle another case', () => {
+  // TC-N-10: Another case
+  assert.strictEqual(true, true);
+});
+`;
+
+      // When: 部分一致しうるcaseIdの存在をチェックする
+      const present = checkCaseIdPresence(content, 'TC-N-1');
+
+      // Then: 実装済みとはみなされない
+      assert.strictEqual(present, false);
+    });
+
     test('returns false when caseId is not present', () => {
       // Given: テストファイルの内容にcaseIdが含まれていない
       const content = `
@@ -181,6 +197,22 @@ test('handles valid input', () => {});
 
       // Then: すべてカバーされている
       assert.strictEqual(issues.length, 0);
+    });
+
+    test('does not treat substring matches as coverage', () => {
+      // Given: TC-N-10 はあるが、TC-N-1 は未実装のテストファイル
+      const testFileContents = new Map<string, string>();
+      testFileContents.set('test/example.test.ts', `
+// TC-N-10: Another case
+test('TC-N-10: handles another case', () => {});
+`);
+
+      // When: カバレッジをチェックする
+      const issues = checkCaseIdCoverage(testFileContents, ['TC-N-1', 'TC-N-10']);
+
+      // Then: TC-N-1 が未実装として検出される
+      assert.strictEqual(issues.length, 1);
+      assert.strictEqual(issues[0]?.caseId, 'TC-N-1');
     });
   });
 

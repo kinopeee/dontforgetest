@@ -448,23 +448,24 @@ export class TestGenerationSession {
   private async runComplianceCheckAndAutoFix(perspectiveMarkdown: string | undefined): Promise<void> {
     const maxRetries = this.settings.strategyComplianceAutoFixMaxRetries;
 
-    // テストファイルのみを対象にフィルタ
-    const testFilePaths = this.generatedFilePaths.filter((absPath) => {
-      const relativePath = path.relative(this.runWorkspaceRoot, absPath);
-      return isTestFilePath(relativePath);
-    });
-
-    if (testFilePaths.length === 0) {
-      appendEventToOutput(
-        emitLogEvent(this.options.generationTaskId, 'info', t('compliance.noTestFiles')),
-      );
-      return;
-    }
-
     let retryCount = 0;
     let lastResult: ComplianceCheckResult | undefined;
 
     while (retryCount <= maxRetries) {
+      // NOTE: 自動修正（cursor-agent再実行）で新しいテストファイルが追加される可能性があるため、
+      // 各ループで最新の generatedFilePaths からテスト対象を再計算する。
+      const testFilePaths = this.generatedFilePaths.filter((absPath) => {
+        const relativePath = path.relative(this.runWorkspaceRoot, absPath);
+        return isTestFilePath(relativePath);
+      });
+
+      if (testFilePaths.length === 0) {
+        appendEventToOutput(
+          emitLogEvent(this.options.generationTaskId, 'info', t('compliance.noTestFiles')),
+        );
+        return;
+      }
+
       const result = await runComplianceCheck({
         workspaceRoot: this.runWorkspaceRoot,
         testFilePaths,

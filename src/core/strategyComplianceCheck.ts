@@ -3,6 +3,10 @@ import * as vscode from 'vscode';
 import { t } from './l10n';
 import { analyzeFileContent, type AnalysisIssue, type AnalysisSummary } from './testAnalyzer';
 
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * 観点表ケースID未実装の問題
  */
@@ -79,8 +83,16 @@ export function extractCaseIdsFromPerspectiveMarkdown(perspectiveMarkdown: strin
  */
 export function checkCaseIdPresence(testContent: string, caseId: string): boolean {
   // caseIdがそのまま出現するかをチェック（コメント・文字列問わず）
-  // 正規表現でワード境界を使うと TC-N-01 のハイフンが境界になるため、単純な includes で判定
-  return testContent.includes(caseId);
+  //
+  // NOTE:
+  // - `\b` のような「単語境界」は `TC-N-01` のハイフンで境界判定されやすく扱いづらい。
+  // - そのため、英数/ハイフン/アンダースコアを「caseId を構成しうる文字」とみなし、
+  //   caseId の前後がそれ以外（または文字列端）である場合のみ一致とする。
+  // - これにより、`TC-N-1` が `TC-N-10` に部分一致して誤検知するケースを防ぐ。
+  const id = escapeRegExp(caseId);
+  const tokenChars = '0-9A-Za-z_-';
+  const re = new RegExp(`(^|[^${tokenChars}])${id}(?=[^${tokenChars}]|$)`, 'i');
+  return re.test(testContent);
 }
 
 /**

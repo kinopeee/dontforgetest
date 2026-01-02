@@ -1,7 +1,0 @@
-feat: テスト生成後の戦略準拠チェックと自動修正機能を追加
-
-- 生成されたテストコードの品質を自動チェック（G/W/T、境界値、例外メッセージ、caseID網羅）
-- 違反があれば cursor-agent を再実行して自動修正（最大試行回数は設定可能）
-- 観点表生成プロンプトを defaultTestStrategy に合わせて改善（失敗系≥成功系、undefined境界値を明記）
-- 新規設定項目を追加（enableStrategyComplianceCheck、strategyComplianceAutoFixMaxRetries）
-- 準拠チェック機能の単体テストを追加
