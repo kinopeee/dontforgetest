@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import {
   analyzeFileContent,
   buildAnalysisReportMarkdown,
+  getAnalysisSettings,
   type AnalysisIssue,
   type AnalysisResult,
 } from '../../../core/testAnalyzer';
@@ -873,6 +874,20 @@ ${testFn}(\`should work\`, () => {
 
       // Then: パイプ文字がエスケープされている
       assert.ok(markdown.includes('test \\| with \\| pipes'));
+    });
+  });
+
+  suite('getAnalysisSettings', () => {
+    test('TC-TA-N-01: returns default settings when no configuration is set', () => {
+      // Given: デフォルト設定（特別な設定なし）
+      // When: getAnalysisSettings を呼び出す
+      const settings = getAnalysisSettings();
+
+      // Then: デフォルト値が返される
+      assert.ok(typeof settings.reportDir === 'string');
+      assert.ok(typeof settings.testFilePattern === 'string');
+      assert.ok(settings.reportDir.length > 0);
+      assert.ok(settings.testFilePattern.length > 0);
     });
   });
 });
