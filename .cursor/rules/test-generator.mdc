@@ -122,6 +122,23 @@ alwaysApply: false
 2. ローカライズ値が空でなく、生のキーと一致しないことを確認することを優先
 3. プレースホルダーが解決されていることを確認（例: `{0}` や `${...}` が残っていない）
 
+#### 具体例（推奨 / 非推奨）
+
+```typescript
+// 推奨：生のキーと異なることを確認（翻訳が引けている）
+expect(t('user.name')).not.toBe('user.name');
+
+// 推奨：値が空でないことを確認（空文字/undefined を防ぐ）
+expect(t('user.name')).toBeTruthy();
+
+// 推奨：プレースホルダーが解決されていることを確認
+const message = t('error.user_not_found', { userId: '123' });
+expect(message).not.toMatch(/\{0\}|\$\{/);
+
+// 非推奨：特定言語の文字列に依存（言語切替や翻訳更新で壊れやすい）
+expect(t('user.name')).toBe('ユーザー名');
+```
+
 ### Given / When / Then コメント
 
 各テストケースに以下のコメントを付与：
@@ -213,8 +230,9 @@ npx c8 -r html npm test
 ## テスト内容
 - テスト: npm test
 - カバレッジ: npm run coverage
-  - Statements: xx% / Branches: yy% / Functions: zz% / Lines: aa%
-  - lcov: coverage/lcov.info（CI成果物 or ローカル生成）
+  - Statements: 85% / Branches: 82% / Functions: 88% / Lines: 85%
+  - lcov: coverage/lcov.info（CI成果物）
+  - カバレッジレポート: （CI成果物のリンクを貼る）
 ```
 
 ## 運用ルール
