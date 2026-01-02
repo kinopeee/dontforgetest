@@ -9,4 +9,5 @@
 
 - 観点表: `docs/test-perspectives/`
 - 実行レポート: `docs/test-execution-reports/`
+- 戦略準拠チェックレポート（自動修正後も問題が残る場合）: `docs/test-execution-reports/`（例: `compliance-report_*.md`）
 

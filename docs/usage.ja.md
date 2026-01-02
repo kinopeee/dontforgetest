@@ -61,6 +61,13 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 
 - **`dontforgetest.analysisReportDir`**: テスト分析レポートの保存先（既定: `docs/test-analysis-reports`）
 - **`dontforgetest.analysisTestFilePattern`**: 分析対象テストファイルのパターン（既定: `src/test/**/*.test.ts`）
+- **`dontforgetest.enableStrategyComplianceCheck`**: 生成後にテストコードが戦略に準拠しているかをチェックする（既定: true）
+  - Given/When/Then、境界値、例外メッセージ検証をチェックします
+  - 観点表を生成している場合は Case ID 網羅もチェックします（観点表の全Case IDがテスト内に出現すること）
+- **`dontforgetest.strategyComplianceAutoFixMaxRetries`**: 戦略準拠の問題が見つかった場合の自動修正最大試行回数（既定: 1）
+  - `0`: 自動修正なし（レポートのみ）
+  - `1..5`: 問題が解消するまで生成を再実行します（最大試行回数は指定値）
+  - 自動修正後も問題が残る場合は、`dontforgetest.testExecutionReportDir` 配下に `compliance-report_YYYYMMDD_HHmmss.md` を保存します
 
 > **補足（モデル名）**: `dontforgetest.defaultModel` に指定するモデル名は、Cursor CLI の **`/model`** コマンドでリストされる名前を使用してください。
 >

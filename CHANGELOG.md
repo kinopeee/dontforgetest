@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.0.118
+
+### Added
+
+- Strategy compliance check after generation (Given/When/Then, boundary values, exception message verification, and Case ID coverage when a perspective table is generated)
+- Automatic fix attempts by re-running generation when strategy compliance issues are found (configurable)
+- Compliance report saved when issues remain after automatic fix attempts
+
+---
+
+## 0.0.118（日本語）
+
+### 追加
+
+- 生成後の戦略準拠チェック（Given/When/Then、境界値、例外メッセージ検証、観点表生成時の Case ID 網羅）
+- 戦略準拠の問題が見つかった場合に、生成の再実行で自動修正を試みる機能（試行回数は設定可能）
+- 自動修正後も問題が残る場合に、準拠チェックレポートを保存する機能
+
+---
+
 ## 0.0.117
 
 ### Changed
@@ -16,7 +36,7 @@
 
 ### 変更
 
-- 操作パネル: タブUIをセグメントコントロール形式に改善し、アクティブ/非アクティブのコントラストとホバー時フィードバックを向上
+- 操作パネル: タブ UI をセグメントコントロール形式に改善し、アクティブ/非アクティブのコントラストとホバー時フィードバックを向上
 
 ### 修正
 
@@ -28,7 +48,7 @@
 
 ### Fixed
 
-- Test analyzer: Fixed false negatives for empty-string boundary tests — empty string literals (`''`/`""`/``` `` ```) are now correctly detected from the original source code (previously invisible in `codeOnlyContent`)
+- Test analyzer: Fixed false negatives for empty-string boundary tests — empty string literals (`''`/`""`/` `` `) are now correctly detected from the original source code (previously invisible in `codeOnlyContent`)
 - Test analyzer: Fixed potential argument boundary mis-detection in `assert.throws(...)` when a string/template literal is immediately followed by `/` (division) — prevents misclassifying division as a regex start
 
 ---
@@ -37,7 +57,7 @@
 
 ### 修正
 
-- テスト分析: 空文字リテラル（`''`/`""`/``` `` ```）が境界値テストとして検出されず誤って不足扱いになる問題を修正（元ソースから字句解析で検出するよう変更）
+- テスト分析: 空文字リテラル（`''`/`""`/` `` `）が境界値テストとして検出されず誤って不足扱いになる問題を修正（元ソースから字句解析で検出するよう変更）
 - テスト分析: 文字列/テンプレートリテラル直後の `/`（除算）が正規表現開始として誤判定され、`assert.throws(...)` の引数境界が崩れる可能性がある問題を修正（クォート終了時に `lastNonWsChar` を更新）
 
 ---
@@ -72,8 +92,8 @@
   - Given/When/Then コメント不足を検出
   - 境界値テスト不足を検出（null, undefined, 0, 空文字列, 空配列）
   - 例外メッセージ未検証を検出（assert.throws / toThrow でメッセージ検証なし）
-  - Markdown形式の分析レポートを生成
-- 操作パネル: **タブUI**を追加（「生成」と「分析」を切り替え）
+  - Markdown 形式の分析レポートを生成
+- 操作パネル: **タブ UI**を追加（「生成」と「分析」を切り替え）
 - 新コマンド: **`Dontforgetest: テストを分析`**
 - 新コマンド: **`Dontforgetest: 最新の分析レポートを開く`**
 - 新設定:
@@ -82,7 +102,7 @@
 
 ### 修正
 
-- テスト分析: 複数行にまたがる `assert.throws()` 呼び出しで第2引数が次行にある場合の誤検知を修正
+- テスト分析: 複数行にまたがる `assert.throws()` 呼び出しで第 2 引数が次行にある場合の誤検知を修正
 
 ---
 
@@ -118,10 +138,10 @@
 
 ### 変更
 
-- TaskManager: フェーズラベルを追跡し、UIへ通知するようにしました。
+- TaskManager: フェーズラベルを追跡し、UI へ通知するようにしました。
 - 操作パネル: 現在のフェーズに応じて実行ボタンの表示（ラベル）を切り替えるようにしました。
 - l10n: フェーズ別ラベルを追加しました。
-- テスト: テストケースを拡充し、アサーションも強化しました（例: l10nの文言を完全一致で検証、TaskManagerの通知ペイロードを完全一致で検証、missing taskId の no-op など境界条件の追加）。
+- テスト: テストケースを拡充し、アサーションも強化しました（例: l10n の文言を完全一致で検証、TaskManager の通知ペイロードを完全一致で検証、missing taskId の no-op など境界条件の追加）。
 - ESLint: インデントルールを追加しました。
 - 拡張機能カテゴリ（マーケットプレイス向けメタデータ）:
   - 追加: **Testing**, **Machine Learning**
@@ -130,7 +150,7 @@
 ### 修正
 
 - ドキュメント: `README.md` のリンク切れを修正しました（日本語ドキュメント、docs index/usage、画像リンクなど）。
-- ドキュメント: Open VSX上で切れていた日本語ドキュメント/画像リンクをGitHub絶対URLへ変更しました。
+- ドキュメント: Open VSX 上で切れていた日本語ドキュメント/画像リンクを GitHub 絶対 URL へ変更しました。
 
 ---
 
@@ -151,12 +171,12 @@
 
 ### 変更
 
-- UIラベル: 拡張機能全体でラベルを統一・簡略化しました：
+- UI ラベル: 拡張機能全体でラベルを統一・簡略化しました：
   - 出力ビュー: **観点表**（維持）、**実行レポート** → **テストレポート**、**手動マージ**（維持）
   - 操作パネルボタン: **実行** → **生成**
   - 出力選択肢: **観点表+テスト生成** → **観点表+テスト**
   - コマンド名: **最新の実行レポートを開く** → **最新のテストレポートを開く**
-- ドキュメント: 新しいUIラベルに合わせて使用ドキュメントを更新しました。
+- ドキュメント: 新しい UI ラベルに合わせて使用ドキュメントを更新しました。
 
 ---
 
@@ -187,6 +207,5 @@
 
 ### 変更
 
-- 操作パネルUIを **3つのプルダウン（生成物/生成対象/生成先）＋ 実行ボタン** に整理しました。
-- 生成先の挙動を明確化し、**未コミット差分**および**観点表のみ生成**では **Local固定**（理由を1行表示）にしました。
-
+- 操作パネル UI を **3 つのプルダウン（生成物/生成対象/生成先）＋ 実行ボタン** に整理しました。
+- 生成先の挙動を明確化し、**未コミット差分**および**観点表のみ生成**では **Local 固定**（理由を 1 行表示）にしました。

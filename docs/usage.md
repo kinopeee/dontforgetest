@@ -61,6 +61,13 @@ Search `dontforgetest.*` in Cursor Settings.
 
 - **`dontforgetest.analysisReportDir`**: Output directory for test analysis reports (Default: `docs/test-analysis-reports`)
 - **`dontforgetest.analysisTestFilePattern`**: Glob pattern for test files to analyze (Default: `src/test/**/*.test.ts`)
+- **`dontforgetest.enableStrategyComplianceCheck`**: Check generated test code for strategy compliance after generation (Default: true)
+  - Checks Given/When/Then, boundary values, exception message verification
+  - If a perspective table was generated: checks Case ID coverage (all Case IDs must appear in test files)
+- **`dontforgetest.strategyComplianceAutoFixMaxRetries`**: Maximum number of automatic fix attempts when strategy compliance issues are found (Default: 1)
+  - `0`: no automatic fix (report only)
+  - `1..5`: re-runs generation to fix issues (up to the given number of attempts)
+  - When issues remain after attempts: saves `compliance-report_YYYYMMDD_HHmmss.md` under `dontforgetest.testExecutionReportDir`
 
 > **Note (model names)**: The model name for `dontforgetest.defaultModel` must be one of the names listed by Cursor CLI **`/model`**.
 >
