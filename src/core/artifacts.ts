@@ -1180,10 +1180,11 @@ type SummaryCounts = {
 /**
  * パネル表示用のテスト結果サマリーを計算する。
  *
- * レポート本文の成功判定（buildTestSummarySection）と同じロジックを採用。
+ * レポート本文の成功判定（buildTestSummarySection + resolveSummaryCounts）と同じロジックを採用。
  * - skipped=true の場合は success=null（スキップ扱い）
  * - exitCode===0 → success=true
- * - exitCode===null でも testResult.failures===0 が取れる場合は success=true
+ * - exitCode===null でも失敗数が0と判定できる場合は success=true
+ *   （tests配列から計算 → failures プロパティにフォールバック）
  * - それ以外は success=false
  */
 export function computeTestReportSummary(params: {
@@ -1195,13 +1196,35 @@ export function computeTestReportSummary(params: {
     return { success: null, exitCode: params.exitCode };
   }
 
-  // 既存レポートと同じ判定
-  const hasFailed = typeof params.testResult?.failures === 'number';
-  const isSuccess =
-    params.exitCode === 0 ||
-    (params.exitCode === null && hasFailed && params.testResult?.failures === 0);
+  // exitCode===0 なら成功
+  if (params.exitCode === 0) {
+    return { success: true, exitCode: params.exitCode };
+  }
 
-  return { success: isSuccess, exitCode: params.exitCode };
+  // exitCode===null の場合は、resolveSummaryCounts と同じ優先度で失敗数を判定
+  // 1. tests 配列から failed をカウント
+  // 2. failures プロパティにフォールバック
+  if (params.exitCode === null && params.testResult) {
+    const tests = params.testResult.tests;
+    if (Array.isArray(tests) && tests.length > 0) {
+      let failedCount = 0;
+      for (const t of tests) {
+        if (t.state === 'failed') {
+          failedCount += 1;
+        }
+      }
+      // tests 配列から失敗数を計算できた場合、0なら成功
+      return { success: failedCount === 0, exitCode: params.exitCode };
+    }
+
+    // tests 配列がない場合は failures プロパティを確認
+    if (typeof params.testResult.failures === 'number') {
+      return { success: params.testResult.failures === 0, exitCode: params.exitCode };
+    }
+  }
+
+  // 失敗数を判定できない場合は失敗扱い
+  return { success: false, exitCode: params.exitCode };
 }
 
 function resolveSummaryCounts(testResult: ParsedTestResult, structuredResult: TestResultFile | undefined): SummaryCounts {

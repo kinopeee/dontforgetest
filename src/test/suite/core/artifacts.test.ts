@@ -16,6 +16,7 @@ import {
   parseTestExecutionJsonV1,
   parseTestResultFile,
   renderPerspectiveMarkdownTable,
+  computeTestReportSummary,
   PERSPECTIVE_TABLE_HEADER,
   PERSPECTIVE_TABLE_SEPARATOR,
   type PerspectiveCase,
@@ -7726,6 +7727,137 @@ suite('core/artifacts.ts', () => {
           assert.ok(typeof bundleJa[key] === 'string' && (bundleJa[key] as string).length > 0, `Expected ja key: ${key}`);
         }
       });
+    });
+  });
+
+  suite('computeTestReportSummary', () => {
+    // Given: skipped=true の場合
+    // When: computeTestReportSummary を呼ぶ
+    // Then: success=null が返る
+    test('TC-CTRS-N-01: skipped=true returns success=null', () => {
+      // Given: skipped=true
+      const result = computeTestReportSummary({ exitCode: 0, skipped: true, testResult: undefined });
+
+      // Then: success===null
+      assert.strictEqual(result.success, null);
+      assert.strictEqual(result.exitCode, 0);
+    });
+
+    // Given: exitCode=0 の場合
+    // When: computeTestReportSummary を呼ぶ
+    // Then: success=true が返る
+    test('TC-CTRS-N-02: exitCode=0 returns success=true', () => {
+      // Given: exitCode=0
+      const result = computeTestReportSummary({ exitCode: 0, skipped: false, testResult: undefined });
+
+      // Then: success===true
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.exitCode, 0);
+    });
+
+    // Given: exitCode=1 の場合
+    // When: computeTestReportSummary を呼ぶ
+    // Then: success=false が返る
+    test('TC-CTRS-N-03: exitCode=1 returns success=false', () => {
+      // Given: exitCode=1
+      const result = computeTestReportSummary({ exitCode: 1, skipped: false, testResult: undefined });
+
+      // Then: success===false
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.exitCode, 1);
+    });
+
+    // Given: exitCode=null かつ testResult.tests 配列に failed=0
+    // When: computeTestReportSummary を呼ぶ
+    // Then: success=true が返る（tests配列からカウント）
+    test('TC-CTRS-B-01: exitCode=null with tests array all passed returns success=true', () => {
+      // Given: exitCode=null, tests配列に passed のみ
+      const testResult: TestResultFile = {
+        tests: [
+          { title: 'test1', fullTitle: 'suite test1', state: 'passed' },
+          { title: 'test2', fullTitle: 'suite test2', state: 'passed' },
+        ],
+        // failures プロパティは undefined
+      };
+      const result = computeTestReportSummary({ exitCode: null, skipped: false, testResult });
+
+      // Then: success===true（tests配列から failed=0 を計算）
+      assert.strictEqual(result.success, true, 'Should be success when tests array has all passed');
+      assert.strictEqual(result.exitCode, null);
+    });
+
+    // Given: exitCode=null かつ testResult.tests 配列に failed>0
+    // When: computeTestReportSummary を呼ぶ
+    // Then: success=false が返る（tests配列からカウント）
+    test('TC-CTRS-B-02: exitCode=null with tests array having failed returns success=false', () => {
+      // Given: exitCode=null, tests配列に failed あり
+      const testResult: TestResultFile = {
+        tests: [
+          { title: 'test1', fullTitle: 'suite test1', state: 'passed' },
+          { title: 'test2', fullTitle: 'suite test2', state: 'failed' },
+        ],
+      };
+      const result = computeTestReportSummary({ exitCode: null, skipped: false, testResult });
+
+      // Then: success===false
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.exitCode, null);
+    });
+
+    // Given: exitCode=null かつ testResult.tests が空で failures=0
+    // When: computeTestReportSummary を呼ぶ
+    // Then: success=true が返る（failures プロパティにフォールバック）
+    test('TC-CTRS-B-03: exitCode=null with empty tests and failures=0 returns success=true', () => {
+      // Given: exitCode=null, tests配列が空, failures=0
+      const testResult: TestResultFile = {
+        tests: [],
+        failures: 0,
+      };
+      const result = computeTestReportSummary({ exitCode: null, skipped: false, testResult });
+
+      // Then: success===true（failures プロパティから判定）
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.exitCode, null);
+    });
+
+    // Given: exitCode=null かつ testResult.tests が undefined で failures=2
+    // When: computeTestReportSummary を呼ぶ
+    // Then: success=false が返る（failures プロパティにフォールバック）
+    test('TC-CTRS-B-04: exitCode=null with no tests and failures=2 returns success=false', () => {
+      // Given: exitCode=null, tests未定義, failures=2
+      const testResult: TestResultFile = {
+        failures: 2,
+      };
+      const result = computeTestReportSummary({ exitCode: null, skipped: false, testResult });
+
+      // Then: success===false
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.exitCode, null);
+    });
+
+    // Given: exitCode=null かつ testResult が undefined
+    // When: computeTestReportSummary を呼ぶ
+    // Then: success=false が返る（判定不能のため失敗扱い）
+    test('TC-CTRS-E-01: exitCode=null with no testResult returns success=false', () => {
+      // Given: exitCode=null, testResult=undefined
+      const result = computeTestReportSummary({ exitCode: null, skipped: false, testResult: undefined });
+
+      // Then: success===false（判定不能）
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.exitCode, null);
+    });
+
+    // Given: exitCode=null かつ testResult.tests も failures も undefined
+    // When: computeTestReportSummary を呼ぶ
+    // Then: success=false が返る（判定不能のため失敗扱い）
+    test('TC-CTRS-E-02: exitCode=null with testResult but no tests/failures returns success=false', () => {
+      // Given: exitCode=null, testResult はあるが tests/failures は undefined
+      const testResult: TestResultFile = {};
+      const result = computeTestReportSummary({ exitCode: null, skipped: false, testResult });
+
+      // Then: success===false（判定不能）
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.exitCode, null);
     });
   });
 });
