@@ -3,7 +3,7 @@
 ## 概要
 
 現在のブランチに対して変更をコミットし、リモートへプッシュしたあと、Pull Request を作成するための一括実行コマンドの例です。  
-誤操作防止のため main/master での実行はテンプレート内のチェックでブロックします（詳細は `AGENTS.md`）。コミット前に `npm run lint` を必須で実行します。
+誤操作防止のため main/master での実行はテンプレート内のチェックでブロックします（詳細は `AGENTS.md`）。コミット前に `npm run lint` と `npm run typecheck` を必須で実行します。
 
 ## 前提条件
 
@@ -15,7 +15,7 @@
 ## 実行手順（対話なし）
 
 1. ブランチ確認（main/master 直プッシュ防止）
-2. 品質チェック（lint）
+2. 品質チェック（lint、型チェック）
 3. 変更のステージング（`git add -A`）
 4. コミット（引数または環境変数のメッセージ使用）
 5. プッシュ（`git push -u origin <current-branch>`）
@@ -37,7 +37,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
-npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
+(npm run lint && npm run typecheck) || { echo "❌ lint/型チェックエラーがあります。修正してください。"; exit 1; }
 
 git add -A && \
 git commit -m "$MSG" && \
@@ -78,7 +78,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
-npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
+(npm run lint && npm run typecheck) || { echo "❌ lint/型チェックエラーがあります。修正してください。"; exit 1; }
 
 git add -A && \
 git commit -m "$MSG" && \
@@ -100,8 +100,8 @@ fi
 echo "変更されたファイル:"
 git status --short
 
-# 3) 品質チェック（lint）
-npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
+# 3) 品質チェック（lint、型チェック）
+(npm run lint && npm run typecheck) || { echo "❌ lint/型チェックエラーがあります。修正してください。"; exit 1; }
 
 # 4) 変更をステージング
 git add -A
@@ -182,7 +182,7 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   echo "⚠️ main/master への直接プッシュは禁止です（詳細はAGENTS.md）"; exit 1;
 fi
 
-npm run lint || { echo "❌ lint エラーがあります。修正してください。"; exit 1; }
+(npm run lint && npm run typecheck) || { echo "❌ lint/型チェックエラーがあります。修正してください。"; exit 1; }
 
 git add -A && git commit -m "$MSG" && git push -u origin "$BRANCH" && gh pr create --fill --base main
 ```
