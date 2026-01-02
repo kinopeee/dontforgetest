@@ -227,7 +227,7 @@
     "lint": "eslint src/",
     "test": "node ./out/test/runTest.js",
     "coverage": "c8 -r text -r lcov npm test",
-    "coverage:check": "c8 check-coverage --lines 70 --functions 70 --branches 60",
+    "coverage:check": "c8 check-coverage --lines 70 --functions 70 --branches 60 --statements 70",
     "test:runTest": "node ./node_modules/mocha/bin/mocha --ui tdd ./out/test/suite/runTest.test.js",
     "pretest:runTest": "npm run compile",
     "coverage:runTest": "c8 -r text -r lcov npm run test:runTest",
