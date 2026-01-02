@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.119
+
+### Added
+
+- **Control Panel**: Show last test report summary (✅/❌, exitCode) directly on the panel so you can see success/failure at a glance without opening the full report
+- **Documentation**: Clarified that Dontforgetest does **not** auto-fix failing tests; failures are surfaced so regressions are visible to developers. Strategy-compliance auto-correction (re-running generation) is a separate feature for improving generated test quality, not for hiding regressions.
+
+---
+
+## 0.0.119（日本語）
+
+### 追加
+
+- **操作パネル**: 最終テストレポートのサマリー（✅/❌、exitCode）をパネル上に表示し、レポートを開かずに成功・失敗を即座に確認できるようになりました
+- **ドキュメント**: Dontforgetest は**テスト失敗を自動修正しない**方針を明確化しました。失敗はリグレッションを開発者に知らせるシグナルです。戦略準拠の自動修正（生成再実行）は生成品質向上のための機能であり、回帰を隠すものではありません。
+
+---
+
 ## 0.0.118
 
 ### Added

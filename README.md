@@ -22,6 +22,7 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 - Consolidates logs in an **Output Channel**
 - Saves **test perspective tables** and **test execution reports** (Markdown; output directories are configurable)
 - Shows running task count in the **Status Bar** (click to open logs)
+- **Control Panel**: Displays the last test report summary (✅/❌ + exitCode) so you can instantly see success/failure without opening the full report
 - **Test Analysis**: Analyze existing test files and suggest improvements
   - Detects missing Given/When/Then comments
   - Detects missing boundary value tests
@@ -30,6 +31,7 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
   - Checks Given/When/Then, boundary values, exception message verification
   - If a perspective table was generated: checks **Case ID coverage** (all Case IDs must appear in test files)
   - When issues remain after auto-fix attempts: saves a compliance report under the test execution report directory
+- **No auto-fix for failing tests**: Failures are surfaced so regressions are visible to developers. Strategy-compliance auto-correction (re-running generation) is a separate feature for improving generated test quality, not for hiding regressions.
 
 ## Screenshots
 

@@ -2,6 +2,18 @@ import { type RunningTask } from '../providers/provider';
 import { type TestGenPhase } from './event';
 
 /**
+ * 直近のテスト実行サマリー（パネル表示用）。
+ */
+export interface LastTestReportStatus {
+  /** 成功=true / 失敗=false / スキップ=null */
+  success: boolean | null;
+  /** 終了コード（取得できない場合は null） */
+  exitCode: number | null;
+  /** 更新日時（ms） */
+  updatedAt: number;
+}
+
+/**
  * 実行中タスクの情報。
  */
 export interface ManagedTask {
@@ -28,6 +40,8 @@ type TaskStateListener = (isRunning: boolean, taskCount: number, phaseLabel?: st
 class TaskManager {
   private readonly tasks = new Map<string, ManagedTask>();
   private readonly listeners = new Set<TaskStateListener>();
+  /** 直近のテスト実行サマリー（パネル表示用） */
+  private lastTestReportStatus: LastTestReportStatus | undefined;
 
   /**
    * タスクを登録する。
@@ -168,6 +182,29 @@ class TaskManager {
    */
   public removeListener(listener: TaskStateListener): void {
     this.listeners.delete(listener);
+  }
+
+  /**
+   * 直近のテスト実行サマリーを取得する。
+   */
+  public getLastTestReportStatus(): LastTestReportStatus | undefined {
+    return this.lastTestReportStatus;
+  }
+
+  /**
+   * 直近のテスト実行サマリーを設定し、リスナーに通知する。
+   */
+  public setLastTestReportStatus(status: LastTestReportStatus): void {
+    this.lastTestReportStatus = status;
+    this.notifyListeners();
+  }
+
+  /**
+   * 直近のテスト実行サマリーをクリアする（テスト用）。
+   * @internal
+   */
+  public clearLastTestReportStatus(): void {
+    this.lastTestReportStatus = undefined;
   }
 
   private notifyListeners(): void {

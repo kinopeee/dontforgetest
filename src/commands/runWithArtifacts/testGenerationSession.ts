@@ -10,6 +10,7 @@ import {
   getArtifactSettings,
   parseTestResultFile,
   saveTestExecutionReport,
+  computeTestReportSummary,
   type ArtifactSettings,
   type TestExecutionResult,
   type TestResultFile,
@@ -710,6 +711,9 @@ export class TestGenerationSession {
         timestamp: this.timestamp,
         result: skippedResult,
       });
+      // パネル向け最終結果を更新（スキップ）
+      const summarySkipped = computeTestReportSummary({ exitCode: null, skipped: true, testResult: undefined });
+      taskManager.setLastTestReportStatus({ success: summarySkipped.success, exitCode: summarySkipped.exitCode, updatedAt: nowMs() });
       appendEventToOutput(emitLogEvent(ev.taskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)));
       // 進捗TreeView完了イベント
       handleTestGenEventForProgressView({ type: 'completed', taskId: this.options.generationTaskId, exitCode: null, timestampMs: nowMs() });
@@ -823,6 +827,9 @@ export class TestGenerationSession {
           timestamp: this.timestamp,
           result: { ...enrichedFallbackResult, extensionLog: this.testExecutionLogLines.join('\n') },
         });
+        // パネル向け最終結果を更新（cursorAgentフォールバック経路）
+        const summaryFallback = computeTestReportSummary({ exitCode: fallbackResult.exitCode, skipped: false, testResult: enrichedFallbackResult.testResult });
+        taskManager.setLastTestReportStatus({ success: summaryFallback.success, exitCode: summaryFallback.exitCode, updatedAt: nowMs() });
         appendEventToOutput(
           emitLogEvent(testTaskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)),
         );
@@ -845,6 +852,9 @@ export class TestGenerationSession {
         timestamp: this.timestamp,
         result: { ...enrichedResult, extensionLog: this.testExecutionLogLines.join('\n') },
       });
+      // パネル向け最終結果を更新（cursorAgent経路）
+      const summaryAgent = computeTestReportSummary({ exitCode: result.exitCode, skipped: false, testResult: enrichedResult.testResult });
+      taskManager.setLastTestReportStatus({ success: summaryAgent.success, exitCode: summaryAgent.exitCode, updatedAt: nowMs() });
       appendEventToOutput(emitLogEvent(testTaskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)));
       handleTestGenEventForProgressView({ type: 'completed', taskId: this.options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
       return;
@@ -893,6 +903,9 @@ export class TestGenerationSession {
       timestamp: this.timestamp,
       result: { ...enrichedResult, extensionLog: this.testExecutionLogLines.join('\n') },
     });
+    // パネル向け最終結果を更新（extension経路）
+    const summaryExt = computeTestReportSummary({ exitCode: result.exitCode, skipped: false, testResult: enrichedResult.testResult });
+    taskManager.setLastTestReportStatus({ success: summaryExt.success, exitCode: summaryExt.exitCode, updatedAt: nowMs() });
 
     appendEventToOutput(emitLogEvent(testTaskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)));
     handleTestGenEventForProgressView({ type: 'completed', taskId: this.options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
