@@ -130,9 +130,14 @@ Run from the side panel (**`Dontforgetest: Open Panel`**).
    - For **perspective-only output**, Location is locked to **Local**
 4. Click **Generate**
    - You can track progress in **Progress**
+   - After test execution completes, the result summary (✅/❌ + exitCode) is displayed directly on the panel
 5. After completion, open outputs from **Output**
    - Click **Perspective** / **Test report** to open the latest one
    - If applying back to **Local** failed in Worktree, you can open the **instruction prompt file** via **Manual merge**
+
+> **Note**: Dontforgetest generates and executes tests, but does **not** automatically fix failing tests.
+> Failures are surfaced so regressions are visible to developers.
+> If you see ❌ on the panel, check the test report for details.
 
 ### 2) Run via QuickPick (Command Palette)
 

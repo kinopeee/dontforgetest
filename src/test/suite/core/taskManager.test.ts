@@ -7,11 +7,14 @@ suite('core/taskManager.ts', () => {
   setup(() => {
     // すべてのタスクをキャンセルしてクリーンアップ
     taskManager.cancelAll();
+    // lastTestReportStatus もクリア
+    taskManager.clearLastTestReportStatus();
   });
 
   teardown(() => {
     // テスト後のクリーンアップ
     taskManager.cancelAll();
+    taskManager.clearLastTestReportStatus();
   });
 
   // モックRunningTaskを作成するヘルパー
@@ -949,6 +952,92 @@ suite('core/taskManager.ts', () => {
 
       // Then: It returns "generating"
       assert.strictEqual(label, 'generating');
+    });
+  });
+
+  suite('lastTestReportStatus', () => {
+    // Given: 初期状態（lastTestReportStatus 未設定）
+    // When: getLastTestReportStatus() を呼ぶ
+    // Then: undefined が返る
+    test('TC-N-LTRS-01: 初期状態では undefined を返す', () => {
+      // Given: 初期状態
+      taskManager.clearLastTestReportStatus();
+
+      // When: get
+      const status = taskManager.getLastTestReportStatus();
+
+      // Then: undefined
+      assert.strictEqual(status, undefined, '初期状態は undefined');
+    });
+
+    // Given: setLastTestReportStatus で値を設定
+    // When: getLastTestReportStatus を呼ぶ
+    // Then: 設定した値が返る
+    test('TC-N-LTRS-02: setLastTestReportStatus 後に同じ値が取得できる', () => {
+      // Given: 値を設定
+      const now = Date.now();
+      taskManager.setLastTestReportStatus({ success: true, exitCode: 0, updatedAt: now });
+
+      // When: get
+      const status = taskManager.getLastTestReportStatus();
+
+      // Then: 同じ値
+      assert.deepStrictEqual(status, { success: true, exitCode: 0, updatedAt: now });
+    });
+
+    // Given: setLastTestReportStatus を呼ぶ
+    // When: リスナーを登録している
+    // Then: リスナーが呼ばれる
+    test('TC-N-LTRS-03: setLastTestReportStatus でリスナーが呼ばれる', () => {
+      // Given: リスナーを登録
+      const calls: Array<{ isRunning: boolean; taskCount: number; phaseLabel?: string }> = [];
+      const listener = (isRunning: boolean, taskCount: number, phaseLabel?: string) => {
+        calls.push({ isRunning, taskCount, phaseLabel });
+      };
+      taskManager.addListener(listener);
+
+      try {
+        // When: setLastTestReportStatus を呼ぶ
+        taskManager.setLastTestReportStatus({ success: false, exitCode: 2, updatedAt: Date.now() });
+
+        // Then: リスナーが1回呼ばれる
+        assert.strictEqual(calls.length, 1);
+        assert.strictEqual(calls[0].isRunning, false);
+        assert.strictEqual(calls[0].taskCount, 0);
+      } finally {
+        taskManager.removeListener(listener);
+      }
+    });
+
+    // Given: スキップ時の設定（success=null）
+    // When: getLastTestReportStatus
+    // Then: success===null
+    test('TC-N-LTRS-04: スキップ時は success===null', () => {
+      // Given: success=null で設定
+      const now = Date.now();
+      taskManager.setLastTestReportStatus({ success: null, exitCode: null, updatedAt: now });
+
+      // When: get
+      const status = taskManager.getLastTestReportStatus();
+
+      // Then: success===null
+      assert.strictEqual(status?.success, null);
+      assert.strictEqual(status?.exitCode, null);
+    });
+
+    // Given: clearLastTestReportStatus を呼ぶ
+    // When: 値が設定されている
+    // Then: undefined に戻る
+    test('TC-N-LTRS-05: clearLastTestReportStatus で undefined に戻る', () => {
+      // Given: 値を設定
+      taskManager.setLastTestReportStatus({ success: true, exitCode: 0, updatedAt: Date.now() });
+      assert.ok(taskManager.getLastTestReportStatus() !== undefined);
+
+      // When: clear
+      taskManager.clearLastTestReportStatus();
+
+      // Then: undefined
+      assert.strictEqual(taskManager.getLastTestReportStatus(), undefined);
     });
   });
 });

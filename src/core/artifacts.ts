@@ -1177,6 +1177,33 @@ type SummaryCounts = {
   total?: number;
 };
 
+/**
+ * パネル表示用のテスト結果サマリーを計算する。
+ *
+ * レポート本文の成功判定（buildTestSummarySection）と同じロジックを採用。
+ * - skipped=true の場合は success=null（スキップ扱い）
+ * - exitCode===0 → success=true
+ * - exitCode===null でも testResult.failures===0 が取れる場合は success=true
+ * - それ以外は success=false
+ */
+export function computeTestReportSummary(params: {
+  exitCode: number | null;
+  skipped: boolean;
+  testResult?: TestResultFile;
+}): { success: boolean | null; exitCode: number | null } {
+  if (params.skipped) {
+    return { success: null, exitCode: params.exitCode };
+  }
+
+  // 既存レポートと同じ判定
+  const hasFailed = typeof params.testResult?.failures === 'number';
+  const isSuccess =
+    params.exitCode === 0 ||
+    (params.exitCode === null && hasFailed && params.testResult?.failures === 0);
+
+  return { success: isSuccess, exitCode: params.exitCode };
+}
+
 function resolveSummaryCounts(testResult: ParsedTestResult, structuredResult: TestResultFile | undefined): SummaryCounts {
   if (structuredResult) {
     const tests = structuredResult.tests;

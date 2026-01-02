@@ -39,6 +39,7 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Cleanup task manager state between tests
     taskManager.cancelAll();
+    taskManager.clearLastTestReportStatus();
 
     // Mock Context
     context = {
@@ -79,6 +80,7 @@ suite('src/ui/controlPanel.ts', () => {
   teardown(() => {
     // Cleanup after each test
     taskManager.cancelAll();
+    taskManager.clearLastTestReportStatus();
     // Dispose provider to avoid listener accumulation across tests
     provider.dispose();
   });
@@ -998,7 +1000,7 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Then: One stateUpdate is posted with count=0
     assert.strictEqual(postedMessages.length, 1);
-    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: false, taskCount: 0, phaseLabel: undefined });
+    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: false, taskCount: 0, phaseLabel: undefined, lastTestReportStatus: undefined });
   });
 
   // TC-N-27: Ready message sends running state
@@ -1037,7 +1039,7 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Then: One stateUpdate is posted with count=1
     assert.strictEqual(postedMessages.length, 1);
-    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: undefined });
+    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: undefined, lastTestReportStatus: undefined });
   });
 
   test('TC-N-11: ready posts stateUpdate including phaseLabel from taskManager', async () => {
@@ -1054,7 +1056,7 @@ suite('src/ui/controlPanel.ts', () => {
 
     // Then: stateUpdate includes phaseLabel="preparing"
     assert.strictEqual(postedMessages.length, 1);
-    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: 'preparing' });
+    assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: 'preparing', lastTestReportStatus: undefined });
   });
 
   // TC-N-28: Task registration notifies webview
@@ -1701,7 +1703,7 @@ suite('src/ui/controlPanel.ts', () => {
 
       // Then: Provider posts the exact stateUpdate message with phaseLabel=undefined
       assert.strictEqual(postedMessages.length, 1);
-      assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: false, taskCount: 0, phaseLabel: undefined });
+      assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: false, taskCount: 0, phaseLabel: undefined, lastTestReportStatus: undefined });
     });
 
     test('CP-B-01: on {type:"ready"} posts stateUpdate with isRunning=true, taskCount=1, phaseLabel=undefined', async () => {
@@ -1717,7 +1719,7 @@ suite('src/ui/controlPanel.ts', () => {
 
       // Then: Provider posts the exact stateUpdate message with phaseLabel=undefined
       assert.strictEqual(postedMessages.length, 1);
-      assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: undefined });
+      assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: undefined, lastTestReportStatus: undefined });
     });
 
     test('CP-N-02: on {type:"ready"} includes phaseLabel from taskManager.getCurrentPhaseLabel()', async () => {
@@ -1734,7 +1736,7 @@ suite('src/ui/controlPanel.ts', () => {
 
       // Then: Provider posts phaseLabel="preparing"
       assert.strictEqual(postedMessages.length, 1);
-      assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: 'preparing' });
+      assert.deepStrictEqual(postedMessages[0], { type: 'stateUpdate', isRunning: true, taskCount: 1, phaseLabel: 'preparing', lastTestReportStatus: undefined });
     });
 
     test('CP-N-03: after resolve, taskManager.register triggers a stateUpdate forwarding phaseLabel=undefined', () => {
@@ -1754,6 +1756,7 @@ suite('src/ui/controlPanel.ts', () => {
         isRunning: true,
         taskCount: 1,
         phaseLabel: undefined,
+        lastTestReportStatus: undefined,
       });
     });
 
@@ -1775,6 +1778,7 @@ suite('src/ui/controlPanel.ts', () => {
         isRunning: false,
         taskCount: 0,
         phaseLabel: undefined,
+        lastTestReportStatus: undefined,
       });
     });
 
@@ -2302,6 +2306,69 @@ suite('src/ui/controlPanel.ts', () => {
       assert.strictEqual(harness.isContentActive('generate'), true);
       assert.strictEqual(harness.isTabActive('analyze'), false);
       assert.strictEqual(harness.isContentActive('analyze'), false);
+    });
+  });
+
+  suite('lastTestReportStatus display', () => {
+    // Given: lastTestReportStatus が設定されている
+    // When: ready を送る
+    // Then: stateUpdate に lastTestReportStatus が含まれる
+    test('CP-N-LTRS-01: stateUpdate includes lastTestReportStatus when set', async () => {
+      // Given: ステータスを設定
+      const now = Date.now();
+      taskManager.setLastTestReportStatus({ success: true, exitCode: 0, updatedAt: now });
+      resolveView();
+
+      // When: ready を送信
+      postedMessages = [];
+      webviewView.webview._onMessage?.({ type: 'ready' });
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Then: lastTestReportStatus が含まれる
+      assert.ok(postedMessages.length >= 1);
+      const msg = postedMessages[0] as { type: string; lastTestReportStatus?: { success: boolean | null; exitCode: number | null; updatedAt: number } };
+      assert.strictEqual(msg.type, 'stateUpdate');
+      assert.deepStrictEqual(msg.lastTestReportStatus, { success: true, exitCode: 0, updatedAt: now });
+    });
+
+    // Given: lastTestReportStatus が未設定
+    // When: ready を送る
+    // Then: stateUpdate.lastTestReportStatus は undefined
+    test('CP-N-LTRS-02: stateUpdate lastTestReportStatus is undefined when not set', async () => {
+      // Given: クリア済み
+      taskManager.clearLastTestReportStatus();
+      resolveView();
+
+      // When: ready を送信
+      postedMessages = [];
+      webviewView.webview._onMessage?.({ type: 'ready' });
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Then: undefined
+      assert.ok(postedMessages.length >= 1);
+      const msg = postedMessages[0] as { type: string; lastTestReportStatus?: unknown };
+      assert.strictEqual(msg.type, 'stateUpdate');
+      assert.strictEqual(msg.lastTestReportStatus, undefined);
+    });
+
+    // Given: パネル表示中に setLastTestReportStatus が呼ばれる
+    // When: リスナー経由で送信される
+    // Then: 最新の lastTestReportStatus が含まれる
+    test('CP-N-LTRS-03: setLastTestReportStatus triggers stateUpdate with new status', () => {
+      // Given: パネル初期化済み
+      resolveView();
+      webviewView.webview._onMessage?.({ type: 'ready' });
+      postedMessages = [];
+
+      // When: ステータスを設定
+      const now = Date.now();
+      taskManager.setLastTestReportStatus({ success: false, exitCode: 2, updatedAt: now });
+
+      // Then: stateUpdate が発火し、lastTestReportStatus が含まれる
+      assert.ok(postedMessages.length >= 1);
+      const msg = postedMessages[postedMessages.length - 1] as { type: string; lastTestReportStatus?: { success: boolean | null; exitCode: number | null; updatedAt: number } };
+      assert.strictEqual(msg.type, 'stateUpdate');
+      assert.deepStrictEqual(msg.lastTestReportStatus, { success: false, exitCode: 2, updatedAt: now });
     });
   });
 });

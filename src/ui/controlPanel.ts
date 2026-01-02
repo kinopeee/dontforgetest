@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { taskManager } from '../core/taskManager';
+import { taskManager, type LastTestReportStatus } from '../core/taskManager';
 import { t } from '../core/l10n';
 
 type PanelRunSource = 'workingTree' | 'latestCommit' | 'commitRange';
@@ -18,7 +18,7 @@ type WebviewMessage =
 
 /** 拡張機能からWebviewへのメッセージ */
 type ExtensionMessage =
-  | { type: 'stateUpdate'; isRunning: boolean; taskCount: number; phaseLabel?: string };
+  | { type: 'stateUpdate'; isRunning: boolean; taskCount: number; phaseLabel?: string; lastTestReportStatus?: LastTestReportStatus };
 
 type AllowedCommand =
   | 'dontforgetest.generateTest'
@@ -84,7 +84,8 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
     if (!this.view) {
       return;
     }
-    const message: ExtensionMessage = { type: 'stateUpdate', isRunning, taskCount, phaseLabel };
+    const lastTestReportStatus = taskManager.getLastTestReportStatus();
+    const message: ExtensionMessage = { type: 'stateUpdate', isRunning, taskCount, phaseLabel, lastTestReportStatus };
     void this.view.webview.postMessage(message);
   }
 
@@ -442,6 +443,9 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '      <div class="row">',
       `        <button class="primary" id="runBtn">${t('controlPanel.run')}</button>`,
       '      </div>',
+      '      <div class="row" id="lastTestResultRow" style="display:none; margin-top:8px;">',
+      '        <span id="lastTestResultLine" style="font-size:12px;"></span>',
+      '      </div>',
       '    </div>',
       '  </div>',
       '',
@@ -641,11 +645,35 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       '      vscode.postMessage({ type: "analyze", target: target });',
       '    });',
       '',
+      '    // 直近テスト結果表示用の定数（翻訳済み）',
+      `    const lastTestLabels = {`,
+      `      success: "${t('artifact.executionReport.success')}",`,
+      `      failure: "${t('artifact.executionReport.failure')}",`,
+      `      skipped: "${t('artifact.executionReport.statusSkipped')}"`,
+      `    };`,
+      '',
+      '    // 直近テスト結果を更新する関数',
+      '    function updateLastTestResult(status) {',
+      '      const row = document.getElementById("lastTestResultRow");',
+      '      const line = document.getElementById("lastTestResultLine");',
+      '      if (!row || !line) { return; }',
+      '      if (!status) {',
+      '        row.style.display = "none";',
+      '        return;',
+      '      }',
+      '      row.style.display = "block";',
+      '      const emoji = status.success === true ? "✅" : status.success === false ? "❌" : "⏭️";',
+      '      const label = status.success === true ? lastTestLabels.success : status.success === false ? lastTestLabels.failure : lastTestLabels.skipped;',
+      '      const ec = status.exitCode !== null && status.exitCode !== undefined ? status.exitCode : "null";',
+      '      line.textContent = emoji + " " + label + " (exitCode: " + ec + ")";',
+      '    }',
+      '',
       '    // 拡張機能からのメッセージを受信',
       '    window.addEventListener("message", (event) => {',
       '      const msg = event.data;',
       '      if (msg && msg.type === "stateUpdate") {',
       '        updateButtonState(msg.isRunning, msg.phaseLabel);',
+      '        updateLastTestResult(msg.lastTestReportStatus);',
       '      }',
       '    });',
       '',
