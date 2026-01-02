@@ -26,6 +26,10 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
   - Detects missing Given/When/Then comments
   - Detects missing boundary value tests
   - Detects unverified exception messages
+- **Strategy compliance check (post-generation)**: Checks generated test code against the built-in strategy and can auto-fix by re-running generation
+  - Checks Given/When/Then, boundary values, exception message verification
+  - If a perspective table was generated: checks **Case ID coverage** (all Case IDs must appear in test files)
+  - When issues remain after auto-fix attempts: saves a compliance report under the test execution report directory
 
 ## Screenshots
 
