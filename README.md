@@ -88,15 +88,15 @@ npm run watch
 npm test
 ```
 
-To use a locally installed Cursor, set the executable path (keep the env var name for compatibility).
+To use a locally installed VS Code-compatible editor executable (e.g., VS Code or Cursor), set the executable path (keep the env var name for compatibility).
 
 ```bash
-DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<path to Cursor executable>" npm test
+DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<path to editor executable>" npm test
 ```
 
 ### Run extension (debug)
 
-1. Open this repository in Cursor
+1. Open this repository in your editor (Cursor / VS Code / Windsurf)
 2. Press F5 (Run Extension)
 3. In the Extension Development Host, run commands starting with `Dontforgetest:` from the command palette
 

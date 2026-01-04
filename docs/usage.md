@@ -20,7 +20,7 @@ This document explains how to use the **Test Generation Agent** extension in VS 
 
 ### Install from VSIX (manual / distribution)
 
-1. Open Cursor
+1. Open your editor (Cursor / VS Code / Windsurf)
 2. Open the command palette (macOS: Cmd+Shift+P)
 3. Run **`Extensions: Install from VSIX...`**
 4. Select the `.vsix` file
@@ -30,7 +30,7 @@ This document explains how to use the **Test Generation Agent** extension in VS 
 
 You can also install directly from the file tree without using the command palette:
 
-1. Locate the `.vsix` file in Cursor's Explorer
+1. Locate the `.vsix` file in the Explorer
 2. Right-click the `.vsix` file
 3. Select **`Install Extension VSIX`** (Japanese UI: **`拡張機能の VSIX のインストール`**)
 4. Reload if necessary
@@ -39,15 +39,15 @@ You can also install directly from the file tree without using the command palet
 
 1. Install dependencies: `npm install`
 2. Build: `npm run compile`
-3. Open this repository in Cursor and press **F5** (Run Extension)
+3. Open this repository in your editor (Cursor / VS Code / Windsurf) and press **F5** (Run Extension)
 4. Verify behavior in the Extension Development Host
 
 ## Settings
 
-Search `dontforgetest.*` in Cursor Settings.
+Search `dontforgetest.*` in your editor Settings (Cursor / VS Code / Windsurf).
 
 - **`dontforgetest.agentProvider`**: Agent provider for test generation (Default: `cursorAgent`)
-  - `cursorAgent`: Use Cursor CLI (`cursor-agent`)
+  - `cursorAgent`: Use Cursor Agent CLI (`cursor-agent`)
   - `claudeCode`: Use Claude Code CLI (`claude`)
 - **`dontforgetest.cursorAgentPath`**: Path to `cursor-agent` (if empty, resolves from PATH)
 - **`dontforgetest.claudePath`**: Path to `claude` command for Claude Code CLI (if empty, resolves from PATH)
@@ -73,7 +73,7 @@ Search `dontforgetest.*` in Cursor Settings.
   - `1..5`: re-runs generation to fix issues (up to the given number of attempts)
   - When issues remain after attempts: saves `compliance-report_YYYYMMDD_HHmmss.md` under `dontforgetest.testExecutionReportDir`
 
-> **Note (model names)**: The model name for `dontforgetest.defaultModel` must be one of the names listed by Cursor CLI **`/model`**.
+> **Note (model names)**: The model name for `dontforgetest.defaultModel` must be one of the names listed by Cursor Agent CLI (`cursor-agent`) via **`/model`**.
 >
 > Example (as of 2025-12-25):
 >
@@ -212,7 +212,7 @@ You can analyze existing test files from the **Analyze** tab in the Control Pane
 ### `cursor-agent not found` / `claude command not found`
 
 - Install / set up the corresponding CLI tool
-- For Cursor: Set `dontforgetest.cursorAgentPath` to the full path
+- For Cursor Agent (`cursor-agent`): Set `dontforgetest.cursorAgentPath` to the full path
 - For Claude Code: Set `dontforgetest.claudePath` to the full path
 
 ### Test strategy file cannot be loaded
