@@ -21,12 +21,10 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const repoRoot = path.resolve(__dirname, '..');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require(path.join(repoRoot, 'package.json'));
 
 const publisher = typeof pkg?.publisher === 'string' ? pkg.publisher.trim() : '';
 if (!publisher) {
-  // eslint-disable-next-line no-console
   console.error('package.json の publisher が取得できませんでした（Marketplace の Publisher ID と一致させてください）');
   process.exit(1);
 }
@@ -42,9 +40,7 @@ const token = (() => {
 })();
 
 if (!token) {
-  // eslint-disable-next-line no-console
   console.error('Marketplace PAT が見つかりません。環境変数 VSCE_PAT（推奨）を設定してください。');
-  // eslint-disable-next-line no-console
   console.error('例: VSCE_PAT="<PAT>" npm run marketplace:publish');
   process.exit(1);
 }
@@ -55,20 +51,22 @@ const args = [
   '@vscode/vsce',
   'publish',
   '--no-rewrite-relative-links',
-  '-p',
-  token,
 ];
 
-// eslint-disable-next-line no-console
 console.log(`Visual Studio Marketplace に公開します（publisher=${publisher}）`);
 
 const result = spawnSync(npxCommand, args, {
   cwd: repoRoot,
   stdio: 'inherit',
+  env: {
+    ...process.env,
+    // `vsce publish` は `VSCE_PAT` をネイティブに参照できるため、コマンドライン引数（-p）で渡さない。
+    // これにより、プロセス一覧（ps 等）へのトークン露出を防ぐ。
+    VSCE_PAT: token,
+  },
 });
 
 if (result.error) {
-  // eslint-disable-next-line no-console
   console.error(result.error);
   process.exit(1);
 }
