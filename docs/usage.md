@@ -1,18 +1,18 @@
 # Usage (Dontforgetest)
 
-This document explains how to use the **Test Generation Agent** extension in Cursor.
+This document explains how to use the **Test Generation Agent** extension in VS Code-compatible editors (Cursor / VS Code / Windsurf).
 
 - Japanese docs: `usage.ja.md`
 
 ## Prerequisites
 
 - You opened a workspace as a **folder** (single-file window is not supported)
-- Cursor **2.2+**
-- `cursor-agent` is executable (available in PATH, or configured via settings)
+- **VS Code 1.105+** compatible (Cursor / VS Code / Windsurf)
+- CLI agent executable (e.g., `cursor-agent` or `claude`; available in PATH, or configured via settings)
 - For diff-based sources, your workspace must be a **Git repository**
 - **Currently verified only on macOS** (Windows/Linux are not verified yet)
 
-> **Important**: this extension runs `cursor-agent` with **`--force`**, and generated output may be written to real files.  
+> **Important**: CLI agents (e.g., `cursor-agent`) may run with **`--force`**, and generated output may be written to real files.  
 > Before running, prepare a rollback strategy (create a branch / commit / stash).  
 > For diff-based sources, you can choose **Worktree (isolated)** which generates in a temporary worktree and applies only test diffs back to local when safe.
 

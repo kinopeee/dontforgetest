@@ -1,20 +1,20 @@
 # 操作手順（Dontforgetest）
 
-このドキュメントは、Cursor 上で「テスト生成エージェント」拡張機能を使うための操作手順です。
+このドキュメントは、VS Code 互換エディタ（Cursor / VS Code / Windsurf）上で「テスト生成エージェント」拡張機能を使うための操作手順です。
 
 - English docs: `../README.md`, `usage.md`
 
 ## 前提条件
 
 - **ワークスペースをフォルダとして開いている**（単一ファイルだけ開いている状態は不可）
-- Cursor **2.2** 以降
-- **`cursor-agent` が実行できる**（PATHに入っている、または設定でパス指定）
-- コミット差分系を使う場合は **Gitリポジトリである** こと
+- **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf）
+- **CLI エージェント**（例: `cursor-agent`、`claude`）**が実行できる**（PATH に入っている、または設定でパス指定）
+- コミット差分系を使う場合は **Git リポジトリである** こと
 - **現時点の動作確認は macOS 環境のみ**（Windows/Linux は未検証）
 
-> **注意（重要）**: 本拡張は `cursor-agent` を **`--force` で実行**するため、生成結果は**実ファイルに書き込まれます**。  
+> **注意（重要）**: CLI エージェント（例: `cursor-agent`）は **`--force` で実行**される場合があり、生成結果は**実ファイルに書き込まれます**。  
 > 実行前にブランチを切る／コミットするなど、必ず退避手段を用意してください。  
-> ※コミット差分系は **Worktree（隔離）** を選べます（生成は一時worktree、ローカルへはテスト差分のみ適用）。
+> ※コミット差分系は **Worktree（隔離）** を選べます（生成は一時 worktree、ローカルへはテスト差分のみ適用）。
 
 ## インストール
 
@@ -32,14 +32,14 @@
 
 1. Cursor のエクスプローラーで `.vsix` ファイルを表示
 2. `.vsix` を右クリック
-3. **`拡張機能の VSIX のインストール`**（英語UIの場合は **`Install Extension VSIX`**）を選択
+3. **`拡張機能の VSIX のインストール`**（英語 UI の場合は **`Install Extension VSIX`**）を選択
 4. 必要に応じて再読み込み（Reload）
 
 ### 開発版として試す（このリポジトリを開発する場合）
 
 1. 依存関係をインストール: `npm install`
 2. ビルド: `npm run compile`
-3. Cursorでこのリポジトリを開き **F5**（Run Extension）
+3. Cursor でこのリポジトリを開き **F5**（Run Extension）
 4. Extension Development Host でコマンドを実行して動作確認
 
 ## 設定
@@ -59,6 +59,7 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 - **`dontforgetest.testCommand`**: 生成後に実行するテストコマンド（既定: `npm test`、空ならスキップ）
 - **`dontforgetest.testExecutionReportDir`**: テスト実行レポート（自動生成）の保存先（既定: `docs/test-execution-reports`）
 - **`dontforgetest.testExecutionRunner`**: テスト実行の担当者（既定: `extension`）
+
   - `extension`: 拡張機能がローカルで `testCommand` を実行し、stdout/stderr/exitCode を収集してレポート化
   - `cursorAgent`: `cursor-agent` に実行させ、マーカー付きの結果から stdout/stderr/exitCode を抽出してレポート化
   - `cursorAgent` が実行拒否/空結果になる場合は、拡張機能側で **自動フォールバック**して実行します（警告ログが出ます）
@@ -67,7 +68,7 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 - **`dontforgetest.analysisTestFilePattern`**: 分析対象テストファイルのパターン（既定: `src/test/**/*.test.ts`）
 - **`dontforgetest.enableStrategyComplianceCheck`**: 生成後にテストコードが戦略に準拠しているかをチェックする（既定: true）
   - Given/When/Then、境界値、例外メッセージ検証をチェックします
-  - 観点表を生成している場合は Case ID 網羅もチェックします（観点表の全Case IDがテスト内に出現すること）
+  - 観点表を生成している場合は Case ID 網羅もチェックします（観点表の全 Case ID がテスト内に出現すること）
 - **`dontforgetest.strategyComplianceAutoFixMaxRetries`**: 戦略準拠の問題が見つかった場合の自動修正最大試行回数（既定: 1）
   - `0`: 自動修正なし（レポートのみ）
   - `1..5`: 問題が解消するまで生成を再実行します（最大試行回数は指定値）
@@ -100,7 +101,7 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 
 ### テスト戦略ファイルについて
 
-テスト戦略ファイルは、テスト生成時のルール（観点表の形式、Given/When/Thenコメントの必須化など）を定義します。
+テスト戦略ファイルは、テスト生成時のルール（観点表の形式、Given/When/Then コメントの必須化など）を定義します。
 
 - **設定が空の場合**: 拡張機能に内蔵されたデフォルト戦略（英語版）が自動的に使用されます
 - **カスタマイズしたい場合**: 任意の `.md` ファイルを作成し、`dontforgetest.testStrategyPath` にパスを指定してください
@@ -129,7 +130,7 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 サイドバーの操作パネル（**`Dontforgetest: パネルを開く`**）から実行します。
 
 1. **生成物**を選択
-   - **観点表+テスト生成（既定）**: 観点表→テスト生成→（設定により）テスト実行まで行います
+   - **観点表+テスト生成（既定）**: 観点表 → テスト生成 →（設定により）テスト実行まで行います
    - **観点表のみ**: 観点表のみ生成して終了します（テスト生成/実行は行いません）
 2. **生成対象**を選択
    - **未コミット差分 / 最新コミット / コミット範囲**
@@ -160,7 +161,7 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
    - **観点表のみ**
 4. （最新コミット差分 / コミット範囲差分 かつ 観点表+テスト生成 の場合）**実行先**を選択
    - **Local**: 現在のワークスペースを直接編集
-   - **Worktree**: 一時worktreeで生成し、テスト差分だけをローカルへ適用（自動適用不可なら手動マージ）
+   - **Worktree**: 一時 worktree で生成し、テスト差分だけをローカルへ適用（自動適用不可なら手動マージ）
 5. **モデル**を選択
    - 設定の `defaultModel` を使用
    - モデル名を入力して上書き
@@ -231,9 +232,8 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 
 ### 差分が大きい
 
-- プロンプトに埋め込む差分は一定サイズで **切り詰め**ます（truncated表示あり）
+- プロンプトに埋め込む差分は一定サイズで **切り詰め**ます（truncated 表示あり）
 
 ## 参考
 
 - 内蔵デフォルト戦略: `src/core/defaultTestStrategy.ts`
-
