@@ -14,8 +14,10 @@ export type AgentProviderId = 'cursorAgent' | 'claudeCode';
  */
 export function getAgentProviderId(): AgentProviderId {
   const config = vscode.workspace.getConfiguration('dontforgetest');
-  const raw = config.get<string>('agentProvider', 'cursorAgent');
-  const trimmed = (raw ?? 'cursorAgent').trim();
+  // vscode.workspace.getConfiguration().get<T>() は、実値が T でなくてもそのまま返すため、
+  // 文字列以外（number / null など）が入っても安全にフォールバックできるように扱う。
+  const raw = config.get<unknown>('agentProvider');
+  const trimmed = typeof raw === 'string' ? raw.trim() : '';
   if (trimmed === 'claudeCode') {
     return 'claudeCode';
   }
