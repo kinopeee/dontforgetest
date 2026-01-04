@@ -12,6 +12,18 @@ export interface ModelSettings {
 }
 
 /**
+ * 重複を避けながらモデル名を配列に追加するヘルパー。
+ */
+function pushUniqueModel(out: string[], seen: Set<string>, model: string): void {
+  const trimmed = model.trim();
+  if (trimmed.length === 0 || seen.has(trimmed)) {
+    return;
+  }
+  seen.add(trimmed);
+  out.push(trimmed);
+}
+
+/**
  * モデル設定を読み取り、正規化して返す。
  */
 export function getModelSettings(): ModelSettings {
@@ -76,20 +88,11 @@ export function getModelCandidates(settings: ModelSettings = getModelSettings())
   const out: string[] = [];
   const seen = new Set<string>();
 
-  const pushUnique = (m: string): void => {
-    const trimmed = m.trim();
-    if (trimmed.length === 0 || seen.has(trimmed)) {
-      return;
-    }
-    seen.add(trimmed);
-    out.push(trimmed);
-  };
-
   if (settings.defaultModel) {
-    pushUnique(settings.defaultModel);
+    pushUniqueModel(out, seen, settings.defaultModel);
   }
   for (const m of settings.customModels) {
-    pushUnique(m);
+    pushUniqueModel(out, seen, m);
   }
   return out;
 }
@@ -110,26 +113,20 @@ export function getClaudeCodeModelCandidates(): string[] {
 }
 
 /**
- * Cursor Agent 用のビルトインモデル候補リスト。
+ * Cursor CLI / Cursor Agent 用のビルトインモデル候補リスト（UI 用のヒント）。
+ *
+ * 注意:
+ * - CLI 側のモデル一覧は変動し得るため、ここは「公開ドキュメント上の例」として最小限に留める
+ * - ここに無いモデルは `dontforgetest.customModels` に追加するか、入力で指定する
+ *
+ * 出典（確認日: 2026-01-04）:
+ * - https://cursor.com/docs/cli/overview
  */
 const CURSOR_AGENT_BUILTIN_MODELS = [
-  'composer-1',
   'auto',
   'sonnet-4.5',
-  'sonnet-4.5-thinking',
   'opus-4.5',
-  'opus-4.5-thinking',
-  'gemini-3-pro',
-  'gemini-3-flash',
   'gpt-5.2',
-  'gpt-5.1',
-  'gpt-5.2-high',
-  'gpt-5.1-high',
-  'gpt-5.1-codex',
-  'gpt-5.1-codex-high',
-  'gpt-5.1-codex-max',
-  'gpt-5.1-codex-max-high',
-  'opus-4.1',
   'grok',
 ];
 
@@ -141,28 +138,19 @@ export function getCursorAgentModelCandidates(settings: ModelSettings = getModel
   const out: string[] = [];
   const seen = new Set<string>();
 
-  const pushUnique = (m: string): void => {
-    const trimmed = m.trim();
-    if (trimmed.length === 0 || seen.has(trimmed)) {
-      return;
-    }
-    seen.add(trimmed);
-    out.push(trimmed);
-  };
-
   // ビルトインモデルを追加
   for (const m of CURSOR_AGENT_BUILTIN_MODELS) {
-    pushUnique(m);
+    pushUniqueModel(out, seen, m);
   }
 
   // defaultModel を追加（ビルトインに無い場合）
   if (settings.defaultModel) {
-    pushUnique(settings.defaultModel);
+    pushUniqueModel(out, seen, settings.defaultModel);
   }
 
   // customModels を追加
   for (const m of settings.customModels) {
-    pushUnique(m);
+    pushUniqueModel(out, seen, m);
   }
 
   return out;

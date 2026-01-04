@@ -220,11 +220,10 @@ suite('core/modelSettings.ts', () => {
       const result = getCursorAgentModelCandidates(settings);
 
       // Then: ビルトインモデルが含まれる
-      assert.ok(result.includes('composer-1'), 'Should include composer-1');
       assert.ok(result.includes('auto'), 'Should include auto');
       assert.ok(result.includes('sonnet-4.5'), 'Should include sonnet-4.5');
       assert.ok(result.includes('gpt-5.2'), 'Should include gpt-5.2');
-      assert.strictEqual(result[0], 'composer-1', 'composer-1 should be first');
+      assert.strictEqual(result[0], 'auto', 'auto should be first');
     });
 
     // TC-CURSOR-N-02: customModels が auto を含む場合は重複しない
@@ -274,7 +273,6 @@ suite('core/modelSettings.ts', () => {
       const result = getModelCandidatesForProvider('cursorAgent', settings);
 
       // Then: ビルトインモデルと model-x, model-y が含まれる
-      assert.ok(result.includes('composer-1'), 'Should include composer-1');
       assert.ok(result.includes('auto'), 'Should include auto');
       assert.ok(result.includes('model-x'), 'Should include model-x');
       assert.ok(result.includes('model-y'), 'Should include model-y');
@@ -325,7 +323,6 @@ suite('core/modelSettings.ts', () => {
       const result = getModelCandidatesForProvider('cursorAgent', settings);
 
       // Then: Returns list containing CURSOR_AGENT_BUILTIN_MODELS base
-      assert.ok(result.includes('composer-1'), 'Should include composer-1');
       assert.ok(result.includes('auto'), 'Should include auto');
     });
   });
@@ -391,16 +388,6 @@ suite('core/modelSettings.ts', () => {
       assert.strictEqual(result, undefined);
     });
 
-    // TC-N-30: getClaudeCodeModelCandidates returns fixed list
-    test('TC-N-30: getClaudeCodeModelCandidates returns fixed list [opus-4.5, sonnet-4.5, haiku-4.5]', () => {
-      // Given: nothing
-      // When: getClaudeCodeModelCandidates is called
-      const result = getClaudeCodeModelCandidates();
-
-      // Then: Returns ['opus-4.5', 'sonnet-4.5', 'haiku-4.5']
-      assert.deepStrictEqual(result, ['opus-4.5', 'sonnet-4.5', 'haiku-4.5']);
-    });
-
     // TC-N-31: getCursorAgentModelCandidates with defaultModel='custom-model' includes custom-model
     test('TC-N-31: getCursorAgentModelCandidates with custom defaultModel includes it', () => {
       // Given: cursorAgent provider with defaultModel='custom-model'
@@ -414,6 +401,36 @@ suite('core/modelSettings.ts', () => {
 
       // Then: 'custom-model' is included in the list
       assert.ok(result.includes('custom-model'), 'Should include custom-model');
+    });
+
+    // TC-B-07: getEffectiveDefaultModel with settings.defaultModel whitespace-only returns undefined
+    test('TC-B-07: defaultModel whitespace-only returns undefined', () => {
+      // Given: claudeCode provider with whitespace-only defaultModel
+      const settings: ModelSettings = {
+        defaultModel: '   ',
+        customModels: [],
+      };
+
+      // When: getEffectiveDefaultModel is called
+      const result = getEffectiveDefaultModel('claudeCode', settings);
+
+      // Then: Returns undefined (whitespace is not a valid candidate)
+      assert.strictEqual(result, undefined);
+    });
+
+    // TC-N-14: cursorAgent with customModels model as defaultModel returns that model
+    test('TC-N-14: cursorAgent with customModels model as defaultModel returns that model', () => {
+      // Given: cursorAgent provider with a custom model configured as defaultModel
+      const settings: ModelSettings = {
+        defaultModel: 'my-custom-model',
+        customModels: ['my-custom-model'],
+      };
+
+      // When: getEffectiveDefaultModel is called
+      const result = getEffectiveDefaultModel('cursorAgent', settings);
+
+      // Then: Returns the custom model since it is included in candidates
+      assert.strictEqual(result, 'my-custom-model');
     });
   });
 });

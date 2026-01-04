@@ -489,9 +489,16 @@ export class TestGenerationSession {
           this.generatedFilePaths.push(absPath);
         }
       }
-    } catch {
+    } catch (error) {
       // git コマンドが失敗しても処理は継続する
       // （generatedFilePaths が空のままの場合は戦略準拠チェックがスキップされる）
+      appendEventToOutput(
+        emitLogEvent(
+          `${this.options.generationTaskId}-git`,
+          'info',
+          `Git command failed during file collection: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
     }
   }
 
@@ -840,8 +847,8 @@ export class TestGenerationSession {
         stderrLower.includes('permission denied') ||
         stderrLower.includes('not allowed') ||
         stderrLower.includes('disallowed') ||
-        result.stderr.includes('tool is not allowed') ||
-        result.stderr.includes('permission required');
+        stderrLower.includes('tool is not allowed') ||
+        stderrLower.includes('permission required');
 
       const suspiciousEmptyResult =
         result.exitCode === null &&

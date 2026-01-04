@@ -26,11 +26,7 @@ export function getAgentProviderId(): AgentProviderId {
  * 設定に応じたエージェントプロバイダーを生成する。
  */
 export function createAgentProvider(): AgentProvider {
-  const id = getAgentProviderId();
-  if (id === 'claudeCode') {
-    return new ClaudeCodeProvider();
-  }
-  return new CursorAgentProvider();
+  return createAgentProviderById(getAgentProviderId());
 }
 
 /**

@@ -49,11 +49,11 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
 
   // エージェント（cursor-agent / claude）はプロンプト中にファイルパスが含まれると、必要に応じて読み取り/編集を行える。
   const promptParts: string[] = [
-    `あなたはソフトウェアエンジニアです。以下の対象に対して、ユニットテストを追加/更新してください。`,
+    `You are a software engineer. Add or update unit tests for the target below.`,
     ``,
-    `## 対象`,
-    `- 実行種別: ${options.targetLabel}`,
-    `- 対象ファイル:`,
+    `## Target`,
+    `- Run type: ${options.targetLabel}`,
+    `- Target files:`,
     targetsText,
     ``,
   ];
@@ -61,86 +61,86 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
   // 実行フローセクション（preTestCheck の有無で内容が変わる）
   if (enablePreTestCheck && preTestCheckCommand.length > 0) {
     promptParts.push(
-      `## 実行フロー（必須）`,
-      `この拡張機能の所定フローは **「テスト生成 → 型チェック/Lint → テスト実行（testCommand）→ レポート保存」** です。`,
-      `あなた（CLI エージェント）の担当は **テスト生成** と **型チェック/Lintによるエラー修正** です。`,
+      `## Required execution flow`,
+      `The required flow of this extension is: **"Generate tests → Typecheck/Lint → Run tests (testCommand) → Save reports"**.`,
+      `You (the CLI agent) are responsible for **test generation** and **fixing typecheck/lint errors**.`,
       ``,
-      `### あなたのタスク`,
-      `1. テストコードを追加/更新する`,
-      `2. 以下のコマンドを実行して、型エラー/Lintエラーがないか確認する:`,
+      `### Your tasks`,
+      `1. Add or update test code`,
+      `2. Run the following command to verify there are no typecheck/lint errors:`,
       `   \`\`\`bash`,
       `   ${preTestCheckCommand}`,
       `   \`\`\``,
-      `3. エラーがあれば **テストコードを修正** して再度チェックする（最大3回まで）`,
-      `4. エラーが解消したら、またはリトライ上限に達したら終了する`,
+      `3. If there are errors, **fix the test code** and re-run the check (up to 3 times)`,
+      `4. Stop when errors are resolved or when retries are exhausted`,
       ``,
-      `### 制約`,
-      `- **テスト実行（\`npm test\` 等）は行わない**（拡張機能が後で担当する）`,
-      `- **デバッグ開始・ウォッチ開始・対話的セッション開始をしない**`,
-      `- **プロダクションコードの変更は行わない**（テストコードの追加/更新のみ）`,
-      `- 必要なら「追加したテストの概要」と「注意点（既知の制約/未対応）」を短く文章で報告して終了する`,
+      `### Constraints`,
+      `- **Do NOT run tests** (e.g., \`npm test\`). The extension will run tests later.`,
+      `- **Do NOT start debugging, watch mode, or any interactive session**`,
+      `- **Do NOT modify production code** (only add/update test code)`,
+      `- If needed, finish with a short summary of added tests and any caveats/known limitations`,
       ``,
     );
   } else {
     promptParts.push(
-      `## 実行フロー（必須）`,
-      `この拡張機能の所定フローは **「テスト生成 →（拡張機能がオーケストレーションして）テスト実行（testCommand）→ レポート保存」** です。`,
-      `※ テスト実行は拡張機能側が担当し、設定により「拡張機能プロセスで実行」または「CLI エージェント経由で実行」します。`,
-      `あなた（CLI エージェント）は次を厳守してください。`,
-      `- **あなた自身でテストを実行しない**（shellツールは使わない / \`npm test\` 等を走らせない）`,
-      `- **デバッグ開始・ウォッチ開始・対話的セッション開始をしない**（テスト実行後にデバッグへ移行しない）`,
-      `- **修正（プロダクションコードの変更）は行わない**（テストコードの追加/更新のみ行う）`,
-      `- 必要なら「追加したテストの概要」と「注意点（既知の制約/未対応）」を短く文章で報告して終了する`,
+      `## Required execution flow`,
+      `The required flow of this extension is: **"Generate tests → (the extension orchestrates) Run tests (testCommand) → Save reports"**.`,
+      `Note: Test execution is handled by the extension. Depending on settings, it may run in the extension process or via the CLI agent.`,
+      `You (the CLI agent) MUST follow these rules:`,
+      `- **Do NOT run tests yourself** (do not use shell tools; do not run \`npm test\`, etc.)`,
+      `- **Do NOT start debugging, watch mode, or any interactive session**`,
+      `- **Do NOT modify production code** (only add/update test code)`,
+      `- If needed, finish with a short summary of added tests and any caveats/known limitations`,
       ``,
     );
   }
 
   promptParts.push(
-    `## 出力言語（必須）`,
-    `- 説明文（テーブル以外）: ${languages.answerLanguage}`,
-    `- テストコード内コメント: ${languages.commentLanguage}`,
-    `- テスト観点表（Markdown）: ${languages.perspectiveTableLanguage}`,
+    `## Output language (required)`,
+    `- Explanations (non-table text): ${languages.answerLanguage}`,
+    `- Comments inside test code: ${languages.commentLanguage}`,
+    `- Test perspective table (Markdown): ${languages.perspectiveTableLanguage}`,
     ``,
-    `## 変更範囲の制約（必須）`,
-    `- 変更してよいのは **テストコード（例: \`src/test/**\`, \`**/*.test.ts\`）のみ**`,
-    `- アプリ本体/拡張機能本体の実装（\`src/**\` のうちテスト以外）を「直す」ための編集は禁止`,
-    `- **ドキュメント類（例: \`docs/**\`, \`README.md\` など）や Markdown（\`*.md\`）の新規作成/編集は禁止**`,
-    `- **ワークスペース直下（ルート）への新規ファイル作成は禁止**（例: \`test_perspectives.md\` のような補助ファイルを作らない）`,
-    `- 観点表は拡張機能が所定のフローで保存するため、**観点表を別ファイルに保存しない**（既存の観点表ファイルへ追記もしない）`,
-    `- もしテストを成立させるために実装側の修正が必要だと判断した場合は、**修正せず**に、その旨と理由を報告して終了する`,
+    `## Allowed change scope (required)`,
+    `- You may change **ONLY test code** (e.g., \`src/test/**\`, \`**/*.test.ts\`)`,
+    `- Do NOT edit production/extension implementation files (non-test files under \`src/**\`)`,
+    `- Do NOT create or edit documentation/Markdown files (e.g., \`docs/**\`, \`README.md\`, \`*.md\`)`,
+    `- Do NOT create new files at the workspace root (e.g., do not create helper files like \`test_perspectives.md\`)`,
+    `- The extension will save the perspective table; do NOT save it to any file (and do not append to existing perspective files)`,
+    `- If you believe production changes are required to make tests pass, do NOT modify production code; instead, report the reason and stop`,
     ``,
   );
 
   // ツール使用制約セクション（preTestCheck の有無で内容が変わる）
   if (enablePreTestCheck && preTestCheckCommand.length > 0) {
     promptParts.push(
-      `## ツール使用制約（必須）`,
-      `- **許可されたコマンドのみ実行可能**: \`${preTestCheckCommand}\``,
-      `- **テスト実行コマンド（\`npm test\` / \`pnpm test\` / \`pytest\` 等）は禁止**`,
-      `- **Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）`,
-      `- 必要な情報は、対象ファイルの読み取り（read）と、こちらから提示する差分/対象パスから判断すること`,
+      `## Tooling constraints (required)`,
+      `- **You may only run this command**: \`${preTestCheckCommand}\``,
+      `- **Do NOT run test commands** (e.g., \`npm test\` / \`pnpm test\` / \`pytest\`)`,
+      `- Do NOT launch GUI apps (avoid spawning external processes)`,
+      `- Use only file reads and the provided diffs/paths to make decisions`,
       ``,
     );
   } else {
     promptParts.push(
-      `## ツール使用制約（必須）`,
-      `- **shell（コマンド実行）ツールは使用禁止**（\`git diff\` / \`npm test\` 等を実行しない）`,
-      `- **Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）`,
-      `- 必要な情報は、対象ファイルの読み取り（read）と、こちらから提示する差分/対象パスから判断すること`,
+      `## Tooling constraints (required)`,
+      `- Do NOT use shell/command execution tools (do not run \`git diff\`, \`npm test\`, etc.)`,
+      `- Do NOT launch GUI apps (avoid spawning external processes)`,
+      `- Use only file reads and the provided diffs/paths to make decisions`,
       ``,
     );
   }
 
   promptParts.push(
-    `## テスト戦略ルール（必須）`,
-    `以下のルールを必ず遵守してください（原文を貼り付けます）。`,
+    `## Test strategy rules (required)`,
+    `Follow the rules below exactly (verbatim text follows).`,
     ``,
     strategyText.trim(),
     ``,
-    `## 実装上の注意`,
-    `- 既存のテストフレームワーク/テスト配置規約があればそれに従うこと`,
-    `- テストは実行可能な状態で追加すること（必要な import / setup を含める）`,
-    `- 既存テストの軽微な修正だけで済む場合でも、ルールに反しないこと`,
+    `## Implementation notes`,
+    `- Follow any existing test framework and file placement conventions`,
+    `- Ensure tests are runnable (include necessary imports/setup)`,
+    `- Even if only minor tweaks are needed, do not violate the rules above`,
   );
 
   const prompt = promptParts.join('\n');
@@ -172,30 +172,30 @@ export async function buildTestPerspectivePrompt(
     .join('\n');
 
   const parts: string[] = [];
-  parts.push('あなたはソフトウェアエンジニアです。');
-  parts.push('以下の対象について、テスト観点表（Markdown）**だけ**を作成してください。');
-  parts.push('テストコードの生成、ファイルの編集、追加の説明文の出力は不要です。');
+  parts.push('You are a software engineer.');
+  parts.push('Create **only** a test perspective table (Markdown) for the target below.');
+  parts.push('Do NOT generate test code, do NOT edit files, and do NOT output any additional explanation.');
   parts.push('');
-  parts.push('## 対象');
-  parts.push(`- 実行種別: ${options.targetLabel}`);
-  parts.push('- 対象ファイル:');
-  parts.push(targetsText.length > 0 ? targetsText : '- (なし)');
+  parts.push('## Target');
+  parts.push(`- Run type: ${options.targetLabel}`);
+  parts.push('- Target files:');
+  parts.push(targetsText.length > 0 ? targetsText : '- (none)');
   parts.push('');
-  parts.push('## 出力言語（必須）');
-  parts.push(`- テスト観点表（Markdown）: ${languages.perspectiveTableLanguage}`);
+  parts.push('## Output language (required)');
+  parts.push(`- Test perspective table (Markdown): ${languages.perspectiveTableLanguage}`);
   parts.push('');
-  parts.push('## 出力要件（必須）');
-  parts.push('- 返答は **JSON だけ** にする（Markdownテーブルは出力しない）');
-  parts.push('- 次のマーカーで出力全体を囲むこと（マーカー行も必ず含める）');
+  parts.push('## Output requirements (required)');
+  parts.push('- Output **JSON only** (do NOT output a Markdown table)');
+  parts.push('- Wrap the entire output with the following markers (marker lines must be included):');
   parts.push(`  - ${markerBegin}`);
   parts.push(`  - ${markerEnd}`);
-  parts.push('- JSON は次のスキーマに従うこと（キー名は厳密に一致させる）:');
-  parts.push('  - ルート: `{ "version": 1, "cases": PerspectiveCase[] }`');
+  parts.push('- JSON must follow this schema (keys must match exactly):');
+  parts.push('  - Root: `{ "version": 1, "cases": PerspectiveCase[] }`');
   parts.push('  - `PerspectiveCase`: `{ "caseId": string, "inputPrecondition": string, "perspective": string, "expectedResult": string, "notes": string }`');
-  parts.push('- 各フィールドはできるだけ1行で書く（改行を含めない）');
-  parts.push('- 最終的に拡張機能側で次の列の Markdown 表へ変換される前提で内容を埋める: `Case ID`, `Input / Precondition`, `Perspective (Equivalence / Boundary)`, `Expected Result`, `Notes`');
-  parts.push('- 正常系・異常系・境界値を網羅し、境界値は最低でも `0 / 最小値 / 最大値 / ±1 / 空 / null / undefined` を含める');
-  parts.push('- **失敗系（異常系/エラー系）のケースを、成功系と同数以上含めること**（テスト品質の基本原則）');
+  parts.push('- Keep each field single-line where possible (avoid newlines inside field values)');
+  parts.push('- The extension will convert this into a Markdown table with columns: `Case ID`, `Input / Precondition`, `Perspective (Equivalence / Boundary)`, `Expected Result`, `Notes`');
+  parts.push('- Cover normal cases, error cases, and boundary cases. Include at least: `0 / min / max / ±1 / empty / null / undefined`');
+  parts.push('- **Include at least as many failure cases as success cases**');
   parts.push('');
   parts.push('## Critical Quality Rules (MUST)');
   parts.push('- 1 case = 1 branch. Do not bundle multiple input conditions in a single case.');
@@ -204,10 +204,10 @@ export async function buildTestPerspectivePrompt(
   parts.push('- Only include boundary values relevant to this diff; if omitted, explain why in Notes.');
   parts.push('- For report artifacts, Expected Results must name the exact section/label/value to assert.');
   parts.push('');
-  parts.push('## ツール使用制約（必須）');
-  parts.push('- **shell（コマンド実行）ツールは使用禁止**（`git diff` / `npm test` 等を実行しない）');
-  parts.push('- **Cursor 等のGUIアプリを起動する操作は禁止**（別プロセス起動の回避）');
-  parts.push('- ファイルの編集/追加は不要（実施しない）');
+  parts.push('## Tooling constraints (required)');
+  parts.push('- Do NOT use shell/command execution tools (do not run `git diff`, `npm test`, etc.)');
+  parts.push('- Do NOT launch GUI apps (avoid spawning external processes)');
+  parts.push('- Do NOT edit or add files');
   parts.push('');
   parts.push('## Test Strategy Rules (MUST)');
   parts.push('The following rules are mandatory. Follow them exactly.');
@@ -215,14 +215,14 @@ export async function buildTestPerspectivePrompt(
 
   if (options.referenceText && options.referenceText.trim().length > 0) {
     parts.push('');
-    parts.push('## 参考（差分/補足情報）');
-    parts.push('必要に応じて参照してください。');
+    parts.push('## Reference (diff / additional context)');
+    parts.push('Use this only if needed.');
     parts.push('');
     parts.push(options.referenceText.trim());
   }
 
   parts.push('');
-  parts.push('## 出力フォーマット（必須）');
+  parts.push('## Output format (required)');
   parts.push(markerBegin);
   parts.push('{');
   parts.push('  "version": 1,');

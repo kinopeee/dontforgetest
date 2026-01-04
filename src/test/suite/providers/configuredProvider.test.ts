@@ -9,17 +9,17 @@ import { CursorAgentProvider } from '../../../providers/cursorAgentProvider';
 import { ClaudeCodeProvider } from '../../../providers/claudeCodeProvider';
 
 suite('configuredProvider', () => {
-  // === 観点表 ===
+  // === Test perspective table ===
   // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
-  // |---------|---------------------|--------------------------------------|-----------------|-------|
-  // | TC-N-01 | agentProvider 未設定 | 正常系 - デフォルト | 'cursorAgent' を返す | - |
-  // | TC-N-02 | agentProvider='cursorAgent' | 正常系 - 明示的設定 | 'cursorAgent' を返す | - |
-  // | TC-N-03 | agentProvider='claudeCode' | 正常系 - Claude 設定 | 'claudeCode' を返す | - |
-  // | TC-N-04 | createAgentProvider() | 正常系 - デフォルト | CursorAgentProvider を返す | - |
-  // | TC-N-05 | createAgentProviderById('cursorAgent') | 正常系 | CursorAgentProvider を返す | - |
-  // | TC-N-06 | createAgentProviderById('claudeCode') | 正常系 | ClaudeCodeProvider を返す | - |
-  // | TC-B-01 | agentProvider='' | 境界 - 空文字 | 'cursorAgent' を返す | - |
-  // | TC-E-01 | agentProvider='invalid' | 異常系 - 無効値 | 'cursorAgent' を返す | - |
+  // |---------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-N-01 | agentProvider unset | Equivalence – default | Returns 'cursorAgent' | - |
+  // | TC-N-02 | agentProvider='cursorAgent' | Equivalence – explicit setting | Returns 'cursorAgent' | - |
+  // | TC-N-03 | agentProvider='claudeCode' | Equivalence – Claude setting | Returns 'claudeCode' | - |
+  // | TC-N-04 | createAgentProvider() | Equivalence – default factory | Returns CursorAgentProvider | - |
+  // | TC-N-05 | createAgentProviderById('cursorAgent') | Equivalence | Returns CursorAgentProvider | - |
+  // | TC-N-06 | createAgentProviderById('claudeCode') | Equivalence | Returns ClaudeCodeProvider | - |
+  // | TC-B-01 | agentProvider='' | Boundary – empty string | Returns 'cursorAgent' | - |
+  // | TC-E-01 | agentProvider='invalid' | Error – invalid value | Returns 'cursorAgent' | - |
 
   let originalValue: string | undefined;
 

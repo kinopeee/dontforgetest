@@ -135,12 +135,15 @@ suite('core/promptBuilder.ts', () => {
         assert.ok(result.prompt.includes('src/test.ts'), 'targetPathsが含まれている');
         assert.ok(result.prompt.includes('テスト戦略ルール'), 'テスト戦略ルールが含まれている');
         // デフォルトでenablePreTestCheck=trueのため、型チェック/Lintを含むフローが出力される
-        assert.ok(result.prompt.includes('テスト生成 → 型チェック/Lint → テスト実行（testCommand）→ レポート保存'), '実行フローが含まれている');
+        assert.ok(
+          result.prompt.includes('Generate tests → Typecheck/Lint → Run tests (testCommand) → Save reports'),
+          '実行フローが含まれている',
+        );
         // デフォルトでenablePreTestCheck=trueのため、PreTestCheck版の制約が出力される
-        assert.ok(result.prompt.includes('プロダクションコードの変更は行わない'), '修正禁止が明記されている');
-        assert.ok(result.prompt.includes('デバッグ開始・ウォッチ開始・対話的セッション開始をしない'), 'デバッグ禁止が明記されている');
-        assert.ok(result.prompt.includes('## 変更範囲の制約（必須）'), '変更範囲の制約セクションが含まれている');
-        assert.ok(result.prompt.includes('## ツール使用制約（必須）'), 'ツール使用制約セクションが含まれている');
+        assert.ok(result.prompt.includes('Do NOT modify production code'), '修正禁止が明記されている');
+        assert.ok(result.prompt.includes('Do NOT start debugging, watch mode, or any interactive session'), 'デバッグ禁止が明記されている');
+        assert.ok(result.prompt.includes('## Allowed change scope (required)'), '変更範囲の制約セクションが含まれている');
+        assert.ok(result.prompt.includes('## Tooling constraints (required)'), 'ツール使用制約セクションが含まれている');
         assert.strictEqual(result.languages.answerLanguage, 'ja');
         assert.strictEqual(result.languages.commentLanguage, 'ja');
         assert.strictEqual(result.languages.perspectiveTableLanguage, getArtifactLocale());
@@ -196,7 +199,7 @@ suite('core/promptBuilder.ts', () => {
 
       assert.ok(result.prompt.length > 0, 'プロンプトが生成されている');
       // 対象ファイルリストは空だが、プロンプト自体は生成される
-      assert.ok(result.prompt.includes('対象ファイル:'), '対象ファイルセクションが含まれている');
+      assert.ok(result.prompt.includes('Target files:'), '対象ファイルセクションが含まれている');
     });
 
     // Given: enablePreTestCheck=true かつ preTestCheckCommand が有効
@@ -218,9 +221,9 @@ suite('core/promptBuilder.ts', () => {
       };
 
       const result = await buildTestGenPrompt(options);
-      assert.ok(result.prompt.includes('型チェック/Lint'), '型チェックフローへの言及が含まれる');
+      assert.ok(result.prompt.includes('Typecheck/Lint'), '型チェックフローへの言及が含まれる');
       assert.ok(result.prompt.includes('npm run lint'), 'コマンドが含まれる');
-      assert.ok(result.prompt.includes('許可されたコマンドのみ実行可能'), 'ツール制約が含まれる');
+      assert.ok(result.prompt.includes('You may only run this command'), 'ツール制約が含まれる');
     });
 
     // Given: enablePreTestCheck=false
@@ -241,8 +244,8 @@ suite('core/promptBuilder.ts', () => {
       };
 
       const result = await buildTestGenPrompt(options);
-      assert.ok(!result.prompt.includes('型チェック/Lint'), '型チェックフローは含まれない');
-      assert.ok(result.prompt.includes('shell（コマンド実行）ツールは使用禁止'), '標準のツール制約が含まれる');
+      assert.ok(!result.prompt.includes('Typecheck/Lint') && !result.prompt.includes('typecheck/lint'), '型チェックフローは含まれない');
+      assert.ok(result.prompt.includes('Do NOT use shell/command execution tools'), '標準のツール制約が含まれる');
     });
 
     // Given: Config.enablePreTestCheck=false だが Options.enablePreTestCheck=true を指定
@@ -268,7 +271,7 @@ suite('core/promptBuilder.ts', () => {
           preTestCheckCommand: 'npm run check'
         };
         const result = await buildTestGenPrompt(options);
-        assert.ok(result.prompt.includes('型チェック/Lint'), 'Optionsが優先され有効になる');
+        assert.ok(result.prompt.includes('Typecheck/Lint'), 'Optionsが優先され有効になる');
         assert.ok(result.prompt.includes('npm run check'), 'コマンドが含まれる');
       } finally {
         await config.update('enablePreTestCheck', undefined, vscode.ConfigurationTarget.Global);
@@ -297,7 +300,7 @@ suite('core/promptBuilder.ts', () => {
           enablePreTestCheck: false // Force Disable
         };
         const result = await buildTestGenPrompt(options);
-        assert.ok(!result.prompt.includes('型チェック/Lint'), 'Optionsが優先され無効になる');
+        assert.ok(!result.prompt.includes('Typecheck/Lint') && !result.prompt.includes('typecheck/lint'), 'Optionsが優先され無効になる');
       } finally {
         await config.update('enablePreTestCheck', undefined, vscode.ConfigurationTarget.Global);
       }
@@ -322,7 +325,7 @@ suite('core/promptBuilder.ts', () => {
       };
 
       const result = await buildTestGenPrompt(options);
-      assert.ok(!result.prompt.includes('型チェック/Lint'), 'コマンドが空なら無効になる');
+      assert.ok(!result.prompt.includes('Typecheck/Lint') && !result.prompt.includes('typecheck/lint'), 'コマンドが空なら無効になる');
     });
 
     // Given: enablePreTestCheck=true だが preTestCheckCommand が空白のみ
@@ -344,7 +347,7 @@ suite('core/promptBuilder.ts', () => {
       };
 
       const result = await buildTestGenPrompt(options);
-      assert.ok(!result.prompt.includes('型チェック/Lint'), 'コマンドが空白なら無効になる');
+      assert.ok(!result.prompt.includes('Typecheck/Lint') && !result.prompt.includes('typecheck/lint'), 'コマンドが空白なら無効になる');
     });
 
     // Given: Options で enablePreTestCheck / preTestCheckCommand を未指定（undefined）
@@ -371,7 +374,7 @@ suite('core/promptBuilder.ts', () => {
           preTestCheckCommand: undefined // Undefined
         };
         const result = await buildTestGenPrompt(options);
-        assert.ok(result.prompt.includes('型チェック/Lint'), 'Configの値(true)が使われる');
+        assert.ok(result.prompt.includes('Typecheck/Lint'), 'Configの値(true)が使われる');
         assert.ok(result.prompt.includes('npm run config-cmd'), 'Configのコマンドが使われる');
       } finally {
         await config.update('enablePreTestCheck', undefined, vscode.ConfigurationTarget.Global);
@@ -540,8 +543,8 @@ suite('core/promptBuilder.ts', () => {
       });
 
       // Then: Prompt instructs to write fields on single line without newlines
-      assert.ok(result.prompt.includes('1行で書く'), 'Single line instruction is included');
-      assert.ok(result.prompt.includes('改行を含めない'), 'No newlines instruction is included');
+      assert.ok(result.prompt.includes('single-line'), 'Single line instruction is included');
+      assert.ok(result.prompt.includes('avoid newlines'), 'No newlines instruction is included');
     });
 
     test('TC-PROMPT-N-01: buildTestPerspectivePrompt includes the "Critical Quality Rules (MUST)" section and the 1-branch rule', async () => {
@@ -628,7 +631,7 @@ suite('core/promptBuilder.ts', () => {
       });
 
       // Then: It must not include the reference section
-      assert.ok(!result.prompt.includes('## 参考（差分/補足情報）'), 'Reference section should be omitted');
+      assert.ok(!result.prompt.includes('## Reference (diff / additional context)'), 'Reference section should be omitted');
     });
 
     test('TC-PROMPT-B-EMPTY: buildTestPerspectivePrompt omits the reference section when referenceText is whitespace-only', async () => {
@@ -649,7 +652,7 @@ suite('core/promptBuilder.ts', () => {
       });
 
       // Then: It must not include the reference section
-      assert.ok(!result.prompt.includes('## 参考（差分/補足情報）'), 'Reference section should be omitted');
+      assert.ok(!result.prompt.includes('## Reference (diff / additional context)'), 'Reference section should be omitted');
     });
 
     test('TC-PROMPT-N-03: buildTestPerspectivePrompt includes reference section and raw referenceText when provided', async () => {
@@ -670,7 +673,7 @@ suite('core/promptBuilder.ts', () => {
       });
 
       // Then: It includes the reference section and the exact reference text
-      assert.ok(result.prompt.includes('## 参考（差分/補足情報）'), 'Reference section should be included');
+      assert.ok(result.prompt.includes('## Reference (diff / additional context)'), 'Reference section should be included');
       assert.ok(result.prompt.includes('DIFF_SNIPPET_X'), 'Reference text should be included as-is');
     });
   });

@@ -48,8 +48,6 @@ export function normalizeRunMode(value: unknown): RunMode {
 export function activate(context: vscode.ExtensionContext) {
   console.log('拡張機能 "dontforgetest" が有効化されました');
 
-  // 設定に応じて Provider を生成（cursorAgent がデフォルト）
-  const provider = createAgentProvider();
   const settingsPanelProvider = new SettingsPanelViewProvider();
   const controlPanelProvider = new TestGenControlPanelViewProvider(context);
   initializeTestGenStatusBar(context);
@@ -72,6 +70,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('dontforgetest.generateTest', async () => {
+      // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
+      const provider = createAgentProvider();
       await generateTestWithQuickPick(provider, context);
     }),
   );
@@ -86,6 +86,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'dontforgetest.generateTestFromCommit',
       async (args?: { runLocation?: RunLocation; modelOverride?: string; runMode?: RunMode }) => {
+        // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
+        const provider = createAgentProvider();
         const runLocation = normalizeRunLocation(args?.runLocation);
         const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
         const runMode = normalizeRunMode(args?.runMode);
@@ -98,6 +100,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'dontforgetest.generateTestFromCommitRange',
       async (args?: { runLocation?: RunLocation; modelOverride?: string; runMode?: RunMode }) => {
+        // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
+        const provider = createAgentProvider();
         const runLocation = normalizeRunLocation(args?.runLocation);
         const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
         const runMode = normalizeRunMode(args?.runMode);
@@ -108,6 +112,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('dontforgetest.generateTestFromWorkingTree', async (args?: { modelOverride?: string; runMode?: RunMode }) => {
+      // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
+      const provider = createAgentProvider();
       const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
       const runMode = normalizeRunMode(args?.runMode);
       await generateTestFromWorkingTree(provider, modelOverride, { runMode });

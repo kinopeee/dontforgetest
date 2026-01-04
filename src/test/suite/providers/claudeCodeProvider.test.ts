@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { EventEmitter } from 'events';
-import { ClaudeCodeProvider } from '../../../providers/claudeCodeProvider';
+import { ClaudeCodeProvider, __test__ as claudeCodeProviderTest } from '../../../providers/claudeCodeProvider';
 import { type TestGenEvent } from '../../../core/event';
 import { type AgentRunOptions } from '../../../providers/provider';
 
@@ -13,21 +13,21 @@ function waitForAsyncCleanup(ms: number = 100): Promise<void> {
 }
 
 suite('ClaudeCodeProvider', () => {
-  // === 観点表 ===
+  // === Test perspective table ===
   // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
-  // |---------|---------------------|--------------------------------------|-----------------|-------|
-  // | TC-N-01 | ClaudeCodeProvider インスタンス | 正常系 - id/displayName | id='claude-code', displayName='Claude Code' | - |
-  // | TC-N-02 | run 呼び出し | 正常系 - RunningTask 返却 | taskId が一致する RunningTask を返す | - |
-  // | TC-N-05 | run 呼び出し | 正常系 - started イベント発火 | started イベントが発火する | - |
-  // | TC-N-06 | allowWrite=true | 正常系 - 書き込み許可 | started イベントに write=on が含まれる | - |
-  // | TC-N-07 | model='opus-4.5' 指定 | 正常系 - モデル指定 | started イベントに model=opus-4.5 が含まれる | - |
-  // | TC-N-21 | child.close (exitCode=0) | 正常系 - 正常終了 | completed イベントが exitCode=0 で発火 | - |
-  // | TC-N-29 | dispose() 呼び出し | 正常系 - dispose | child.kill() が呼ばれ、activeChild がクリアされる | - |
-  // | TC-B-07 | options.model=undefined | Boundary - no model | started イベントに model= が含まれない | - |
-  // | TC-B-08 | options.agentCommand=undefined | Boundary - no agentCommand | デフォルトの 'claude' コマンドが使用される | - |
-  // | TC-B-13 | outputFormat='stream-json' | Boundary - default | started イベントが出力される | - |
-  // | TC-E-04 | child.on('error') (ENOENT) | Error - spawn ENOENT | log (level='error') が発火、completed (exitCode=null) | - |
-  // | TC-E-10 | run() 時に既に activeChild が存在 | Error - duplicate run | 前の child が kill され、warn ログが出力される | - |
+  // |---------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-N-01 | ClaudeCodeProvider instance | Equivalence – id/displayName | id='claude-code', displayName='Claude Code' | - |
+  // | TC-N-02 | run() is called | Equivalence – RunningTask | Returns RunningTask with matching taskId | - |
+  // | TC-N-05 | run() is called | Equivalence – started event | Emits started event | - |
+  // | TC-N-06 | allowWrite=true | Equivalence – write enabled | started event detail includes write=on | - |
+  // | TC-N-07 | model='opus-4.5' | Equivalence – model selection | started event detail includes model=opus-4.5 | - |
+  // | TC-N-21 | child.close(exitCode=0) | Equivalence – normal completion | Emits completed event with exitCode=0 | - |
+  // | TC-N-29 | dispose() is called | Equivalence – dispose | Calls child.kill() and clears activeChild | - |
+  // | TC-B-07 | options.model=undefined | Boundary – no model | started event detail does not include model= | - |
+  // | TC-B-08 | options.agentCommand=undefined | Boundary – default command | Uses default 'claude' | - |
+  // | TC-B-13 | outputFormat='stream-json' | Boundary – verbose required | Emits started event | - |
+  // | TC-E-04 | child emits error | Error – spawn/transport error | Emits error log and completed(null) | - |
+  // | TC-E-10 | run() while activeChild exists | Error – duplicate run | Kills previous child and emits warn log | - |
 
   // TC-N-01: id と displayName が正しく設定されている
   test('TC-N-01: id と displayName が正しく設定されている', () => {
@@ -364,6 +364,9 @@ suite('ClaudeCodeProvider', () => {
       assert.strictEqual(result.events.length, 1);
       const event = result.events[0];
       assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.path, path.relative(workspaceRoot, filePath));
+      }
     });
 
     // TC-N-23: result イベント受信で log イベント発火
@@ -481,7 +484,7 @@ suite('ClaudeCodeProvider', () => {
     });
 
     // TC-B-15: toWorkspaceRelative で workspace 外のパスを渡す
-    test('TC-B-15: toWorkspaceRelative で workspace 外のパスを渡すと undefined が返る', () => {
+    test('TC-B-15: toWorkspaceRelative で workspace 外のパスを渡すと絶対パスにフォールバックする', () => {
       // Given: tool_call with path outside workspace
       const filePath = path.resolve(workspaceRoot, '..', 'outside', 'file.ts');
       const obj = {
@@ -716,7 +719,7 @@ suite('ClaudeCodeProvider', () => {
         fakeNow = 0;
         stdout.emit('data', Buffer.from('not-json\n'));
 
-        fakeNow = 10 * 60_000;
+        fakeNow = claudeCodeProviderTest.CLAUDE_CODE_MONITORING.maxSilenceBeforeKillMs;
         timers.fireAllIntervals();
 
         // Then: A kill is attempted and an error log is emitted about auto-stop

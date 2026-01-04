@@ -35,10 +35,14 @@ export class SettingsPanelViewProvider implements vscode.WebviewViewProvider, vs
 
     webviewView.webview.html = this.buildHtml();
 
-    webviewView.webview.onDidReceiveMessage(async (raw: unknown) => {
+    const messageListener = webviewView.webview.onDidReceiveMessage(async (raw: unknown) => {
       const msg = raw as WebviewMessage;
       await this.handleMessage(msg);
     });
+    // テストでは onDidReceiveMessage が undefined を返すスタブの場合があるため、防御的に扱う
+    if (messageListener && typeof (messageListener as vscode.Disposable).dispose === 'function') {
+      this.disposables.push(messageListener);
+    }
   }
 
   public dispose(): void {
@@ -46,6 +50,7 @@ export class SettingsPanelViewProvider implements vscode.WebviewViewProvider, vs
       d.dispose();
     }
     this.disposables = [];
+    this.view = undefined;
   }
 
   private async handleMessage(msg: WebviewMessage): Promise<void> {
@@ -79,6 +84,8 @@ export class SettingsPanelViewProvider implements vscode.WebviewViewProvider, vs
         return;
       }
       await setDefaultModel(model.trim() || undefined);
+      // 設定更新後に UI 側へ同期通知（選択状態の整合性維持）
+      this.sendConfigUpdate();
       return;
     }
   }

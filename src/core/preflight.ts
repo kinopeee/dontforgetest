@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { getModelSettings, getEffectiveDefaultModel } from './modelSettings';
@@ -77,7 +78,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
         await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.claudePath');
       }
       if (picked === openDocsLabel) {
-        await vscode.env.openExternal(vscode.Uri.parse('https://docs.claude.com/en/docs/claude-code/headless'));
+        await vscode.env.openExternal(vscode.Uri.parse('https://docs.claude.com/en/docs/claude-code/sdk/sdk-headless'));
       }
       return undefined;
     }
@@ -154,13 +155,7 @@ async function canSpawnCommand(command: string, args: string[], cwd: string): Pr
   return await new Promise<boolean>((resolve) => {
     // PATH を拡張
     const env: NodeJS.ProcessEnv = { ...process.env };
-    const homeDir = process.env.HOME ?? '';
-    const additionalPaths = [
-      '/opt/homebrew/bin',
-      `${homeDir}/.local/bin`,
-      '/usr/local/bin',
-      `${homeDir}/.claude/local`,
-    ];
+    const additionalPaths = getDefaultAdditionalPaths();
     const currentPath = env.PATH ?? '';
     const pathSeparator = process.platform === 'win32' ? ';' : ':';
     env.PATH = [...additionalPaths, currentPath].filter(Boolean).join(pathSeparator);
@@ -184,4 +179,40 @@ async function canSpawnCommand(command: string, args: string[], cwd: string): Pr
       resolve(true);
     });
   });
+}
+
+/**
+ * VS Code から起動した場合に PATH が不足しやすいため、追加で探索するパス。
+ * - ここは「よくあるインストール先」のみを限定的に追加する（環境依存なので最小限）
+ * - 将来は設定（またはより堅牢な解決手段）へ移行する余地あり
+ */
+function getDefaultAdditionalPaths(): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (p: string | undefined): void => {
+    if (!p) return;
+    const trimmed = p.trim();
+    if (trimmed.length === 0 || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    out.push(trimmed);
+  };
+
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA;
+    const userProfile = process.env.USERPROFILE;
+    // 例: %LOCALAPPDATA%\Programs\Claude
+    push(localAppData ? path.join(localAppData, 'Programs', 'Claude') : undefined);
+    // 例: %USERPROFILE%\.claude\local
+    push(userProfile ? path.join(userProfile, '.claude', 'local') : undefined);
+    return out;
+  }
+
+  const homeDir = os.homedir();
+  push('/opt/homebrew/bin'); // macOS (Apple Silicon) Homebrew
+  push(path.join(homeDir, '.local', 'bin')); // ユーザーローカル
+  push('/usr/local/bin'); // macOS/Linux 標準
+  push(path.join(homeDir, '.claude', 'local')); // Claude Code のローカル
+
+  return out;
 }

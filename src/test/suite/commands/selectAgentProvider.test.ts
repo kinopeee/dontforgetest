@@ -3,13 +3,13 @@ import * as vscode from 'vscode';
 import { selectAgentProvider } from '../../../commands/selectAgentProvider';
 
 suite('selectAgentProvider', () => {
-  // === 観点表 ===
+  // === Test perspective table ===
   // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
-  // |---------|---------------------|--------------------------------------|-----------------|-------|
-  // | TC-N-01 | QuickPick でキャンセル | 正常系 - キャンセル | 設定は変更されない | - |
-  // | TC-N-02 | 関数が呼び出し可能 | 正常系 - 基本動作 | エラーなく完了 | - |
-  // | TC-N-08 | QuickPick で 'claudeCode' を選択 | 正常系 - Provider 選択 | dontforgetest.agentProvider が 'claudeCode' に更新される | - |
-  // | TC-N-09 | QuickPick をキャンセル (undefined) | 正常系 - キャンセル | 設定は変更されない | TC-N-01 と同等 |
+  // |---------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-N-01 | QuickPick canceled | Equivalence – cancel | Settings are not changed | - |
+  // | TC-N-02 | Function is callable | Equivalence – basic flow | Completes without error | - |
+  // | TC-N-08 | QuickPick selects 'claudeCode' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'claudeCode' | - |
+  // | TC-N-09 | QuickPick canceled (undefined) | Equivalence – cancel | Settings are not changed | Same as TC-N-01 |
 
   let originalShowQuickPick: typeof vscode.window.showQuickPick;
   let originalShowInformationMessage: typeof vscode.window.showInformationMessage;

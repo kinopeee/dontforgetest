@@ -1,7 +1,33 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import * as os from 'os';
 import * as path from 'path';
 import { nowMs, type TestGenEvent } from '../core/event';
 import { type AgentProvider, type AgentRunOptions, type RunningTask } from './provider';
+
+/**
+ * Claude Code CLI のプロセス監視・しきい値設定（ミリ秒）。
+ * 環境や CLI の挙動変化に合わせて調整しやすいよう、定数に集約する。
+ */
+const CLAUDE_CODE_MONITORING = {
+  /** 初回 heartbeat ログを出すまでの待機時間 */
+  heartbeatInitialDelayMs: 10_000,
+  /** heartbeat ログの間隔 */
+  heartbeatIntervalMs: 30_000,
+  /** 出力後の無音警告を開始するまでの時間 */
+  postOutputSilenceWarnAfterMs: 10_000,
+  /** 無音ログの間隔 */
+  postOutputSilenceLogIntervalMs: 30_000,
+  /** 無音監視チェックの間隔 */
+  postOutputSilenceCheckIntervalMs: 5_000,
+  /** 無視されたイベントのサマリーを出すまでの静かな時間 */
+  ignoredSummaryQuietAfterMs: 30_000,
+  /** 自動停止までの最大無音時間 */
+  maxSilenceBeforeKillMs: 10 * 60_000,
+  /** 大量出力検知: assistant メッセージ長 */
+  highOutputMaxAssistantTextLength: 50_000,
+  /** 大量出力検知: パース済みイベント数 */
+  highOutputMaxParsedEventCount: 5_000,
+} as const;
 
 /**
  * Claude Code CLI（claude -p）を呼び出してテスト生成を実行するProvider。
@@ -70,10 +96,16 @@ export class ClaudeCodeProvider implements AgentProvider {
       taskId: options.taskId,
       dispose: () => {
         // SIGTERMで止まらない場合もあるが、まずは穏当に終了を試みる。
-        child.kill();
-        if (this.activeChild === child) {
-          this.activeChild = undefined;
-          this.activeTaskId = undefined;
+        try {
+          child.kill();
+        } catch {
+          // Ignore kill errors
+        } finally {
+          // kill の成否に関わらず参照はクリアして、次のタスクを開始できるようにする
+          if (this.activeChild === child) {
+            this.activeChild = undefined;
+            this.activeTaskId = undefined;
+          }
         }
       },
     };
@@ -112,13 +144,7 @@ export class ClaudeCodeProvider implements AgentProvider {
 
     // VS Code から起動した場合、シェルの PATH が継承されないことがあるため、
     // claude がインストールされやすい場所を PATH に追加
-    const homeDir = process.env.HOME ?? '';
-    const additionalPaths = [
-      '/opt/homebrew/bin',
-      `${homeDir}/.local/bin`,
-      '/usr/local/bin',
-      `${homeDir}/.claude/local`,
-    ];
+    const additionalPaths = getDefaultAdditionalPaths();
     const currentPath = env.PATH ?? '';
     const pathSeparator = process.platform === 'win32' ? ';' : ':';
     env.PATH = [...additionalPaths, currentPath].filter(Boolean).join(pathSeparator);
@@ -181,8 +207,8 @@ export class ClaudeCodeProvider implements AgentProvider {
     };
 
     // claude が無音で長時間待つケースがあるため、一定時間出力が無い場合だけ心拍ログを出す。
-    const heartbeatInitialDelayMs = 10_000;
-    const heartbeatIntervalMs = 30_000;
+    const heartbeatInitialDelayMs = CLAUDE_CODE_MONITORING.heartbeatInitialDelayMs;
+    const heartbeatIntervalMs = CLAUDE_CODE_MONITORING.heartbeatIntervalMs;
     let heartbeatInterval: NodeJS.Timeout | undefined;
     const heartbeatTimeout = setTimeout(() => {
       if (hasAnyOutput) {
@@ -234,14 +260,14 @@ export class ClaudeCodeProvider implements AgentProvider {
 
     // 出力が「一度でもあった」後に、再度無音になるケース（system:init の後に止まる等）もある。
     // その場合もユーザーに状況が伝わるよう、無音監視を行う。
-    const postOutputSilenceWarnAfterMs = 10_000;
-    const postOutputSilenceLogIntervalMs = 30_000;
-    const postOutputSilenceCheckIntervalMs = 5_000;
-    const ignoredSummaryQuietAfterMs = 30_000;
+    const postOutputSilenceWarnAfterMs = CLAUDE_CODE_MONITORING.postOutputSilenceWarnAfterMs;
+    const postOutputSilenceLogIntervalMs = CLAUDE_CODE_MONITORING.postOutputSilenceLogIntervalMs;
+    const postOutputSilenceCheckIntervalMs = CLAUDE_CODE_MONITORING.postOutputSilenceCheckIntervalMs;
+    const ignoredSummaryQuietAfterMs = CLAUDE_CODE_MONITORING.ignoredSummaryQuietAfterMs;
     let lastSilenceLogAtMs = startedAtMs;
     let lastIgnoredSummaryAtMs = startedAtMs;
     let lastIgnoredTotalAtSummary = 0;
-    const maxSilenceBeforeKillMs = 10 * 60_000;
+    const maxSilenceBeforeKillMs = CLAUDE_CODE_MONITORING.maxSilenceBeforeKillMs;
     let killRequested = false;
 
     const monitorInterval = setInterval(() => {
@@ -312,7 +338,11 @@ export class ClaudeCodeProvider implements AgentProvider {
             }
 
             // 大量出力（巨大メッセージ or 高イベント数）が原因でExtension Hostが不安定になる可能性を切り分ける
-            if (!highOutputLogged && (maxAssistantTextLength >= 50_000 || parsedEventCount >= 5_000)) {
+            if (
+              !highOutputLogged &&
+              (maxAssistantTextLength >= CLAUDE_CODE_MONITORING.highOutputMaxAssistantTextLength ||
+                parsedEventCount >= CLAUDE_CODE_MONITORING.highOutputMaxParsedEventCount)
+            ) {
               highOutputLogged = true;
             }
 
@@ -529,6 +559,47 @@ export class ClaudeCodeProvider implements AgentProvider {
     });
     return undefined;
   }
+}
+
+/**
+ * テスト専用の内部エクスポート。
+ * 本番利用は禁止。
+ */
+export const __test__ = {
+  CLAUDE_CODE_MONITORING,
+};
+
+/**
+ * VS Code から起動した場合に PATH が不足しやすいため、追加で探索するパス。
+ * - ここは「よくあるインストール先」のみを限定的に追加する（環境依存なので最小限）
+ * - 将来は設定（またはより堅牢な解決手段）へ移行する余地あり
+ */
+function getDefaultAdditionalPaths(): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (p: string | undefined): void => {
+    if (!p) return;
+    const trimmed = p.trim();
+    if (trimmed.length === 0 || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    out.push(trimmed);
+  };
+
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA;
+    const userProfile = process.env.USERPROFILE;
+    push(localAppData ? path.join(localAppData, 'Programs', 'Claude') : undefined);
+    push(userProfile ? path.join(userProfile, '.claude', 'local') : undefined);
+    return out;
+  }
+
+  const homeDir = os.homedir();
+  push('/opt/homebrew/bin'); // macOS (Apple Silicon) Homebrew
+  push(path.join(homeDir, '.local', 'bin')); // ユーザーローカル
+  push('/usr/local/bin'); // macOS/Linux 標準
+  push(path.join(homeDir, '.claude', 'local')); // Claude Code のローカル
+  return out;
 }
 
 function tryParseJson(line: string): Record<string, unknown> | undefined {
