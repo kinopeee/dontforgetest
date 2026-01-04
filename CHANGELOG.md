@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.121
+
+### Changed
+
+- Documentation: Added Open VSX badges (version, downloads) to improve registry listing visibility
+- Marketplace metadata: Expanded keywords to improve discoverability on registries such as Open VSX
+
+---
+
+## 0.0.121（日本語）
+
+### 変更
+
+- ドキュメント: Open VSX のバッジ（バージョン/ダウンロード）を追加し、レジストリ上の表示を改善しました
+- メタデータ: キーワードを拡充し、Open VSX 等で見つけやすくしました
+
+---
+
 ## 0.0.120
 
 ### Changed
