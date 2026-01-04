@@ -2,6 +2,7 @@
 
 - 操作手順: `usage.ja.md`
 - English: `README.md`, `usage.md`
+- 公開手順（Visual Studio Marketplace）: `publishing.ja.md`
 
 ## 自動生成成果物
 

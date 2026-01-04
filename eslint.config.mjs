@@ -26,6 +26,25 @@ export default tseslint.config(
     },
   },
   {
+    // Node.js の実行スクリプト（CommonJS）向け設定
+    // - `require` / `process` / `__dirname` などを未定義扱いしない
+    // - `require()` を禁止する TypeScript ルールはスクリプトでは例外扱いにする
+    files: ['scripts/**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        module: 'readonly',
+        __dirname: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
     ignores: ['out/**', 'node_modules/**', '*.js'],
   }
 );
