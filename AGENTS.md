@@ -2,13 +2,13 @@
 
 ## プロジェクト概要
 
-Cursor CLI（cursor-agent）をヘッドレスモードで非同期呼び出しし、コミット差分や選択範囲からテストコードを自動生成する VS Code拡張機能「Dontforgetest」。TypeScriptで記述され、VS Code Extension APIを使用。
+CLI エージェント（現在対応: Cursor Agent / Claude Code ｜対応予定: Codex CLI）をヘッドレスで非同期呼び出しし、コミット差分や選択範囲からテストコードを自動生成する VS Code 互換拡張機能「Dontforgetest」。TypeScript で記述され、VS Code Extension API を使用。
 
 ## 技術スタック
 
 - **言語**: TypeScript 5.7+
 - **ランタイム**: Node.js
-- **ターゲット**: Cursor（VS Code 1.85.0+ 互換）
+- **ターゲット**: VS Code 1.105+ 互換（Cursor / VS Code / Windsurf）
 - **ビルド**: tsc (TypeScript Compiler)
 - **テスト/カバレッジ**: c8
 - **出力先**: `out/` ディレクトリ
@@ -20,7 +20,8 @@ src/
 ├── extension.ts    # 拡張機能のエントリーポイント（activate/deactivate）
 ├── commands/       # コマンド実装（コミット差分/作業ツリー/成果物付き実行など）
 ├── core/           # 生成戦略・プロンプト・成果物管理・事前チェック等の中核ロジック
-├── providers/      # cursor-agent 実行や実行制御（Run-to-completion）関連
+├── providers/      # CLI エージェント実行や実行制御（Run-to-completion）関連
+                    # 現在対応: Cursor Agent / Claude Code｜対応予定: Codex CLI
 ├── git/            # git差分解析・worktree管理
 ├── ui/             # WebView/TreeView/QuickPick/StatusBar 等のUI層
 └── test/           # VS Code拡張機能テスト（@vscode/test-electron + mocha）
@@ -34,20 +35,24 @@ tsconfig.json       # TypeScript設定
 ## コーディング規約
 
 ### 言語
+
 - コメントとドキュメントは**日本語**で記述
-  - 例外: モデルへのプロンプト、テスト観点表については指示追従性を重視して**英語**で記述
+  - 例外: モデルへのプロンプトは指示追従性を重視して**英語**で記述
+  - 生成物（観点表/レポート）は VS Code の表示言語（ja/en）に追従
 - 変数名・関数名は英語（キャメルケース）
 
 ### TypeScript
-- `strict: true` を維持
-- 型は明示的に定義（any禁止）
-- モジュールの読み込みには `import` 構文を使用（ESLint により `require()` は原則禁止）
-- バージョン番号に限らず、環境・実行時に変わり得る情報（例: ポート番号、外部コマンド/実行ファイルのパス、ファイル/ディレクトリパス、APIエンドポイント、モデル名、タイムアウト値など）のハードコードは**厳禁**（必要な場合は設定ファイル・環境変数・定数定義に集約し、参照する）
 
-### VS Code拡張機能パターン
+- `strict: true` を維持
+- 型は明示的に定義（any 禁止）
+- モジュールの読み込みには `import` 構文を使用（ESLint により `require()` は原則禁止。テスト等で必要な場合は理由付きで例外可）
+- 環境・実行時に変わり得る情報（例: ポート番号、外部コマンドのパス、API エンドポイント、タイムアウト値など）のハードコードは原則禁止。設定ファイル・環境変数・定数定義に集約し参照する（固定候補リスト等、変更頻度が低い定数はソース内に持ってよい）
+
+### VS Code 拡張機能パターン
+
 - コマンドは `context.subscriptions.push()` で登録
 - リソースは `Disposable` パターンで管理
-- コマンドIDは `dontforgetest.commandName` 形式
+- コマンド ID は `dontforgetest.commandName` 形式
 
 ## 開発コマンド
 
@@ -95,8 +100,8 @@ npm run vsix:build:bump
 
 ## デバッグ方法
 
-1. F5キーで「Run Extension」を実行
-2. Extension Development Hostウィンドウが起動
+1. F5 キーで「Run Extension」を実行
+2. Extension Development Host ウィンドウが起動
 3. コマンドパレット（Cmd+Shift+P）でコマンドをテスト
 
 ## 新機能追加時の手順
@@ -104,7 +109,7 @@ npm run vsix:build:bump
 1. **コマンド追加**: `package.json` の `contributes.commands` に定義
 2. **実装**: `src/extension.ts` の `activate()` 内で `registerCommand`
 3. **ビルド**: `npm run compile`
-4. **テスト**: F5でデバッグ実行
+4. **テスト**: F5 でデバッグ実行
 
 ## テスト作成ガイドライン
 
@@ -112,7 +117,7 @@ npm run vsix:build:bump
 
 ### 主要なルール
 
-1. **テスト観点表の作成**: テスト作業前にMarkdown形式の観点表を作成
+1. **テスト観点表の作成**: テスト作業前に Markdown 形式の観点表を作成
 2. **Given / When / Then コメント**: 各テストケースに必ず付与
 3. **正常系・異常系の網羅**: 正常系と同数以上の失敗系を含める
 4. **境界値テスト**: 0 / 最小値 / 最大値 / ±1 / 空 / NULL を考慮
@@ -130,8 +135,8 @@ npm run vsix:build:bump
 ## エラー対処
 
 - **型エラー**: `@types/vscode` のバージョンを確認
-- **ランタイムエラー**: Extension Development HostのDevToolsでデバッグ
-- **コマンドが見つからない**: `package.json` のコマンドIDと実装を照合
+- **ランタイムエラー**: Extension Development Host の DevTools でデバッグ
+- **コマンドが見つからない**: `package.json` のコマンド ID と実装を照合
 
 ## ブランチ運用規約
 
@@ -146,14 +151,14 @@ npm run vsix:build:bump
 <prefix>/<簡潔な説明>
 ```
 
-| prefix | 用途 |
-|--------|------|
-| feat | 新機能 |
-| fix | バグ修正 |
+| prefix   | 用途             |
+| -------- | ---------------- |
+| feat     | 新機能           |
+| fix      | バグ修正         |
 | refactor | リファクタリング |
-| docs | ドキュメント |
-| test | テスト |
-| chore | 雑務・設定 |
+| docs     | ドキュメント     |
+| test     | テスト           |
+| chore    | 雑務・設定       |
 
 ### 例
 
@@ -170,7 +175,7 @@ docs/update-usage-guide
 
 ## コミットメッセージ規約
 
-Conventional Commits準拠。日本語で記述。
+Conventional Commits 準拠。日本語で記述。
 
 ### フォーマット
 
@@ -183,14 +188,14 @@ Conventional Commits準拠。日本語で記述。
 
 ### Prefix
 
-| prefix | 用途 |
-|--------|------|
-| feat | 新機能 |
-| fix | バグ修正 |
+| prefix   | 用途             |
+| -------- | ---------------- |
+| feat     | 新機能           |
+| fix      | バグ修正         |
 | refactor | リファクタリング |
-| docs | ドキュメント |
-| test | テスト |
-| chore | 雑務・設定 |
+| docs     | ドキュメント     |
+| test     | テスト           |
+| chore    | 雑務・設定       |
 
 ### ルール
 
@@ -199,7 +204,7 @@ Conventional Commits準拠。日本語で記述。
 - 差分を確認してから書く（推測で書かない）
 - 曖昧な表現禁止（"update", "fix bug" 等）
 
-## PRメッセージ規約
+## PR メッセージ規約
 
 コミットメッセージ規約と整合。日本語で記述。
 
@@ -213,13 +218,16 @@ Conventional Commits準拠。日本語で記述。
 
 ```markdown
 ## 概要
-このPRで実装・修正した内容の要約
+
+この PR で実装・修正した内容の要約
 
 ## 変更内容
-- 変更点1
-- 変更点2
+
+- 変更点 1
+- 変更点 2
 
 ## テスト内容
+
 - 実施したテスト・確認内容
 
 Closes #123

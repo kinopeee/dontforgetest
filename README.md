@@ -1,8 +1,8 @@
 # Dontforgetest
 
-**Don't forget test!** — One-click, commit-based test generation for Cursor.
+**Don't forget test!** — One-click, commit-based test generation for VS Code-compatible editors.
 
-Powered by Cursor CLI (`cursor-agent`), this extension automatically generates test code from commit diffs and selections.
+Powered by CLI agents (currently: Cursor Agent / Claude Code; planned: Codex CLI), this extension automatically generates test code from commit diffs and selections.
 
 - Japanese docs: [README.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/README.ja.md), [docs/usage.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.ja.md)
 
@@ -46,7 +46,7 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 
 ![Test perspective table](https://raw.githubusercontent.com/kinopeee/dontforgetest/main/docs/images/fig2.png)
 
-> **Important**: `cursor-agent` is executed with **`--force`**.  
+> **Important**: CLI agents may be executed with **`--force`** (e.g., `cursor-agent`).  
 > **Local** modifies real files in your workspace.  
 > **Worktree** writes to a temporary worktree and applies only test diffs when safe; otherwise it exports merge artifacts.  
 > Before running, prepare a rollback strategy (create a branch / commit / stash).
@@ -59,8 +59,8 @@ Powered by Cursor CLI (`cursor-agent`), this extension automatically generates t
 
 ## Requirements
 
-- Cursor **2.2+**
-- Cursor CLI (`cursor-agent`)
+- **VS Code 1.105+** compatible (Cursor / VS Code / Windsurf)
+- CLI agent executable (e.g., `cursor-agent` or `claude`)
 
 ## Development (for contributors)
 
