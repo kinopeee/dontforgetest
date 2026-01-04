@@ -55,4 +55,3 @@ Notes:
 
 - Ensure the PAT has **Marketplace: Manage** scope.
 - Ensure the token is passed via `VSCE_PAT`.
-

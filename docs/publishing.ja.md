@@ -55,4 +55,3 @@ VSCE_PAT="<YOUR_PAT>" npm run marketplace:publish
 
 - PAT に **Marketplace: Manage** の権限が付いているか確認してください。
 - `VSCE_PAT` 経由でトークンが渡っているか確認してください。
-
