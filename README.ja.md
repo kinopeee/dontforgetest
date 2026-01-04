@@ -2,6 +2,9 @@
 
 **Don't forget test!** — コミット差分から、ワンクリックでテストを自動生成。
 
+[![Open VSX Version](https://img.shields.io/open-vsx/v/kinopeee/dontforgetest?label=Open%20VSX)](https://open-vsx.org/extension/kinopeee/dontforgetest)
+[![Open VSX Downloads](https://img.shields.io/open-vsx/dt/kinopeee/dontforgetest?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/kinopeee/dontforgetest)
+
 CLI エージェント（現在対応: Cursor Agent / Claude Code｜対応予定: Codex CLI）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する VS Code 互換拡張機能です。
 
 - English docs: [README.md](https://github.com/kinopeee/dontforgetest/blob/main/README.md), [docs/usage.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.md)

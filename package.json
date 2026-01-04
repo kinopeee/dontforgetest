@@ -3,7 +3,7 @@
   "publisher": "kinopeee",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.120",
+  "version": "0.0.121",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.105.0"
@@ -263,7 +263,8 @@
     "vsix:build": "npm run package:vsix",
     "vsix:build-install": "npm run package:vsix && npm run vsix:install",
     "vsix:build-install:bump": "node ./scripts/vsixBuildInstallBumpCommit.cjs",
-    "vsix:build:bump": "npm version patch --no-git-tag-version && npm run vsix:build"
+    "vsix:build:bump": "npm version patch --no-git-tag-version && npm run vsix:build",
+    "publish:openvsx": "node ./scripts/publishOpenVsx.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
@@ -282,11 +283,17 @@
     "typescript-eslint": "^8.19.1"
   },
   "keywords": [
-    "test",
-    "testing",
-    "test-generation",
+    "ai",
+    "claude",
+    "claude-code",
     "cursor",
-    "ai"
+    "cursor-agent",
+    "test",
+    "test-generation",
+    "testing",
+    "vscode",
+    "vscode-extension",
+    "windsurf"
   ],
   "author": "Kinopee",
   "license": "GPL-3.0-only",
