@@ -2,6 +2,7 @@
 
 - Usage: `usage.md`
 - 日本語: `README.ja.md`, `usage.ja.md`
+- Publishing (Visual Studio Marketplace): `publishing.md`
 
 ## Auto-generated artifacts
 
