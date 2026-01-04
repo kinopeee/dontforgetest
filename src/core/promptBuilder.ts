@@ -47,7 +47,7 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
   const enablePreTestCheck = options.enablePreTestCheck ?? config.get<boolean>('enablePreTestCheck', true);
   const preTestCheckCommand = options.preTestCheckCommand?.trim() ?? (config.get<string>('preTestCheckCommand', 'npm run compile') ?? 'npm run compile').trim();
 
-  // cursor-agent はプロンプト中にファイルパスが含まれると、必要に応じて読み取り/編集を行える。
+  // エージェント（cursor-agent / claude）はプロンプト中にファイルパスが含まれると、必要に応じて読み取り/編集を行える。
   const promptParts: string[] = [
     `あなたはソフトウェアエンジニアです。以下の対象に対して、ユニットテストを追加/更新してください。`,
     ``,
@@ -63,7 +63,7 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     promptParts.push(
       `## 実行フロー（必須）`,
       `この拡張機能の所定フローは **「テスト生成 → 型チェック/Lint → テスト実行（testCommand）→ レポート保存」** です。`,
-      `あなた（cursor-agent）の担当は **テスト生成** と **型チェック/Lintによるエラー修正** です。`,
+      `あなた（CLI エージェント）の担当は **テスト生成** と **型チェック/Lintによるエラー修正** です。`,
       ``,
       `### あなたのタスク`,
       `1. テストコードを追加/更新する`,
@@ -85,8 +85,8 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     promptParts.push(
       `## 実行フロー（必須）`,
       `この拡張機能の所定フローは **「テスト生成 →（拡張機能がオーケストレーションして）テスト実行（testCommand）→ レポート保存」** です。`,
-      `※ テスト実行は拡張機能側が担当し、設定により「拡張機能プロセスで実行」または「cursor-agent 経由で実行」します。`,
-      `あなた（cursor-agent）は次を厳守してください。`,
+      `※ テスト実行は拡張機能側が担当し、設定により「拡張機能プロセスで実行」または「CLI エージェント経由で実行」します。`,
+      `あなた（CLI エージェント）は次を厳守してください。`,
       `- **あなた自身でテストを実行しない**（shellツールは使わない / \`npm test\` 等を走らせない）`,
       `- **デバッグ開始・ウォッチ開始・対話的セッション開始をしない**（テスト実行後にデバッグへ移行しない）`,
       `- **修正（プロダクションコードの変更）は行わない**（テストコードの追加/更新のみ行う）`,

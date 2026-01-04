@@ -46,8 +46,12 @@
 
 Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 
+- **`dontforgetest.agentProvider`**: テスト生成に使用するエージェント（既定: `cursorAgent`）
+  - `cursorAgent`: Cursor CLI（`cursor-agent`）を使用
+  - `claudeCode`: Claude Code CLI（`claude`）を使用
 - **`dontforgetest.cursorAgentPath`**: `cursor-agent` の実行パス（未指定なら PATH から解決）
-- **`dontforgetest.defaultModel`**: `cursor-agent --model` に渡すモデル（空なら自動）
+- **`dontforgetest.claudePath`**: Claude Code CLI（`claude` コマンド）のパス（未指定なら PATH から解決）
+- **`dontforgetest.defaultModel`**: エージェントの `--model` オプションに渡すモデル（空なら自動）
 
 - **`dontforgetest.testStrategyPath`**: テスト戦略ファイルのパス（空なら内蔵デフォルトを使用）
 - **`dontforgetest.includeTestPerspectiveTable`**: テスト生成前にテスト観点表を生成して保存するか（既定: true）
@@ -210,10 +214,11 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 
 ## トラブルシュート
 
-### `cursor-agent が見つかりません`
+### `cursor-agent が見つかりません` / `claude コマンドが見つかりません`
 
-- `cursor-agent` をインストール/セットアップする
-- `dontforgetest.cursorAgentPath` にフルパスを設定する
+- 対応する CLI ツールをインストール/セットアップする
+- Cursor の場合: `dontforgetest.cursorAgentPath` にフルパスを設定
+- Claude Code の場合: `dontforgetest.claudePath` にフルパスを設定
 
 ### テスト戦略ファイルが読み込めない
 

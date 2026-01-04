@@ -46,8 +46,12 @@ You can also install directly from the file tree without using the command palet
 
 Search `dontforgetest.*` in Cursor Settings.
 
+- **`dontforgetest.agentProvider`**: Agent provider for test generation (Default: `cursorAgent`)
+  - `cursorAgent`: Use Cursor CLI (`cursor-agent`)
+  - `claudeCode`: Use Claude Code CLI (`claude`)
 - **`dontforgetest.cursorAgentPath`**: Path to `cursor-agent` (if empty, resolves from PATH)
-- **`dontforgetest.defaultModel`**: Model passed to `cursor-agent --model` (if empty, auto)
+- **`dontforgetest.claudePath`**: Path to `claude` command for Claude Code CLI (if empty, resolves from PATH)
+- **`dontforgetest.defaultModel`**: Model passed to the agent `--model` option (if empty, auto)
 
 - **`dontforgetest.testStrategyPath`**: Test strategy file path (if empty, uses the built-in default)
 - **`dontforgetest.includeTestPerspectiveTable`**: Whether to generate and save a test perspective table before test generation (Default: true)
@@ -205,10 +209,11 @@ You can analyze existing test files from the **Analyze** tab in the Control Pane
 
 ## Troubleshooting
 
-### `cursor-agent not found`
+### `cursor-agent not found` / `claude command not found`
 
-- Install / set up `cursor-agent`
-- Set `dontforgetest.cursorAgentPath` to the full path
+- Install / set up the corresponding CLI tool
+- For Cursor: Set `dontforgetest.cursorAgentPath` to the full path
+- For Claude Code: Set `dontforgetest.claudePath` to the full path
 
 ### Test strategy file cannot be loaded
 

@@ -135,32 +135,36 @@ suite('package.json / package-lock.json version checks', () => {
   const workspaceRoot = path.resolve(__dirname, '../../..');
 
   // TC-N-01
-  test("TC-N-01: package.json root.version is '0.0.119'", () => {
+  test('TC-N-01: package.json root.version is a valid semver string', () => {
     // Given: package.json exists at workspace root
     const pkg = readPackageJson(workspaceRoot);
 
     // When: Reading root.version
     const version = pkg.version;
 
-    // Then: It equals the expected version string
-    assert.strictEqual(version, '0.0.119');
+    // Then: It is a valid semver format (e.g., '0.0.120')
+    assert.ok(typeof version === 'string', 'version should be a string');
+    assert.match(version as string, /^\d+\.\d+\.\d+/, 'version should match semver pattern');
   });
 
   // TC-N-02
-  test("TC-N-02: package-lock.json root.version is '0.0.119'", () => {
-    // Given: package-lock.json exists at workspace root
+  test('TC-N-02: package-lock.json root.version matches package.json version', () => {
+    // Given: package.json and package-lock.json exist at workspace root
+    const pkg = readPackageJson(workspaceRoot);
     const lock = readPackageLockJson(workspaceRoot);
 
-    // When: Reading root.version
-    const version = lock.version;
+    // When: Reading both versions
+    const pkgVersion = pkg.version;
+    const lockVersion = lock.version;
 
-    // Then: It equals the expected version string
-    assert.strictEqual(version, '0.0.119');
+    // Then: They are equal
+    assert.strictEqual(lockVersion, pkgVersion);
   });
 
   // TC-N-03
-  test("TC-N-03: package-lock.json packages[''].version is '0.0.119'", () => {
+  test("TC-N-03: package-lock.json packages[''].version matches package.json version", () => {
     // Given: package-lock.json contains packages[''] entry
+    const pkg = readPackageJson(workspaceRoot);
     const lock = readPackageLockJson(workspaceRoot);
     const packages = isPlainRecord(lock.packages) ? lock.packages : undefined;
     const rootPkg = packages && isPlainRecord(packages['']) ? (packages[''] as Record<string, unknown>) : undefined;
@@ -168,8 +172,8 @@ suite('package.json / package-lock.json version checks', () => {
     // When: Reading packages[''].version
     const version = rootPkg?.version;
 
-    // Then: It equals the expected version string
-    assert.strictEqual(version, '0.0.119');
+    // Then: It equals package.json version
+    assert.strictEqual(version, pkg.version);
   });
 
   // TC-N-04

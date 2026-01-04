@@ -89,6 +89,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
     void this.view.webview.postMessage(message);
   }
 
+
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
@@ -153,6 +154,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       await this.deps.executeCommand('dontforgetest.analyzeTests', { target });
       return;
     }
+
   }
 
   private sourceToCommand(source: PanelRunSource): AllowedCommand | undefined {

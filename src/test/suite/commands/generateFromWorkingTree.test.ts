@@ -56,6 +56,8 @@ suite('commands/generateFromWorkingTree.ts', () => {
       workspaceRoot: '/workspace',
       defaultModel: 'mock-model',
       testStrategyPath: '',
+      agentProviderId: 'cursorAgent',
+      agentCommand: 'cursor-agent',
       cursorAgentCommand: 'cursor-agent',
     }),
     buildTestGenPrompt: async () => ({

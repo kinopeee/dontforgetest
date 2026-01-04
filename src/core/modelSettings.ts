@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { type AgentProviderId } from '../providers/configuredProvider';
 
 export interface ModelSettings {
   /** 未設定の場合は undefined（cursor-agent 側の自動選択に委ねる） */
@@ -101,3 +102,102 @@ function pickUpdateTarget(): vscode.ConfigurationTarget {
   return vscode.ConfigurationTarget.Global;
 }
 
+/**
+ * Claude Code CLI 用のモデル候補を返す。
+ */
+export function getClaudeCodeModelCandidates(): string[] {
+  return ['opus-4.5', 'sonnet-4.5', 'haiku-4.5'];
+}
+
+/**
+ * Cursor Agent 用のビルトインモデル候補リスト。
+ */
+const CURSOR_AGENT_BUILTIN_MODELS = [
+  'composer-1',
+  'auto',
+  'sonnet-4.5',
+  'sonnet-4.5-thinking',
+  'opus-4.5',
+  'opus-4.5-thinking',
+  'gemini-3-pro',
+  'gemini-3-flash',
+  'gpt-5.2',
+  'gpt-5.1',
+  'gpt-5.2-high',
+  'gpt-5.1-high',
+  'gpt-5.1-codex',
+  'gpt-5.1-codex-high',
+  'gpt-5.1-codex-max',
+  'gpt-5.1-codex-max-high',
+  'opus-4.1',
+  'grok',
+];
+
+/**
+ * Cursor Agent 用のモデル候補を返す。
+ * ビルトインリストに customModels と defaultModel をマージして返す。
+ */
+export function getCursorAgentModelCandidates(settings: ModelSettings = getModelSettings()): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  const pushUnique = (m: string): void => {
+    const trimmed = m.trim();
+    if (trimmed.length === 0 || seen.has(trimmed)) {
+      return;
+    }
+    seen.add(trimmed);
+    out.push(trimmed);
+  };
+
+  // ビルトインモデルを追加
+  for (const m of CURSOR_AGENT_BUILTIN_MODELS) {
+    pushUnique(m);
+  }
+
+  // defaultModel を追加（ビルトインに無い場合）
+  if (settings.defaultModel) {
+    pushUnique(settings.defaultModel);
+  }
+
+  // customModels を追加
+  for (const m of settings.customModels) {
+    pushUnique(m);
+  }
+
+  return out;
+}
+
+/**
+ * Provider ID に応じたモデル候補を返す。
+ */
+export function getModelCandidatesForProvider(
+  providerId: AgentProviderId,
+  settings: ModelSettings = getModelSettings(),
+): string[] {
+  if (providerId === 'claudeCode') {
+    return getClaudeCodeModelCandidates();
+  }
+  return getCursorAgentModelCandidates(settings);
+}
+
+/**
+ * 現在の Provider に応じた有効なデフォルトモデルを返す。
+ * - 設定された defaultModel が現在の Provider の候補に含まれていればそれを返す
+ * - 含まれていなければ undefined（Provider のデフォルトに委ねる）
+ */
+export function getEffectiveDefaultModel(
+  providerId: AgentProviderId,
+  settings: ModelSettings = getModelSettings(),
+): string | undefined {
+  const candidates = getModelCandidatesForProvider(providerId, settings);
+  const configured = settings.defaultModel;
+
+  // 設定されたモデルが現在の Provider の候補に含まれていればそれを使う
+  if (configured && candidates.includes(configured)) {
+    return configured;
+  }
+
+  // 含まれていなければ undefined（Provider のデフォルトに委ねる）
+  return undefined;
+}

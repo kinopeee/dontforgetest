@@ -1,6 +1,16 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { getModelCandidates, normalizeModelList, getModelSettings, setDefaultModel, type ModelSettings } from '../../../core/modelSettings';
+import {
+  getModelCandidates,
+  normalizeModelList,
+  getModelSettings,
+  setDefaultModel,
+  getClaudeCodeModelCandidates,
+  getCursorAgentModelCandidates,
+  getModelCandidatesForProvider,
+  getEffectiveDefaultModel,
+  type ModelSettings,
+} from '../../../core/modelSettings';
 
 suite('core/modelSettings.ts', () => {
   suite('normalizeModelList', () => {
@@ -178,6 +188,232 @@ suite('core/modelSettings.ts', () => {
         assert.ok(err instanceof TypeError, 'Should throw TypeError');
         assert.strictEqual((err as Error).message, 'boom');
       }
+    });
+  });
+
+  suite('getClaudeCodeModelCandidates', () => {
+    // TC-CLAUDE-N-01: Claude Code 用のモデル候補が正しく返る
+    test('TC-CLAUDE-N-01: Claude Code 用のモデル候補を返す', () => {
+      // Given: なし
+      // When: getClaudeCodeModelCandidates を呼び出す
+      const result = getClaudeCodeModelCandidates();
+
+      // Then: Opus, Sonnet, Haiku の3つが含まれる
+      assert.ok(Array.isArray(result), 'Should return an array');
+      assert.ok(result.includes('opus-4.5'), 'Should include opus-4.5');
+      assert.ok(result.includes('sonnet-4.5'), 'Should include sonnet-4.5');
+      assert.ok(result.includes('haiku-4.5'), 'Should include haiku-4.5');
+      assert.strictEqual(result.length, 3, 'Should have exactly 3 candidates');
+    });
+  });
+
+  suite('getCursorAgentModelCandidates', () => {
+    // TC-CURSOR-N-01: Cursor Agent 用のビルトインモデルが含まれる
+    test('TC-CURSOR-N-01: ビルトインモデルが含まれる', () => {
+      // Given: customModels が空の設定
+      const settings: ModelSettings = {
+        defaultModel: undefined,
+        customModels: [],
+      };
+
+      // When: getCursorAgentModelCandidates を呼び出す
+      const result = getCursorAgentModelCandidates(settings);
+
+      // Then: ビルトインモデルが含まれる
+      assert.ok(result.includes('composer-1'), 'Should include composer-1');
+      assert.ok(result.includes('auto'), 'Should include auto');
+      assert.ok(result.includes('sonnet-4.5'), 'Should include sonnet-4.5');
+      assert.ok(result.includes('gpt-5.2'), 'Should include gpt-5.2');
+      assert.strictEqual(result[0], 'composer-1', 'composer-1 should be first');
+    });
+
+    // TC-CURSOR-N-02: customModels が auto を含む場合は重複しない
+    test('TC-CURSOR-N-02: customModels が auto を含む場合は重複しない', () => {
+      // Given: customModels に auto が含まれる設定
+      const settings: ModelSettings = {
+        defaultModel: undefined,
+        customModels: ['auto', 'model-a'],
+      };
+
+      // When: getCursorAgentModelCandidates を呼び出す
+      const result = getCursorAgentModelCandidates(settings);
+
+      // Then: auto は1回だけ含まれる
+      const autoCount = result.filter((m) => m === 'auto').length;
+      assert.strictEqual(autoCount, 1, 'auto should appear exactly once');
+      // model-a は追加されている
+      assert.ok(result.includes('model-a'), 'Should include model-a');
+    });
+
+    // TC-CURSOR-N-03: defaultModel がビルトインに無い場合は追加される
+    test('TC-CURSOR-N-03: defaultModel がビルトインに無い場合は追加される', () => {
+      // Given: defaultModel にビルトイン外のモデルを設定
+      const settings: ModelSettings = {
+        defaultModel: 'custom-model-x',
+        customModels: [],
+      };
+
+      // When: getCursorAgentModelCandidates を呼び出す
+      const result = getCursorAgentModelCandidates(settings);
+
+      // Then: custom-model-x が追加されている
+      assert.ok(result.includes('custom-model-x'), 'Should include custom-model-x');
+    });
+  });
+
+  suite('getModelCandidatesForProvider', () => {
+    // TC-PROVIDER-N-01: cursorAgent の場合は Cursor 用候補を返す
+    test('TC-PROVIDER-N-01: cursorAgent の場合は Cursor 用候補を返す', () => {
+      // Given: cursorAgent を指定
+      const settings: ModelSettings = {
+        defaultModel: 'model-x',
+        customModels: ['model-y'],
+      };
+
+      // When: getModelCandidatesForProvider を呼び出す
+      const result = getModelCandidatesForProvider('cursorAgent', settings);
+
+      // Then: ビルトインモデルと model-x, model-y が含まれる
+      assert.ok(result.includes('composer-1'), 'Should include composer-1');
+      assert.ok(result.includes('auto'), 'Should include auto');
+      assert.ok(result.includes('model-x'), 'Should include model-x');
+      assert.ok(result.includes('model-y'), 'Should include model-y');
+    });
+
+    // TC-PROVIDER-N-02: claudeCode の場合は Claude 用候補を返す
+    test('TC-PROVIDER-N-02: claudeCode の場合は Claude 用候補を返す', () => {
+      // Given: claudeCode を指定
+      const settings: ModelSettings = {
+        defaultModel: 'model-x',
+        customModels: ['model-y'],
+      };
+
+      // When: getModelCandidatesForProvider を呼び出す
+      const result = getModelCandidatesForProvider('claudeCode', settings);
+
+      // Then: Claude 用のモデルが返る（settings は無視される）
+      assert.ok(result.includes('opus-4.5'), 'Should include opus-4.5');
+      assert.ok(result.includes('sonnet-4.5'), 'Should include sonnet-4.5');
+      assert.ok(result.includes('haiku-4.5'), 'Should include haiku-4.5');
+      assert.ok(!result.includes('model-x'), 'Should not include model-x');
+    });
+
+    // TC-N-10: getModelCandidatesForProvider('claudeCode', settings) returns Claude models
+    test('TC-N-10: getModelCandidatesForProvider(claudeCode) returns Claude model candidates', () => {
+      // Given: claudeCode provider
+      const settings: ModelSettings = {
+        defaultModel: undefined,
+        customModels: [],
+      };
+
+      // When: getModelCandidatesForProvider is called
+      const result = getModelCandidatesForProvider('claudeCode', settings);
+
+      // Then: Returns ['opus-4.5', 'sonnet-4.5', 'haiku-4.5']
+      assert.deepStrictEqual(result, ['opus-4.5', 'sonnet-4.5', 'haiku-4.5']);
+    });
+
+    // TC-N-11: getModelCandidatesForProvider('cursorAgent', settings) returns Cursor Agent models
+    test('TC-N-11: getModelCandidatesForProvider(cursorAgent) returns Cursor model candidates with builtins', () => {
+      // Given: cursorAgent provider with settings
+      const settings: ModelSettings = {
+        defaultModel: undefined,
+        customModels: [],
+      };
+
+      // When: getModelCandidatesForProvider is called
+      const result = getModelCandidatesForProvider('cursorAgent', settings);
+
+      // Then: Returns list containing CURSOR_AGENT_BUILTIN_MODELS base
+      assert.ok(result.includes('composer-1'), 'Should include composer-1');
+      assert.ok(result.includes('auto'), 'Should include auto');
+    });
+  });
+
+  suite('getEffectiveDefaultModel', () => {
+    // TC-N-12: getEffectiveDefaultModel('claudeCode', {defaultModel: 'opus-4.5', ...}) returns 'opus-4.5'
+    test('TC-N-12: claudeCode with defaultModel in candidates returns that model', () => {
+      // Given: claudeCode provider with defaultModel='opus-4.5' (in candidates)
+      const settings: ModelSettings = {
+        defaultModel: 'opus-4.5',
+        customModels: [],
+      };
+
+      // When: getEffectiveDefaultModel is called
+      const result = getEffectiveDefaultModel('claudeCode', settings);
+
+      // Then: Returns 'opus-4.5' since it is in candidates
+      assert.strictEqual(result, 'opus-4.5');
+    });
+
+    // TC-N-13: getEffectiveDefaultModel('claudeCode', {defaultModel: 'gpt-5.2', ...}) returns undefined
+    test('TC-N-13: claudeCode with defaultModel NOT in candidates returns undefined', () => {
+      // Given: claudeCode provider with defaultModel='gpt-5.2' (not in Claude candidates)
+      const settings: ModelSettings = {
+        defaultModel: 'gpt-5.2',
+        customModels: [],
+      };
+
+      // When: getEffectiveDefaultModel is called
+      const result = getEffectiveDefaultModel('claudeCode', settings);
+
+      // Then: Returns undefined since 'gpt-5.2' is not in Claude candidates
+      assert.strictEqual(result, undefined);
+    });
+
+    // TC-B-05: getEffectiveDefaultModel with settings.defaultModel=undefined returns undefined
+    test('TC-B-05: defaultModel=undefined returns undefined', () => {
+      // Given: claudeCode provider with no defaultModel set
+      const settings: ModelSettings = {
+        defaultModel: undefined,
+        customModels: [],
+      };
+
+      // When: getEffectiveDefaultModel is called
+      const result = getEffectiveDefaultModel('claudeCode', settings);
+
+      // Then: Returns undefined
+      assert.strictEqual(result, undefined);
+    });
+
+    // TC-B-06: getEffectiveDefaultModel with settings.defaultModel='' (empty string) returns undefined
+    test('TC-B-06: defaultModel empty string returns undefined', () => {
+      // Given: claudeCode provider with defaultModel=''
+      const settings: ModelSettings = {
+        defaultModel: '',
+        customModels: [],
+      };
+
+      // When: getEffectiveDefaultModel is called
+      const result = getEffectiveDefaultModel('claudeCode', settings);
+
+      // Then: Returns undefined since empty string is not in candidates
+      assert.strictEqual(result, undefined);
+    });
+
+    // TC-N-30: getClaudeCodeModelCandidates returns fixed list
+    test('TC-N-30: getClaudeCodeModelCandidates returns fixed list [opus-4.5, sonnet-4.5, haiku-4.5]', () => {
+      // Given: nothing
+      // When: getClaudeCodeModelCandidates is called
+      const result = getClaudeCodeModelCandidates();
+
+      // Then: Returns ['opus-4.5', 'sonnet-4.5', 'haiku-4.5']
+      assert.deepStrictEqual(result, ['opus-4.5', 'sonnet-4.5', 'haiku-4.5']);
+    });
+
+    // TC-N-31: getCursorAgentModelCandidates with defaultModel='custom-model' includes custom-model
+    test('TC-N-31: getCursorAgentModelCandidates with custom defaultModel includes it', () => {
+      // Given: cursorAgent provider with defaultModel='custom-model'
+      const settings: ModelSettings = {
+        defaultModel: 'custom-model',
+        customModels: [],
+      };
+
+      // When: getCursorAgentModelCandidates is called
+      const result = getCursorAgentModelCandidates(settings);
+
+      // Then: 'custom-model' is included in the list
+      assert.ok(result.includes('custom-model'), 'Should include custom-model');
     });
   });
 });
