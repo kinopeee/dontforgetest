@@ -20,7 +20,7 @@
 
 ### VSIX からインストール（配布/手動）
 
-1. Cursor を開く
+1. エディタ（Cursor / VS Code / Windsurf）を開く
 2. コマンドパレットを開く（macOS: Cmd+Shift+P）
 3. **`Extensions: Install from VSIX...`** を実行
 4. `.vsix` ファイルを選択
@@ -30,7 +30,7 @@
 
 コマンドパレットを使わず、ファイルツリーから直接インストールすることもできます。
 
-1. Cursor のエクスプローラーで `.vsix` ファイルを表示
+1. エクスプローラー（ファイルツリー）で `.vsix` ファイルを表示
 2. `.vsix` を右クリック
 3. **`拡張機能の VSIX のインストール`**（英語 UI の場合は **`Install Extension VSIX`**）を選択
 4. 必要に応じて再読み込み（Reload）
@@ -39,15 +39,15 @@
 
 1. 依存関係をインストール: `npm install`
 2. ビルド: `npm run compile`
-3. Cursor でこのリポジトリを開き **F5**（Run Extension）
+3. エディタ（Cursor / VS Code / Windsurf）でこのリポジトリを開き **F5**（Run Extension）
 4. Extension Development Host でコマンドを実行して動作確認
 
 ## 設定
 
-Cursor の設定（Settings）で `dontforgetest.*` を検索します。
+設定（Settings）で `dontforgetest.*` を検索します。
 
 - **`dontforgetest.agentProvider`**: テスト生成に使用するエージェント（既定: `cursorAgent`）
-  - `cursorAgent`: Cursor CLI（`cursor-agent`）を使用
+  - `cursorAgent`: Cursor Agent CLI（`cursor-agent`）を使用
   - `claudeCode`: Claude Code CLI（`claude`）を使用
 - **`dontforgetest.cursorAgentPath`**: `cursor-agent` の実行パス（未指定なら PATH から解決）
 - **`dontforgetest.claudePath`**: Claude Code CLI（`claude` コマンド）のパス（未指定なら PATH から解決）
@@ -74,7 +74,7 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
   - `1..5`: 問題が解消するまで生成を再実行します（最大試行回数は指定値）
   - 自動修正後も問題が残る場合は、`dontforgetest.testExecutionReportDir` 配下に `compliance-report_YYYYMMDD_HHmmss.md` を保存します
 
-> **補足（モデル名）**: `dontforgetest.defaultModel` に指定するモデル名は、Cursor CLI の **`/model`** コマンドでリストされる名前を使用してください。
+> **補足（モデル名）**: `dontforgetest.defaultModel` に指定するモデル名は、Cursor Agent CLI（`cursor-agent`）の **`/model`** コマンドでリストされる名前を使用してください。
 >
 > 例（2025.12.25 時点）:
 >
@@ -218,7 +218,7 @@ Cursor の設定（Settings）で `dontforgetest.*` を検索します。
 ### `cursor-agent が見つかりません` / `claude コマンドが見つかりません`
 
 - 対応する CLI ツールをインストール/セットアップする
-- Cursor の場合: `dontforgetest.cursorAgentPath` にフルパスを設定
+- Cursor Agent（`cursor-agent`）の場合: `dontforgetest.cursorAgentPath` にフルパスを設定
 - Claude Code の場合: `dontforgetest.claudePath` にフルパスを設定
 
 ### テスト戦略ファイルが読み込めない
