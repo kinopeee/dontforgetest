@@ -7,11 +7,13 @@ import { generateTestFromLatestCommit } from './commands/generateFromCommit';
 import { generateTestFromCommitRange } from './commands/generateFromCommitRange';
 import { generateTestFromWorkingTree } from './commands/generateFromWorkingTree';
 import { selectDefaultModel } from './commands/selectDefaultModel';
+import { selectAgentProvider } from './commands/selectAgentProvider';
 import { analyzeTestsCommand, type AnalysisTarget } from './commands/analyzeTests';
 import { type TestGenerationRunMode } from './commands/runWithArtifacts';
 import { getAnalysisSettings } from './core/testAnalyzer';
-import { CursorAgentProvider } from './providers/cursorAgentProvider';
+import { createAgentProvider } from './providers/configuredProvider';
 import { TestGenControlPanelViewProvider } from './ui/controlPanel';
+import { SettingsPanelViewProvider } from './ui/settingsPanel';
 import { showTestGenOutput } from './ui/outputChannel';
 import { generateTestWithQuickPick } from './ui/quickPick';
 import { initializeTestGenStatusBar } from './ui/statusBar';
@@ -46,11 +48,18 @@ export function normalizeRunMode(value: unknown): RunMode {
 export function activate(context: vscode.ExtensionContext) {
   console.log('拡張機能 "dontforgetest" が有効化されました');
 
-  const provider = new CursorAgentProvider();
+  const settingsPanelProvider = new SettingsPanelViewProvider();
   const controlPanelProvider = new TestGenControlPanelViewProvider(context);
   initializeTestGenStatusBar(context);
   initializeProgressTreeView(context);
   initializeOutputTreeView(context);
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(SettingsPanelViewProvider.viewId, settingsPanelProvider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+    settingsPanelProvider,
+  );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(TestGenControlPanelViewProvider.viewId, controlPanelProvider, {
@@ -61,6 +70,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('dontforgetest.generateTest', async () => {
+      // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
+      const provider = createAgentProvider();
       await generateTestWithQuickPick(provider, context);
     }),
   );
@@ -75,6 +86,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'dontforgetest.generateTestFromCommit',
       async (args?: { runLocation?: RunLocation; modelOverride?: string; runMode?: RunMode }) => {
+        // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
+        const provider = createAgentProvider();
         const runLocation = normalizeRunLocation(args?.runLocation);
         const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
         const runMode = normalizeRunMode(args?.runMode);
@@ -87,6 +100,8 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'dontforgetest.generateTestFromCommitRange',
       async (args?: { runLocation?: RunLocation; modelOverride?: string; runMode?: RunMode }) => {
+        // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
+        const provider = createAgentProvider();
         const runLocation = normalizeRunLocation(args?.runLocation);
         const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
         const runMode = normalizeRunMode(args?.runMode);
@@ -97,6 +112,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('dontforgetest.generateTestFromWorkingTree', async (args?: { modelOverride?: string; runMode?: RunMode }) => {
+      // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
+      const provider = createAgentProvider();
       const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
       const runMode = normalizeRunMode(args?.runMode);
       await generateTestFromWorkingTree(provider, modelOverride, { runMode });
@@ -112,6 +129,12 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('dontforgetest.selectDefaultModel', async () => {
       await selectDefaultModel();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('dontforgetest.selectAgentProvider', async () => {
+      await selectAgentProvider();
     }),
   );
 

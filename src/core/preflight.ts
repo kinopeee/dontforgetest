@@ -1,13 +1,22 @@
 import { spawn } from 'child_process';
+import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { getModelSettings } from './modelSettings';
+import { getModelSettings, getEffectiveDefaultModel } from './modelSettings';
 import { t } from './l10n';
+import { getAgentProviderId, type AgentProviderId } from '../providers/configuredProvider';
 
 export interface PreflightOk {
   workspaceRoot: string;
   defaultModel?: string;
   testStrategyPath: string;
+  /** 現在選択されている Provider の ID */
+  agentProviderId: AgentProviderId;
+  /** 実行するエージェントコマンド（cursor-agent または claude） */
+  agentCommand: string;
+  /**
+   * @deprecated Use `agentCommand` instead. Kept for backward compatibility.
+   */
   cursorAgentCommand: string;
 }
 
@@ -27,10 +36,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
   }
 
   const config = vscode.workspace.getConfiguration('dontforgetest');
-  const { defaultModel } = getModelSettings();
   const testStrategyPath = (config.get<string>('testStrategyPath', '') ?? '').trim();
-  const cursorAgentPath = (config.get<string>('cursorAgentPath') ?? '').trim();
-  const cursorAgentCommand = cursorAgentPath.length > 0 ? cursorAgentPath : 'cursor-agent';
 
   // testStrategyPath が空、またはファイルが存在しない場合は内蔵デフォルトを使用
   // → エラーにせず、そのまま続行（promptBuilder側でフォールバック）
@@ -45,6 +51,51 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
       effectiveTestStrategyPath = ''; // 空にして内蔵デフォルト使用を示す
     }
   }
+
+  // Provider 選択に応じたコマンド確認
+  const agentProviderId = getAgentProviderId();
+
+  if (agentProviderId === 'claudeCode') {
+    // Claude Code CLI の確認
+    const claudePath = (config.get<string>('claudePath') ?? '').trim();
+    const claudeCommand = claudePath.length > 0 ? claudePath : 'claude';
+
+    const agentAvailable = await canSpawnCommand(claudeCommand, ['--version'], workspaceRoot);
+    if (!agentAvailable) {
+      if (process.env.VSCODE_TEST_RUNNER === '1') {
+        void vscode.window.showErrorMessage(t('claudeCode.notFound', claudeCommand));
+        return undefined;
+      }
+
+      const openSettingsLabel = t('claudeCode.openSettings');
+      const openDocsLabel = t('claudeCode.openDocs');
+      const picked = await vscode.window.showErrorMessage(
+        t('claudeCode.notFound', claudeCommand),
+        openSettingsLabel,
+        openDocsLabel,
+      );
+      if (picked === openSettingsLabel) {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.claudePath');
+      }
+      if (picked === openDocsLabel) {
+        await vscode.env.openExternal(vscode.Uri.parse('https://docs.claude.com/en/docs/claude-code/sdk/sdk-headless'));
+      }
+      return undefined;
+    }
+
+    return {
+      workspaceRoot,
+      defaultModel: getEffectiveDefaultModel(agentProviderId, getModelSettings()),
+      testStrategyPath: effectiveTestStrategyPath,
+      agentProviderId,
+      agentCommand: claudeCommand,
+      cursorAgentCommand: claudeCommand, // 後方互換
+    };
+  }
+
+  // Cursor Agent CLI の確認（デフォルト）
+  const cursorAgentPath = (config.get<string>('cursorAgentPath') ?? '').trim();
+  const cursorAgentCommand = cursorAgentPath.length > 0 ? cursorAgentPath : 'cursor-agent';
 
   const agentAvailable = await canSpawnCommand(cursorAgentCommand, ['--version'], workspaceRoot);
   if (!agentAvailable) {
@@ -74,9 +125,11 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
 
   return {
     workspaceRoot,
-    defaultModel,
+    defaultModel: getEffectiveDefaultModel(agentProviderId, getModelSettings()),
     testStrategyPath: effectiveTestStrategyPath,
-    cursorAgentCommand,
+    agentProviderId,
+    agentCommand: cursorAgentCommand,
+    cursorAgentCommand, // 後方互換
   };
 }
 
@@ -93,11 +146,23 @@ async function fileExists(absolutePath: string): Promise<boolean> {
   }
 }
 
+/**
+ * コマンドの存在確認を spawn で試みる。
+ * VS Code から起動した場合はシェルの PATH が継承されないことがあるため、
+ * claude がインストールされやすい場所を PATH に追加。
+ */
 async function canSpawnCommand(command: string, args: string[], cwd: string): Promise<boolean> {
   return await new Promise<boolean>((resolve) => {
+    // PATH を拡張
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    const additionalPaths = getDefaultAdditionalPaths();
+    const currentPath = env.PATH ?? '';
+    const pathSeparator = process.platform === 'win32' ? ';' : ':';
+    env.PATH = [...additionalPaths, currentPath].filter(Boolean).join(pathSeparator);
+
     const child = spawn(command, args, {
       cwd,
-      env: process.env,
+      env,
       stdio: 'ignore',
     });
 
@@ -114,4 +179,40 @@ async function canSpawnCommand(command: string, args: string[], cwd: string): Pr
       resolve(true);
     });
   });
+}
+
+/**
+ * VS Code から起動した場合に PATH が不足しやすいため、追加で探索するパス。
+ * - ここは「よくあるインストール先」のみを限定的に追加する（環境依存なので最小限）
+ * - 将来は設定（またはより堅牢な解決手段）へ移行する余地あり
+ */
+function getDefaultAdditionalPaths(): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (p: string | undefined): void => {
+    if (!p) return;
+    const trimmed = p.trim();
+    if (trimmed.length === 0 || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    out.push(trimmed);
+  };
+
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA;
+    const userProfile = process.env.USERPROFILE;
+    // 例: %LOCALAPPDATA%\Programs\Claude
+    push(localAppData ? path.join(localAppData, 'Programs', 'Claude') : undefined);
+    // 例: %USERPROFILE%\.claude\local
+    push(userProfile ? path.join(userProfile, '.claude', 'local') : undefined);
+    return out;
+  }
+
+  const homeDir = os.homedir();
+  push('/opt/homebrew/bin'); // macOS (Apple Silicon) Homebrew
+  push(path.join(homeDir, '.local', 'bin')); // ユーザーローカル
+  push('/usr/local/bin'); // macOS/Linux 標準
+  push(path.join(homeDir, '.claude', 'local')); // Claude Code のローカル
+
+  return out;
 }

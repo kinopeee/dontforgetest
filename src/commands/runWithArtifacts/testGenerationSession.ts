@@ -24,6 +24,7 @@ import {
   type ComplianceCheckResult,
 } from '../../core/strategyComplianceCheck';
 import { createTemporaryWorktree, removeTemporaryWorktree } from '../../git/worktreeManager';
+import { execGitStdout } from '../../git/gitExec';
 import { type RunningTask } from '../../providers/provider';
 import { runProviderToCompletion } from '../../providers/runToCompletion';
 import { appendEventToOutput } from '../../ui/outputChannel';
@@ -357,6 +358,10 @@ export class TestGenerationSession {
 
     const genExit = await this.runGenerationWithFileCollection(finalPrompt);
 
+    // fileWrite イベントが取れなかった場合のフォールバック:
+    // git diff --name-only と untracked files から変更/追加されたテストファイルを収集
+    await this.supplementGeneratedFilePathsFromGit();
+
     const cleanupResults = await cleanupUnexpectedPerspectiveFiles(this.localWorkspaceRoot);
     for (const cleanup of cleanupResults) {
       if (cleanup.deleted) {
@@ -441,6 +446,60 @@ export class TestGenerationSession {
       return filePath;
     }
     return path.join(this.runWorkspaceRoot, filePath);
+  }
+
+  /**
+   * fileWrite イベントが取れなかった場合のフォールバック。
+   * git diff --name-only と git ls-files --others から変更/追加されたテストファイルを収集し、
+   * generatedFilePaths に補完する。
+   *
+   * Claude Code など、tool_call 形式が異なる Provider でも戦略準拠チェックが動作するようにする。
+   */
+  private async supplementGeneratedFilePathsFromGit(): Promise<void> {
+    try {
+      // 変更されたファイル（staged + unstaged）
+      const diffOutput = await execGitStdout(
+        this.runWorkspaceRoot,
+        ['diff', '--name-only', 'HEAD'],
+        1024 * 1024,
+      ).catch(() => '');
+
+      // 新規追加ファイル（untracked）
+      const untrackedOutput = await execGitStdout(
+        this.runWorkspaceRoot,
+        ['ls-files', '--others', '--exclude-standard'],
+        1024 * 1024,
+      ).catch(() => '');
+
+      const allFiles = [
+        ...diffOutput.split('\n'),
+        ...untrackedOutput.split('\n'),
+      ]
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      for (const relativePath of allFiles) {
+        // テストファイルのみを対象
+        if (!isTestFilePath(relativePath)) {
+          continue;
+        }
+
+        const absPath = path.join(this.runWorkspaceRoot, relativePath);
+        if (!this.generatedFilePaths.includes(absPath)) {
+          this.generatedFilePaths.push(absPath);
+        }
+      }
+    } catch (error) {
+      // git コマンドが失敗しても処理は継続する
+      // （generatedFilePaths が空のままの場合は戦略準拠チェックがスキップされる）
+      appendEventToOutput(
+        emitLogEvent(
+          `${this.options.generationTaskId}-git`,
+          'info',
+          `Git command failed during file collection: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    }
   }
 
   /**
@@ -775,11 +834,21 @@ export class TestGenerationSession {
       const resultWithPath = { ...result, testResultPath, extensionVersion };
 
       const stderrLower = result.stderr.toLowerCase();
+
+      // Cursor Agent の拒否パターン
       const toolExecutionRejected =
         (stderrLower.includes('rejected') && (stderrLower.includes('execution') || stderrLower.includes('tool') || stderrLower.includes('command'))) ||
         result.stderr.includes('Tool execution rejected') ||
         result.stderr.includes('Execution rejected') ||
         (result.errorMessage?.includes('ツール') ?? false);
+
+      // Claude Code の拒否パターン
+      const claudeRejected =
+        stderrLower.includes('permission denied') ||
+        stderrLower.includes('not allowed') ||
+        stderrLower.includes('disallowed') ||
+        stderrLower.includes('tool is not allowed') ||
+        stderrLower.includes('permission required');
 
       const suspiciousEmptyResult =
         result.exitCode === null &&
@@ -794,9 +863,10 @@ export class TestGenerationSession {
         result.stderr.includes('コマンドが拒否されました') ||
         result.stderr.includes('実行が拒否されました') ||
         result.stderr.includes('手動で承認が必要') ||
+        result.stderr.includes('許可されていません') ||
         (result.errorMessage?.includes('拒否') ?? false);
 
-      const shouldTreatAsRejected = toolExecutionRejected || suspiciousEmptyResult || rejectedJpMessage;
+      const shouldTreatAsRejected = toolExecutionRejected || claudeRejected || suspiciousEmptyResult || rejectedJpMessage;
 
       if (shouldTreatAsRejected) {
         const warnMessage = t('testExecution.warn.cursorAgentRejectedFallback');

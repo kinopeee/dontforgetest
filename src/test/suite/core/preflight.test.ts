@@ -653,8 +653,16 @@ suite('core/preflight.ts', () => {
         originalGetConfiguration = vscode.workspace.getConfiguration;
         originalShowErrorMessage = vscode.window.showErrorMessage;
 
+        // cursor-agent の存在確認が PATH 拡張により成功する場合があるため、
+        // 確実に失敗するダミーコマンド名を返して検証する。
+        const missingCommand = 'cursor-agent__definitely_missing__';
         const configStub = {
-          get: (_section: string, _defaultValue?: unknown) => undefined,
+          get: (section: string, _defaultValue?: unknown) => {
+            if (section === 'cursorAgentPath') {
+              return missingCommand;
+            }
+            return undefined;
+          },
         } as unknown as vscode.WorkspaceConfiguration;
 
         vscode.workspace.getConfiguration = () => configStub;
@@ -674,7 +682,7 @@ suite('core/preflight.ts', () => {
           // Then: Returns undefined and shows an error message containing the fallback command name
           assert.strictEqual(result, undefined);
           assert.strictEqual(errorMessages.length, 1, 'Expected one error message');
-          assert.ok(errorMessages[0]?.includes('cursor-agent'), 'Expected message to include fallback command name');
+          assert.ok(errorMessages[0]?.includes(missingCommand), 'Expected message to include missing command name');
         } finally {
           if (originalPathEnv === undefined) {
             delete process.env.PATH;

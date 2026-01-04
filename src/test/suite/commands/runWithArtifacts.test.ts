@@ -4992,9 +4992,9 @@ suite('commands/runWithArtifacts.ts', () => {
     });
 
     // Then: Prompt includes document editing restrictions
-    assert.ok(result.prompt.includes('ドキュメント類（例: `docs/**`'), 'Prompt should include document editing restrictions');
+    assert.ok(result.prompt.includes('Do NOT create or edit documentation/Markdown files'), 'Prompt should include document editing restrictions');
     assert.ok(result.prompt.includes('test_perspectives.md'), 'Prompt should mention test_perspectives.md prohibition');
-    assert.ok(result.prompt.includes('観点表を別ファイルに保存しない'), 'Prompt should include perspective table saving restriction');
+    assert.ok(result.prompt.includes('do NOT save it to any file'), 'Prompt should include perspective table saving restriction');
   });
 
   // TC-PROMPT-B-01: buildTestGenPrompt with empty targetPaths
@@ -5013,7 +5013,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     // Then: Prompt is generated successfully and includes restrictions
     assert.ok(result.prompt.length > 0, 'Prompt should be generated');
-    assert.ok(result.prompt.includes('ドキュメント類（例: `docs/**`'), 'Prompt should include document editing restrictions');
+    assert.ok(result.prompt.includes('Do NOT create or edit documentation/Markdown files'), 'Prompt should include document editing restrictions');
   });
 
   suite('ProgressTreeView Event Emission', () => {

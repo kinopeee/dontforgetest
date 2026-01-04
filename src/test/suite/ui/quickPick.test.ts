@@ -264,6 +264,8 @@ suite('src/ui/quickPick.ts', () => {
       preflightResult = {
         workspaceRoot,
         testStrategyPath: '',
+        agentProviderId: 'cursorAgent',
+        agentCommand: 'cursor-agent',
         cursorAgentCommand: 'cursor-agent',
         defaultModel: undefined,
       };

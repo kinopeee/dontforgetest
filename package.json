@@ -3,7 +3,7 @@
   "publisher": "kinopeee",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.119",
+  "version": "0.0.120",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.105.0"
@@ -27,6 +27,12 @@
     },
     "views": {
       "dontforgetest": [
+        {
+          "id": "dontforgetest.settingsPanel",
+          "name": "%views.settingsPanel.name%",
+          "type": "webview",
+          "visibility": "collapsed"
+        },
         {
           "id": "dontforgetest.controlPanel",
           "name": "%views.controlPanel.name%",
@@ -74,6 +80,10 @@
         "title": "%command.selectDefaultModel.title%"
       },
       {
+        "command": "dontforgetest.selectAgentProvider",
+        "title": "%command.selectAgentProvider.title%"
+      },
+      {
         "command": "dontforgetest.openSettings",
         "title": "%command.openSettings.title%",
         "icon": "$(gear)"
@@ -103,7 +113,7 @@
       "view/title": [
         {
           "command": "dontforgetest.openSettings",
-          "when": "view == dontforgetest.controlPanel",
+          "when": "view == dontforgetest.settingsPanel",
           "group": "navigation"
         }
       ]
@@ -111,10 +121,24 @@
     "configuration": {
       "title": "%configuration.title%",
       "properties": {
+        "dontforgetest.agentProvider": {
+          "type": "string",
+          "enum": [
+            "cursorAgent",
+            "claudeCode"
+          ],
+          "default": "cursorAgent",
+          "description": "%configuration.agentProvider.description%"
+        },
         "dontforgetest.cursorAgentPath": {
           "type": "string",
           "default": "",
           "description": "%configuration.cursorAgentPath.description%"
+        },
+        "dontforgetest.claudePath": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.claudePath.description%"
         },
         "dontforgetest.maxParallelTasks": {
           "type": "number",

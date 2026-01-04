@@ -47,6 +47,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
   public static readonly viewId = 'dontforgetest.controlPanel';
 
   private view?: vscode.WebviewView;
+  private readonly disposables: vscode.Disposable[] = [];
   private readonly deps: ControlPanelDeps;
   private readonly stateListener: (isRunning: boolean, taskCount: number, phaseLabel?: string) => void;
   private disposed = false;
@@ -73,6 +74,10 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       return;
     }
     this.disposed = true;
+    for (const d of this.disposables) {
+      d.dispose();
+    }
+    this.disposables.length = 0;
     taskManager.removeListener(this.stateListener);
     this.view = undefined;
   }
@@ -89,6 +94,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
     void this.view.webview.postMessage(message);
   }
 
+
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
@@ -103,10 +109,14 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
 
     webviewView.webview.html = this.buildHtml();
 
-    webviewView.webview.onDidReceiveMessage(async (raw: unknown) => {
+    const messageListener = webviewView.webview.onDidReceiveMessage(async (raw: unknown) => {
       const msg = raw as WebviewMessage;
       await this.handleMessage(msg);
     });
+    // テストでは onDidReceiveMessage が undefined を返すスタブの場合があるため、防御的に扱う
+    if (messageListener && typeof (messageListener as vscode.Disposable).dispose === 'function') {
+      this.disposables.push(messageListener);
+    }
   }
 
   private async handleMessage(msg: WebviewMessage): Promise<void> {
@@ -153,6 +163,7 @@ export class TestGenControlPanelViewProvider implements vscode.WebviewViewProvid
       await this.deps.executeCommand('dontforgetest.analyzeTests', { target });
       return;
     }
+
   }
 
   private sourceToCommand(source: PanelRunSource): AllowedCommand | undefined {

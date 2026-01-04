@@ -55,6 +55,8 @@ suite('commands/generateFromCommitRange.ts', () => {
         workspaceRoot,
         defaultModel: `model-${Date.now()}`,
         testStrategyPath: '',
+        agentProviderId: 'cursorAgent',
+        agentCommand: 'cursor-agent',
         cursorAgentCommand: 'cursor-agent',
       };
 
