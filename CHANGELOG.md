@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.0.120
+
+### Changed
+
+- Documentation: Unified editor compatibility to **VS Code 1.105+** (Cursor / VS Code / Windsurf) and generalized CLI agent wording (current: Cursor Agent / Claude Code; planned: Codex CLI)
+
+### Fixed
+
+- Settings: Fixed a potential TypeError when `dontforgetest.agentProvider` is configured with a non-string value by safely falling back to the default provider
+
+---
+
+## 0.0.120（日本語）
+
+### 変更
+
+- ドキュメント: 対応エディタ表記を **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf）に統一し、CLI エージェント記載を汎用化しました（現在: Cursor Agent / Claude Code｜対応予定: Codex CLI）
+
+### 修正
+
+- 設定: `dontforgetest.agentProvider` に文字列以外の値が設定された場合でも TypeError で落ちないようにし、デフォルトのプロバイダーへ安全にフォールバックするよう修正しました
+
+---
+
 ## 0.0.119
 
 ### Added
