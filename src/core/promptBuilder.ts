@@ -17,6 +17,12 @@ export interface BuildPromptOptions {
   targetPaths: string[];
   /** テスト戦略ルールファイル（既定: docs/test-strategy.md） */
   testStrategyPath: string;
+  /**
+   * 実行モード。
+   * - cliAgent: Cursor Agent / Claude Code のようにローカルにアクセスできる CLI エージェント
+   * - patch: Devin のようにローカルへ直接アクセスできない前提で、パッチ（unified diff）を返す
+   */
+  agentMode?: 'cliAgent' | 'patch';
   /** 生成後の型チェック/Lintを有効化（デフォルト: true） */
   enablePreTestCheck?: boolean;
   /** 型チェック/Lintコマンド（例: npm run compile） */
@@ -58,8 +64,41 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     ``,
   ];
 
-  // 実行フローセクション（preTestCheck の有無で内容が変わる）
-  if (enablePreTestCheck && preTestCheckCommand.length > 0) {
+  const agentMode = options.agentMode === 'patch' ? 'patch' : 'cliAgent';
+  const effectiveEnablePreTestCheck = agentMode === 'patch' ? false : enablePreTestCheck;
+
+  // 実行フローセクション（agentMode / preTestCheck の有無で内容が変わる）
+  if (agentMode === 'patch') {
+    const patchMarkerBegin = '<!-- BEGIN DONTFORGETEST PATCH -->';
+    const patchMarkerEnd = '<!-- END DONTFORGETEST PATCH -->';
+    promptParts.push(
+      `## Required execution flow`,
+      `The required flow of this extension is: **"Generate tests → (the extension orchestrates) Run tests (testCommand) → Save reports"**.`,
+      `You are responsible for **test generation output** only.`,
+      ``,
+      `### Critical constraints (MUST)`,
+      `- You do NOT have direct access to the local workspace. Use only the provided diff/context.`,
+      `- Do NOT run any commands.`,
+      `- Do NOT output explanations. Output the patch only.`,
+      ``,
+      `## Output format (required)`,
+      `- Output a **unified diff patch** that can be applied via \`git apply\``,
+      `- Wrap the patch with the following markers (marker lines must be included):`,
+      `  - ${patchMarkerBegin}`,
+      `  - ${patchMarkerEnd}`,
+      `- Do NOT use code fences (no \`\`\` fences)`,
+      `- Ensure the patch ends with a newline`,
+      ``,
+      patchMarkerBegin,
+      `diff --git a/src/test/example.test.ts b/src/test/example.test.ts`,
+      `index 0000000..1111111 100644`,
+      `--- a/src/test/example.test.ts`,
+      `+++ b/src/test/example.test.ts`,
+      `@@`,
+      patchMarkerEnd,
+      ``,
+    );
+  } else if (effectiveEnablePreTestCheck && preTestCheckCommand.length > 0) {
     promptParts.push(
       `## Required execution flow`,
       `The required flow of this extension is: **"Generate tests → Typecheck/Lint → Run tests (testCommand) → Save reports"**.`,
@@ -111,8 +150,16 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     ``,
   );
 
-  // ツール使用制約セクション（preTestCheck の有無で内容が変わる）
-  if (enablePreTestCheck && preTestCheckCommand.length > 0) {
+  // ツール使用制約セクション（agentMode / preTestCheck の有無で内容が変わる）
+  if (agentMode === 'patch') {
+    promptParts.push(
+      `## Tooling constraints (required)`,
+      `- Do NOT run any commands`,
+      `- Do NOT launch GUI apps (avoid spawning external processes)`,
+      `- Use only the provided diff/context to make decisions`,
+      ``,
+    );
+  } else if (effectiveEnablePreTestCheck && preTestCheckCommand.length > 0) {
     promptParts.push(
       `## Tooling constraints (required)`,
       `- **You may only run this command**: \`${preTestCheckCommand}\``,

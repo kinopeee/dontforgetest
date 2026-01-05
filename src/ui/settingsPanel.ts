@@ -65,7 +65,7 @@ export class SettingsPanelViewProvider implements vscode.WebviewViewProvider, vs
 
     if (msg.type === 'setAgentProvider') {
       const agentProvider = (msg as { agentProvider?: unknown }).agentProvider;
-      if (agentProvider !== 'cursorAgent' && agentProvider !== 'claudeCode') {
+      if (agentProvider !== 'cursorAgent' && agentProvider !== 'claudeCode' && agentProvider !== 'devinApi') {
         return;
       }
       const config = vscode.workspace.getConfiguration('dontforgetest');
@@ -173,6 +173,7 @@ export class SettingsPanelViewProvider implements vscode.WebviewViewProvider, vs
       '        <select id="agentProviderSelect" aria-label="agentProvider">',
       `          <option value="cursorAgent">Cursor CLI</option>`,
       `          <option value="claudeCode">Claude Code</option>`,
+      `          <option value="devinApi">Devin API</option>`,
       '        </select>',
       '      </div>',
       '    </div>',
@@ -208,6 +209,26 @@ export class SettingsPanelViewProvider implements vscode.WebviewViewProvider, vs
       '    function updateModelCandidates(candidates, currentModel) {',
       '      if (!modelSelect) { return; }',
       '      modelSelect.innerHTML = "";',
+      '      // Devin API はモデル指定をサポートしないため、UI上は disabled + placeholder とする',
+      '      const isDevin = agentProviderSelect && agentProviderSelect.value === "devinApi";',
+      '      if (isDevin) {',
+      '        const opt = document.createElement("option");',
+      '        opt.value = "";',
+      '        opt.textContent = "(auto)";',
+      '        opt.selected = true;',
+      '        modelSelect.appendChild(opt);',
+      '        modelSelect.disabled = true;',
+      '        return;',
+      '      }',
+      '      modelSelect.disabled = false;',
+      '      if (!Array.isArray(candidates) || candidates.length === 0) {',
+      '        const opt = document.createElement("option");',
+      '        opt.value = "";',
+      '        opt.textContent = "(auto)";',
+      '        opt.selected = true;',
+      '        modelSelect.appendChild(opt);',
+      '        return;',
+      '      }',
       '      for (const m of candidates) {',
       '        const opt = document.createElement("option");',
       '        opt.value = m;',

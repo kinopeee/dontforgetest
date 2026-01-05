@@ -163,6 +163,10 @@ export function getModelCandidatesForProvider(
   providerId: AgentProviderId,
   settings: ModelSettings = getModelSettings(),
 ): string[] {
+  // Devin はモデル指定が提供されない（自動選択）ため、候補は空扱いにする
+  if (providerId === 'devinApi') {
+    return [];
+  }
   if (providerId === 'claudeCode') {
     return getClaudeCodeModelCandidates();
   }

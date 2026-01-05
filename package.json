@@ -125,10 +125,44 @@
           "type": "string",
           "enum": [
             "cursorAgent",
-            "claudeCode"
+            "claudeCode",
+            "devinApi"
           ],
           "default": "cursorAgent",
           "description": "%configuration.agentProvider.description%"
+        },
+        "dontforgetest.devinApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.devinApiKey.description%"
+        },
+        "dontforgetest.devinBaseUrl": {
+          "type": "string",
+          "default": "https://api.devin.ai/v1",
+          "description": "%configuration.devinBaseUrl.description%"
+        },
+        "dontforgetest.devinIdempotent": {
+          "type": "boolean",
+          "default": true,
+          "description": "%configuration.devinIdempotent.description%"
+        },
+        "dontforgetest.devinMaxAcuLimit": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "description": "%configuration.devinMaxAcuLimit.description%"
+        },
+        "dontforgetest.devinPollInitialDelayMs": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 1000,
+          "description": "%configuration.devinPollInitialDelayMs.description%"
+        },
+        "dontforgetest.devinPollMaxDelayMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "description": "%configuration.devinPollMaxDelayMs.description%"
         },
         "dontforgetest.cursorAgentPath": {
           "type": "string",

@@ -350,6 +350,31 @@ suite('core/promptBuilder.ts', () => {
       assert.ok(!result.prompt.includes('Typecheck/Lint') && !result.prompt.includes('typecheck/lint'), 'コマンドが空白なら無効になる');
     });
 
+    // Given: agentMode=patch（Devin想定）
+    // When: buildTestGenPrompt を呼び出す
+    // Then: パッチ返却の出力契約（DONTFORGETEST PATCH マーカー）が含まれ、PreTestCheckフローは含まれない
+    test('TC-PB-DEVIN-01: agentMode=patch の場合、パッチ返却フォーマットが含まれる', async () => {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        assert.fail('No workspace');
+        return;
+      }
+
+      const result = await buildTestGenPrompt({
+        workspaceRoot,
+        targetLabel: 'Target',
+        targetPaths: ['src/t.ts'],
+        testStrategyPath: '',
+        agentMode: 'patch',
+      });
+
+      assert.ok(result.prompt.includes('<!-- BEGIN DONTFORGETEST PATCH -->'), 'パッチ begin マーカーが含まれる');
+      assert.ok(result.prompt.includes('<!-- END DONTFORGETEST PATCH -->'), 'パッチ end マーカーが含まれる');
+      // patch モードではコマンド実行前提を避ける
+      assert.ok(!result.prompt.includes('Typecheck/Lint'), 'Typecheck/Lint フローは含まれない');
+      assert.ok(result.prompt.includes('Output the patch only'), 'パッチのみ出力の制約が含まれる');
+    });
+
     // Given: Options で enablePreTestCheck / preTestCheckCommand を未指定（undefined）
     // When: buildTestGenPrompt を呼び出す
     // Then: Config の値が使用される

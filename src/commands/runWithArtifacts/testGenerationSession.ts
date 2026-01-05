@@ -34,6 +34,7 @@ import { cleanupUnexpectedPerspectiveFiles } from './cleanupStep';
 import { applyWorktreeTestChanges, type WorktreeApplyResult } from './worktreeApplyStep';
 import { runTestCommandViaCursorAgent } from './testExecutionStep';
 import { runPerspectiveTableStep } from './perspectiveStep';
+import { applyDevinPatchToRepo, extractDevinPatchFromLogs } from './devinPatchApplyStep';
 import type { RunWithArtifactsOptions, TestGenerationRunMode, WorktreeOps } from '../runWithArtifacts';
 
 type ReadFileUtf8 = (filePath: string) => Promise<string>;
@@ -410,6 +411,84 @@ export class TestGenerationSession {
    * テスト生成を実行し、fileWrite イベントからファイルパスを収集する
    */
   private async runGenerationWithFileCollection(prompt: string): Promise<number | null> {
+    // Devin はローカルへ直接書き込めない想定のため、パッチ出力→git apply で反映する
+    if (this.options.provider.id === 'devin-api') {
+      const logs: string[] = [];
+      const baseExit = await runProviderToCompletion({
+        provider: this.options.provider,
+        run: {
+          taskId: this.options.generationTaskId,
+          workspaceRoot: this.runWorkspaceRoot,
+          agentCommand: this.options.cursorAgentCommand,
+          prompt,
+          model: this.options.model,
+          outputFormat: 'stream-json',
+          allowWrite: false,
+        },
+        onEvent: (event) => {
+          handleTestGenEventForStatusBar(event);
+          appendEventToOutput(event);
+          if (event.type === 'log') {
+            logs.push(event.message);
+          }
+        },
+        onRunningTask: (runningTask) => {
+          taskManager.updateRunningTask(this.options.generationTaskId, runningTask);
+        },
+      });
+
+      // provider 自体が失敗している場合は適用しない（blocked/expired 等）
+      if (baseExit !== 0) {
+        appendEventToOutput(
+          emitLogEvent(
+            this.options.generationTaskId,
+            'warn',
+            `Devin の終了コードが 0 ではないため、パッチ適用をスキップします（exit=${baseExit ?? 'null'}）`,
+          ),
+        );
+        return baseExit;
+      }
+
+      const raw = logs.join('\n');
+      const patchText = extractDevinPatchFromLogs(raw);
+      if (!patchText) {
+        appendEventToOutput(
+          emitLogEvent(this.options.generationTaskId, 'warn', 'Devin 出力からパッチを抽出できませんでした（マーカー未検出）。'),
+        );
+        return 1;
+      }
+
+      const applyResult = await applyDevinPatchToRepo({
+        generationTaskId: this.options.generationTaskId,
+        patchText,
+        runWorkspaceRoot: this.runWorkspaceRoot,
+        extensionContext: this.options.extensionContext,
+      });
+
+      if (applyResult.applied) {
+        // 戦略準拠チェック用にファイルパスを収集
+        for (const rel of applyResult.testPaths) {
+          const absPath = path.join(this.runWorkspaceRoot, rel);
+          if (!this.generatedFilePaths.includes(absPath)) {
+            this.generatedFilePaths.push(absPath);
+          }
+        }
+        return 0;
+      }
+
+      // apply 失敗時は非0として扱う（worktree モードではローカルへは適用されない）
+      if (applyResult.persistedPatchPath) {
+        appendEventToOutput(
+          emitLogEvent(
+            this.options.generationTaskId,
+            'warn',
+            `Devin パッチを適用できませんでした。保存したパッチ: ${applyResult.persistedPatchPath}`,
+          ),
+        );
+      }
+      return 1;
+    }
+
     return await runProviderToCompletion({
       provider: this.options.provider,
       run: {
@@ -586,6 +665,7 @@ export class TestGenerationSession {
    */
   private buildAutoFixPrompt(result: ComplianceCheckResult, perspectiveMarkdown: string | undefined): string {
     const issuesText = formatComplianceIssuesForPrompt(result);
+    const isDevin = this.options.provider.id === 'devin-api';
     const parts: string[] = [
       '## テストコード自動修正',
       '',
@@ -593,13 +673,38 @@ export class TestGenerationSession {
       '',
       issuesText,
       '',
+    ];
+
+    if (isDevin) {
+      parts.push(
+        '## 出力フォーマット（必須）',
+        '',
+        '- 返答は **unified diff パッチのみ**（説明文は禁止）',
+        '- 返答は次のマーカーで囲むこと:',
+        '- `<!-- BEGIN DONTFORGETEST PATCH -->`',
+        '- `<!-- END DONTFORGETEST PATCH -->`',
+        '- コードフェンス（```）は禁止',
+        '- パッチ末尾は改行で終えること',
+        '',
+        '<!-- BEGIN DONTFORGETEST PATCH -->',
+        'diff --git a/src/test/example.test.ts b/src/test/example.test.ts',
+        'index 0000000..1111111 100644',
+        '--- a/src/test/example.test.ts',
+        '+++ b/src/test/example.test.ts',
+        '@@',
+        '<!-- END DONTFORGETEST PATCH -->',
+        '',
+      );
+    }
+
+    parts.push(
       '## 修正ルール',
       '',
       '1. **Given/When/Then コメント**: 各テストケースに必ず付与',
       '2. **境界値テスト**: 0 / 最小値 / 最大値 / ±1 / 空 / null / undefined を考慮',
       '3. **例外メッセージ検証**: 例外の型とメッセージを明示的に検証',
       '',
-    ];
+    );
 
     if (perspectiveMarkdown) {
       parts.push(

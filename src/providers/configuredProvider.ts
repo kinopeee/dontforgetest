@@ -2,11 +2,12 @@ import * as vscode from 'vscode';
 import { type AgentProvider } from './provider';
 import { CursorAgentProvider } from './cursorAgentProvider';
 import { ClaudeCodeProvider } from './claudeCodeProvider';
+import { DevinApiProvider } from './devinApiProvider';
 
 /**
  * エージェントプロバイダーの識別子。
  */
-export type AgentProviderId = 'cursorAgent' | 'claudeCode';
+export type AgentProviderId = 'cursorAgent' | 'claudeCode' | 'devinApi';
 
 /**
  * 設定からエージェントプロバイダーIDを取得する。
@@ -18,6 +19,9 @@ export function getAgentProviderId(): AgentProviderId {
   // 文字列以外（number / null など）が入っても安全にフォールバックできるように扱う。
   const raw = config.get<unknown>('agentProvider');
   const trimmed = typeof raw === 'string' ? raw.trim() : '';
+  if (trimmed === 'devinApi') {
+    return 'devinApi';
+  }
   if (trimmed === 'claudeCode') {
     return 'claudeCode';
   }
@@ -36,6 +40,9 @@ export function createAgentProvider(): AgentProvider {
  * テスト用に公開。
  */
 export function createAgentProviderById(id: AgentProviderId): AgentProvider {
+  if (id === 'devinApi') {
+    return new DevinApiProvider();
+  }
   if (id === 'claudeCode') {
     return new ClaudeCodeProvider();
   }

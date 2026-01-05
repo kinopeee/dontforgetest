@@ -68,6 +68,7 @@ export async function generateTestFromCommitRange(
     targetLabel: t('prompt.commitRangeLabel', trimmedRange),
     targetPaths: changedFiles,
     testStrategyPath,
+    agentMode: provider.id === 'devin-api' ? 'patch' : 'cliAgent',
   });
 
   const diffForPrompt = truncateText(diffText, 20_000);

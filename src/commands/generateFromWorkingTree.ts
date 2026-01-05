@@ -91,6 +91,7 @@ export async function generateTestFromWorkingTree(
     targetLabel: t('prompt.uncommittedLabel', selected.label),
     targetPaths: changedFiles,
     testStrategyPath,
+    agentMode: provider.id === 'devin-api' ? 'patch' : 'cliAgent',
   });
 
   const diffForPrompt = truncateText(diffText, MAX_DIFF_CHARS_FOR_PROMPT);

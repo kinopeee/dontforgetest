@@ -21,11 +21,19 @@ export async function selectAgentProvider(): Promise<void> {
       description: currentId === 'claudeCode' ? t('selectAgentProvider.current') : undefined,
       providerId: 'claudeCode',
     },
+    {
+      label: t('selectAgentProvider.devinApi'),
+      description: currentId === 'devinApi' ? t('selectAgentProvider.current') : undefined,
+      providerId: 'devinApi',
+    },
   ];
 
-  const currentLabel = currentId === 'claudeCode'
-    ? t('selectAgentProvider.claudeCode')
-    : t('selectAgentProvider.cursorAgent');
+  let currentLabel = t('selectAgentProvider.cursorAgent');
+  if (currentId === 'claudeCode') {
+    currentLabel = t('selectAgentProvider.claudeCode');
+  } else if (currentId === 'devinApi') {
+    currentLabel = t('selectAgentProvider.devinApi');
+  }
 
   const picked = await vscode.window.showQuickPick<AgentPickItem>(items, {
     title: t('selectAgentProvider.title'),

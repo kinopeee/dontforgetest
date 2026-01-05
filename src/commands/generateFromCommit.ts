@@ -46,6 +46,7 @@ export async function generateTestFromLatestCommit(
     targetLabel: t('prompt.latestCommitLabel', commit.slice(0, 7)),
     targetPaths: changedFiles,
     testStrategyPath,
+    agentMode: provider.id === 'devin-api' ? 'patch' : 'cliAgent',
   });
 
   const finalPrompt = [

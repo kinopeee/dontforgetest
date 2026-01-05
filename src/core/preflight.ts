@@ -55,6 +55,37 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
   // Provider 選択に応じたコマンド確認
   const agentProviderId = getAgentProviderId();
 
+  if (agentProviderId === 'devinApi') {
+    // Devin API は CLI を必要としないため、API Key の存在だけ確認する
+    const devinApiKeyRaw = (config.get<string>('devinApiKey') ?? '').trim();
+    const apiKey = devinApiKeyRaw.length > 0 ? devinApiKeyRaw : (process.env.DEVIN_API_KEY ?? '').trim();
+    if (apiKey.length === 0) {
+      if (process.env.VSCODE_TEST_RUNNER === '1') {
+        void vscode.window.showErrorMessage(t('devinApi.missingApiKey'));
+        return undefined;
+      }
+
+      const openSettingsLabel = t('devinApi.openSettings');
+      const picked = await vscode.window.showErrorMessage(
+        t('devinApi.missingApiKey'),
+        openSettingsLabel,
+      );
+      if (picked === openSettingsLabel) {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.devinApiKey');
+      }
+      return undefined;
+    }
+
+    return {
+      workspaceRoot,
+      defaultModel: undefined, // Devin はモデル指定が提供されない
+      testStrategyPath: effectiveTestStrategyPath,
+      agentProviderId,
+      agentCommand: 'devin-api', // Provider 側で無視されるが、インターフェース互換のため設定する
+      cursorAgentCommand: 'devin-api', // 後方互換
+    };
+  }
+
   if (agentProviderId === 'claudeCode') {
     // Claude Code CLI の確認
     const claudePath = (config.get<string>('claudePath') ?? '').trim();

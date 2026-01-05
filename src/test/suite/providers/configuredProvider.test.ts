@@ -7,6 +7,7 @@ import {
 } from '../../../providers/configuredProvider';
 import { CursorAgentProvider } from '../../../providers/cursorAgentProvider';
 import { ClaudeCodeProvider } from '../../../providers/claudeCodeProvider';
+import { DevinApiProvider } from '../../../providers/devinApiProvider';
 
 suite('configuredProvider', () => {
   // === Test perspective table ===
@@ -14,6 +15,7 @@ suite('configuredProvider', () => {
   // |---------|----------------------|--------------------------------------|-----------------|-------|
   // | TC-N-01 | agentProvider='claudeCode' | Equivalence – valid value | Returns 'claudeCode' | Claude Code agent selected |
   // | TC-N-02 | agentProvider='cursor' (or 'cursorAgent') | Equivalence – valid value | Returns 'cursorAgent' | Cursor agent selected |
+  // | TC-N-03 | agentProvider='devinApi' | Equivalence – valid value | Returns 'devinApi' | Devin API selected |
   // | TC-E-01 | agentProvider undefined | Boundary – undefined | Returns default ('cursorAgent') | Fallback on undefined |
   // | TC-E-02 | agentProvider='' | Boundary – empty string | Returns default ('cursorAgent') | Fallback on empty |
   // | TC-E-03 | agentProvider=null | Boundary – null | Returns default ('cursorAgent') | Fallback on null |
@@ -62,6 +64,19 @@ suite('configuredProvider', () => {
     assert.strictEqual(id, 'cursorAgent');
   });
 
+  // TC-N-03: agentProvider='devinApi' の場合、Devin API が選択される
+  test('TC-N-03: agentProvider=devinApi の場合、devinApi を返す', async () => {
+    // Given: agentProvider='devinApi' を設定
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('agentProvider', 'devinApi', vscode.ConfigurationTarget.Workspace);
+
+    // When: getAgentProviderId を呼び出す
+    const id = getAgentProviderId();
+
+    // Then: 'devinApi' を返す
+    assert.strictEqual(id, 'devinApi');
+  });
+
   // TC-N-04: createAgentProvider() はデフォルトで CursorAgentProvider を返す
   test('TC-N-04: createAgentProvider はデフォルトで CursorAgentProvider を返す', async () => {
     // Given: agentProvider 未設定
@@ -96,6 +111,13 @@ suite('configuredProvider', () => {
     // Then: ClaudeCodeProvider を返す
     assert.ok(provider instanceof ClaudeCodeProvider);
     assert.strictEqual(provider.id, 'claude-code');
+  });
+
+  // TC-N-07: createAgentProviderById('devinApi') は DevinApiProvider を返す
+  test('TC-N-07: createAgentProviderById devinApi は DevinApiProvider を返す', () => {
+    const provider = createAgentProviderById('devinApi');
+    assert.ok(provider instanceof DevinApiProvider);
+    assert.strictEqual(provider.id, 'devin-api');
   });
 
   // TC-E-01: agentProvider 未設定（undefined）の場合、デフォルトを返す
