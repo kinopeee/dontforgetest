@@ -4,6 +4,7 @@ node_modules/**
 .cursor/**
 .claude/**
 src/**
+.npm-cache/**
 .gitignore
 .yarnrc
 vsc-extension-quickstart.md
