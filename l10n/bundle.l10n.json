@@ -307,5 +307,8 @@
   "compliance.autoFixAttempt": "Attempting automatic fix ({0}/{1})...",
   "compliance.autoFixLimitReached": "Automatic fix limit reached ({0} attempts). Some strategy compliance issues remain. See compliance report for details.",
   "compliance.reportSaved": "Strategy compliance report saved: {0}",
-  "compliance.reportSaveFailed": "Failed to save compliance report: {0}"
+  "compliance.reportSaveFailed": "Failed to save compliance report: {0}",
+  "action.openLatestExecutionReport": "Open execution report",
+  "testExecution.toast.failed": "Test failures detected. Review the report and fix with your IDE agent if needed: {0}",
+  "testExecution.toast.commandFailed": "Failed to run the test command (exit={0}). Check settings/logs. Report: {1}"
 }

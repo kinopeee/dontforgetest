@@ -1130,11 +1130,11 @@ export class TestGenerationSession {
       String(result.exitCode ?? 'null'),
       String(result.durationMs),
     );
-    const testCompletedEvent = emitLogEvent(
-      testTaskId,
-      result.exitCode === 0 ? 'info' : 'error',
-      testCompletedMsg,
-    );
+    // テスト結果が取得できていれば「テスト失敗」、取得できなければ「コマンド実行失敗」と判断
+    const hasTestResult = enrichedResult.testResult !== undefined;
+    const logLevel: 'info' | 'warn' | 'error' =
+      result.exitCode === 0 ? 'info' : hasTestResult ? 'warn' : 'error';
+    const testCompletedEvent = emitLogEvent(testTaskId, logLevel, testCompletedMsg);
     appendEventToOutput(testCompletedEvent);
     this.captureEvent(testCompletedEvent);
 
@@ -1158,6 +1158,34 @@ export class TestGenerationSession {
 
     appendEventToOutput(emitLogEvent(testTaskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)));
     handleTestGenEventForProgressView({ type: 'completed', taskId: this.options.generationTaskId, exitCode: result.exitCode, timestampMs: nowMs() });
+
+    // ユーザー通知: テスト結果に応じたトースト表示（VS Code拡張機能テスト中はスキップ）
+    if (process.env.VSCODE_TEST_RUNNER !== '1') {
+      const reportPath = saved.relativePath ?? saved.absolutePath;
+      const openReportAction = t('action.openLatestExecutionReport');
+
+      if (result.exitCode === 0) {
+        // 成功時は通知を出さない（既存方針踏襲）
+      } else if (hasTestResult) {
+        // テスト失敗を検出: Warning
+        void vscode.window
+          .showWarningMessage(t('testExecution.toast.failed', reportPath), openReportAction)
+          .then((picked) => {
+            if (picked === openReportAction) {
+              void vscode.commands.executeCommand('dontforgetest.openLatestExecutionReport');
+            }
+          });
+      } else {
+        // コマンド実行失敗: Error
+        void vscode.window
+          .showErrorMessage(t('testExecution.toast.commandFailed', String(result.exitCode ?? 'null'), reportPath), openReportAction)
+          .then((picked) => {
+            if (picked === openReportAction) {
+              void vscode.commands.executeCommand('dontforgetest.openLatestExecutionReport');
+            }
+          });
+      }
+    }
   }
 
   private async cleanup(): Promise<void> {

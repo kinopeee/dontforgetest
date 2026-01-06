@@ -2032,4 +2032,405 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       });
     });
   });
+
+  suite('Test execution toast notifications', () => {
+    const dummyProvider = {
+      id: 'dummy',
+      displayName: 'dummy',
+      run: () => ({ taskId: 'dummy-task', dispose: () => {} }),
+    };
+
+    const createSession = (workspaceRoot: string): TestGenerationSession => {
+      return new TestGenerationSession({
+        provider: dummyProvider,
+        workspaceRoot,
+        cursorAgentCommand: 'cursor-agent',
+        testStrategyPath: '',
+        generationLabel: 'Label',
+        targetPaths: [],
+        generationPrompt: 'prompt',
+        perspectiveReferenceText: 'ref',
+        model: undefined,
+        generationTaskId: 'task-toast',
+        runLocation: 'local',
+        runMode: 'full',
+        settingsOverride: {
+          includeTestPerspectiveTable: false,
+          testExecutionRunner: 'extension',
+          testCommand: 'npm test',
+          enablePreTestCheck: false,
+        },
+        extensionContext: undefined as unknown as import('vscode').ExtensionContext,
+      });
+    };
+
+    const writeTestResultFile = (workspaceRoot: string, payload: unknown): void => {
+      const dir = path.join(workspaceRoot, '.vscode-test');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'test-result.json'), JSON.stringify(payload), 'utf8');
+    };
+
+    // TC-TOAST-N-01: テスト失敗（exit!=0, testResult有り）→ showWarningMessage が呼ばれる
+    test('TC-TOAST-N-01: shows warning toast when test fails and testResult is available', async () => {
+      // Given: A session where test command exits with 1 and test-result.json is created after start
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-toast-'));
+      workspaceRoots.push(workspaceRoot);
+      const session = createSession(workspaceRoot);
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+      const prevRunnerEnv = process.env.VSCODE_TEST_RUNNER;
+      delete process.env.VSCODE_TEST_RUNNER;
+
+      const warningCalls: Array<{ message: string; items: string[] }> = [];
+      const execCalls: Array<{ command: string }> = [];
+
+      const originalRunTestCommand = testRunner.runTestCommand;
+      const originalSaveTestExecutionReport = artifacts.saveTestExecutionReport;
+      const originalAppendEvent = outputChannel.appendEventToOutput;
+      const originalShowWarning = vscode.window.showWarningMessage;
+      const originalShowError = vscode.window.showErrorMessage;
+      const originalExecuteCommand = vscode.commands.executeCommand;
+
+      (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = () => {};
+      (testRunner as unknown as { runTestCommand: typeof testRunner.runTestCommand }).runTestCommand = async ({ command, cwd }) => {
+        writeTestResultFile(cwd, {
+          timestamp: Date.now(),
+          failures: 1,
+          passes: 0,
+          pending: 0,
+          total: 1,
+          failedTests: [{ title: 'x', fullTitle: 'x', error: 'y' }],
+        });
+        return {
+          command,
+          cwd,
+          exitCode: 1,
+          signal: null,
+          durationMs: 10,
+          stdout: '',
+          stderr: '',
+          executionRunner: 'extension',
+        };
+      };
+      (artifacts as unknown as { saveTestExecutionReport: typeof artifacts.saveTestExecutionReport }).saveTestExecutionReport = async () => {
+        return { absolutePath: '/abs/test-execution_x.md', relativePath: 'docs/test-execution-reports/test-execution_x.md' };
+      };
+      (vscode.window as unknown as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = ((
+        message: string,
+        ...args: unknown[]
+      ) => {
+        // showWarningMessage は overload で options を受け取れるため、文字列のみ抽出する
+        const items = args.filter((x): x is string => typeof x === 'string');
+        warningCalls.push({ message, items });
+        // Simulate user clicking the first action ("open report")
+        return Promise.resolve(items[0]) as Thenable<string | undefined>;
+      }) as typeof vscode.window.showWarningMessage;
+      (vscode.window as unknown as { showErrorMessage: typeof vscode.window.showErrorMessage }).showErrorMessage = ((
+        _message: string,
+        ..._args: unknown[]
+      ) => Promise.resolve(undefined)) as typeof vscode.window.showErrorMessage;
+      (vscode.commands as unknown as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = ((
+        command: string,
+        ..._rest: unknown[]
+      ) => {
+        execCalls.push({ command });
+        return Promise.resolve(undefined) as unknown as Thenable<unknown>;
+      }) as typeof vscode.commands.executeCommand;
+
+      try {
+        // When: runTestExecution is invoked directly
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(
+          session,
+        );
+        await runTestExecution(0);
+
+        // Then: showWarningMessage is called with a localized action and report path, and clicking action triggers command
+        assert.strictEqual(warningCalls.length, 1, 'Expected exactly one warning toast');
+        assert.ok(warningCalls[0]?.message.includes('docs/test-execution-reports/'), 'Expected report path in warning message');
+        assert.deepStrictEqual(warningCalls[0]?.items, [l10n.t('action.openLatestExecutionReport')]);
+        assert.deepStrictEqual(execCalls, [{ command: 'dontforgetest.openLatestExecutionReport' }]);
+      } finally {
+        if (prevRunnerEnv === undefined) {
+          delete process.env.VSCODE_TEST_RUNNER;
+        } else {
+          process.env.VSCODE_TEST_RUNNER = prevRunnerEnv;
+        }
+        (testRunner as unknown as { runTestCommand: typeof originalRunTestCommand }).runTestCommand = originalRunTestCommand;
+        (artifacts as unknown as { saveTestExecutionReport: typeof originalSaveTestExecutionReport }).saveTestExecutionReport =
+          originalSaveTestExecutionReport;
+        (outputChannel as unknown as { appendEventToOutput: typeof originalAppendEvent }).appendEventToOutput = originalAppendEvent;
+        (vscode.window as unknown as { showWarningMessage: typeof originalShowWarning }).showWarningMessage = originalShowWarning;
+        (vscode.window as unknown as { showErrorMessage: typeof originalShowError }).showErrorMessage = originalShowError;
+        (vscode.commands as unknown as { executeCommand: typeof originalExecuteCommand }).executeCommand = originalExecuteCommand;
+      }
+    });
+
+    // TC-TOAST-N-02: コマンド実行失敗（exit!=0, testResult無し）→ showErrorMessage が呼ばれる
+    test('TC-TOAST-N-02: shows error toast when command fails and testResult is missing', async () => {
+      // Given: A session where test command exits with 2 and no test-result.json is created
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-toast-'));
+      workspaceRoots.push(workspaceRoot);
+      const session = createSession(workspaceRoot);
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+      const prevRunnerEnv = process.env.VSCODE_TEST_RUNNER;
+      delete process.env.VSCODE_TEST_RUNNER;
+
+      const errorCalls: Array<{ message: string; items: string[] }> = [];
+      const execCalls: Array<{ command: string }> = [];
+
+      const originalRunTestCommand = testRunner.runTestCommand;
+      const originalSaveTestExecutionReport = artifacts.saveTestExecutionReport;
+      const originalAppendEvent = outputChannel.appendEventToOutput;
+      const originalShowWarning = vscode.window.showWarningMessage;
+      const originalShowError = vscode.window.showErrorMessage;
+      const originalExecuteCommand = vscode.commands.executeCommand;
+
+      (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = () => {};
+      (testRunner as unknown as { runTestCommand: typeof testRunner.runTestCommand }).runTestCommand = async ({ command, cwd }) => {
+        return {
+          command,
+          cwd,
+          exitCode: 2,
+          signal: null,
+          durationMs: 10,
+          stdout: '',
+          stderr: 'boom',
+          executionRunner: 'extension',
+        };
+      };
+      (artifacts as unknown as { saveTestExecutionReport: typeof artifacts.saveTestExecutionReport }).saveTestExecutionReport = async () => {
+        return { absolutePath: '/abs/test-execution_x.md', relativePath: 'docs/test-execution-reports/test-execution_x.md' };
+      };
+      (vscode.window as unknown as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = ((
+        _message: string,
+        ..._args: unknown[]
+      ) => Promise.resolve(undefined)) as typeof vscode.window.showWarningMessage;
+      (vscode.window as unknown as { showErrorMessage: typeof vscode.window.showErrorMessage }).showErrorMessage = ((
+        message: string,
+        ...args: unknown[]
+      ) => {
+        // showErrorMessage は overload で options を受け取れるため、文字列のみ抽出する
+        const items = args.filter((x): x is string => typeof x === 'string');
+        errorCalls.push({ message, items });
+        return Promise.resolve(items[0]) as Thenable<string | undefined>;
+      }) as typeof vscode.window.showErrorMessage;
+      (vscode.commands as unknown as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = ((
+        command: string,
+        ..._rest: unknown[]
+      ) => {
+        execCalls.push({ command });
+        return Promise.resolve(undefined) as unknown as Thenable<unknown>;
+      }) as typeof vscode.commands.executeCommand;
+
+      try {
+        // When: runTestExecution is invoked directly
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(
+          session,
+        );
+        await runTestExecution(0);
+
+        // Then: showErrorMessage is called and includes exit code + report path; clicking action triggers command
+        assert.strictEqual(errorCalls.length, 1, 'Expected exactly one error toast');
+        assert.ok(errorCalls[0]?.message.includes('exit=2'), 'Expected exit code in error message');
+        assert.ok(errorCalls[0]?.message.includes('docs/test-execution-reports/'), 'Expected report path in error message');
+        assert.deepStrictEqual(errorCalls[0]?.items, [l10n.t('action.openLatestExecutionReport')]);
+        assert.deepStrictEqual(execCalls, [{ command: 'dontforgetest.openLatestExecutionReport' }]);
+      } finally {
+        if (prevRunnerEnv === undefined) {
+          delete process.env.VSCODE_TEST_RUNNER;
+        } else {
+          process.env.VSCODE_TEST_RUNNER = prevRunnerEnv;
+        }
+        (testRunner as unknown as { runTestCommand: typeof originalRunTestCommand }).runTestCommand = originalRunTestCommand;
+        (artifacts as unknown as { saveTestExecutionReport: typeof originalSaveTestExecutionReport }).saveTestExecutionReport =
+          originalSaveTestExecutionReport;
+        (outputChannel as unknown as { appendEventToOutput: typeof originalAppendEvent }).appendEventToOutput = originalAppendEvent;
+        (vscode.window as unknown as { showWarningMessage: typeof originalShowWarning }).showWarningMessage = originalShowWarning;
+        (vscode.window as unknown as { showErrorMessage: typeof originalShowError }).showErrorMessage = originalShowError;
+        (vscode.commands as unknown as { executeCommand: typeof originalExecuteCommand }).executeCommand = originalExecuteCommand;
+      }
+    });
+
+    // TC-TOAST-N-03: テスト成功（exit=0）→ トースト通知は出さない
+    test('TC-TOAST-N-03: does not show toast when test succeeds', async () => {
+      // Given: A session where test command exits with 0
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-toast-'));
+      workspaceRoots.push(workspaceRoot);
+      const session = createSession(workspaceRoot);
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+
+      const prevRunnerEnv = process.env.VSCODE_TEST_RUNNER;
+      delete process.env.VSCODE_TEST_RUNNER;
+
+      let warningCount = 0;
+      let errorCount = 0;
+
+      const originalRunTestCommand = testRunner.runTestCommand;
+      const originalSaveTestExecutionReport = artifacts.saveTestExecutionReport;
+      const originalAppendEvent = outputChannel.appendEventToOutput;
+      const originalShowWarning = vscode.window.showWarningMessage;
+      const originalShowError = vscode.window.showErrorMessage;
+
+      (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = () => {};
+      (testRunner as unknown as { runTestCommand: typeof testRunner.runTestCommand }).runTestCommand = async ({ command, cwd }) => {
+        return {
+          command,
+          cwd,
+          exitCode: 0,
+          signal: null,
+          durationMs: 10,
+          stdout: '',
+          stderr: '',
+          executionRunner: 'extension',
+        };
+      };
+      (artifacts as unknown as { saveTestExecutionReport: typeof artifacts.saveTestExecutionReport }).saveTestExecutionReport = async () => {
+        return { absolutePath: '/abs/test-execution_x.md', relativePath: 'docs/test-execution-reports/test-execution_x.md' };
+      };
+      (vscode.window as unknown as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = ((
+        _message: string,
+        ..._args: unknown[]
+      ) => {
+        warningCount += 1;
+        return Promise.resolve(undefined);
+      }) as typeof vscode.window.showWarningMessage;
+      (vscode.window as unknown as { showErrorMessage: typeof vscode.window.showErrorMessage }).showErrorMessage = ((
+        _message: string,
+        ..._args: unknown[]
+      ) => {
+        errorCount += 1;
+        return Promise.resolve(undefined);
+      }) as typeof vscode.window.showErrorMessage;
+
+      try {
+        // When: runTestExecution is invoked directly
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(
+          session,
+        );
+        await runTestExecution(0);
+
+        // Then: No toast is shown
+        assert.strictEqual(warningCount, 0);
+        assert.strictEqual(errorCount, 0);
+      } finally {
+        if (prevRunnerEnv === undefined) {
+          delete process.env.VSCODE_TEST_RUNNER;
+        } else {
+          process.env.VSCODE_TEST_RUNNER = prevRunnerEnv;
+        }
+        (testRunner as unknown as { runTestCommand: typeof originalRunTestCommand }).runTestCommand = originalRunTestCommand;
+        (artifacts as unknown as { saveTestExecutionReport: typeof originalSaveTestExecutionReport }).saveTestExecutionReport =
+          originalSaveTestExecutionReport;
+        (outputChannel as unknown as { appendEventToOutput: typeof originalAppendEvent }).appendEventToOutput = originalAppendEvent;
+        (vscode.window as unknown as { showWarningMessage: typeof originalShowWarning }).showWarningMessage = originalShowWarning;
+        (vscode.window as unknown as { showErrorMessage: typeof originalShowError }).showErrorMessage = originalShowError;
+      }
+    });
+
+    // TC-TOAST-E-01: VSCODE_TEST_RUNNER==='1' ではトースト表示がスキップされる
+    test('TC-TOAST-E-01: toast is skipped when VSCODE_TEST_RUNNER is set to 1', async () => {
+      // Given: VSCODE_TEST_RUNNER === '1'
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-toast-'));
+      workspaceRoots.push(workspaceRoot);
+      const session = createSession(workspaceRoot);
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+
+      const prevRunnerEnv = process.env.VSCODE_TEST_RUNNER;
+      process.env.VSCODE_TEST_RUNNER = '1';
+
+      let warningCount = 0;
+      let errorCount = 0;
+
+      const originalRunTestCommand = testRunner.runTestCommand;
+      const originalSaveTestExecutionReport = artifacts.saveTestExecutionReport;
+      const originalAppendEvent = outputChannel.appendEventToOutput;
+      const originalShowWarning = vscode.window.showWarningMessage;
+      const originalShowError = vscode.window.showErrorMessage;
+
+      (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = () => {};
+      (testRunner as unknown as { runTestCommand: typeof testRunner.runTestCommand }).runTestCommand = async ({ command, cwd }) => {
+        writeTestResultFile(cwd, { timestamp: Date.now(), failures: 1, total: 1, failedTests: [{ title: 'x', error: 'y' }] });
+        return {
+          command,
+          cwd,
+          exitCode: 1,
+          signal: null,
+          durationMs: 10,
+          stdout: '',
+          stderr: '',
+          executionRunner: 'extension',
+        };
+      };
+      (artifacts as unknown as { saveTestExecutionReport: typeof artifacts.saveTestExecutionReport }).saveTestExecutionReport = async () => {
+        return { absolutePath: '/abs/test-execution_x.md', relativePath: 'docs/test-execution-reports/test-execution_x.md' };
+      };
+      (vscode.window as unknown as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = ((
+        _message: string,
+        ..._args: unknown[]
+      ) => {
+        warningCount += 1;
+        return Promise.resolve(undefined);
+      }) as typeof vscode.window.showWarningMessage;
+      (vscode.window as unknown as { showErrorMessage: typeof vscode.window.showErrorMessage }).showErrorMessage = ((
+        _message: string,
+        ..._args: unknown[]
+      ) => {
+        errorCount += 1;
+        return Promise.resolve(undefined);
+      }) as typeof vscode.window.showErrorMessage;
+
+      try {
+        // When: runTestExecution is invoked
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(
+          session,
+        );
+        await runTestExecution(0);
+
+        // Then: No toast is shown because VSCODE_TEST_RUNNER==='1'
+        assert.strictEqual(warningCount, 0);
+        assert.strictEqual(errorCount, 0);
+      } finally {
+        if (prevRunnerEnv === undefined) {
+          delete process.env.VSCODE_TEST_RUNNER;
+        } else {
+          process.env.VSCODE_TEST_RUNNER = prevRunnerEnv;
+        }
+        (testRunner as unknown as { runTestCommand: typeof originalRunTestCommand }).runTestCommand = originalRunTestCommand;
+        (artifacts as unknown as { saveTestExecutionReport: typeof originalSaveTestExecutionReport }).saveTestExecutionReport =
+          originalSaveTestExecutionReport;
+        (outputChannel as unknown as { appendEventToOutput: typeof originalAppendEvent }).appendEventToOutput = originalAppendEvent;
+        (vscode.window as unknown as { showWarningMessage: typeof originalShowWarning }).showWarningMessage = originalShowWarning;
+        (vscode.window as unknown as { showErrorMessage: typeof originalShowError }).showErrorMessage = originalShowError;
+      }
+    });
+  });
 });

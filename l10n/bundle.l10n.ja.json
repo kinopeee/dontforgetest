@@ -307,5 +307,8 @@
     "compliance.autoFixAttempt": "自動修正を試行中（{0}/{1}）...",
     "compliance.autoFixLimitReached": "自動修正の上限に達しました（{0}回試行）。一部の戦略準拠問題が残っています。詳細は準拠レポートを確認してください。",
     "compliance.reportSaved": "戦略準拠レポートを保存しました: {0}",
-    "compliance.reportSaveFailed": "準拠レポートの保存に失敗しました: {0}"
+    "compliance.reportSaveFailed": "準拠レポートの保存に失敗しました: {0}",
+    "action.openLatestExecutionReport": "実行レポートを開く",
+    "testExecution.toast.failed": "テスト失敗を検出しました。レポートを確認し、必要ならIDEのエージェントで修正してください: {0}",
+    "testExecution.toast.commandFailed": "テストコマンドの実行に失敗しました（exit={0}）。設定/ログを確認してください。レポート: {1}"
 }
