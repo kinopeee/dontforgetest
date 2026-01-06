@@ -33,8 +33,127 @@ type DevinSessionStatusResponse = {
 
 type DevinEndState = 'blocked' | 'finished' | 'expired';
 
+const DEVIN_PROMPT_MAX_CHARS = 30_000;
+// 余裕を持たせて切り詰める（JSONエラー文などが追加されても超えにくくする）
+const DEVIN_PROMPT_TARGET_CHARS = 28_000;
+// blocked 時に「追加入力なしで完了せよ」を追送する最大回数（MVP）
+const DEVIN_AUTO_UNBLOCK_MAX_RETRIES = 1;
+
+const PERSPECTIVE_MARKER_END = '<!-- END TEST PERSPECTIVES JSON -->';
+const PATCH_MARKER_END = '<!-- END DONTFORGETEST PATCH -->';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function truncateForDevinPrompt(prompt: string): { prompt: string; truncated: boolean; originalLength: number } {
+  const originalLength = prompt.length;
+  if (originalLength <= DEVIN_PROMPT_MAX_CHARS) {
+    return { prompt, truncated: false, originalLength };
+  }
+  const target = Math.max(1_000, Math.min(DEVIN_PROMPT_TARGET_CHARS, DEVIN_PROMPT_MAX_CHARS - 100));
+  const marker = '\n\n...(truncated to fit Devin API prompt limit)...\n\n';
+  // 末尾に差分等が付く構造が多いため、まずは末尾を削る（=先頭の制約を優先）
+  const sliced = prompt.slice(0, Math.max(0, target - marker.length)) + marker;
+  return { prompt: sliced, truncated: true, originalLength };
+}
+
+/**
+ * プロンプトを論理的な塊に分割し、添付ファイルとしてアップロードする準備をする。
+ * 分割戦略:
+ * - diff/patch ブロック（```diff や ```patch で囲まれた部分、または unified diff 風のテキスト）
+ * - test-perspectives JSON ブロック（マーカーで囲まれた部分）
+ * - それ以外（instructions + context）
+ * 分割に失敗した場合は全体を context.txt 1本で返す。
+ */
+function splitPromptForAttachments(prompt: string): Array<{ filename: string; content: string }> {
+  const files: Array<{ filename: string; content: string }> = [];
+  let remaining = prompt;
+
+  // diff/patch ブロックを抽出（```diff ... ``` または ```patch ... ```）
+  const diffCodeBlockRegex = /```(?:diff|patch)\s*\n([\s\S]*?)```/g;
+  let diffMatch: RegExpExecArray | null;
+  const diffs: string[] = [];
+  while ((diffMatch = diffCodeBlockRegex.exec(prompt)) !== null) {
+    diffs.push(diffMatch[1] ?? '');
+  }
+  if (diffs.length > 0) {
+    const diffContent = diffs.join('\n\n');
+    files.push({ filename: 'diff.patch', content: diffContent });
+    // remaining から削除
+    remaining = remaining.replace(diffCodeBlockRegex, '\n[See attached: diff.patch]\n');
+  }
+
+  // unified diff 風のテキスト（diff --git から始まる連続ブロック）を抽出
+  // コードブロック内でない場合のフォールバック
+  if (diffs.length === 0) {
+    const unifiedDiffRegex = /((?:^diff --git .+\n(?:[\s\S]*?)(?=\ndiff --git |\n*$)))/gm;
+    const unifiedMatch = unifiedDiffRegex.exec(remaining);
+    if (unifiedMatch) {
+      // 最初のマッチから末尾まで unified diff として扱う
+      const diffStart = remaining.indexOf('diff --git ');
+      if (diffStart !== -1) {
+        const diffContent = remaining.slice(diffStart);
+        files.push({ filename: 'diff.patch', content: diffContent });
+        remaining = remaining.slice(0, diffStart) + '\n[See attached: diff.patch]\n';
+      }
+    }
+  }
+
+  // test-perspectives JSON ブロックを抽出
+  const perspectivesBegin = '<!-- BEGIN TEST PERSPECTIVES JSON -->';
+  const perspectivesEnd = '<!-- END TEST PERSPECTIVES JSON -->';
+  const perspectivesStartIdx = remaining.indexOf(perspectivesBegin);
+  const perspectivesEndIdx = remaining.indexOf(perspectivesEnd);
+  if (perspectivesStartIdx !== -1 && perspectivesEndIdx !== -1 && perspectivesEndIdx > perspectivesStartIdx) {
+    const perspectivesContent = remaining.slice(perspectivesStartIdx, perspectivesEndIdx + perspectivesEnd.length);
+    files.push({ filename: 'test-perspectives.json', content: perspectivesContent });
+    remaining =
+      remaining.slice(0, perspectivesStartIdx) +
+      '\n[See attached: test-perspectives.json]\n' +
+      remaining.slice(perspectivesEndIdx + perspectivesEnd.length);
+  }
+
+  // 残りを instructions/context として保存
+  const trimmedRemaining = remaining.trim();
+  if (trimmedRemaining.length > 0) {
+    files.push({ filename: 'instructions.txt', content: trimmedRemaining });
+  }
+
+  // ファイルが1件もなければ元の prompt 全体を context.txt として返す
+  if (files.length === 0) {
+    return [{ filename: 'context.txt', content: prompt }];
+  }
+
+  return files;
+}
+
+/**
+ * アップロードされた添付ファイルの URL を参照する短い prompt を構築する。
+ * Devin API の仕様に従い、`ATTACHMENT:"url"` を独立行で列挙する。
+ */
+function buildShortPromptWithAttachments(uploaded: Array<{ filename: string; url: string }>): string {
+  const lines: string[] = [
+    'Read the attached files carefully and complete the task.',
+    '',
+    '## Attached Files',
+    '',
+  ];
+  for (const f of uploaded) {
+    lines.push(`ATTACHMENT:"${f.url}"`);
+    lines.push(`(${f.filename})`);
+    lines.push('');
+  }
+  lines.push('## Instructions');
+  lines.push('');
+  lines.push('1. Analyze the attached context (instructions, diff, perspectives if any).');
+  lines.push('2. Generate the required output based on the instructions.');
+  lines.push('3. Output ONLY between the required markers:');
+  lines.push('   - For perspectives: `<!-- BEGIN TEST PERSPECTIVES JSON -->` ... `<!-- END TEST PERSPECTIVES JSON -->`');
+  lines.push('   - For patch: `<!-- BEGIN DONTFORGETEST PATCH -->` ... `<!-- END DONTFORGETEST PATCH -->`');
+  lines.push('4. Do NOT include anything else outside the markers.');
+  lines.push('5. Do NOT ask questions or request repository setup.');
+  return lines.join('\n');
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -220,11 +339,52 @@ export class DevinApiProvider implements AgentProvider {
       return;
     }
 
+    // プロンプトが上限を超える場合は、まず attachments アップロードを試みる
+    let finalPrompt: string;
+    if (options.prompt.length > DEVIN_PROMPT_MAX_CHARS) {
+      const attachmentsResult = await this.tryUploadPromptAsAttachments({
+        baseUrl: cfg.baseUrl,
+        apiKey: cfg.apiKey,
+        originalPrompt: options.prompt,
+        taskId: options.taskId,
+        onEvent: options.onEvent,
+        signal: abortController.signal,
+      });
+      if (attachmentsResult.ok) {
+        finalPrompt = attachmentsResult.shortPrompt;
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'info',
+          message: t('devinApi.attachmentsSplit', String(attachmentsResult.uploadedFiles.length)),
+          timestampMs: nowMs(),
+        });
+      } else {
+        // アップロード失敗 → truncate フォールバック
+        const maybeTruncated = truncateForDevinPrompt(options.prompt);
+        finalPrompt = maybeTruncated.prompt;
+        options.onEvent({
+          type: 'log',
+          taskId: options.taskId,
+          level: 'warn',
+          message: t(
+            'devinApi.attachmentsUploadFailed',
+            String(options.prompt.length),
+            String(DEVIN_PROMPT_MAX_CHARS),
+            attachmentsResult.error,
+          ),
+          timestampMs: nowMs(),
+        });
+      }
+    } else {
+      finalPrompt = options.prompt;
+    }
+
     const session = await this.createSession({
       baseUrl: cfg.baseUrl,
       apiKey: cfg.apiKey,
       body: {
-        prompt: options.prompt,
+        prompt: finalPrompt,
         idempotent: cfg.idempotent,
         max_acu_limit: cfg.maxAcuLimit,
         tags: cfg.tags,
@@ -257,6 +417,37 @@ export class DevinApiProvider implements AgentProvider {
       exitCode,
       timestampMs: nowMs(),
     });
+  }
+
+  /**
+   * プロンプトを分割して attachments にアップロードし、短い prompt を構築する。
+   * 成功時は ok=true と shortPrompt を返し、失敗時は ok=false と error を返す。
+   */
+  private async tryUploadPromptAsAttachments(params: {
+    baseUrl: string;
+    apiKey: string;
+    originalPrompt: string;
+    taskId: string;
+    onEvent: (event: TestGenEvent) => void;
+    signal: AbortSignal;
+  }): Promise<
+    | { ok: true; shortPrompt: string; uploadedFiles: Array<{ filename: string; url: string }> }
+    | { ok: false; error: string }
+  > {
+    try {
+      const files = splitPromptForAttachments(params.originalPrompt);
+      const uploaded = await this.uploadAttachments({
+        baseUrl: params.baseUrl,
+        apiKey: params.apiKey,
+        files,
+        signal: params.signal,
+      });
+      const shortPrompt = buildShortPromptWithAttachments(uploaded);
+      return { ok: true, shortPrompt, uploadedFiles: uploaded };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: msg };
+    }
   }
 
   private async createSession(params: {
@@ -302,6 +493,8 @@ export class DevinApiProvider implements AgentProvider {
     let delayMs = Math.min(params.maxDelayMs, Math.max(1000, params.initialDelayMs));
     let lastMessageCount = 0;
     let lastStatusEnum: string | undefined;
+    let unblockRetries = 0;
+    let sawEndMarker = false;
 
     while (true) {
       if (params.signal.aborted) {
@@ -380,6 +573,9 @@ export class DevinApiProvider implements AgentProvider {
           if (msg.length === 0) {
             continue;
           }
+          if (msg.includes(PERSPECTIVE_MARKER_END) || msg.includes(PATCH_MARKER_END)) {
+            sawEndMarker = true;
+          }
           const type = (m?.type ?? '').trim();
           // initial_user_message はプロンプトの反復になりやすいので抑制
           if (type === 'initial_user_message') {
@@ -399,7 +595,57 @@ export class DevinApiProvider implements AgentProvider {
         if (statusEnum === 'finished') {
           return 0;
         }
-        // blocked / expired は MVP では終了扱い（要追加入力/期限切れ）
+        // マーカー（END）が取れていれば、blocked でも成果物は回収できているため成功扱いにする
+        if (statusEnum === 'blocked' && sawEndMarker) {
+          const elapsedSec = Math.max(0, Math.floor((nowMs() - startedAt) / 1000));
+          params.onEvent({
+            type: 'log',
+            taskId: params.taskId,
+            level: 'warn',
+            message: `Devin セッションは status=blocked で終了しましたが、成果物マーカー（END）が確認できたため成功扱いにします（elapsed=${elapsedSec}s）。`,
+            timestampMs: nowMs(),
+          });
+          return 0;
+        }
+        // expired は終了扱い
+        // blocked は「追加入力待ち」だが、MVP では自動で 1 回だけ追送して継続を試みる
+        if (statusEnum === 'blocked' && unblockRetries < DEVIN_AUTO_UNBLOCK_MAX_RETRIES) {
+          unblockRetries += 1;
+          const elapsedSec = Math.max(0, Math.floor((nowMs() - startedAt) / 1000));
+          params.onEvent({
+            type: 'log',
+            taskId: params.taskId,
+            level: 'warn',
+            message: `Devin セッションが status=blocked になったため、自動で追加メッセージを送信して続行します（retry=${unblockRetries}/${DEVIN_AUTO_UNBLOCK_MAX_RETRIES}, elapsed=${elapsedSec}s）。`,
+            timestampMs: nowMs(),
+          });
+          try {
+            await this.postSessionMessage({
+              baseUrl: params.baseUrl,
+              apiKey: params.apiKey,
+              sessionId: params.sessionId,
+              message:
+                'Continue the task without asking questions. Do NOT request repository setup. You already have all necessary context in the prompt. Output the final result now.\n' +
+                '- For perspectives: output JSON between the required markers.\n' +
+                '- For patch: output unified diff between the required markers.\n' +
+                'Do not include anything else outside the markers.',
+              signal: params.signal,
+            });
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            params.onEvent({
+              type: 'log',
+              taskId: params.taskId,
+              level: 'warn',
+              message: `Devin /message の送信に失敗しました（続行します）: ${msg}`,
+              timestampMs: nowMs(),
+            });
+          }
+          await sleep(delayMs, params.signal);
+          continue;
+        }
+
+        // blocked / expired は終了扱い（要追加入力/期限切れ）
         const elapsedSec = Math.max(0, Math.floor((nowMs() - startedAt) / 1000));
         params.onEvent({
           type: 'log',
@@ -431,6 +677,91 @@ export class DevinApiProvider implements AgentProvider {
       // Exponential backoff（上限あり）
       delayMs = Math.min(params.maxDelayMs, Math.floor(delayMs * 1.2));
     }
+  }
+
+  private async postSessionMessage(params: {
+    baseUrl: string;
+    apiKey: string;
+    sessionId: string;
+    message: string;
+    signal: AbortSignal;
+  }): Promise<void> {
+    const url = `${params.baseUrl}/sessions/${encodeURIComponent(params.sessionId)}/message`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message: params.message }),
+      signal: params.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`Devin API /sessions/{id}/message failed: ${res.status} ${res.statusText} ${text}`.trim());
+    }
+  }
+
+  /**
+   * Devin API /attachments にファイルをアップロードし、参照 URL を取得する。
+   * multipart/form-data で `file` フィールドに送信する。
+   */
+  private async uploadAttachment(params: {
+    baseUrl: string;
+    apiKey: string;
+    filename: string;
+    content: string;
+    signal: AbortSignal;
+  }): Promise<{ url: string }> {
+    const url = `${params.baseUrl}/attachments`;
+    const blob = new Blob([params.content], { type: 'text/plain' });
+    const formData = new FormData();
+    formData.append('file', blob, params.filename);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+        // Content-Type は FormData の場合、fetch が自動設定する（手動設定すると boundary が壊れる）
+      },
+      body: formData,
+      signal: params.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`Devin API /attachments failed: ${res.status} ${res.statusText} ${text}`.trim());
+    }
+    const parsed: unknown = text.length > 0 ? JSON.parse(text) : {};
+    const rec = isRecord(parsed) ? parsed : undefined;
+    // Devin 公式ドキュメントでは `url` フィールドで返ってくる想定
+    const fileUrl = typeof rec?.url === 'string' ? rec.url : undefined;
+    if (!fileUrl) {
+      throw new Error('Devin API /attachments returned no url');
+    }
+    return { url: fileUrl };
+  }
+
+  /**
+   * 複数のファイルを添付アップロードし、各 URL を返す。1 件でも失敗すれば例外をスローする。
+   */
+  private async uploadAttachments(params: {
+    baseUrl: string;
+    apiKey: string;
+    files: Array<{ filename: string; content: string }>;
+    signal: AbortSignal;
+  }): Promise<Array<{ filename: string; url: string }>> {
+    const results: Array<{ filename: string; url: string }> = [];
+    for (const f of params.files) {
+      const uploaded = await this.uploadAttachment({
+        baseUrl: params.baseUrl,
+        apiKey: params.apiKey,
+        filename: f.filename,
+        content: f.content,
+        signal: params.signal,
+      });
+      results.push({ filename: f.filename, url: uploaded.url });
+    }
+    return results;
   }
 }
 

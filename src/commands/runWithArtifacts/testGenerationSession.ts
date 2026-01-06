@@ -82,6 +82,15 @@ export class TestGenerationSession {
   private readonly runLocation: 'local' | 'worktree';
   private readonly localWorkspaceRoot: string;
   private readonly worktreeOps: WorktreeOps;
+  /**
+   * testCommand が「ユーザー/呼び出し側によって明示設定されたもの」かどうか。
+   * - 設定UIの既定値（package.json の configuration.default）により "npm test" が返ってくるケースでは false になる。
+   * - settingsOverride で testCommand を渡した場合は true とみなす。
+   *
+   * NOTE:
+   * 非Nodeプロジェクトで既定の "npm test" が走って ENOENT になる事故を避けるために使用する。
+   */
+  private readonly isTestCommandExplicit: boolean;
 
   private aborted: boolean = false;
   private runWorkspaceRoot: string;
@@ -107,6 +116,7 @@ export class TestGenerationSession {
       createTemporaryWorktree,
       removeTemporaryWorktree,
     };
+    this.isTestCommandExplicit = this.resolveIsTestCommandExplicit(options.settingsOverride?.testCommand);
   }
 
   public async run(): Promise<void> {
@@ -159,12 +169,63 @@ export class TestGenerationSession {
       // キャンセルチェック
       if (this.checkCancelled()) return;
 
-      // テスト実行とレポート保存
+      // 生成が失敗（exit!=0 または null）した場合は、テスト実行へ進まない。
+      // 失敗の原因が testCommand の exitCode で上書きされるのを防ぐ（例: npm ENOENT=254）。
+      if (genExit !== 0) {
+        await this.finishAfterGenerationFailure(genExit);
+        return;
+      }
+
+      // テスト実行とレポート保存（生成成功時のみ）
       await this.runTestExecution(genExit);
 
     } finally {
       await this.cleanup();
     }
+  }
+
+  /**
+   * テスト生成が失敗した場合の終了処理。
+   * - テスト実行は行わない
+   * - 実行レポートは "skipped" として保存し、理由を明示する
+   * - パネル表示用のサマリーは「失敗（exit=genExit）」に更新する
+   */
+  private async finishAfterGenerationFailure(genExit: number | null): Promise<void> {
+    const msg = t('testExecution.skip.generationFailed', String(genExit ?? 'null'));
+    const warnEv = emitLogEvent(`${this.options.generationTaskId}-test`, 'warn', msg);
+    appendEventToOutput(warnEv);
+    this.captureEvent(warnEv);
+
+    const extensionVersion = this.resolveExtensionVersion();
+    const skippedResult: TestExecutionResult = {
+      command: this.settings.testCommand,
+      cwd: this.runWorkspaceRoot,
+      exitCode: null,
+      signal: null,
+      durationMs: 0,
+      stdout: '',
+      stderr: '',
+      executionRunner: 'unknown',
+      skipped: true,
+      skipReason: msg,
+      extensionLog: this.testExecutionLogLines.join('\n'),
+      extensionVersion,
+    };
+    const saved = await saveTestExecutionReport({
+      workspaceRoot: this.localWorkspaceRoot,
+      generationLabel: this.options.generationLabel,
+      targetPaths: this.options.targetPaths,
+      model: this.options.model,
+      reportDir: this.settings.testExecutionReportDir,
+      timestamp: this.timestamp,
+      result: skippedResult,
+    });
+
+    // パネル向け最終結果を更新（生成失敗を優先して表示）
+    taskManager.setLastTestReportStatus({ success: false, exitCode: genExit ?? null, updatedAt: nowMs() });
+
+    appendEventToOutput(emitLogEvent(warnEv.taskId, 'info', t('testExecution.reportSaved', saved.relativePath ?? saved.absolutePath)));
+    handleTestGenEventForProgressView({ type: 'completed', taskId: this.options.generationTaskId, exitCode: genExit, timestampMs: nowMs() });
   }
 
   private checkCancelled(): boolean {
@@ -437,25 +498,35 @@ export class TestGenerationSession {
         },
       });
 
-      // provider 自体が失敗している場合は適用しない（blocked/expired 等）
+      const raw = logs.join('\n');
+      const patchText = extractDevinPatchFromLogs(raw);
+      if (!patchText) {
+        // provider が失敗していてパッチも無い場合は、その終了コードを尊重する
+        if (baseExit !== 0) {
+          appendEventToOutput(
+            emitLogEvent(
+              this.options.generationTaskId,
+              'warn',
+              `Devin の終了コードが 0 ではなく、パッチも抽出できないため失敗扱いにします（exit=${baseExit ?? 'null'}）`,
+            ),
+          );
+          return baseExit;
+        }
+        appendEventToOutput(
+          emitLogEvent(this.options.generationTaskId, 'warn', 'Devin 出力からパッチを抽出できませんでした（マーカー未検出）。'),
+        );
+        return 1;
+      }
+
+      // status=blocked などで exit!=0 でも、パッチが抽出できた場合は適用を試みる。
       if (baseExit !== 0) {
         appendEventToOutput(
           emitLogEvent(
             this.options.generationTaskId,
             'warn',
-            `Devin の終了コードが 0 ではないため、パッチ適用をスキップします（exit=${baseExit ?? 'null'}）`,
+            `Devin の終了コードが 0 ではありませんが、パッチを抽出できたため適用を試みます（exit=${baseExit ?? 'null'}）。`,
           ),
         );
-        return baseExit;
-      }
-
-      const raw = logs.join('\n');
-      const patchText = extractDevinPatchFromLogs(raw);
-      if (!patchText) {
-        appendEventToOutput(
-          emitLogEvent(this.options.generationTaskId, 'warn', 'Devin 出力からパッチを抽出できませんでした（マーカー未検出）。'),
-        );
-        return 1;
       }
 
       const applyResult = await applyDevinPatchToRepo({
@@ -837,12 +908,15 @@ export class TestGenerationSession {
     // Worktree モードでは、ローカルへテスト差分の適用に成功した場合のみ自動テストを実行する。
     // worktreeApplyResult が未設定（例: 途中で例外が発生）な場合も「適用できていない」とみなし、テストは安全側でスキップする。
     const isWorktreeAppliedToLocal = worktreeApplyResult?.applied === true;
-    const shouldSkipTestExecution = isTestCommandEmpty || (isWorktreeMode && !isWorktreeAppliedToLocal);
-    if (shouldSkipTestExecution) {
-      const msg =
-        isTestCommandEmpty
-          ? t('testExecution.skip.emptyCommand')
-          : t('testExecution.skip.worktreeMvp');
+    const shouldSkipByWorktree = isWorktreeMode && !isWorktreeAppliedToLocal;
+    const autoSkipReason = await this.resolveAutoSkipReason({
+      testWorkspaceRoot,
+      trimmedTestCommand,
+      isTestCommandEmpty,
+      shouldSkipByWorktree,
+    });
+    if (autoSkipReason) {
+      const msg = autoSkipReason;
       const ev = emitLogEvent(`${this.options.generationTaskId}-test`, 'warn', msg);
       handleTestGenEventForStatusBar({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
       this.captureEvent({ type: 'started', taskId: ev.taskId, label: 'test-command', detail: 'skipped', timestampMs: nowMs() });
@@ -1180,6 +1254,52 @@ export class TestGenerationSession {
       testCommand,
       readFileUtf8: (filePath: string) => fs.promises.readFile(filePath, 'utf8'),
     });
+  }
+
+  /**
+   * "npm test" 既定値の事故防止など、拡張機能側で安全にスキップすべき理由があればメッセージを返す。
+   * 理由がなければ undefined。
+   */
+  private async resolveAutoSkipReason(params: {
+    testWorkspaceRoot: string;
+    trimmedTestCommand: string;
+    isTestCommandEmpty: boolean;
+    shouldSkipByWorktree: boolean;
+  }): Promise<string | undefined> {
+    if (params.isTestCommandEmpty) {
+      return t('testExecution.skip.emptyCommand');
+    }
+    if (params.shouldSkipByWorktree) {
+      return t('testExecution.skip.worktreeMvp');
+    }
+    // NOTE:
+    // testCommand が「既定値の npm test」の場合だけ、package.json が無いプロジェクトでは自動スキップする。
+    // ユーザーが明示的に "npm test" を設定している場合は、意図を尊重して実行する（失敗も含めてログに残す）。
+    if (!this.isTestCommandExplicit && /^npm(\s+run)?\s+test\b/.test(params.trimmedTestCommand)) {
+      const pkgPath = path.join(params.testWorkspaceRoot, 'package.json');
+      try {
+        await fs.promises.stat(pkgPath);
+      } catch {
+        return t('testExecution.skip.defaultNpmNoPackageJson');
+      }
+    }
+    return undefined;
+  }
+
+  private resolveIsTestCommandExplicit(testCommandOverride: string | undefined): boolean {
+    if (typeof testCommandOverride === 'string') {
+      return true;
+    }
+    try {
+      const inspected = vscode.workspace.getConfiguration('dontforgetest').inspect<string>('testCommand');
+      const hasWorkspaceFolder = inspected?.workspaceFolderValue !== undefined;
+      const hasWorkspace = inspected?.workspaceValue !== undefined;
+      const hasGlobal = inspected?.globalValue !== undefined;
+      return hasWorkspaceFolder || hasWorkspace || hasGlobal;
+    } catch {
+      // inspect が失敗する状況では安全側（既定値扱い）とする
+      return false;
+    }
   }
 }
 

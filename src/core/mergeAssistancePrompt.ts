@@ -12,7 +12,12 @@ export interface MergeAssistancePromptParams {
   taskId: string;
   applyCheckOutput: string;
   patchPath: string;
-  snapshotDir: string;
+  /**
+   * 生成結果のスナップショット保存先。
+   * - Worktree経路では必ず作成される
+   * - Devinパッチ経路など、スナップショットが無い場合は undefined を許容する
+   */
+  snapshotDir?: string;
   testPaths: string[];
   preTestCheckCommand: string;
 }
@@ -25,6 +30,7 @@ export function buildMergeAssistancePromptText(params: MergeAssistancePromptPara
     preCheck.length > 0
       ? t('mergeAssistance.steps.step3.withCommand', preCheck)
       : t('mergeAssistance.steps.step3.withoutCommand');
+  const snapshotDirLabel = params.snapshotDir && params.snapshotDir.trim().length > 0 ? params.snapshotDir.trim() : t('artifact.none');
 
   return [
     t('mergeAssistance.prompt.intro1'),
@@ -41,7 +47,7 @@ export function buildMergeAssistancePromptText(params: MergeAssistancePromptPara
     '',
     t('mergeAssistance.prompt.inputsTitle'),
     t('mergeAssistance.prompt.inputs.patchFile', params.patchPath),
-    t('mergeAssistance.prompt.inputs.snapshotDir', params.snapshotDir),
+    t('mergeAssistance.prompt.inputs.snapshotDir', snapshotDirLabel),
     t('mergeAssistance.prompt.inputs.targetsTitle'),
     targets,
     '',

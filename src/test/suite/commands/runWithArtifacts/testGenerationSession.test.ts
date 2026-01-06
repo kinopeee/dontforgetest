@@ -875,6 +875,72 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       }
     });
 
+    // TC-SESSION-SKIP-N-03
+    test('TC-SESSION-SKIP-N-03: runTestExecution auto-skips default "npm test" when package.json is missing and testCommand is not explicitly set', async () => {
+      // Given: A workspace root without package.json, and testCommand is not set explicitly (defaults to "npm test")
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+
+      // settingsOverride で testCommand を渡さない（= 明示設定ではない）
+      const session = new TestGenerationSession({
+        provider: dummyProvider,
+        workspaceRoot,
+        cursorAgentCommand: 'cursor-agent',
+        testStrategyPath: '',
+        generationLabel: 'Label',
+        targetPaths: [],
+        generationPrompt: '',
+        perspectiveReferenceText: '',
+        model: undefined,
+        generationTaskId: 'task-default-npm-skip',
+        runLocation: 'local',
+        settingsOverride: {
+          includeTestPerspectiveTable: false,
+          testExecutionRunner: 'extension',
+          // testCommand is intentionally omitted
+          enablePreTestCheck: false,
+        },
+        extensionContext: { extension: { packageJSON: { version: '0.0.0' } } } as unknown as vscode.ExtensionContext,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+
+      const originalSave = artifacts.saveTestExecutionReport;
+      const originalRun = testRunner.runTestCommand;
+      let captured: import('../../../../core/artifacts').TestExecutionResult | undefined;
+
+      artifacts.saveTestExecutionReport = (async (params: { result: import('../../../../core/artifacts').TestExecutionResult }) => {
+        captured = params.result;
+        return { absolutePath: '/tmp/report.md' };
+      }) as unknown as typeof artifacts.saveTestExecutionReport;
+      testRunner.runTestCommand = (async () => {
+        assert.fail('runTestCommand should not be called when default npm test is auto-skipped');
+      }) as unknown as typeof testRunner.runTestCommand;
+
+      try {
+        // When: runTestExecution is called
+        const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
+        await runTestExecution(0);
+
+        // Then: It saves a skipped result with the default-npm skip reason
+        assert.ok(captured, 'Expected saveTestExecutionReport to be called');
+        assert.strictEqual(captured?.skipped, true, 'Expected skipped=true');
+        assert.strictEqual(
+          captured?.skipReason,
+          l10n.t('testExecution.skip.defaultNpmNoPackageJson'),
+          'Expected skipReason for default npm test without package.json',
+        );
+      } finally {
+        artifacts.saveTestExecutionReport = originalSave;
+        testRunner.runTestCommand = originalRun;
+      }
+    });
+
     // TC-SESSION-SKIP-E-01
     test('TC-SESSION-SKIP-E-01: buildTestExecutionArtifactMarkdown uses envSource=unknown for skipped result (executionRunner="unknown")', async () => {
       // Given: A skipped result created by runTestExecution (empty testCommand)
@@ -1088,6 +1154,85 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
         assert.strictEqual(preparingCalls.length, 1);
       } finally {
         (taskManager as unknown as { updatePhase: typeof taskManager.updatePhase }).updatePhase = originalUpdatePhase;
+        runToCompletion.runProviderToCompletion = originalRunProviderToCompletion;
+        artifacts.saveTestExecutionReport = originalSave;
+        testRunner.runTestCommand = originalRunTest;
+        cleanupStep.cleanupUnexpectedPerspectiveFiles = originalCleanup;
+      }
+    });
+
+    // TC-N-TGS-06
+    test('TC-N-TGS-06: run() does not update phase "running-tests" when generation fails', async () => {
+      // Case ID: TC-N-TGS-06
+      // Given: A full-mode session where generation (runProviderToCompletion) fails
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-phase-'));
+      workspaceRoots.push(workspaceRoot);
+      const taskId = 'phase-generation-failed';
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const runToCompletion = require('../../../../providers/runToCompletion') as typeof import('../../../../providers/runToCompletion');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const testRunner = require('../../../../core/testRunner') as typeof import('../../../../core/testRunner');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const cleanupStep = require('../../../../commands/runWithArtifacts/cleanupStep') as typeof import('../../../../commands/runWithArtifacts/cleanupStep');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+      const session = createSession({
+        workspaceRoot,
+        generationTaskId: taskId,
+        runMode: 'full',
+        includeTestPerspectiveTable: false,
+        testCommand: 'echo should-not-run',
+      });
+
+      const originalRunProviderToCompletion = runToCompletion.runProviderToCompletion;
+      const originalSave = artifacts.saveTestExecutionReport;
+      const originalRunTest = testRunner.runTestCommand;
+      const originalCleanup = cleanupStep.cleanupUnexpectedPerspectiveFiles;
+
+      const phaseLabels: string[] = [];
+      const listener = (_isRunning: boolean, _taskCount: number, phaseLabel?: string) => {
+        if (typeof phaseLabel === 'string' && phaseLabel.length > 0) {
+          phaseLabels.push(phaseLabel);
+        }
+      };
+      taskManager.addListener(listener);
+
+      let captured: import('../../../../core/artifacts').TestExecutionResult | undefined;
+      runToCompletion.runProviderToCompletion = (async () => 1) as unknown as typeof runToCompletion.runProviderToCompletion;
+      artifacts.saveTestExecutionReport = (async (params: { result: import('../../../../core/artifacts').TestExecutionResult }) => {
+        captured = params.result;
+        return { absolutePath: '/tmp/report.md' };
+      }) as unknown as typeof artifacts.saveTestExecutionReport;
+      testRunner.runTestCommand = (async () => {
+        assert.fail('runTestCommand should not be called when generation fails');
+      }) as unknown as typeof testRunner.runTestCommand;
+      cleanupStep.cleanupUnexpectedPerspectiveFiles = (async () => []) as unknown as typeof cleanupStep.cleanupUnexpectedPerspectiveFiles;
+
+      try {
+        // When: run() is called
+        await session.run();
+
+        // Then: Phase "running-tests" is never reached
+        assert.ok(!phaseLabels.includes(l10n.t('progressTreeView.phase.runningTests')), 'Expected not to enter running-tests phase');
+        // And: A skipped execution report is saved with generationFailed reason
+        assert.ok(captured, 'Expected execution report to be saved');
+        assert.strictEqual(captured?.skipped, true, 'Expected skipped=true');
+        assert.strictEqual(
+          captured?.skipReason,
+          l10n.t('testExecution.skip.generationFailed', '1'),
+          'Expected generation-failed skip reason',
+        );
+        // And: Panel summary is updated to show generation failure (exit=1)
+        const last = taskManager.getLastTestReportStatus();
+        assert.ok(last, 'Expected last test report status to be set');
+        assert.strictEqual(last?.success, false, 'Expected success=false');
+        assert.strictEqual(last?.exitCode, 1, 'Expected exitCode=1');
+      } finally {
+        taskManager.removeListener(listener);
         runToCompletion.runProviderToCompletion = originalRunProviderToCompletion;
         artifacts.saveTestExecutionReport = originalSave;
         testRunner.runTestCommand = originalRunTest;

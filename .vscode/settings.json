@@ -1,5 +1,6 @@
 {
     "testgen-agent.defaultModel": "",
     "testgen-agent.testStrategyPath": "",
-    "dontforgetest.testStrategyPath": ""
+    "dontforgetest.testStrategyPath": "",
+    "dontforgetest.agentProvider": "devinApi"
 }

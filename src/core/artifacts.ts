@@ -775,7 +775,13 @@ export function buildTestExecutionArtifactMarkdown(params: {
 
   // stdoutをパースしてテスト結果を抽出
   const testResult = parseMochaOutput(params.result.stdout);
-  const summarySection = buildTestSummarySection(params.result.exitCode, params.result.durationMs, testResult, params.result.testResult);
+  const summarySection = buildTestSummarySection(
+    params.result.skipped === true,
+    params.result.exitCode,
+    params.result.durationMs,
+    testResult,
+    params.result.testResult,
+  );
   const failureDetailsSection = buildFailureDetailsSection(params.result.testResult);
   const detailsSection = buildTestDetailsSection(testResult);
 
@@ -929,6 +935,7 @@ function truncate(text: string, maxChars: number): string {
  * テスト結果サマリーのMarkdownを生成する。
  */
 function buildTestSummarySection(
+  skipped: boolean,
   exitCode: number | null,
   durationMs: number,
   testResult: ParsedTestResult,
@@ -941,8 +948,12 @@ function buildTestSummarySection(
   // 2. exitCode === null でも、テスト結果が取得できて失敗数が0なら成功とみなす
   //    （VS Code 拡張機能テストでは Extension Host が別プロセスで起動するため exitCode が null になることがある）
   const isSuccess = exitCode === 0 || (exitCode === null && hasFailedCount && summary.failed === 0);
-  const statusEmoji = isSuccess ? '✅' : '❌';
-  const statusText = isSuccess ? t('artifact.executionReport.success') : t('artifact.executionReport.failure');
+  const statusEmoji = skipped ? '⏭️' : isSuccess ? '✅' : '❌';
+  const statusText = skipped
+    ? t('artifact.executionReport.skipped')
+    : isSuccess
+      ? t('artifact.executionReport.success')
+      : t('artifact.executionReport.failure');
   const durationSec = (durationMs / 1000).toFixed(1);
 
   const lines: string[] = [

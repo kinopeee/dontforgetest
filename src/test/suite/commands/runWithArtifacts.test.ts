@@ -17,7 +17,7 @@ class MockProvider implements AgentProvider {
   public history: AgentRunOptions[] = [];
 
   constructor(
-    private readonly exitCode: number | null = 0,
+    private readonly exitCodeOrResolver: number | null | ((options: AgentRunOptions) => number | null) = 0,
     private readonly customBehavior?: (options: AgentRunOptions) => void,
     private readonly perspectiveOutput?: string // 観点表生成時の出力を制御用
   ) { }
@@ -25,6 +25,7 @@ class MockProvider implements AgentProvider {
   run(options: AgentRunOptions): RunningTask {
     this.lastRunOptions = options;
     this.history.push(options);
+    const exitCode = typeof this.exitCodeOrResolver === 'function' ? this.exitCodeOrResolver(options) : this.exitCodeOrResolver;
 
     // 非同期イベントを模倣
     setTimeout(() => {
@@ -51,7 +52,7 @@ class MockProvider implements AgentProvider {
             message: this.perspectiveOutput,
             timestampMs: Date.now(),
           });
-        } else if (this.exitCode === 0) {
+        } else if (exitCode === 0) {
           options.onEvent({
             type: 'log',
             taskId: options.taskId,
@@ -73,7 +74,7 @@ class MockProvider implements AgentProvider {
       options.onEvent({
         type: 'completed',
         taskId: options.taskId,
-        exitCode: this.exitCode,
+        exitCode,
         timestampMs: Date.now(),
       });
     }, 10);
@@ -1753,11 +1754,13 @@ suite('commands/runWithArtifacts.ts', () => {
 
   // TC-CMD-18: cursor-agent 異常終了 (exit!=0) + マーカーなし
   test('TC-CMD-18: cursor-agent が異常終了しマーカーもない場合、エラーレポートが生成され、exitCodeが記録される', async () => {
-    // Given: 異常終了ログ + exitCode=1
+    // Given: テスト生成は成功し、テスト実行（cursorAgent）だけが異常終了する（exitCode=1）
     const taskId = `task-18-${Date.now()}`;
     const reportDir = path.join(baseTempDir, 'reports-18');
 
-    const provider = new MockProvider(1, (options) => {
+    const provider = new MockProvider((options) => {
+      return options.taskId.endsWith('-test-agent') ? 1 : 0;
+    }, (options) => {
       if (options.taskId.endsWith('-test-agent')) {
         options.onEvent({
           type: 'log',
