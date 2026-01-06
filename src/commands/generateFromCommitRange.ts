@@ -5,6 +5,7 @@ import { buildTestGenPrompt } from '../core/promptBuilder';
 import { analyzeGitUnifiedDiff, extractChangedPaths, getCommitRangeDiff } from '../git/diffAnalyzer';
 import { type AgentProvider } from '../providers/provider';
 import { runWithArtifacts, type TestGenerationRunMode } from './runWithArtifacts';
+import { DEVIN_API_PROVIDER_ID } from '../providers/providerIds';
 
 export interface GenerateTestCommandOptions {
   runLocation?: 'local' | 'worktree';
@@ -68,7 +69,7 @@ export async function generateTestFromCommitRange(
     targetLabel: t('prompt.commitRangeLabel', trimmedRange),
     targetPaths: changedFiles,
     testStrategyPath,
-    agentMode: provider.id === 'devin-api' ? 'patch' : 'cliAgent',
+    agentMode: provider.id === DEVIN_API_PROVIDER_ID ? 'patch' : 'cliAgent',
   });
 
   const diffForPrompt = truncateText(diffText, 20_000);

@@ -36,6 +36,7 @@ import { runTestCommandViaCursorAgent } from './testExecutionStep';
 import { runPerspectiveTableStep } from './perspectiveStep';
 import { applyDevinPatchToRepo, extractDevinPatchFromLogs } from './devinPatchApplyStep';
 import type { RunWithArtifactsOptions, TestGenerationRunMode, WorktreeOps } from '../runWithArtifacts';
+import { DEVIN_API_PROVIDER_ID } from '../../providers/providerIds';
 
 type ReadFileUtf8 = (filePath: string) => Promise<string>;
 
@@ -473,7 +474,7 @@ export class TestGenerationSession {
    */
   private async runGenerationWithFileCollection(prompt: string): Promise<number | null> {
     // Devin はローカルへ直接書き込めない想定のため、パッチ出力→git apply で反映する
-    if (this.options.provider.id === 'devin-api') {
+    if (this.options.provider.id === DEVIN_API_PROVIDER_ID) {
       const logs: string[] = [];
       const baseExit = await runProviderToCompletion({
         provider: this.options.provider,
@@ -736,7 +737,7 @@ export class TestGenerationSession {
    */
   private buildAutoFixPrompt(result: ComplianceCheckResult, perspectiveMarkdown: string | undefined): string {
     const issuesText = formatComplianceIssuesForPrompt(result);
-    const isDevin = this.options.provider.id === 'devin-api';
+    const isDevin = this.options.provider.id === DEVIN_API_PROVIDER_ID;
     const parts: string[] = [
       '## テストコード自動修正',
       '',

@@ -5,6 +5,7 @@ import { buildTestGenPrompt } from '../core/promptBuilder';
 import { execGitStdout } from '../git/gitExec';
 import { runWithArtifacts, type TestGenerationRunMode } from './runWithArtifacts';
 import { type AgentProvider } from '../providers/provider';
+import { DEVIN_API_PROVIDER_ID } from '../providers/providerIds';
 
 /**
  * 最新コミット（HEAD）の差分に対してテスト生成を実行する。
@@ -46,7 +47,7 @@ export async function generateTestFromLatestCommit(
     targetLabel: t('prompt.latestCommitLabel', commit.slice(0, 7)),
     targetPaths: changedFiles,
     testStrategyPath,
-    agentMode: provider.id === 'devin-api' ? 'patch' : 'cliAgent',
+    agentMode: provider.id === DEVIN_API_PROVIDER_ID ? 'patch' : 'cliAgent',
   });
 
   const finalPrompt = [

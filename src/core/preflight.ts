@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { getModelSettings, getEffectiveDefaultModel } from './modelSettings';
 import { t } from './l10n';
 import { getAgentProviderId, type AgentProviderId } from '../providers/configuredProvider';
+import { DEVIN_API_KEY_ENV, DEVIN_API_PROVIDER_ID } from '../providers/providerIds';
 
 export interface PreflightOk {
   workspaceRoot: string;
@@ -58,7 +59,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
   if (agentProviderId === 'devinApi') {
     // Devin API は CLI を必要としないため、API Key の存在だけ確認する
     const devinApiKeyRaw = (config.get<string>('devinApiKey') ?? '').trim();
-    const apiKey = devinApiKeyRaw.length > 0 ? devinApiKeyRaw : (process.env.DEVIN_API_KEY ?? '').trim();
+    const apiKey = devinApiKeyRaw.length > 0 ? devinApiKeyRaw : (process.env[DEVIN_API_KEY_ENV] ?? '').trim();
     if (apiKey.length === 0) {
       if (process.env.VSCODE_TEST_RUNNER === '1') {
         void vscode.window.showErrorMessage(t('devinApi.missingApiKey'));
@@ -81,8 +82,8 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
       defaultModel: undefined, // Devin はモデル指定が提供されない
       testStrategyPath: effectiveTestStrategyPath,
       agentProviderId,
-      agentCommand: 'devin-api', // Provider 側で無視されるが、インターフェース互換のため設定する
-      cursorAgentCommand: 'devin-api', // 後方互換
+      agentCommand: DEVIN_API_PROVIDER_ID, // Provider 側で無視されるが、インターフェース互換のため設定する
+      cursorAgentCommand: DEVIN_API_PROVIDER_ID, // 後方互換
     };
   }
 

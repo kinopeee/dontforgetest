@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { nowMs, type TestGenEvent } from '../core/event';
 import { t } from '../core/l10n';
 import { type AgentProvider, type AgentRunOptions, type RunningTask } from './provider';
+import { DEVIN_API_KEY_ENV, DEVIN_API_PROVIDER_ID } from './providerIds';
 
 type DevinSessionCreateRequest = {
   prompt: string;
@@ -38,6 +39,8 @@ const DEVIN_PROMPT_MAX_CHARS = 30_000;
 const DEVIN_PROMPT_TARGET_CHARS = 28_000;
 // blocked 時に「追加入力なしで完了せよ」を追送する最大回数（MVP）
 const DEVIN_AUTO_UNBLOCK_MAX_RETRIES = 1;
+// 異常系で API が終了状態を返さない場合に無限ポーリングしないための上限（MVP）
+const DEVIN_POLL_MAX_DURATION_MS = 60 * 60 * 1000; // 60分
 
 const PERSPECTIVE_MARKER_END = '<!-- END TEST PERSPECTIVES JSON -->';
 const PATCH_MARKER_END = '<!-- END DONTFORGETEST PATCH -->';
@@ -205,7 +208,7 @@ function isDevinEndState(statusEnum: string | undefined): statusEnum is DevinEnd
  * - API は REST ポーリングのみ。WebSocket/SSE はない。
  */
 export class DevinApiProvider implements AgentProvider {
-  public readonly id: string = 'devin-api';
+  public readonly id: string = DEVIN_API_PROVIDER_ID;
   public readonly displayName: string = 'Devin API';
 
   private activeAbortController: AbortController | undefined;
@@ -288,7 +291,7 @@ export class DevinApiProvider implements AgentProvider {
   } {
     const config = vscode.workspace.getConfiguration('dontforgetest');
     const apiKeyRaw = (config.get<string>('devinApiKey') ?? '').trim();
-    const apiKey = apiKeyRaw.length > 0 ? apiKeyRaw : (process.env.DEVIN_API_KEY ?? '').trim() || undefined;
+    const apiKey = apiKeyRaw.length > 0 ? apiKeyRaw : (process.env[DEVIN_API_KEY_ENV] ?? '').trim() || undefined;
     const baseUrl = normalizeBaseUrl(config.get<string>('devinBaseUrl') ?? 'https://api.devin.ai/v1');
 
     const idempotentRaw = config.get<boolean>('devinIdempotent', true);
@@ -499,6 +502,17 @@ export class DevinApiProvider implements AgentProvider {
     while (true) {
       if (params.signal.aborted) {
         return null;
+      }
+      // 全体タイムアウト（異常系で無限に待たない）
+      if (nowMs() - startedAt > DEVIN_POLL_MAX_DURATION_MS) {
+        params.onEvent({
+          type: 'log',
+          taskId: params.taskId,
+          level: 'error',
+          message: `Devin セッションのポーリングがタイムアウトしました（${Math.floor(DEVIN_POLL_MAX_DURATION_MS / 60_000)}分経過）。`,
+          timestampMs: nowMs(),
+        });
+        return 1;
       }
 
       let res: Response;
@@ -731,12 +745,32 @@ export class DevinApiProvider implements AgentProvider {
     if (!res.ok) {
       throw new Error(`Devin API /attachments failed: ${res.status} ${res.statusText} ${text}`.trim());
     }
-    const parsed: unknown = text.length > 0 ? JSON.parse(text) : {};
-    const rec = isRecord(parsed) ? parsed : undefined;
-    // Devin 公式ドキュメントでは `url` フィールドで返ってくる想定
-    const fileUrl = typeof rec?.url === 'string' ? rec.url : undefined;
-    if (!fileUrl) {
-      throw new Error('Devin API /attachments returned no url');
+    const trimmed = text.trim();
+
+    // 仕様メモ（docs/devin-api-integration.ja.md）では、レスポンスは「URL文字列」。
+    // 実装は互換のため、以下を許容する:
+    // - JSON string: "https://..."
+    // - raw string: https://...
+    // - JSON object: { "url": "https://..." }（将来/別仕様）
+    let fileUrl: string | undefined;
+
+    if (trimmed.length > 0) {
+      // まずは JSON として解釈を試みる（"..." や {"url":...}）
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        if (typeof parsed === 'string') {
+          fileUrl = parsed.trim();
+        } else if (isRecord(parsed) && typeof parsed.url === 'string') {
+          fileUrl = parsed.url.trim();
+        }
+      } catch {
+        // JSON でなければ raw string として扱う
+        fileUrl = trimmed;
+      }
+    }
+
+    if (!fileUrl || fileUrl.length === 0) {
+      throw new Error(`Devin API /attachments returned no url (response: ${trimmed.slice(0, 200)})`.trim());
     }
     return { url: fileUrl };
   }

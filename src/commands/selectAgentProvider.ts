@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { t } from '../core/l10n';
 import { getAgentProviderId, type AgentProviderId } from '../providers/configuredProvider';
+import { DEVIN_API_KEY_ENV } from '../providers/providerIds';
 
 type AgentPickItem = vscode.QuickPickItem & { providerId: AgentProviderId };
 
@@ -11,7 +12,7 @@ type AgentPickItem = vscode.QuickPickItem & { providerId: AgentProviderId };
 function isDevinApiKeySet(): boolean {
   const config = vscode.workspace.getConfiguration('dontforgetest');
   const devinApiKeyRaw = (config.get<string>('devinApiKey') ?? '').trim();
-  const apiKey = devinApiKeyRaw.length > 0 ? devinApiKeyRaw : (process.env.DEVIN_API_KEY ?? '').trim();
+  const apiKey = devinApiKeyRaw.length > 0 ? devinApiKeyRaw : (process.env[DEVIN_API_KEY_ENV] ?? '').trim();
   return apiKey.length > 0;
 }
 

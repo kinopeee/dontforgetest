@@ -6,6 +6,7 @@ import { analyzeGitUnifiedDiff, extractChangedPaths, getWorkingTreeDiff, type Wo
 import { type AgentProvider } from '../providers/provider';
 import { runWithArtifacts, type TestGenerationRunMode } from './runWithArtifacts';
 import { truncateText } from './runWithArtifacts/utils';
+import { DEVIN_API_PROVIDER_ID } from '../providers/providerIds';
 
 /** プロンプトに含める差分テキストの最大文字数 */
 const MAX_DIFF_CHARS_FOR_PROMPT = 20_000;
@@ -91,7 +92,7 @@ export async function generateTestFromWorkingTree(
     targetLabel: t('prompt.uncommittedLabel', selected.label),
     targetPaths: changedFiles,
     testStrategyPath,
-    agentMode: provider.id === 'devin-api' ? 'patch' : 'cliAgent',
+    agentMode: provider.id === DEVIN_API_PROVIDER_ID ? 'patch' : 'cliAgent',
   });
 
   const diffForPrompt = truncateText(diffText, MAX_DIFF_CHARS_FOR_PROMPT);
