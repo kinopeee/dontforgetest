@@ -1,6 +1,6 @@
 {
   "displayName": "Dontforgetest (Test Generation Agent)",
-  "description": "VS Code 互換エディタ（Cursor / VS Code / Windsurf）向け、コミット差分からワンアクションでテスト生成",
+  "description": "VS Code 互換エディタ（Cursor / VS Code / Windsurf / Antigravity）向け、コミット差分からワンアクションでテスト生成",
   "viewsContainers.activitybar.title": "Dontforgetest",
   "views.settingsPanel.name": "設定",
   "views.controlPanel.name": "操作",

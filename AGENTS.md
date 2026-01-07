@@ -15,7 +15,7 @@ CLI エージェント（現在対応: Cursor CLI / Claude Code / Gemini CLI / C
 
 - **言語**: TypeScript 5.7+
 - **ランタイム**: Node.js
-- **ターゲット**: VS Code 1.105+ 互換（Cursor / VS Code / Windsurf）
+- **ターゲット**: VS Code 1.105+ 互換（Cursor / VS Code / Windsurf / Antigravity）
 - **ビルド**: tsc (TypeScript Compiler)
 - **テスト/カバレッジ**: c8
 - **出力先**: `out/` ディレクトリ
