@@ -116,7 +116,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
         await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.agentPath');
       }
       if (picked === openDocsLabel) {
-        await vscode.env.openExternal(vscode.Uri.parse('https://ai.google.dev/gemini-api/docs/gemini-cli'));
+        await vscode.env.openExternal(vscode.Uri.parse('https://docs.cloud.google.com/gemini/docs/codeassist/gemini-cli'));
       }
       return undefined;
     }
