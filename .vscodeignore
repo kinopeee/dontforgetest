@@ -1,26 +1,44 @@
 .vscode/**
 .vscode-test/**
-node_modules/**
+.git/**
+.gitignore
+.vscodeignore
+.DS_Store
+
+# Cursor / Claude / Codex 等のローカル設定・運用ファイル（配布不要）
 .cursor/**
 .claude/**
+.cursorrules
+.commit-msg.txt
+AGENTS.md
+CLAUDE.md
+
+# npm のローカルキャッシュ（巨大になりがち・配布不要）
+.npm-cache/**
+
+# 依存物（本拡張は runtime dependencies を同梱しない想定）
+node_modules/**
+
+# 開発用ソース・設定（配布不要）
 src/**
-.gitignore
-.yarnrc
-vsc-extension-quickstart.md
-**/tsconfig.json
-**/.eslintrc.json
-**/*.map
-**/*.ts
-out/test/**
-docs/test-*.md
-docs/test-execution-reports/**
-docs/test-perspectives/**
-# coverage は成果物ではないためパッケージに含めない
+scripts/**
+docs/**
 coverage/**
-# ローカル生成のVSIXはパッケージに含めない
+.nyc_output/**
+eslint.config.mjs
+tsconfig*.json
+package-lock.json
+vsc-extension-quickstart.md
+**/.eslintrc.json
+
+# 生成済み VSIX（配布物に同梱しない）
 *.vsix
+
+# テスト・ソースマップ等は配布不要
+out/test/**
+**/*.ts
+**/*.map
+
 # ローカライズリソースは拡張機能の動作に必須のため、他の除外ルールが増えても必ずパッケージに含める
-l10n/**
 !l10n/**
-package.nls*.json
 !package.nls*.json

@@ -1,8 +1,311 @@
 import * as assert from 'assert';
 import { extractBetweenMarkers, coerceLegacyPerspectiveMarkdownTable, truncateText } from '../../../../commands/runWithArtifacts/utils';
-import { PERSPECTIVE_TABLE_HEADER, PERSPECTIVE_TABLE_SEPARATOR } from '../../../../core/artifacts';
+import { parsePerspectiveJsonV1, parseTestExecutionJsonV1, PERSPECTIVE_TABLE_HEADER, PERSPECTIVE_TABLE_SEPARATOR } from '../../../../core/artifacts';
 
 suite('commands/runWithArtifacts/utils.ts', () => {
+  // TC-UTIL-EXT-01: Text contains single pair of markers
+  test('TC-UTIL-EXT-01: extractBetweenMarkers returns content when text contains single pair of markers', () => {
+    // Given: Text with one valid marker pair
+    const text = 'prefix<BEGIN>content<END>suffix';
+    const begin = '<BEGIN>';
+    const end = '<END>';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns the content between markers
+    assert.strictEqual(result, 'content');
+  });
+
+  // TC-UTIL-EXT-02: Text contains multiple BEGIN markers before END
+  test('TC-UTIL-EXT-02: extractBetweenMarkers returns content after the LAST begin marker when multiple BEGINs exist', () => {
+    // Given: Text with multiple BEGIN markers before one END marker
+    // This simulates hallucinated or nested markers where we want the innermost/latest one
+    const text = 'prefix<BEGIN>fake<BEGIN>real content<END>suffix';
+    const begin = '<BEGIN>';
+    const end = '<END>';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns content after the last BEGIN marker
+    assert.strictEqual(result, 'real content');
+  });
+
+  // TC-UTIL-EXT-03: Text contains BEGIN but no END
+  test('TC-UTIL-EXT-03: extractBetweenMarkers returns undefined when END marker is missing', () => {
+    // Given: Text with BEGIN but no END
+    const text = 'prefix<BEGIN>content';
+    const begin = '<BEGIN>';
+    const end = '<END>';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns undefined
+    assert.strictEqual(result, undefined);
+  });
+
+  // TC-UTIL-EXT-04: Text contains END but no BEGIN
+  test('TC-UTIL-EXT-04: extractBetweenMarkers returns undefined when BEGIN marker is missing', () => {
+    // Given: Text with END but no BEGIN
+    const text = 'content<END>suffix';
+    const begin = '<BEGIN>';
+    const end = '<END>';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns undefined
+    assert.strictEqual(result, undefined);
+  });
+
+  // TC-JSON-PER-01: Input is valid raw JSON starting with '{' (no markdown fences)
+  test('TC-JSON-PER-01: parsePerspectiveJsonV1 parses valid raw JSON starting with "{" (direct parse)', () => {
+    // Given: Raw JSON string without markdown markers
+    const json = JSON.stringify({
+      version: 1,
+      cases: [{ caseId: 'TC-01', perspective: 'Direct JSON' }]
+    });
+
+    // When: parsePerspectiveJsonV1 is called
+    const result = parsePerspectiveJsonV1(json);
+
+    // Then: Parses successfully
+    assert.strictEqual(result.ok, true);
+    if (result.ok) {
+      assert.strictEqual(result.value.cases[0].perspective, 'Direct JSON');
+    }
+  });
+
+  // TC-JSON-PER-02: Input is valid JSON inside markdown code blocks
+  test('TC-JSON-PER-02: parsePerspectiveJsonV1 parses valid JSON inside markdown code blocks (extraction fallback)', () => {
+    // Given: JSON inside markdown fences (legacy format)
+    const jsonContent = JSON.stringify({
+      version: 1,
+      cases: [{ caseId: 'TC-02', perspective: 'Fenced JSON' }]
+    });
+    const input = `\`\`\`json\n${jsonContent}\n\`\`\``;
+
+    // When: parsePerspectiveJsonV1 is called
+    const result = parsePerspectiveJsonV1(input);
+
+    // Then: Parses successfully via extraction
+    assert.strictEqual(result.ok, true);
+    if (result.ok) {
+      assert.strictEqual(result.value.cases[0].perspective, 'Fenced JSON');
+    }
+  });
+
+  // TC-JSON-PER-03: Input starts with '{' but is invalid JSON
+  test('TC-JSON-PER-03: parsePerspectiveJsonV1 returns invalid-json error when input starts with "{" but is invalid', () => {
+    // Given: Invalid JSON starting with '{'
+    const input = '{ "version": 1, "cases": [ '; // Missing closing brackets
+
+    // When: parsePerspectiveJsonV1 is called
+    const result = parsePerspectiveJsonV1(input);
+
+    // Then: Returns invalid-json error (direct parse attempt)
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.ok(result.error.includes('invalid-json'), `Expected invalid-json error, got: ${result.error}`);
+    }
+  });
+
+  // TC-JSON-PER-04: Input is valid JSON but has wrong version/schema
+  test('TC-JSON-PER-04: parsePerspectiveJsonV1 returns error when JSON schema/version is invalid', () => {
+    // Given: Valid JSON but wrong version
+    const input = JSON.stringify({ version: 2, cases: [] });
+
+    // When: parsePerspectiveJsonV1 is called
+    const result = parsePerspectiveJsonV1(input);
+
+    // Then: Returns error (not ok)
+    assert.strictEqual(result.ok, false);
+  });
+
+  // TC-JSON-EXEC-01: Input is valid raw JSON starting with '{'
+  test('TC-JSON-EXEC-01: parseTestExecutionJsonV1 parses valid raw JSON starting with "{" (direct parse)', () => {
+    // Given: Raw JSON string for execution result
+    const json = JSON.stringify({
+      version: 1,
+      exitCode: 0,
+      stdout: 'Direct Execution JSON'
+    });
+
+    // When: parseTestExecutionJsonV1 is called
+    const result = parseTestExecutionJsonV1(json);
+
+    // Then: Parses successfully
+    assert.strictEqual(result.ok, true);
+    if (result.ok) {
+      assert.strictEqual(result.value.stdout, 'Direct Execution JSON');
+    }
+  });
+
+  // TC-N-01
+  test('TC-N-01: extractBetweenMarkers returns content from the last begin/end pair', () => {
+    // Given: Text containing multiple begin/end pairs
+    const text = 'A<BEGIN>first<END>B<BEGIN>last<END>';
+    const begin = '<BEGIN>';
+    const end = '<END>';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns the content from the last pair
+    assert.strictEqual(result, 'last');
+  });
+
+  // TC-N-02
+  test('TC-N-02: parsePerspectiveJsonV1 succeeds with valid JSON containing "{ }" in strings', () => {
+    // Given: Valid Perspective JSON where a string contains JSON-like braces
+    const json = JSON.stringify({
+      version: 1,
+      cases: [{
+        caseId: 'TC-01',
+        perspective: 'Contains { braces } in string',
+      }]
+    });
+
+    // When: parsePerspectiveJsonV1 is called
+    const result = parsePerspectiveJsonV1(json);
+
+    // Then: parse succeeds and returns ok: true
+    assert.strictEqual(result.ok, true);
+    if (result.ok) {
+      assert.strictEqual(result.value.cases[0].perspective, 'Contains { braces } in string');
+    }
+  });
+
+  // TC-E-01
+  test('TC-E-01: extractBetweenMarkers returns undefined when begin marker is missing', () => {
+    // Given: Text missing the begin marker
+    const text = 'Some content\n<!-- END TEST PERSPECTIVES JSON -->';
+    const begin = '<!-- BEGIN TEST PERSPECTIVES JSON -->';
+    const end = '<!-- END TEST PERSPECTIVES JSON -->';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns undefined
+    assert.strictEqual(result, undefined);
+  });
+
+  // TC-E-02
+  test('TC-E-02: extractBetweenMarkers returns undefined when end marker is missing after the last begin', () => {
+    // Given: Text containing begin marker but no end marker after it
+    const text = '<!-- BEGIN TEST PERSPECTIVES JSON -->\nSome content';
+    const begin = '<!-- BEGIN TEST PERSPECTIVES JSON -->';
+    const end = '<!-- END TEST PERSPECTIVES JSON -->';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns undefined
+    assert.strictEqual(result, undefined);
+  });
+
+  // TC-E-03
+  test('TC-E-03: parsePerspectiveJsonV1 returns error for malformed JSON', () => {
+    // Given: Malformed JSON (missing closing brace)
+    const json = '{"version":1, "cases": [';
+
+    // When: parsePerspectiveJsonV1 is called
+    const result = parsePerspectiveJsonV1(json);
+
+    // Then: returns ok: false and error starts with "invalid-json:"
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.ok(result.error.startsWith('invalid-json:'), `Error should start with "invalid-json:", got: ${result.error}`);
+    }
+  });
+
+  // TC-E-04
+  test('TC-E-04: parsePerspectiveJsonV1 returns error for JSON array', () => {
+    // Given: Valid JSON but it is an array instead of an object
+    const json = '[]';
+
+    // When: parsePerspectiveJsonV1 is called
+    const result = parsePerspectiveJsonV1(json);
+
+    // Then: returns ok: false and error is "json-not-object"
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.strictEqual(result.error, 'json-not-object');
+    }
+  });
+
+  // TC-E-05
+  test('TC-E-05: parsePerspectiveJsonV1 returns error for JSON null', () => {
+    // Given: Valid JSON but it is null
+    const json = 'null';
+
+    // When: parsePerspectiveJsonV1 is called
+    const result = parsePerspectiveJsonV1(json);
+
+    // Then: returns ok: false and error is "json-not-object"
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.strictEqual(result.error, 'json-not-object');
+    }
+  });
+
+  // TC-E-06
+  test('TC-E-06: parsePerspectiveJsonV1 returns error for unsupported version', () => {
+    // Given: Valid JSON object but version is not 1
+    const json = JSON.stringify({ version: 2, cases: [] });
+
+    // When: parsePerspectiveJsonV1 is called
+    const result = parsePerspectiveJsonV1(json);
+
+    // Then: returns ok: false
+    assert.strictEqual(result.ok, false);
+  });
+
+  // TC-E-08
+  test('TC-E-08: parseTestExecutionJsonV1 returns error for JSON syntax error', () => {
+    // Given: Malformed Execution JSON
+    const json = '{ "exitCode": 0, ';
+
+    // When: parseTestExecutionJsonV1 is called
+    const result = parseTestExecutionJsonV1(json);
+
+    // Then: returns ok: false and error includes "invalid-json"
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.ok(result.error.includes('invalid-json'), `Error should include "invalid-json", got: ${result.error}`);
+    }
+  });
+
+  // TC-B-01
+  test('TC-B-01: extractBetweenMarkers returns empty string when content between markers is empty', () => {
+    // Given: Text with markers but no content between them
+    const text = 'prefix<BEGIN><END>suffix';
+    const begin = '<BEGIN>';
+    const end = '<END>';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns empty string
+    assert.strictEqual(result, '');
+  });
+
+  // TC-E-03
+  test('TC-E-03: extractBetweenMarkers returns undefined when end marker only appears before the last begin', () => {
+    // Given: Text with an end marker only before the last begin marker
+    const text = '<END>early end<BEGIN>later begin with no end';
+    const begin = '<BEGIN>';
+    const end = '<END>';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns undefined because no end exists after the last begin
+    assert.strictEqual(result, undefined);
+  });
+
   // TC-B-26: extractBetweenMarkers called with text containing begin marker but no end marker
   test('TC-B-26: extractBetweenMarkers returns undefined when end marker is missing', () => {
     // Given: Text containing begin marker but no end marker
@@ -29,6 +332,50 @@ suite('commands/runWithArtifacts/utils.ts', () => {
 
     // Then: Returns undefined
     assert.strictEqual(result, undefined, 'Should return undefined when begin marker is missing');
+  });
+
+  // TC-N-35: extractBetweenMarkers called with multiple marker pairs returns the last complete pair
+  test('TC-N-35: extractBetweenMarkers returns content from the last complete marker pair when multiple pairs exist', () => {
+    // Given: Text containing multiple marker pairs (e.g., prompt instructions and actual output)
+    const text = [
+      'Some prompt text',
+      '- <!-- BEGIN TEST PERSPECTIVES JSON -->',
+      'This is not JSON',
+      '- <!-- END TEST PERSPECTIVES JSON -->',
+      'More text',
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->',
+      '{"version":1,"cases":[]}',
+      '<!-- END TEST PERSPECTIVES JSON -->',
+    ].join('\n');
+    const begin = '<!-- BEGIN TEST PERSPECTIVES JSON -->';
+    const end = '<!-- END TEST PERSPECTIVES JSON -->';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns content from the last complete pair (actual JSON output)
+    assert.strictEqual(result, '{"version":1,"cases":[]}', 'Should return content from the last complete marker pair');
+  });
+
+  // TC-N-36: extractBetweenMarkers handles multiple pairs where only the last has a matching end
+  test('TC-N-36: extractBetweenMarkers returns content from the last begin when earlier pairs are incomplete', () => {
+    // Given: Text with incomplete early pairs and a complete last pair
+    const text = [
+      '- <!-- BEGIN TEST PERSPECTIVES JSON -->',
+      'Incomplete content',
+      'More text',
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->',
+      '{"version":1,"cases":[{"caseId":"TC-1"}]}',
+      '<!-- END TEST PERSPECTIVES JSON -->',
+    ].join('\n');
+    const begin = '<!-- BEGIN TEST PERSPECTIVES JSON -->';
+    const end = '<!-- END TEST PERSPECTIVES JSON -->';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns content from the last complete pair
+    assert.strictEqual(result, '{"version":1,"cases":[{"caseId":"TC-1"}]}', 'Should return content from the last complete pair');
   });
 
   // TC-B-28: coerceLegacyPerspectiveMarkdownTable called with markdown missing header

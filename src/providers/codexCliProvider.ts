@@ -19,6 +19,14 @@ export class CodexCliProvider implements AgentProvider {
 
   private activeChild: ChildProcessWithoutNullStreams | undefined;
   private activeTaskId: string | undefined;
+  private readonly spawnFn: typeof spawn;
+
+  /**
+   * @param spawnFn テスト用に注入可能な spawn 関数（デフォルト: 実際の child_process.spawn）
+   */
+  constructor(spawnFn?: typeof spawn) {
+    this.spawnFn = spawnFn ?? spawn;
+  }
 
   public run(options: AgentRunOptions): RunningTask {
     // 多重起動で codex プロセスが残り続けると問題になるため、既存タスクがあれば停止する。
@@ -93,15 +101,21 @@ export class CodexCliProvider implements AgentProvider {
 
   private spawnCodex(options: AgentRunOptions, prompt: string): ChildProcessWithoutNullStreams {
     const command = options.agentCommand ?? 'codex';
-    const args: string[] = [];
-
-    // -p / --prompt: 非対話（ヘッドレス）モード
-    args.push('-p');
-    args.push(prompt);
+    const args: string[] = ['exec'];
 
     if (options.model) {
       args.push('--model', options.model);
     }
+
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    const reasoningEffort = (config.get<string>('codexReasoningEffort') ?? '').trim();
+    if (reasoningEffort.length > 0) {
+      // TOML パースされるため、文字列はクォート付きで渡す。
+      args.push('-c', `model_reasoning_effort="${reasoningEffort}"`);
+    }
+
+    // codex exec は prompt を stdin から受け取る（長文でも安全）。
+    args.push('-');
 
     // codex が内部で $EDITOR / $PAGER を呼び、GUI起動で待ち続けるケースを避ける。
     const env: NodeJS.ProcessEnv = { ...process.env };
@@ -118,14 +132,14 @@ export class CodexCliProvider implements AgentProvider {
       env.LESS = 'FRX';
     }
 
-    const child = spawn(command, args, {
+    const child = this.spawnFn(command, args, {
       cwd: options.workspaceRoot,
       env,
       stdio: 'pipe',
     });
 
-    // codex が標準入力待ちで停止するケースを切り分けるため、stdin を明示的に閉じる。
     try {
+      child.stdin.write(`${prompt}\n`);
       child.stdin.end();
     } catch {
       // noop

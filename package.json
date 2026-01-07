@@ -3,7 +3,7 @@
   "publisher": "kinopeee",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.122",
+  "version": "0.0.123",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.105.0"
@@ -152,6 +152,11 @@
           "default": "",
           "description": "%configuration.codexPromptCommand.description%"
         },
+        "dontforgetest.codexReasoningEffort": {
+          "type": "string",
+          "default": "medium",
+          "description": "%configuration.codexReasoningEffort.description%"
+        },
         "dontforgetest.maxParallelTasks": {
           "type": "number",
           "default": 4,
@@ -187,7 +192,7 @@
         },
         "dontforgetest.perspectiveGenerationTimeoutMs": {
           "type": "number",
-          "default": 300000,
+          "default": 600000,
           "minimum": 0,
           "description": "%configuration.perspectiveGenerationTimeoutMs.description%"
         },

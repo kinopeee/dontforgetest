@@ -106,6 +106,11 @@ export class TestGenerationSession {
       createTemporaryWorktree,
       removeTemporaryWorktree,
     };
+
+    // DONTFORGETEST_DEBUG_LOG_ROOT が未設定の場合は workspaceRoot を設定する
+    if (!process.env.DONTFORGETEST_DEBUG_LOG_ROOT || process.env.DONTFORGETEST_DEBUG_LOG_ROOT.trim().length === 0) {
+      process.env.DONTFORGETEST_DEBUG_LOG_ROOT = options.workspaceRoot;
+    }
   }
 
   public async run(): Promise<void> {

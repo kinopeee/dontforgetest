@@ -187,9 +187,9 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       assert.strictEqual(env.DONTFORGETEST_TEST_RESULT_FILE, testResultFilePath);
     });
 
-    // TC-N-06
-    test('TC-N-06: constructor sets DONTFORGETEST_DEBUG_LOG_ROOT if not already set', () => {
-      // Given: DONTFORGETEST_DEBUG_LOG_ROOT is not set
+    // TC-N-04
+    test('TC-N-04: constructor sets DONTFORGETEST_DEBUG_LOG_ROOT to workspaceRoot when it is undefined', () => {
+      // Given: DONTFORGETEST_DEBUG_LOG_ROOT is undefined
       const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
       workspaceRoots.push(workspaceRoot);
       const originalDebugRoot = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
@@ -206,8 +206,7 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       }
     });
 
-    // TC-E-07
-    test('TC-E-07: constructor does NOT overwrite DONTFORGETEST_DEBUG_LOG_ROOT if already set', () => {
+    test('TC-ENV-DEBUG-03: constructor does NOT overwrite DONTFORGETEST_DEBUG_LOG_ROOT when already set', () => {
       // Given: DONTFORGETEST_DEBUG_LOG_ROOT is already set
       const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
       workspaceRoots.push(workspaceRoot);
@@ -221,6 +220,43 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
 
         // Then: DONTFORGETEST_DEBUG_LOG_ROOT remains unchanged
         assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, existingValue);
+      } finally {
+        process.env.DONTFORGETEST_DEBUG_LOG_ROOT = originalDebugRoot;
+      }
+    });
+
+    // TC-B-03
+    test('TC-B-03: constructor sets DONTFORGETEST_DEBUG_LOG_ROOT to workspaceRoot when it is an empty string', () => {
+      // Given: DONTFORGETEST_DEBUG_LOG_ROOT is an empty string
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const originalDebugRoot = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+      process.env.DONTFORGETEST_DEBUG_LOG_ROOT = '';
+
+      try {
+        // When: A session is created
+        createSession(workspaceRoot);
+
+        // Then: DONTFORGETEST_DEBUG_LOG_ROOT is set to the workspaceRoot
+        assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, workspaceRoot);
+      } finally {
+        process.env.DONTFORGETEST_DEBUG_LOG_ROOT = originalDebugRoot;
+      }
+    });
+
+    test('TC-B-03 (whitespace): constructor sets DONTFORGETEST_DEBUG_LOG_ROOT to workspaceRoot when it is whitespace only', () => {
+      // Given: DONTFORGETEST_DEBUG_LOG_ROOT is whitespace only
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const originalDebugRoot = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+      process.env.DONTFORGETEST_DEBUG_LOG_ROOT = '   ';
+
+      try {
+        // When: A session is created
+        createSession(workspaceRoot);
+
+        // Then: DONTFORGETEST_DEBUG_LOG_ROOT is set to the workspaceRoot
+        assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, workspaceRoot);
       } finally {
         process.env.DONTFORGETEST_DEBUG_LOG_ROOT = originalDebugRoot;
       }
@@ -1922,6 +1958,82 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
           (progressTreeView as unknown as { handleTestGenEventForProgressView: typeof originalProgressHandler }).handleTestGenEventForProgressView =
             originalProgressHandler;
           (outputChannel as unknown as { appendEventToOutput: typeof originalAppendEvent }).appendEventToOutput = originalAppendEvent;
+        }
+      });
+
+      // TC-ENV-DEBUG-01: DONTFORGETEST_DEBUG_LOG_ROOT defaults to workspaceRoot
+      test('TC-ENV-DEBUG-01: DONTFORGETEST_DEBUG_LOG_ROOT defaults to workspaceRoot', () => {
+        // Given: Env var is undefined
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-debug-01-'));
+        workspaceRoots.push(workspaceRoot);
+        const original = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+        delete process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+
+        try {
+          // When: Session created
+          createSession({
+            workspaceRoot,
+            generationTaskId: 'task-debug-01',
+            runMode: 'full',
+            includeTestPerspectiveTable: false,
+            testCommand: '',
+          });
+
+          // Then: Env var set to workspaceRoot
+          assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, workspaceRoot);
+        } finally {
+          process.env.DONTFORGETEST_DEBUG_LOG_ROOT = original;
+        }
+      });
+
+      // TC-ENV-DEBUG-02: DONTFORGETEST_DEBUG_LOG_ROOT defaults to workspaceRoot if empty
+      test('TC-ENV-DEBUG-02: DONTFORGETEST_DEBUG_LOG_ROOT defaults to workspaceRoot if empty', () => {
+        // Given: Env var is empty string
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-debug-02-'));
+        workspaceRoots.push(workspaceRoot);
+        const original = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+        process.env.DONTFORGETEST_DEBUG_LOG_ROOT = '';
+
+        try {
+          // When: Session created
+          createSession({
+            workspaceRoot,
+            generationTaskId: 'task-debug-02',
+            runMode: 'full',
+            includeTestPerspectiveTable: false,
+            testCommand: '',
+          });
+
+          // Then: Env var set to workspaceRoot
+          assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, workspaceRoot);
+        } finally {
+          process.env.DONTFORGETEST_DEBUG_LOG_ROOT = original;
+        }
+      });
+
+      // TC-ENV-DEBUG-03: DONTFORGETEST_DEBUG_LOG_ROOT preserved if set
+      test('TC-ENV-DEBUG-03: DONTFORGETEST_DEBUG_LOG_ROOT is preserved if already set', () => {
+        // Given: Env var is set
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-debug-03-'));
+        workspaceRoots.push(workspaceRoot);
+        const original = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+        const presetPath = '/tmp/preset/debug/path';
+        process.env.DONTFORGETEST_DEBUG_LOG_ROOT = presetPath;
+
+        try {
+          // When: Session created
+          createSession({
+            workspaceRoot,
+            generationTaskId: 'task-debug-03',
+            runMode: 'full',
+            includeTestPerspectiveTable: false,
+            testCommand: '',
+          });
+
+          // Then: Env var preserved
+          assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, presetPath);
+        } finally {
+          process.env.DONTFORGETEST_DEBUG_LOG_ROOT = original;
         }
       });
     });

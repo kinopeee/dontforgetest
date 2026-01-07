@@ -24,6 +24,7 @@
   "configuration.cursorAgentPath.description": "(Deprecated) Path to cursor-agent command (resolved from PATH if not specified)",
   "configuration.claudePath.description": "(Deprecated) Path to claude command for Claude Code CLI (resolved from PATH if not specified)",
   "configuration.codexPromptCommand.description": "Codex CLI command name to load from ~/.codex/prompts (e.g., commit-only). Empty disables injection",
+  "configuration.codexReasoningEffort.description": "Codex CLI reasoning effort override passed via -c model_reasoning_effort (e.g., low/medium/high/xhigh). Empty disables override",
   "configuration.maxParallelTasks.description": "Maximum number of parallel tasks for multi-file processing (snapshot capture/restore, etc.)",
   "configuration.defaultModel.description": "Default model to pass to the agent --model option (if empty, auto)",
   "configuration.customModels.description": "Fallback list of model candidates (used in QuickPick, etc.)",
