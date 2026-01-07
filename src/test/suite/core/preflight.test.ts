@@ -31,8 +31,11 @@ suite('core/preflight.ts', () => {
 
       // Check config reading specifically (TC-N-01 additional check)
       const config = vscode.workspace.getConfiguration('dontforgetest');
-      const agentPath = config.get('agentPath');
-      assert.strictEqual(agentPath, '', 'Default agentPath should be empty');
+      // NOTE:
+      // 開発者のローカル設定で dontforgetest.agentPath が設定されている場合があるため、
+      // 「既定値が空であること」を前提にせず、テスト内で一時的に上書きしてから復元する。
+      const originalAgentPath = config.get<string>('agentPath');
+      await config.update('agentPath', '', vscode.ConfigurationTarget.Workspace);
 
       // このテストは実際の環境に依存するため、条件付きで実行
       // cursor-agentがインストールされていない場合はスキップ
@@ -48,6 +51,8 @@ suite('core/preflight.ts', () => {
       } catch (err) {
         // エラーが発生した場合はスキップ（環境依存のため）
         console.log('preflight test skipped:', err);
+      } finally {
+        await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
       }
     });
 
