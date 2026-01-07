@@ -72,7 +72,7 @@ suite('providers/runToCompletion.ts', () => {
       onEvent: () => {},
     });
 
-    // Then: Provider runs to completion, exitCode returned, timeout cleared
+    // Then: Provider runs to completion and exitCode is returned
     assert.strictEqual(exitCode, 0, 'Exit code should be 0');
   });
 
@@ -101,7 +101,7 @@ suite('providers/runToCompletion.ts', () => {
       },
     });
 
-    // Then: Timeout event logged, runningTask disposed, null exitCode returned
+    // Then: null exitCode is returned on timeout
     assert.strictEqual(exitCode, null, 'Exit code should be null on timeout');
   });
 
@@ -126,7 +126,7 @@ suite('providers/runToCompletion.ts', () => {
       onEvent: () => {},
     });
 
-    // Then: Timeout set to maximum value, provider runs until timeout or completion
+    // Then: Should complete normally
     assert.strictEqual(exitCode, 0, 'Should complete normally');
   });
 
@@ -151,7 +151,7 @@ suite('providers/runToCompletion.ts', () => {
       onEvent: () => {},
     });
 
-    // Then: Timeout not set (treated as infinite), provider runs until completion
+    // Then: Should complete normally without timeout
     assert.strictEqual(exitCode, 0, 'Should complete normally without timeout');
   });
 
@@ -176,7 +176,31 @@ suite('providers/runToCompletion.ts', () => {
       onEvent: () => {},
     });
 
-    // Then: No timeout set, provider runs until completion
+    // Then: Should complete normally without timeout
     assert.strictEqual(exitCode, 0, 'Should complete normally without timeout');
+  });
+
+  // TC-NULL-06: runProviderToCompletion called with model=undefined
+  test('TC-NULL-06: runProviderToCompletion handles undefined model', async () => {
+    // Given: model=undefined
+    const provider = new MockProvider(0);
+
+    // When: runProviderToCompletion is called
+    const exitCode = await runProviderToCompletion({
+      provider,
+      run: {
+        taskId: 'test-task-undefined-model',
+        workspaceRoot: process.cwd(),
+        agentCommand: 'mock-agent',
+        prompt: 'test prompt',
+        model: undefined,
+        outputFormat: 'stream-json',
+        allowWrite: false,
+      },
+      onEvent: () => {},
+    });
+
+    // Then: Should complete normally with undefined model
+    assert.strictEqual(exitCode, 0, 'Should complete normally with undefined model');
   });
 });

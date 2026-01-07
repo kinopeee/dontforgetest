@@ -5429,6 +5429,90 @@ suite('core/artifacts.ts', () => {
       assert.strictEqual(result.value.cases[1]?.caseId, 'TC-N-02');
     });
 
+    test('TC-N-02A: parsePerspectiveJsonV1 normalizes bare newlines inside strings', () => {
+      // Given: JSON 文字列内に改行を含むケース（Gemini 出力の揺れ）
+      const raw = `{
+        "version": 1,
+        "cases": [
+          {
+            "caseId": "TC-N-NEWLINE",
+            "inputPrecondition": "line1
+line2",
+            "perspective": "Equivalence – normal",
+            "expectedResult": "ok",
+            "notes": "-"
+          }
+        ]
+      }`;
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: 改行を含む文字列でもパースできる
+      assert.ok(result.ok, 'parsePerspectiveJsonV1 returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.cases.length, 1);
+      assert.ok(result.value.cases[0]?.inputPrecondition.includes('\n'), '改行が保持されること');
+    });
+
+    test('ART-JSON-N-03: parsePerspectiveJsonV1 normalizes bare carriage returns', () => {
+      // Given: JSON string with bare carriage return
+      const raw = '{"version":1,"cases":[{"caseId":"CR","inputPrecondition":"a\rb"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Normalized and parsed successfully
+      assert.ok(result.ok);
+      if (result.ok) {
+        assert.strictEqual(result.value.cases[0]?.inputPrecondition, 'a\rb');
+      }
+    });
+
+    test('ART-JSON-N-04: parsePerspectiveJsonV1 handles mixed escaped and bare newlines', () => {
+      // Given: JSON string with both escaped and bare newlines
+      const raw = '{"version":1,"cases":[{"caseId":"MIXED","inputPrecondition":"escaped\\\\nand bare\nnewline"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Parsed successfully with newlines preserved
+      assert.ok(result.ok);
+      if (result.ok) {
+        assert.strictEqual(result.value.cases[0]?.inputPrecondition, 'escaped\\nand bare\nnewline');
+      }
+    });
+
+    test('ART-JSON-N-05: parsePerspectiveJsonV1 normalizes newlines in nested objects', () => {
+      // Given: Nested JSON with bare newlines
+      const raw = '{"version":1,"cases":[{"caseId":"NESTED","inputPrecondition":"{\\n \\"inner\\": \\"line1\nline2\\"\\n}"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Parsed successfully
+      assert.ok(result.ok);
+      if (result.ok) {
+        assert.ok(result.value.cases[0]?.inputPrecondition.includes('line1\nline2'));
+      }
+    });
+
+    test('ART-JSON-E-01: parsePerspectiveJsonV1 still fails on truly invalid JSON', () => {
+      // Given: JSON with missing closing brace
+      const raw = '{"version":1,"cases":[]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('no-json-object'));
+      }
+    });
+
     // TC-E-17: Case item missing required fields (caseId, inputPrecondition, etc.)
     test('TC-E-17: parsePerspectiveJsonV1 uses getStringOrEmpty to set empty string for missing fields', () => {
       // Given: Case item missing required fields
@@ -5760,6 +5844,28 @@ suite('core/artifacts.ts', () => {
       assert.strictEqual(result.value.durationMs, 12);
       assert.strictEqual(result.value.stdout, 'out');
       assert.strictEqual(result.value.stderr, '');
+    });
+
+    test('ART-JSON-EXEC-N-01: parseTestExecutionJsonV1 normalizes bare newlines in stdout', () => {
+      // Given: JSON with bare newline in stdout (Gemini style)
+      const raw = `{
+        "version": 1,
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 10,
+        "stdout": "line1
+line2",
+        "stderr": ""
+      }`;
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Normalized and parsed successfully
+      assert.ok(result.ok);
+      if (result.ok) {
+        assert.strictEqual(result.value.stdout, 'line1\nline2');
+      }
     });
 
     // TC-EXECJSON-N-02: JSON with code fences and extra text
@@ -7858,6 +7964,98 @@ suite('core/artifacts.ts', () => {
       // Then: success===false（判定不能）
       assert.strictEqual(result.success, false);
       assert.strictEqual(result.exitCode, null);
+    });
+  });
+
+  suite('JSON normalization and robust parsing', () => {
+    // TC-N-01
+    test('TC-N-01: parsePerspectiveJsonV1 handles raw newlines inside JSON string values', () => {
+      // Given: A JSON string with a raw newline inside a value
+      const raw = '{"version": 1, "cases": [{"caseId": "TC-1", "inputPrecondition": "", "perspective": "", "expectedResult": "", "notes": "line 1\nline 2"}]}';
+
+      // When: parsePerspectiveJsonV1 is called (which uses normalizeJsonWithBareNewlines internally)
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It successfully parses and the newline is preserved/escaped correctly
+      assert.strictEqual(result.ok, true);
+      if (result.ok) {
+        assert.strictEqual(result.value.cases[0].notes, 'line 1\nline 2');
+      }
+    });
+
+    // TC-N-02
+    test('TC-N-02: parsePerspectiveJsonV1 maintains newlines outside of JSON string values', () => {
+      // Given: A JSON string with a newline between properties (outside quotes)
+      const raw = '{\n  "version": 1,\n  "cases": []\n}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It successfully parses and structure is correct
+      assert.strictEqual(result.ok, true);
+      if (result.ok) {
+        assert.strictEqual(result.value.version, 1);
+      }
+    });
+
+    // TC-E-01
+    test('TC-E-01: parsePerspectiveJsonV1 returns ok=false for empty string', () => {
+      // Given: An empty string
+      const raw = '';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It returns ok=false with error "empty"
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'empty');
+      }
+    });
+
+    // TC-E-02
+    test('TC-E-02: parsePerspectiveJsonV1 fails with invalid-json for incomplete JSON with newline in string', () => {
+      // Given: An incomplete JSON string (unclosed quote) with a newline
+      const raw = '{"version": 1, "cases": [{"caseId": "TC-1", "notes": "unfinished... \n';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It returns ok=false with "invalid-json:" error
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'));
+      }
+    });
+
+    // TC-E-03
+    test('TC-E-03: parsePerspectiveJsonV1 returns invalid-json for unparseable non-JSON strings starting with {', () => {
+      // Given: A string that starts with { but is not valid JSON
+      const raw = '{"key": "value" "missing_comma": true}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It returns ok=false with "invalid-json:" error from parseJsonWithNormalization
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'), `Expected error to start with invalid-json:, got: ${result.error}`);
+      }
+    });
+
+    // TC-E-10
+    test('TC-E-10: parsePerspectiveJsonV1 handles input ending with backslash correctly', () => {
+      // Given: A JSON string ending with a backslash inside a value
+      const raw = '{"version": 1, "cases": [{"caseId": "TC-1", "inputPrecondition": "", "perspective": "", "expectedResult": "", "notes": "backslash at end \\\\"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It successfully parses
+      assert.strictEqual(result.ok, true);
+      if (result.ok) {
+        assert.strictEqual(result.value.cases[0].notes, 'backslash at end \\');
+      }
     });
   });
 });

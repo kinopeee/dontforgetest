@@ -7,13 +7,17 @@ import {
 } from '../../../providers/configuredProvider';
 import { CursorAgentProvider } from '../../../providers/cursorAgentProvider';
 import { ClaudeCodeProvider } from '../../../providers/claudeCodeProvider';
+import { GeminiCliProvider } from '../../../providers/geminiCliProvider';
+import { CodexCliProvider } from '../../../providers/codexCliProvider';
 
 suite('configuredProvider', () => {
   // === Test perspective table ===
   // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
   // |---------|----------------------|--------------------------------------|-----------------|-------|
   // | TC-N-01 | agentProvider='claudeCode' | Equivalence – valid value | Returns 'claudeCode' | Claude Code agent selected |
-  // | TC-N-02 | agentProvider='cursor' (or 'cursorAgent') | Equivalence – valid value | Returns 'cursorAgent' | Cursor agent selected |
+  // | TC-N-02 | agentProvider='geminiCli' | Equivalence – valid value | Returns 'geminiCli' | Gemini CLI agent selected |
+  // | TC-N-03 | agentProvider='cursor' (or 'cursorAgent') | Equivalence – valid value | Returns 'cursorAgent' | Cursor agent selected |
+  // | TC-N-04 | agentProvider='codexCli' | Equivalence – valid value | Returns 'codexCli' | Codex CLI agent selected |
   // | TC-E-01 | agentProvider undefined | Boundary – undefined | Returns default ('cursorAgent') | Fallback on undefined |
   // | TC-E-02 | agentProvider='' | Boundary – empty string | Returns default ('cursorAgent') | Fallback on empty |
   // | TC-E-03 | agentProvider=null | Boundary – null | Returns default ('cursorAgent') | Fallback on null |
@@ -36,145 +40,207 @@ suite('configuredProvider', () => {
     await config.update('agentProvider', originalValue, vscode.ConfigurationTarget.Workspace);
   });
 
+  // TC-N-04
+  test('TC-N-04: agentProvider=geminiCli の場合、createAgentProvider は GeminiCliProvider を返す', async () => {
+    // Given: agentProvider is set to 'geminiCli'
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('agentProvider', 'geminiCli', vscode.ConfigurationTarget.Workspace);
+
+    // When: createAgentProvider is called
+    const provider = createAgentProvider();
+
+    // Then: It returns an instance of GeminiCliProvider
+    assert.ok(provider instanceof GeminiCliProvider);
+    assert.strictEqual(provider.id, 'gemini-cli');
+  });
+
   // TC-N-01: agentProvider='claudeCode' の場合、Claude Code エージェントが選択される
   test('TC-N-01: agentProvider=claudeCode の場合、claudeCode を返す', async () => {
-    // Given: agentProvider='claudeCode' を設定
+    // Given: agentProvider is set to 'claudeCode'
     const config = vscode.workspace.getConfiguration('dontforgetest');
     await config.update('agentProvider', 'claudeCode', vscode.ConfigurationTarget.Workspace);
 
-    // When: getAgentProviderId を呼び出す
+    // When: getAgentProviderId is called
     const id = getAgentProviderId();
 
-    // Then: 'claudeCode' を返す（Claude Code エージェントが選択される）
+    // Then: It returns 'claudeCode'
     assert.strictEqual(id, 'claudeCode');
   });
 
-  // TC-N-02: agentProvider='cursorAgent' の場合、Cursor エージェントが選択される
-  test('TC-N-02: agentProvider=cursorAgent の場合、cursorAgent を返す', async () => {
-    // Given: agentProvider='cursorAgent' を設定
+  // TC-N-02: agentProvider='geminiCli' の場合、Gemini CLI エージェントが選択される
+  test('TC-N-02: agentProvider=geminiCli の場合、geminiCli を返す', async () => {
+    // Given: agentProvider is set to 'geminiCli'
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('agentProvider', 'geminiCli', vscode.ConfigurationTarget.Workspace);
+
+    // When: getAgentProviderId is called
+    const id = getAgentProviderId();
+
+    // Then: It returns 'geminiCli'
+    assert.strictEqual(id, 'geminiCli');
+  });
+
+  // TC-N-03: agentProvider='cursorAgent' の場合、Cursor エージェントが選択される
+  test('TC-N-03: agentProvider=cursorAgent の場合、cursorAgent を返す', async () => {
+    // Given: agentProvider is set to 'cursorAgent'
     const config = vscode.workspace.getConfiguration('dontforgetest');
     await config.update('agentProvider', 'cursorAgent', vscode.ConfigurationTarget.Workspace);
 
-    // When: getAgentProviderId を呼び出す
+    // When: getAgentProviderId is called
     const id = getAgentProviderId();
 
-    // Then: 'cursorAgent' を返す（Cursor エージェントが選択される）
+    // Then: It returns 'cursorAgent'
     assert.strictEqual(id, 'cursorAgent');
   });
 
-  // TC-N-04: createAgentProvider() はデフォルトで CursorAgentProvider を返す
-  test('TC-N-04: createAgentProvider はデフォルトで CursorAgentProvider を返す', async () => {
-    // Given: agentProvider 未設定
+  // TC-N-04-ID: agentProvider='codexCli' の場合、Codex CLI エージェントが選択される
+  test('TC-N-04-ID: agentProvider=codexCli の場合、codexCli を返す', async () => {
+    // Given: agentProvider is set to 'codexCli'
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('agentProvider', 'codexCli', vscode.ConfigurationTarget.Workspace);
+
+    // When: getAgentProviderId is called
+    const id = getAgentProviderId();
+
+    // Then: It returns 'codexCli'
+    assert.strictEqual(id, 'codexCli');
+  });
+
+  // TC-N-05: createAgentProvider() はデフォルトで CursorAgentProvider を返す
+  test('TC-N-05: createAgentProvider はデフォルトで CursorAgentProvider を返す', async () => {
+    // Given: agentProvider is unset
     const config = vscode.workspace.getConfiguration('dontforgetest');
     await config.update('agentProvider', undefined, vscode.ConfigurationTarget.Workspace);
 
-    // When: createAgentProvider を呼び出す
+    // When: createAgentProvider is called
     const provider = createAgentProvider();
 
-    // Then: CursorAgentProvider を返す
+    // Then: It returns an instance of CursorAgentProvider
     assert.ok(provider instanceof CursorAgentProvider);
     assert.strictEqual(provider.id, 'cursor-agent');
   });
 
-  // TC-N-05: createAgentProviderById('cursorAgent') は CursorAgentProvider を返す
-  test('TC-N-05: createAgentProviderById cursorAgent は CursorAgentProvider を返す', () => {
-    // Given: 'cursorAgent' を指定
-    // When: createAgentProviderById を呼び出す
+  // TC-N-06: createAgentProviderById('cursorAgent') は CursorAgentProvider を返す
+  test('TC-N-06: createAgentProviderById cursorAgent は CursorAgentProvider を返す', () => {
+    // Given: providerId is 'cursorAgent'
+    // When: createAgentProviderById is called
     const provider = createAgentProviderById('cursorAgent');
 
-    // Then: CursorAgentProvider を返す
+    // Then: It returns an instance of CursorAgentProvider
     assert.ok(provider instanceof CursorAgentProvider);
     assert.strictEqual(provider.id, 'cursor-agent');
   });
 
-  // TC-N-06: createAgentProviderById('claudeCode') は ClaudeCodeProvider を返す
-  test('TC-N-06: createAgentProviderById claudeCode は ClaudeCodeProvider を返す', () => {
-    // Given: 'claudeCode' を指定
-    // When: createAgentProviderById を呼び出す
+  // TC-N-07: createAgentProviderById('claudeCode') は ClaudeCodeProvider を返す
+  test('TC-N-07: createAgentProviderById claudeCode は ClaudeCodeProvider を返す', () => {
+    // Given: providerId is 'claudeCode'
+    // When: createAgentProviderById is called
     const provider = createAgentProviderById('claudeCode');
 
-    // Then: ClaudeCodeProvider を返す
+    // Then: It returns an instance of ClaudeCodeProvider
     assert.ok(provider instanceof ClaudeCodeProvider);
     assert.strictEqual(provider.id, 'claude-code');
   });
 
+  // TC-N-08: createAgentProviderById('geminiCli') は GeminiCliProvider を返す
+  test('TC-N-08: createAgentProviderById geminiCli は GeminiCliProvider を返す', () => {
+    // Given: providerId is 'geminiCli'
+    // When: createAgentProviderById is called
+    const provider = createAgentProviderById('geminiCli');
+
+    // Then: It returns an instance of GeminiCliProvider
+    assert.ok(provider instanceof GeminiCliProvider);
+    assert.strictEqual(provider.id, 'gemini-cli');
+  });
+
+  // TC-N-09: createAgentProviderById('codexCli') は CodexCliProvider を返す
+  test('TC-N-09: createAgentProviderById codexCli は CodexCliProvider を返す', () => {
+    // Given: providerId is 'codexCli'
+    // When: createAgentProviderById is called
+    const provider = createAgentProviderById('codexCli');
+
+    // Then: It returns an instance of CodexCliProvider
+    assert.ok(provider instanceof CodexCliProvider);
+    assert.strictEqual(provider.id, 'codex-cli');
+  });
+
   // TC-E-01: agentProvider 未設定（undefined）の場合、デフォルトを返す
   test('TC-E-01: agentProvider 未設定の場合、cursorAgent を返す', async () => {
-    // Given: agentProvider 未設定（undefined）
+    // Given: agentProvider is undefined
     const config = vscode.workspace.getConfiguration('dontforgetest');
     await config.update('agentProvider', undefined, vscode.ConfigurationTarget.Workspace);
 
-    // When: getAgentProviderId を呼び出す
+    // When: getAgentProviderId is called
     const id = getAgentProviderId();
 
-    // Then: 'cursorAgent' を返す（デフォルトのエージェントプロバイダー）
+    // Then: It returns the default 'cursorAgent'
     assert.strictEqual(id, 'cursorAgent');
   });
 
   // TC-E-02: agentProvider='' の場合、デフォルトを返す
   test('TC-E-02: agentProvider が空文字の場合、cursorAgent を返す', async () => {
-    // Given: agentProvider='' を設定（空文字列）
+    // Given: agentProvider is an empty string
     const config = vscode.workspace.getConfiguration('dontforgetest');
     await config.update('agentProvider', '', vscode.ConfigurationTarget.Workspace);
 
-    // When: getAgentProviderId を呼び出す
+    // When: getAgentProviderId is called
     const id = getAgentProviderId();
 
-    // Then: 'cursorAgent' を返す（空文字列は無効な値としてデフォルトにフォールバック）
+    // Then: It returns the default 'cursorAgent'
     assert.strictEqual(id, 'cursorAgent');
   });
 
   // TC-E-03: agentProvider=null の場合、デフォルトを返す
   test('TC-E-03: agentProvider が null の場合、cursorAgent を返す', async () => {
-    // Given: agentProvider=null を設定
+    // Given: agentProvider is null
     const config = vscode.workspace.getConfiguration('dontforgetest');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await config.update('agentProvider', null as any, vscode.ConfigurationTarget.Workspace);
 
-    // When: getAgentProviderId を呼び出す
+    // When: getAgentProviderId is called
     const id = getAgentProviderId();
 
-    // Then: 'cursorAgent' を返す（null は無効な値としてデフォルトにフォールバック）
+    // Then: It returns the default 'cursorAgent'
     assert.strictEqual(id, 'cursorAgent');
   });
 
-  // TC-E-04: agentProvider='invalidProvider' の場合、デフォルトを返す
-  test('TC-E-04: agentProvider が無効なプロバイダー名の場合、cursorAgent を返す', async () => {
-    // Given: agentProvider='invalidProvider' を設定（許可されていないプロバイダー名）
+  // TC-E-11
+  test('TC-E-11: agentProvider が無効なプロバイダー名の場合、cursorAgent を返す', async () => {
+    // Given: agentProvider is set to an invalid provider name
     const config = vscode.workspace.getConfiguration('dontforgetest');
     await config.update('agentProvider', 'invalidProvider', vscode.ConfigurationTarget.Workspace);
 
-    // When: getAgentProviderId を呼び出す
+    // When: getAgentProviderId is called
     const id = getAgentProviderId();
 
-    // Then: 'cursorAgent' を返す（無効なプロバイダー名はデフォルトにフォールバック）
+    // Then: It returns the default 'cursorAgent'
     assert.strictEqual(id, 'cursorAgent');
   });
 
   // TC-E-05: agentProvider=' ' (空白のみ) の場合、デフォルトを返す
   test('TC-E-05: agentProvider が空白のみの場合、cursorAgent を返す', async () => {
-    // Given: agentProvider='   ' を設定（空白文字のみ）
+    // Given: agentProvider is whitespace only
     const config = vscode.workspace.getConfiguration('dontforgetest');
     await config.update('agentProvider', '   ', vscode.ConfigurationTarget.Workspace);
 
-    // When: getAgentProviderId を呼び出す
+    // When: getAgentProviderId is called
     const id = getAgentProviderId();
 
-    // Then: 'cursorAgent' を返す（空白のみは無効な値としてデフォルトにフォールバック）
+    // Then: It returns the default 'cursorAgent'
     assert.strictEqual(id, 'cursorAgent');
   });
 
   // TC-E-06: agentProvider=123 (数値) の場合、デフォルトを返す
   test('TC-E-06: agentProvider が数値の場合、cursorAgent を返す', async () => {
-    // Given: agentProvider=123 を設定（文字列以外の型）
+    // Given: agentProvider is set to a number (invalid type)
     const config = vscode.workspace.getConfiguration('dontforgetest');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await config.update('agentProvider', 123 as any, vscode.ConfigurationTarget.Workspace);
 
-    // When: getAgentProviderId を呼び出す
+    // When: getAgentProviderId is called
     const id = getAgentProviderId();
 
-    // Then: 'cursorAgent' を返す（数値型は無効な値としてデフォルトにフォールバック）
+    // Then: It returns the default 'cursorAgent'
     assert.strictEqual(id, 'cursorAgent');
   });
 

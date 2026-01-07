@@ -116,6 +116,97 @@ export type ParseTestResultFileResult =
   | { ok: true; value: TestResultFile }
   | { ok: false; error: string };
 
+function parseJsonWithNormalization(raw: string): { ok: true; value: unknown } | { ok: false; error: string } {
+  const first = tryParseJson(raw);
+  if (first.ok) {
+    return first;
+  }
+
+  const normalized = normalizeJsonWithBareNewlines(raw);
+  if (normalized === raw) {
+    return first;
+  }
+
+  const retry = tryParseJson(normalized);
+  return retry;
+}
+
+function tryParseJson(raw: string): { ok: true; value: unknown } | { ok: false; error: string } {
+  try {
+    return { ok: true, value: JSON.parse(raw) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: `invalid-json: ${msg}` };
+  }
+}
+
+/**
+ * 文字列内の「生の改行」をエスケープし、JSONとしてパース可能な形に整える。
+ * - Gemini などが JSON 文字列内に改行を含めるケースの補正用
+ */
+function normalizeJsonWithBareNewlines(raw: string): string {
+  let inString = false;
+  let escaped = false;
+  let changed = false;
+  const out: string[] = [];
+
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        if (ch === '\n') {
+          out.push('\\n');
+          changed = true;
+          continue;
+        }
+        if (ch === '\r') {
+          out.push('\\r');
+          changed = true;
+          continue;
+        }
+        out.push(ch);
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        out.push(ch);
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+        out.push(ch);
+        continue;
+      }
+      if (ch === '\n') {
+        out.push('\\n');
+        changed = true;
+        continue;
+      }
+      if (ch === '\r') {
+        out.push('\\r');
+        changed = true;
+        continue;
+      }
+      out.push(ch);
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      out.push(ch);
+      continue;
+    }
+
+    out.push(ch);
+  }
+
+  if (!changed) {
+    return raw;
+  }
+  return out.join('');
+}
+
 /**
  * cursor-agent の出力から抽出した JSON テキストを、観点表JSONとしてパースする（多少の揺れに寛容）。
  * - コードフェンスが混入しても除去する
@@ -133,13 +224,11 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
   // 入力が JSON 配列から始まる場合は、内側の `{...}` を拾わずに全体をパースして型検証する。
   // 例: `[{"version":1}]` は JSON だが object ではないため json-not-object とする。
   if (trimmedUnfenced.startsWith('[')) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(trimmedUnfenced);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: `invalid-json: ${msg}` };
+    const parsedResult = parseJsonWithNormalization(trimmedUnfenced);
+    if (!parsedResult.ok) {
+      return { ok: false, error: parsedResult.error };
     }
+    const parsed = parsedResult.value;
     const rec = asRecord(parsed);
     if (!rec) {
       return { ok: false, error: 'json-not-object' };
@@ -177,12 +266,11 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
 
   let parsed: unknown;
   if (jsonText) {
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: `invalid-json: ${msg}` };
+    const parsedResult = parseJsonWithNormalization(jsonText);
+    if (!parsedResult.ok) {
+      return { ok: false, error: parsedResult.error };
     }
+    parsed = parsedResult.value;
   } else {
     // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
     // 例: [] / "..." / null / true / false は JSON として成立し、object でないため json-not-object を返したい。
@@ -197,12 +285,11 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
       trimmedUnfenced === 'true' ||
       trimmedUnfenced === 'false'
     ) {
-      try {
-        parsed = JSON.parse(trimmedUnfenced);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return { ok: false, error: `invalid-json: ${msg}` };
+      const parsedResult = parseJsonWithNormalization(trimmedUnfenced);
+      if (!parsedResult.ok) {
+        return { ok: false, error: parsedResult.error };
       }
+      parsed = parsedResult.value;
     } else {
       return { ok: false, error: 'no-json-object' };
     }
@@ -258,13 +345,11 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
   // 入力が JSON 配列から始まる場合は、内側の `{...}` を拾わずに全体をパースして型検証する。
   // 例: `[{"version":1}]` は JSON だが object ではないため json-not-object とする。
   if (trimmedUnfenced.startsWith('[')) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(trimmedUnfenced);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: `invalid-json: ${msg}` };
+    const parsedResult = parseJsonWithNormalization(trimmedUnfenced);
+    if (!parsedResult.ok) {
+      return { ok: false, error: parsedResult.error };
     }
+    const parsed = parsedResult.value;
     const rec = asRecord(parsed);
     if (!rec) {
       return { ok: false, error: 'json-not-object' };
@@ -297,12 +382,11 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
 
   let parsed: unknown;
   if (jsonText) {
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: `invalid-json: ${msg}` };
+    const parsedResult = parseJsonWithNormalization(jsonText);
+    if (!parsedResult.ok) {
+      return { ok: false, error: parsedResult.error };
     }
+    parsed = parsedResult.value;
   } else {
     // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
     if (trimmedUnfenced.startsWith('{')) {
@@ -315,12 +399,11 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
       trimmedUnfenced === 'true' ||
       trimmedUnfenced === 'false'
     ) {
-      try {
-        parsed = JSON.parse(trimmedUnfenced);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return { ok: false, error: `invalid-json: ${msg}` };
+      const parsedResult = parseJsonWithNormalization(trimmedUnfenced);
+      if (!parsedResult.ok) {
+        return { ok: false, error: parsedResult.error };
       }
+      parsed = parsedResult.value;
     } else {
       return { ok: false, error: 'no-json-object' };
     }

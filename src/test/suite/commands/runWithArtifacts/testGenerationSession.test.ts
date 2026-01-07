@@ -187,6 +187,45 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       assert.strictEqual(env.DONTFORGETEST_TEST_RESULT_FILE, testResultFilePath);
     });
 
+    // TC-N-06
+    test('TC-N-06: constructor sets DONTFORGETEST_DEBUG_LOG_ROOT if not already set', () => {
+      // Given: DONTFORGETEST_DEBUG_LOG_ROOT is not set
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const originalDebugRoot = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+      delete process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+
+      try {
+        // When: A session is created
+        createSession(workspaceRoot);
+
+        // Then: DONTFORGETEST_DEBUG_LOG_ROOT is set to the workspaceRoot
+        assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, workspaceRoot);
+      } finally {
+        process.env.DONTFORGETEST_DEBUG_LOG_ROOT = originalDebugRoot;
+      }
+    });
+
+    // TC-E-07
+    test('TC-E-07: constructor does NOT overwrite DONTFORGETEST_DEBUG_LOG_ROOT if already set', () => {
+      // Given: DONTFORGETEST_DEBUG_LOG_ROOT is already set
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const originalDebugRoot = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+      const existingValue = '/existing/path';
+      process.env.DONTFORGETEST_DEBUG_LOG_ROOT = existingValue;
+
+      try {
+        // When: A session is created
+        createSession(workspaceRoot);
+
+        // Then: DONTFORGETEST_DEBUG_LOG_ROOT remains unchanged
+        assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, existingValue);
+      } finally {
+        process.env.DONTFORGETEST_DEBUG_LOG_ROOT = originalDebugRoot;
+      }
+    });
+
     test('TC-TGS-READ-E-01: readTestResultFile returns undefined when test-result.json does not exist', async () => {
       // Given: A workspace without the file
       const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));

@@ -14,77 +14,83 @@ import {
 
 suite('core/modelSettings.ts', () => {
   suite('normalizeModelList', () => {
-    // Given: undefined
-    // When: normalizeModelListを呼び出す
-    // Then: 空配列が返る
     test('TC-A-01: undefinedは空配列に正規化される', () => {
+      // Given: input is undefined
+      // When: normalizeModelList is called
       const result = normalizeModelList(undefined);
+      // Then: Returns an empty array
       assert.deepStrictEqual(result, []);
     });
 
-    // Given: string配列だが空文字/空白/重複/非stringが混在
-    // When: normalizeModelListを呼び出す
-    // Then: trimされ、空要素と重複と非stringが除外される（順序は先勝ち）
     test('TC-N-02: 値の正規化（trim/空除外/重複除去）', () => {
+      // Given: string array with mixed whitespace, empty strings, duplicates, and non-string values
       const input: unknown = [' o3 ', '', '  ', 'o3', 123, null, 'claude-4-opus-thinking', 'claude-4-opus-thinking'];
+      // When: normalizeModelList is called
       const result = normalizeModelList(input);
+      // Then: Whitespace is trimmed, empty elements, non-strings, and duplicates are removed
       assert.deepStrictEqual(result, ['o3', 'claude-4-opus-thinking']);
+    });
+
+    test('TC-B-01: Empty array input', () => {
+      // Given: input is an empty array
+      // When: normalizeModelList is called
+      const result = normalizeModelList([]);
+      // Then: Returns an empty array
+      assert.deepStrictEqual(result, []);
     });
   });
 
   suite('getModelCandidates', () => {
-    // Given: defaultModelとcustomModelsが設定済み（重複あり）
-    // When: getModelCandidatesを呼び出す
-    // Then: defaultModelが先頭、customModelsとマージ、重複除去される
     test('TC-N-01: 候補モデルの生成（default優先、重複除去）', () => {
+      // Given: defaultModel and customModels are set with duplicates
       const settings: ModelSettings = {
         defaultModel: 'claude-3.5-sonnet',
         customModels: ['o3', ' claude-3.5-sonnet ', 'claude-4-opus-thinking'],
       };
+      // When: getModelCandidates is called
       const result = getModelCandidates(settings);
+      // Then: defaultModel is first, followed by unique customModels
       assert.deepStrictEqual(result, ['claude-3.5-sonnet', 'o3', 'claude-4-opus-thinking']);
     });
 
-    // Given: defaultModel未設定、customModelsのみ
-    // When: getModelCandidatesを呼び出す
-    // Then: customModelsの正規化結果が返る
     test('TC-N-02: defaultModel未設定の場合', () => {
+      // Given: defaultModel is undefined, customModels has values
       const settings: ModelSettings = {
         defaultModel: undefined,
         customModels: [' o3 ', 'o3', ''],
       };
+      // When: getModelCandidates is called
       const result = getModelCandidates(settings);
+      // Then: Returns normalized customModels
       assert.deepStrictEqual(result, ['o3']);
     });
   });
 
   suite('getModelSettings (Integration)', () => {
-    // TC-N-02: User settings define dontforgetest.defaultModel
     test('TC-N-02: User settings define dontforgetest.defaultModel', async () => {
-      // Given: dontforgetest.defaultModel を設定している
+      // Given: dontforgetest.defaultModel is configured in settings
       const config = vscode.workspace.getConfiguration('dontforgetest');
       await config.update('defaultModel', 'test-model-n02', vscode.ConfigurationTarget.Global);
 
       try {
-        // When: getModelSettings を呼び出す
+        // When: getModelSettings is called
         const settings = getModelSettings();
-        // Then: 設定値が返る
+        // Then: The configured value is returned
         assert.strictEqual(settings.defaultModel, 'test-model-n02');
       } finally {
         await config.update('defaultModel', undefined, vscode.ConfigurationTarget.Global);
       }
     });
 
-    // TC-B-02: User settings define ONLY old testgen-agent keys (Verify Isolation)
     test('TC-B-02: User settings define ONLY old testgen-agent keys (Verify Isolation)', async () => {
-      // Given: dontforgetest.defaultModel を未設定にし、旧キーのみが存在する状況を想定する
+      // Given: dontforgetest.defaultModel is unset
       const config = vscode.workspace.getConfiguration('dontforgetest');
       await config.update('defaultModel', undefined, vscode.ConfigurationTarget.Global);
 
-      // When: getModelSettings を呼び出す
+      // When: getModelSettings is called
       const settings = getModelSettings();
 
-      // Then: dontforgetest.defaultModel は未設定のまま（default状態を確認）
+      // Then: defaultModel remains undefined (ignoring legacy keys if any)
       assert.strictEqual(settings.defaultModel, undefined);
     });
   });
@@ -104,7 +110,7 @@ suite('core/modelSettings.ts', () => {
     });
 
     test('TC-MODEL-SET-N-01: trims model value and calls config.update once', async () => {
-      // Given: A mocked configuration.update that records calls
+      // Given: A mocked configuration.update and an input with whitespace
       originalGetConfiguration = vscode.workspace.getConfiguration;
       const calls: Array<{ section: string; value: unknown; target: unknown }> = [];
       const configStub = {
@@ -115,10 +121,10 @@ suite('core/modelSettings.ts', () => {
 
       vscode.workspace.getConfiguration = () => configStub;
 
-      // When: setDefaultModel is called with a trimmed value
+      // When: setDefaultModel is called with a value containing whitespace
       await setDefaultModel('  model-a  ');
 
-      // Then: update is called with trimmed value and a valid ConfigurationTarget
+      // Then: update is called once with trimmed value
       assert.strictEqual(calls.length, 1);
       assert.strictEqual(calls[0]?.section, 'defaultModel');
       assert.strictEqual(calls[0]?.value, 'model-a');
@@ -129,7 +135,7 @@ suite('core/modelSettings.ts', () => {
     });
 
     test('TC-MODEL-SET-B-01: undefined clears defaultModel as empty string', async () => {
-      // Given: A mocked configuration.update that records calls
+      // Given: A mocked configuration.update
       originalGetConfiguration = vscode.workspace.getConfiguration;
       const calls: Array<{ section: string; value: unknown; target: unknown }> = [];
       const configStub = {
@@ -143,7 +149,7 @@ suite('core/modelSettings.ts', () => {
       // When: setDefaultModel is called with undefined
       await setDefaultModel(undefined);
 
-      // Then: update is called with empty string
+      // Then: update is called with an empty string to clear the setting
       assert.strictEqual(calls.length, 1);
       assert.strictEqual(calls[0]?.section, 'defaultModel');
       assert.strictEqual(calls[0]?.value, '');
@@ -161,7 +167,7 @@ suite('core/modelSettings.ts', () => {
       vscode.workspace.getConfiguration = () => configStub;
 
       // When: setDefaultModel is called
-      // Then: It rejects with Error('update failed')
+      // Then: It should rethrow the error with the same message
       try {
         await setDefaultModel('model');
         assert.fail('Should have thrown');
@@ -180,7 +186,7 @@ suite('core/modelSettings.ts', () => {
       };
 
       // When: setDefaultModel is called
-      // Then: It rejects with TypeError('boom')
+      // Then: It should rethrow the TypeError with the same message
       try {
         await setDefaultModel('model');
         assert.fail('Should have thrown');
@@ -192,13 +198,12 @@ suite('core/modelSettings.ts', () => {
   });
 
   suite('getClaudeCodeModelCandidates', () => {
-    // TC-CLAUDE-N-01: Claude Code 用のモデル候補が正しく返る
     test('TC-CLAUDE-N-01: Claude Code 用のモデル候補を返す', () => {
-      // Given: なし
-      // When: getClaudeCodeModelCandidates を呼び出す
+      // Given: No special setup needed
+      // When: getClaudeCodeModelCandidates is called
       const result = getClaudeCodeModelCandidates();
 
-      // Then: Opus, Sonnet, Haiku の3つが含まれる
+      // Then: Returns the list of standard Claude models
       assert.ok(Array.isArray(result), 'Should return an array');
       assert.ok(result.includes('opus-4.5'), 'Should include opus-4.5');
       assert.ok(result.includes('sonnet-4.5'), 'Should include sonnet-4.5');
@@ -208,97 +213,120 @@ suite('core/modelSettings.ts', () => {
   });
 
   suite('getCursorAgentModelCandidates', () => {
-    // TC-CURSOR-N-01: Cursor Agent 用のビルトインモデルが含まれる
     test('TC-CURSOR-N-01: ビルトインモデルが含まれる', () => {
-      // Given: customModels が空の設定
+      // Given: customModels is empty
       const settings: ModelSettings = {
         defaultModel: undefined,
         customModels: [],
       };
 
-      // When: getCursorAgentModelCandidates を呼び出す
+      // When: getCursorAgentModelCandidates is called
       const result = getCursorAgentModelCandidates(settings);
 
-      // Then: ビルトインモデルが含まれる
+      // Then: Includes builtin models like 'auto'
       assert.ok(result.includes('auto'), 'Should include auto');
       assert.ok(result.includes('sonnet-4.5'), 'Should include sonnet-4.5');
       assert.ok(result.includes('gpt-5.2'), 'Should include gpt-5.2');
       assert.strictEqual(result[0], 'auto', 'auto should be first');
     });
 
-    // TC-CURSOR-N-02: customModels が auto を含む場合は重複しない
     test('TC-CURSOR-N-02: customModels が auto を含む場合は重複しない', () => {
-      // Given: customModels に auto が含まれる設定
+      // Given: customModels already includes 'auto'
       const settings: ModelSettings = {
         defaultModel: undefined,
         customModels: ['auto', 'model-a'],
       };
 
-      // When: getCursorAgentModelCandidates を呼び出す
+      // When: getCursorAgentModelCandidates is called
       const result = getCursorAgentModelCandidates(settings);
 
-      // Then: auto は1回だけ含まれる
+      // Then: 'auto' only appears once
       const autoCount = result.filter((m) => m === 'auto').length;
       assert.strictEqual(autoCount, 1, 'auto should appear exactly once');
-      // model-a は追加されている
       assert.ok(result.includes('model-a'), 'Should include model-a');
     });
 
-    // TC-CURSOR-N-03: defaultModel がビルトインに無い場合は追加される
     test('TC-CURSOR-N-03: defaultModel がビルトインに無い場合は追加される', () => {
-      // Given: defaultModel にビルトイン外のモデルを設定
+      // Given: defaultModel is not a builtin
       const settings: ModelSettings = {
         defaultModel: 'custom-model-x',
         customModels: [],
       };
 
-      // When: getCursorAgentModelCandidates を呼び出す
+      // When: getCursorAgentModelCandidates is called
       const result = getCursorAgentModelCandidates(settings);
 
-      // Then: custom-model-x が追加されている
+      // Then: The custom defaultModel is added to candidates
       assert.ok(result.includes('custom-model-x'), 'Should include custom-model-x');
     });
   });
 
   suite('getModelCandidatesForProvider', () => {
-    // TC-PROVIDER-N-01: cursorAgent の場合は Cursor 用候補を返す
     test('TC-PROVIDER-N-01: cursorAgent の場合は Cursor 用候補を返す', () => {
-      // Given: cursorAgent を指定
+      // Given: provider is 'cursorAgent'
       const settings: ModelSettings = {
         defaultModel: 'model-x',
         customModels: ['model-y'],
       };
 
-      // When: getModelCandidatesForProvider を呼び出す
+      // When: getModelCandidatesForProvider is called
       const result = getModelCandidatesForProvider('cursorAgent', settings);
 
-      // Then: ビルトインモデルと model-x, model-y が含まれる
+      // Then: Includes both builtin and custom models
       assert.ok(result.includes('auto'), 'Should include auto');
       assert.ok(result.includes('model-x'), 'Should include model-x');
       assert.ok(result.includes('model-y'), 'Should include model-y');
     });
 
-    // TC-PROVIDER-N-02: claudeCode の場合は Claude 用候補を返す
     test('TC-PROVIDER-N-02: claudeCode の場合は Claude 用候補を返す', () => {
-      // Given: claudeCode を指定
+      // Given: provider is 'claudeCode'
       const settings: ModelSettings = {
         defaultModel: 'model-x',
         customModels: ['model-y'],
       };
 
-      // When: getModelCandidatesForProvider を呼び出す
+      // When: getModelCandidatesForProvider is called
       const result = getModelCandidatesForProvider('claudeCode', settings);
 
-      // Then: Claude 用のモデルが返る（settings は無視される）
+      // Then: Returns Claude models (ignoring custom models in settings for this provider)
       assert.ok(result.includes('opus-4.5'), 'Should include opus-4.5');
       assert.ok(result.includes('sonnet-4.5'), 'Should include sonnet-4.5');
       assert.ok(result.includes('haiku-4.5'), 'Should include haiku-4.5');
       assert.ok(!result.includes('model-x'), 'Should not include model-x');
     });
 
-    // TC-N-10: getModelCandidatesForProvider('claudeCode', settings) returns Claude models
+    test('TC-PROVIDER-N-03: codexCli の場合は Codex 用候補を返す', () => {
+      // Given: provider is 'codexCli'
+      const settings: ModelSettings = {
+        defaultModel: 'gpt-5.2-codex',
+        customModels: ['custom-codex'],
+      };
+
+      // When: getModelCandidatesForProvider is called
+      const result = getModelCandidatesForProvider('codexCli', settings);
+
+      // Then: Returns models suitable for Codex CLI
+      assert.ok(result.includes('gpt-5.2-codex'), 'Should include gpt-5.2-codex');
+      assert.ok(result.includes('custom-codex'), 'Should include custom-codex');
+    });
+
+    test('MS-N-10: geminiCli の場合は Gemini 用候補を返す', () => {
+      // Given: provider is 'geminiCli'
+      const settings: ModelSettings = {
+        defaultModel: 'gemini-3-flash-preview',
+        customModels: ['custom-gemini'],
+      };
+
+      // When: getModelCandidatesForProvider is called
+      const result = getModelCandidatesForProvider('geminiCli', settings);
+
+      // Then: Returns models suitable for Gemini CLI
+      assert.ok(result.includes('gemini-3-flash-preview'), 'Should include gemini-3-flash-preview');
+      assert.ok(result.includes('custom-gemini'), 'Should include custom-gemini');
+    });
+
     test('TC-N-10: getModelCandidatesForProvider(claudeCode) returns Claude model candidates', () => {
-      // Given: claudeCode provider
+      // Given: provider is 'claudeCode' with empty settings
       const settings: ModelSettings = {
         defaultModel: undefined,
         customModels: [],
@@ -307,13 +335,12 @@ suite('core/modelSettings.ts', () => {
       // When: getModelCandidatesForProvider is called
       const result = getModelCandidatesForProvider('claudeCode', settings);
 
-      // Then: Returns ['opus-4.5', 'sonnet-4.5', 'haiku-4.5']
+      // Then: Returns exact list of Claude models
       assert.deepStrictEqual(result, ['opus-4.5', 'sonnet-4.5', 'haiku-4.5']);
     });
 
-    // TC-N-11: getModelCandidatesForProvider('cursorAgent', settings) returns Cursor Agent models
     test('TC-N-11: getModelCandidatesForProvider(cursorAgent) returns Cursor model candidates with builtins', () => {
-      // Given: cursorAgent provider with settings
+      // Given: provider is 'cursorAgent' with empty settings
       const settings: ModelSettings = {
         defaultModel: undefined,
         customModels: [],
@@ -322,15 +349,14 @@ suite('core/modelSettings.ts', () => {
       // When: getModelCandidatesForProvider is called
       const result = getModelCandidatesForProvider('cursorAgent', settings);
 
-      // Then: Returns list containing CURSOR_AGENT_BUILTIN_MODELS base
+      // Then: Includes builtin models like 'auto'
       assert.ok(result.includes('auto'), 'Should include auto');
     });
   });
 
   suite('getEffectiveDefaultModel', () => {
-    // TC-N-12: getEffectiveDefaultModel('claudeCode', {defaultModel: 'opus-4.5', ...}) returns 'opus-4.5'
     test('TC-N-12: claudeCode with defaultModel in candidates returns that model', () => {
-      // Given: claudeCode provider with defaultModel='opus-4.5' (in candidates)
+      // Given: defaultModel is 'opus-4.5' which is a Claude candidate
       const settings: ModelSettings = {
         defaultModel: 'opus-4.5',
         customModels: [],
@@ -339,13 +365,12 @@ suite('core/modelSettings.ts', () => {
       // When: getEffectiveDefaultModel is called
       const result = getEffectiveDefaultModel('claudeCode', settings);
 
-      // Then: Returns 'opus-4.5' since it is in candidates
+      // Then: Returns 'opus-4.5'
       assert.strictEqual(result, 'opus-4.5');
     });
 
-    // TC-N-13: getEffectiveDefaultModel('claudeCode', {defaultModel: 'gpt-5.2', ...}) returns undefined
     test('TC-N-13: claudeCode with defaultModel NOT in candidates returns undefined', () => {
-      // Given: claudeCode provider with defaultModel='gpt-5.2' (not in Claude candidates)
+      // Given: defaultModel is 'gpt-5.2' which is NOT a Claude candidate
       const settings: ModelSettings = {
         defaultModel: 'gpt-5.2',
         customModels: [],
@@ -354,13 +379,26 @@ suite('core/modelSettings.ts', () => {
       // When: getEffectiveDefaultModel is called
       const result = getEffectiveDefaultModel('claudeCode', settings);
 
-      // Then: Returns undefined since 'gpt-5.2' is not in Claude candidates
+      // Then: Returns undefined
       assert.strictEqual(result, undefined);
     });
 
-    // TC-B-05: getEffectiveDefaultModel with settings.defaultModel=undefined returns undefined
+    test('TC-N-15: codexCli with defaultModel in candidates returns that model', () => {
+      // Given: defaultModel is 'gpt-5.2-codex' which is a Codex candidate
+      const settings: ModelSettings = {
+        defaultModel: 'gpt-5.2-codex',
+        customModels: [],
+      };
+
+      // When: getEffectiveDefaultModel is called
+      const result = getEffectiveDefaultModel('codexCli', settings);
+
+      // Then: Returns 'gpt-5.2-codex'
+      assert.strictEqual(result, 'gpt-5.2-codex');
+    });
+
     test('TC-B-05: defaultModel=undefined returns undefined', () => {
-      // Given: claudeCode provider with no defaultModel set
+      // Given: defaultModel is undefined
       const settings: ModelSettings = {
         defaultModel: undefined,
         customModels: [],
@@ -373,9 +411,8 @@ suite('core/modelSettings.ts', () => {
       assert.strictEqual(result, undefined);
     });
 
-    // TC-B-06: getEffectiveDefaultModel with settings.defaultModel='' (empty string) returns undefined
     test('TC-B-06: defaultModel empty string returns undefined', () => {
-      // Given: claudeCode provider with defaultModel=''
+      // Given: defaultModel is an empty string
       const settings: ModelSettings = {
         defaultModel: '',
         customModels: [],
@@ -384,13 +421,12 @@ suite('core/modelSettings.ts', () => {
       // When: getEffectiveDefaultModel is called
       const result = getEffectiveDefaultModel('claudeCode', settings);
 
-      // Then: Returns undefined since empty string is not in candidates
+      // Then: Returns undefined
       assert.strictEqual(result, undefined);
     });
 
-    // TC-N-31: getCursorAgentModelCandidates with defaultModel='custom-model' includes custom-model
     test('TC-N-31: getCursorAgentModelCandidates with custom defaultModel includes it', () => {
-      // Given: cursorAgent provider with defaultModel='custom-model'
+      // Given: cursorAgent with a custom defaultModel
       const settings: ModelSettings = {
         defaultModel: 'custom-model',
         customModels: [],
@@ -399,13 +435,12 @@ suite('core/modelSettings.ts', () => {
       // When: getCursorAgentModelCandidates is called
       const result = getCursorAgentModelCandidates(settings);
 
-      // Then: 'custom-model' is included in the list
+      // Then: Includes the custom model
       assert.ok(result.includes('custom-model'), 'Should include custom-model');
     });
 
-    // TC-B-07: getEffectiveDefaultModel with settings.defaultModel whitespace-only returns undefined
     test('TC-B-07: defaultModel whitespace-only returns undefined', () => {
-      // Given: claudeCode provider with whitespace-only defaultModel
+      // Given: defaultModel is whitespace only
       const settings: ModelSettings = {
         defaultModel: '   ',
         customModels: [],
@@ -414,13 +449,12 @@ suite('core/modelSettings.ts', () => {
       // When: getEffectiveDefaultModel is called
       const result = getEffectiveDefaultModel('claudeCode', settings);
 
-      // Then: Returns undefined (whitespace is not a valid candidate)
+      // Then: Returns undefined
       assert.strictEqual(result, undefined);
     });
 
-    // TC-N-14: cursorAgent with customModels model as defaultModel returns that model
     test('TC-N-14: cursorAgent with customModels model as defaultModel returns that model', () => {
-      // Given: cursorAgent provider with a custom model configured as defaultModel
+      // Given: defaultModel is one of the customModels
       const settings: ModelSettings = {
         defaultModel: 'my-custom-model',
         customModels: ['my-custom-model'],
@@ -429,9 +463,80 @@ suite('core/modelSettings.ts', () => {
       // When: getEffectiveDefaultModel is called
       const result = getEffectiveDefaultModel('cursorAgent', settings);
 
-      // Then: Returns the custom model since it is included in candidates
+      // Then: Returns the custom model
       assert.strictEqual(result, 'my-custom-model');
+    });
+
+    test('TC-N-16: geminiCli with defaultModel in candidates returns that model', () => {
+      // Given: defaultModel is 'gemini-3-flash-preview' which is a Gemini candidate
+      const settings: ModelSettings = {
+        defaultModel: 'gemini-3-flash-preview',
+        customModels: [],
+      };
+
+      // When: getEffectiveDefaultModel is called
+      const result = getEffectiveDefaultModel('geminiCli', settings);
+
+      // Then: Returns 'gemini-3-flash-preview'
+      assert.strictEqual(result, 'gemini-3-flash-preview');
+    });
+  });
+
+  suite('getGeminiCliModelCandidates', () => {
+    test('MS-N-11: Gemini CLI 用のビルトインモデルが含まれる', () => {
+      // Given: customModels is empty
+      const settings: ModelSettings = {
+        defaultModel: undefined,
+        customModels: [],
+      };
+
+      // When: getModelCandidatesForProvider('geminiCli', settings) is called
+      const result = getModelCandidatesForProvider('geminiCli', settings);
+      // Then: Includes Gemini builtin models
+      assert.ok(result.includes('gemini-3-pro-preview'), 'Should include gemini-3-pro-preview');
+      assert.ok(result.includes('gemini-3-flash-preview'), 'Should include gemini-3-flash-preview');
+    });
+
+    test('MS-N-13: defaultModel がビルトインに無い場合は追加される', () => {
+      // Given: defaultModel is not a Gemini builtin
+      const settings: ModelSettings = {
+        defaultModel: 'custom-gemini-x',
+        customModels: [],
+      };
+
+      // When: getModelCandidatesForProvider('geminiCli', settings) is called
+      const result = getModelCandidatesForProvider('geminiCli', settings);
+      // Then: Includes the custom defaultModel
+      assert.ok(result.includes('custom-gemini-x'), 'Should include custom-gemini-x');
+    });
+  });
+
+  suite('getCodexCliModelCandidates', () => {
+    test('MS-N-12: Codex CLI 用のビルトインモデルが含まれる', () => {
+      // Given: customModels is empty
+      const settings: ModelSettings = {
+        defaultModel: undefined,
+        customModels: [],
+      };
+
+      // When: getModelCandidatesForProvider('codexCli', settings) is called
+      const result = getModelCandidatesForProvider('codexCli', settings);
+      // Then: Includes Codex builtin models
+      assert.ok(result.includes('gpt-5.2-codex'), 'Should include gpt-5.2-codex');
+      assert.ok(result.includes('gpt-5.1-codex-max'), 'Should include gpt-5.1-codex-max');
+    });
+
+    test('MS-N-14: defaultModel がビルトインに無い場合は追加される', () => {
+      // Given: defaultModel is not a Codex builtin
+      const settings: ModelSettings = {
+        defaultModel: 'custom-codex-x',
+        customModels: [],
+      };
+
+      // When: getModelCandidatesForProvider('codexCli', settings) is called
+      const result = getModelCandidatesForProvider('codexCli', settings);
+      // Then: Includes the custom defaultModel
+      assert.ok(result.includes('custom-codex-x'), 'Should include custom-codex-x');
     });
   });
 });
-

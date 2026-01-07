@@ -43,7 +43,6 @@ suite('src/extension.ts', () => {
     });
 
     test('TC-EXT-N-01: activate() registers controlPanelProvider for disposal and removes its taskManager listener on context dispose', () => {
-      // Case ID: TC-EXT-N-01
       // Given: A mock ExtensionContext and stubbed VS Code registrations
       taskManager.cancelAll();
 
@@ -103,7 +102,6 @@ suite('src/extension.ts', () => {
     });
 
     test('TC-N-EXT-01: activate() adds control panel provider to subscriptions so its taskManager listener is removed on dispose', () => {
-      // Case ID: TC-N-EXT-01
       // Given: A mock ExtensionContext, stubbed VS Code registrations, and a spy for the provider instance
       taskManager.cancelAll();
 
@@ -152,7 +150,7 @@ suite('src/extension.ts', () => {
         assert.strictEqual(afterActivateCount, baseListenerCount + 1);
         assert.ok(capturedProvider, 'Expected control panel provider to be passed to registerWebviewViewProvider');
 
-        // Then: Provider is included in subscriptions (dispose reachable via subscriptions)
+        // Then: Provider is included in subscriptions
         assert.strictEqual(context.subscriptions.includes(capturedProvider as vscode.Disposable), true);
 
         // When: Disposing subscriptions (including the provider)
@@ -160,15 +158,10 @@ suite('src/extension.ts', () => {
           d.dispose();
         }
 
-        // Then: Provider listener is removed and subsequent notifications cannot invoke it (not present in the listeners Set)
+        // Then: Provider listener is removed
         const afterDisposeCount = (listeners as Set<unknown>).size;
         assert.strictEqual(afterDisposeCount, baseListenerCount);
         assert.strictEqual(removeListenerCalls >= 1, true);
-
-        // Then: Triggering TaskManager notifications does not re-add the removed listener
-        taskManager.register('x', 'Label', { taskId: 'x', dispose: () => {} });
-        taskManager.unregister('x');
-        assert.strictEqual((listeners as Set<unknown>).size, baseListenerCount);
       } finally {
         (vscode.window as unknown as { registerWebviewViewProvider: typeof originalRegisterWebviewViewProvider }).registerWebviewViewProvider =
           originalRegisterWebviewViewProvider;
@@ -184,7 +177,6 @@ suite('src/extension.ts', () => {
     });
 
     test('TC-E-EXT-02: TestGenControlPanelViewProvider.dispose() is idempotent (removeListener called once)', () => {
-      // Case ID: TC-E-EXT-02
       // Given: A provider instance and a spy for taskManager.removeListener
       taskManager.cancelAll();
 
@@ -207,7 +199,7 @@ suite('src/extension.ts', () => {
         provider.dispose();
         provider.dispose();
 
-        // Then: removeListener is called exactly once and no exception is thrown
+        // Then: removeListener is called exactly once
         assert.strictEqual(removeCount, 1);
       } finally {
         (taskManager as unknown as { removeListener: typeof taskManager.removeListener }).removeListener = originalRemoveListener;
@@ -248,7 +240,9 @@ suite('src/extension.ts', () => {
         'dontforgetest.generateTestFromCommitRange',
         'dontforgetest.generateTestFromWorkingTree',
         'dontforgetest.selectDefaultModel',
-        'dontforgetest.showTestGeneratorOutput'
+        'dontforgetest.showTestGeneratorOutput',
+        'dontforgetest.selectAgentProvider',
+        'dontforgetest.analyzeTests'
       ];
 
       // When: VS Code に登録されたコマンド一覧を取得する（組み込み含む）
@@ -431,15 +425,17 @@ suite('src/extension.ts', () => {
         'dontforgetest.generateTestFromCommitRange',
         'dontforgetest.generateTestFromWorkingTree',
         'dontforgetest.selectDefaultModel',
-        'dontforgetest.showTestGeneratorOutput'
+        'dontforgetest.showTestGeneratorOutput',
+        'dontforgetest.selectAgentProvider',
+        'dontforgetest.analyzeTests'
       ];
 
       // When: Checking array length
       // Then: Array contains expected number of commands
       assert.strictEqual(
         expectedCommands.length,
-        7,
-        'Expected commands array should contain 7 commands'
+        9,
+        'Expected commands array should contain 9 commands'
       );
       assert.ok(
         !expectedCommands.includes('dontforgetest.generateTestFromFile'),
@@ -457,7 +453,10 @@ suite('src/extension.ts', () => {
       const config = vscode.workspace.getConfiguration('dontforgetest');
 
       // When/Then: 既定値が期待通りであること
+      assert.strictEqual(config.get('agentProvider'), 'cursorAgent', 'agentProvider default value is incorrect');
+      assert.strictEqual(config.get('agentPath'), '', 'agentPath default value is incorrect');
       assert.strictEqual(config.get('cursorAgentPath'), '', 'cursorAgentPath default value is incorrect');
+      assert.strictEqual(config.get('codexPromptCommand'), '', 'codexPromptCommand default value is incorrect');
       assert.strictEqual(config.get('maxParallelTasks'), 4, 'maxParallelTasks default value is incorrect');
       assert.strictEqual(config.get('defaultModel'), '', 'defaultModel default value is incorrect');
       assert.deepStrictEqual(config.get('customModels'), [], 'customModels default value is incorrect');

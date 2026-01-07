@@ -3,7 +3,7 @@
   "publisher": "kinopeee",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.121",
+  "version": "0.0.122",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.105.0"
@@ -125,10 +125,17 @@
           "type": "string",
           "enum": [
             "cursorAgent",
-            "claudeCode"
+            "claudeCode",
+            "geminiCli",
+            "codexCli"
           ],
           "default": "cursorAgent",
           "description": "%configuration.agentProvider.description%"
+        },
+        "dontforgetest.agentPath": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.agentPath.description%"
         },
         "dontforgetest.cursorAgentPath": {
           "type": "string",
@@ -139,6 +146,11 @@
           "type": "string",
           "default": "",
           "description": "%configuration.claudePath.description%"
+        },
+        "dontforgetest.codexPromptCommand": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.codexPromptCommand.description%"
         },
         "dontforgetest.maxParallelTasks": {
           "type": "number",
