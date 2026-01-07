@@ -133,10 +133,13 @@ suite('providers/codexCliProvider.ts', () => {
     const mockSpawn = (() => child) as unknown as typeof childProcess.spawn;
     const provider = new CodexCliProvider(mockSpawn);
     const options = {
+      taskId: 'task-1',
       workspaceRoot: '/',
       agentCommand: 'codex',
-      generationPrompt: 'prompt',
-      taskId: 'task-1',
+      prompt: 'prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: () => {},
     };
 
     // When: run is called
