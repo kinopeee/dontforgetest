@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.0.123
+
+### Added
+
+- Agent providers: Added support for **Gemini CLI** and **Codex CLI** as test generation backends
+- Settings: Extended `dontforgetest.agentProvider` with `geminiCli` / `codexCli`, and added Codex-specific options (`dontforgetest.codexPromptCommand`, `dontforgetest.codexReasoningEffort`)
+- UI: Settings panel now supports switching agent providers and choosing model candidates per provider
+
+### Changed
+
+- Preflight: Added command availability checks and guidance for Gemini/Codex CLI
+- Model selection: Added provider-aware model candidate hints and default model validation
+
+---
+
+## 0.0.123（日本語）
+
+### 追加
+
+- エージェント: **Gemini CLI** / **Codex CLI** に対応し、テスト生成の実行バックエンドとして選択できるようになりました
+- 設定: `dontforgetest.agentProvider` に `geminiCli` / `codexCli` を追加し、Codex 用の設定（`dontforgetest.codexPromptCommand` / `dontforgetest.codexReasoningEffort`）を追加しました
+- UI: 設定パネルでエージェント切替と、プロバイダー別のモデル候補選択に対応しました
+
+### 変更
+
+- 事前チェック: Gemini/Codex CLI のコマンド存在確認と案内（設定/ドキュメント導線）を追加しました
+- モデル選択: プロバイダー別のモデル候補（ヒント）と defaultModel の整合チェックを追加しました
+
+---
+
 ## 0.0.121
 
 ### Changed
@@ -34,7 +64,7 @@
 
 ### 変更
 
-- ドキュメント: 対応エディタ表記を **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf）に統一し、CLI エージェント記載を汎用化しました（現在: Cursor Agent / Claude Code｜対応予定: Codex CLI）
+- ドキュメント: 対応エディタ表記を **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf）に統一し、CLI エージェント記載を汎用化しました（現在: Cursor Agent / Claude Code ｜対応予定: Codex CLI）
 
 ### 修正
 
