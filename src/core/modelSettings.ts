@@ -131,6 +131,15 @@ const CURSOR_AGENT_BUILTIN_MODELS = [
 ];
 
 /**
+ * Gemini CLI 用のビルトインモデル候補リスト（UI 用のヒント）。
+ *
+ * 注意:
+ * - CLI 側のモデル一覧は変動し得るため、ここは「公開情報上の例」として最小限に留める
+ * - ここに無いモデルは `dontforgetest.customModels` に追加するか、入力で指定する
+ */
+const GEMINI_CLI_BUILTIN_MODELS = ['gemini-3-pro-preview', 'gemini-3-flash-preview'];
+
+/**
  * Cursor Agent 用のモデル候補を返す。
  * ビルトインリストに customModels と defaultModel をマージして返す。
  */
@@ -163,9 +172,9 @@ export function getModelCandidatesForProvider(
   providerId: AgentProviderId,
   settings: ModelSettings = getModelSettings(),
 ): string[] {
-  if (providerId === 'claudeCode') {
-    return getClaudeCodeModelCandidates();
-  }
+  if (providerId === 'claudeCode') return getClaudeCodeModelCandidates();
+  if (providerId === 'geminiCli') return getGeminiCliModelCandidates(settings);
+  if (providerId === 'codexCli') return getCodexCliModelCandidates(settings);
   return getCursorAgentModelCandidates(settings);
 }
 
@@ -188,4 +197,62 @@ export function getEffectiveDefaultModel(
 
   // 含まれていなければ undefined（Provider のデフォルトに委ねる）
   return undefined;
+}
+
+/**
+ * Gemini CLI 用のモデル候補を返す。
+ * ビルトインリストに customModels と defaultModel をマージして返す。
+ */
+export function getGeminiCliModelCandidates(settings: ModelSettings = getModelSettings()): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  for (const m of GEMINI_CLI_BUILTIN_MODELS) {
+    pushUniqueModel(out, seen, m);
+  }
+  if (settings.defaultModel) {
+    pushUniqueModel(out, seen, settings.defaultModel);
+  }
+  for (const m of settings.customModels) {
+    pushUniqueModel(out, seen, m);
+  }
+
+  return out;
+}
+
+/**
+ * Codex CLI 用のビルトインモデル候補リスト（UI 用のヒント）。
+ *
+ * NOTE:
+ * - getCodexCliModelCandidates から参照されるため、定義を関数より前に置いておく（TDZ を避ける意図）
+ * - CLI 側のモデル一覧は変動し得るため、ここは最小限に留める
+ */
+const CODEX_CLI_BUILTIN_MODELS = [
+  'gpt-5.2-codex',
+  'gpt-5.2-codex-high',
+  'gpt-5.1-codex',
+  'gpt-5.1-codex-high',
+  'gpt-5.1-codex-max',
+  'gpt-5.1-codex-max-high',
+] as const;
+
+/**
+ * Codex CLI 用のモデル候補を返す。
+ * 設定された defaultModel / customModels のみを表示する。
+ */
+export function getCodexCliModelCandidates(settings: ModelSettings = getModelSettings()): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  for (const m of CODEX_CLI_BUILTIN_MODELS) {
+    pushUniqueModel(out, seen, m);
+  }
+  if (settings.defaultModel) {
+    pushUniqueModel(out, seen, settings.defaultModel);
+  }
+  for (const m of settings.customModels) {
+    pushUniqueModel(out, seen, m);
+  }
+
+  return out;
 }

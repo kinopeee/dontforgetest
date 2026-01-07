@@ -778,13 +778,8 @@ suite('commands/runWithArtifacts.ts', () => {
     });
 
     // Then: 観点表が保存される（タイムアウトメッセージが含まれる）
-    const perspectiveUri = vscode.Uri.file(path.join(workspaceRoot, perspectiveDir));
-    const perspectives = await vscode.workspace.findFiles(new vscode.RelativePattern(perspectiveUri, 'test-perspectives_*.md'));
-    assert.ok(perspectives.length > 0, 'タイムアウトしても観点表ファイルは保存されること');
-
-    const doc = await vscode.workspace.openTextDocument(perspectives[0]);
-    const text = doc.getText();
-    assert.ok(text.includes('タイムアウト: cursor-agent の処理が'), 'タイムアウトのログが含まれること');
+    const text = await readLatestPerspectiveArtifactText(workspaceRoot, perspectiveDir);
+    assert.ok(text.includes('タイムアウト: エージェントの処理が'), 'タイムアウトのログが含まれること');
   });
 
   // TC-CMD-06: testCommand が VS Code を起動しそうでも、拡張機能内で実行される（警告ログあり）
@@ -6455,9 +6450,9 @@ suite('commands/runWithArtifacts.ts', () => {
 
   // --- Perspective Generation Timeout Tests (from Test Perspectives Table) ---
 
-  // TC-N-01: perspectiveGenerationTimeoutMs = 300000 (default), perspective generation completes within timeout
-  test('TC-N-01: perspectiveGenerationTimeoutMs = 300000 (default), perspective generation completes within timeout', async () => {
-    // Given: Default timeout setting (300000ms), perspective generation completes successfully
+  // TC-N-01: perspectiveGenerationTimeoutMs = 600000 (default), perspective generation completes within timeout
+  test('TC-N-01: perspectiveGenerationTimeoutMs = 600000 (default), perspective generation completes within timeout', async () => {
+    // Given: Default timeout setting (600000ms), perspective generation completes successfully
     const taskId = `task-n-01-${Date.now()}`;
     const provider = new MockProvider(0);
     const perspectiveDir = path.join(baseTempDir, 'perspectives-n-01');
@@ -6479,7 +6474,7 @@ suite('commands/runWithArtifacts.ts', () => {
         testCommand: '',
         testExecutionReportDir: path.join(baseTempDir, 'reports-n-01'),
         testExecutionRunner: 'extension',
-        perspectiveGenerationTimeoutMs: 300000,
+        perspectiveGenerationTimeoutMs: 600000,
       },
     });
 
@@ -6490,7 +6485,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged');
     // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
     // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
     assert.ok(
@@ -6500,9 +6495,9 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(text.includes('| TC-N-01 | cond | Equivalence – normal | ok | - |'), 'Perspective table should contain extracted content');
   });
 
-  // TC-N-02: perspectiveGenerationTimeoutMs = 300000, testCommand detects VS Code launch, testExecutionRunner = 'extension'
-  test('TC-N-02: perspectiveGenerationTimeoutMs = 300000, testCommand detects VS Code launch, testExecutionRunner = extension', async () => {
-    // Given: Timeout setting = 300000, testCommand detects VS Code launch, testExecutionRunner = 'extension'
+  // TC-N-02: perspectiveGenerationTimeoutMs = 600000, testCommand detects VS Code launch, testExecutionRunner = 'extension'
+  test('TC-N-02: perspectiveGenerationTimeoutMs = 600000, testCommand detects VS Code launch, testExecutionRunner = extension', async () => {
+    // Given: Timeout setting = 600000, testCommand detects VS Code launch, testExecutionRunner = 'extension'
     const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-n-02-${Date.now()}`);
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
     const pkgJson = {
@@ -6533,7 +6528,7 @@ suite('commands/runWithArtifacts.ts', () => {
         testCommand: 'npm test',
         testExecutionReportDir: path.join(baseTempDir, 'reports-n-02'),
         testExecutionRunner: 'extension',
-        perspectiveGenerationTimeoutMs: 300000,
+        perspectiveGenerationTimeoutMs: 600000,
       },
     });
 
@@ -6558,10 +6553,10 @@ suite('commands/runWithArtifacts.ts', () => {
     }
   });
 
-  // TC-N-03: perspectiveGenerationTimeoutMs = 300000, testCommand detects VS Code launch, testExecutionRunner = 'cursorAgent'
+  // TC-N-03: perspectiveGenerationTimeoutMs = 600000, testCommand detects VS Code launch, testExecutionRunner = 'cursorAgent'
   // FIXME: テスト環境依存の問題で不安定。後日調査する。
-  test.skip('TC-N-03: perspectiveGenerationTimeoutMs = 300000, testCommand detects VS Code launch, testExecutionRunner = cursorAgent', async () => {
-    // Given: Timeout setting = 300000, testCommand detects VS Code launch, testExecutionRunner = 'cursorAgent'
+  test.skip('TC-N-03: perspectiveGenerationTimeoutMs = 600000, testCommand detects VS Code launch, testExecutionRunner = cursorAgent', async () => {
+    // Given: Timeout setting = 600000, testCommand detects VS Code launch, testExecutionRunner = 'cursorAgent'
     const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-n-03-${Date.now()}`);
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
     const pkgJson = {
@@ -6592,7 +6587,7 @@ suite('commands/runWithArtifacts.ts', () => {
         testCommand: 'npm test',
         testExecutionReportDir: path.join(baseTempDir, 'reports-n-03'),
         testExecutionRunner: 'cursorAgent',
-        perspectiveGenerationTimeoutMs: 300000,
+        perspectiveGenerationTimeoutMs: 600000,
       },
     });
 
@@ -6680,7 +6675,7 @@ suite('commands/runWithArtifacts.ts', () => {
         testCommand: 'echo test',
         testExecutionReportDir: path.join(baseTempDir, 'reports-n-04'),
         testExecutionRunner: 'cursorAgent',
-        perspectiveGenerationTimeoutMs: 300000,
+        perspectiveGenerationTimeoutMs: 600000,
       },
     });
 
@@ -6771,7 +6766,7 @@ suite('commands/runWithArtifacts.ts', () => {
         testCommand: 'npm test',
         testExecutionReportDir: path.join(baseTempDir, 'reports-n-05'),
         testExecutionRunner: 'cursorAgent',
-        perspectiveGenerationTimeoutMs: 300000,
+        perspectiveGenerationTimeoutMs: 600000,
       },
     });
 
@@ -6831,7 +6826,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged');
   });
 
   // TC-B-02: perspectiveGenerationTimeoutMs = -1
@@ -6869,7 +6864,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged');
   });
 
   // TC-B-03: perspectiveGenerationTimeoutMs = 1
@@ -6928,14 +6923,14 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(true, 'Timeout setting should be respected');
   });
 
-  // TC-B-04: perspectiveGenerationTimeoutMs = 300001
-  test('TC-B-04: perspectiveGenerationTimeoutMs = 300001', async () => {
-    // Given: perspectiveGenerationTimeoutMs = 300001 (max+1)
+  // TC-B-04: perspectiveGenerationTimeoutMs = 600001
+  test('TC-B-04: perspectiveGenerationTimeoutMs = 600001', async () => {
+    // Given: perspectiveGenerationTimeoutMs = 600001 (max+1)
     const taskId = `task-b-04-${Date.now()}`;
     const provider = new MockProvider(0);
     const perspectiveDir = path.join(baseTempDir, 'perspectives-b-04');
 
-    // When: runWithArtifacts is called with timeout = 300001
+    // When: runWithArtifacts is called with timeout = 600001
     await runWithArtifacts({
       provider,
       workspaceRoot,
@@ -6952,18 +6947,18 @@ suite('commands/runWithArtifacts.ts', () => {
         testCommand: '',
         testExecutionReportDir: path.join(baseTempDir, 'reports-b-04'),
         testExecutionRunner: 'extension',
-        perspectiveGenerationTimeoutMs: 300001,
+        perspectiveGenerationTimeoutMs: 600001,
       },
     });
 
-    // Then: Timeout is set to 300001ms, timeout error is logged if exceeded
+    // Then: Timeout is set to 600001ms, timeout error is logged if exceeded
     const perspectiveUri = vscode.Uri.file(path.join(workspaceRoot, perspectiveDir));
     const perspectives = await vscode.workspace.findFiles(new vscode.RelativePattern(perspectiveUri, 'test-perspectives_*.md'));
     assert.ok(perspectives.length > 0, 'Perspective table should be saved');
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged for normal completion');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged for normal completion');
   });
 
   // TC-B-05: perspectiveGenerationTimeoutMs = Number.MAX_SAFE_INTEGER
@@ -7002,7 +6997,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged for normal completion');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged for normal completion');
   });
 
   // TC-B-06: perspectiveGenerationTimeoutMs = undefined (not provided)
@@ -7040,7 +7035,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged');
   });
 
   // TC-B-07: perspectiveGenerationTimeoutMs = null
@@ -7078,7 +7073,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged');
   });
 
   // TC-B-08: perspectiveGenerationTimeoutMs = NaN
@@ -7116,7 +7111,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged');
   });
 
   // TC-B-09: perspectiveGenerationTimeoutMs = Infinity
@@ -7154,7 +7149,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged');
   });
 
   // TC-E-02: perspectiveGenerationTimeoutMs = 50, perspective generation completes just before timeout
@@ -7216,7 +7211,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged');
     // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
     // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
     assert.ok(
@@ -7284,13 +7279,8 @@ suite('commands/runWithArtifacts.ts', () => {
     });
 
     // Then: Timeout error log is emitted, exception is caught silently, exitCode is null, perspective table is saved
-    const perspectiveUri = vscode.Uri.file(path.join(workspaceRoot, perspectiveDir));
-    const perspectives = await vscode.workspace.findFiles(new vscode.RelativePattern(perspectiveUri, 'test-perspectives_*.md'));
-    assert.ok(perspectives.length > 0, 'Perspective table should be saved');
-
-    const doc = await vscode.workspace.openTextDocument(perspectives[0]);
-    const text = doc.getText();
-    assert.ok(text.includes('タイムアウト: cursor-agent の処理が'), 'Timeout error should be logged');
+    const text = await readLatestPerspectiveArtifactText(workspaceRoot, perspectiveDir);
+    assert.ok(text.includes('タイムアウト: エージェントの処理が'), 'Timeout error should be logged');
   });
 
   // TC-E-04: perspectiveGenerationTimeoutMs = 50, provider completes synchronously before timeout callback
@@ -7353,7 +7343,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged');
     // マーカーは抽出後に削除されるため、保存されたファイルにはマーカーは含まれない
     // 代わりに、抽出された観点表の内容（テーブル形式）が含まれることを確認
     assert.ok(
@@ -7396,7 +7386,7 @@ suite('commands/runWithArtifacts.ts', () => {
         testCommand: '',
         testExecutionReportDir: path.join(baseTempDir, 'reports-e-06'),
         testExecutionRunner: 'extension',
-        perspectiveGenerationTimeoutMs: 300000,
+        perspectiveGenerationTimeoutMs: 600000,
       },
     });
 
@@ -7453,13 +7443,13 @@ suite('commands/runWithArtifacts.ts', () => {
 
     const doc = await vscode.workspace.openTextDocument(perspectives[0]);
     const text = doc.getText();
-    assert.ok(!text.includes('タイムアウト: cursor-agent の処理が'), 'No timeout error should be logged');
+    assert.ok(!text.includes('タイムアウト: エージェントの処理が'), 'No timeout error should be logged');
   });
 
-  // TC-E-08: perspectiveGenerationTimeoutMs = 300000, perspective generation fails (exitCode !== 0)
+  // TC-E-08: perspectiveGenerationTimeoutMs = 600000, perspective generation fails (exitCode !== 0)
   // FIXME: テスト環境依存の問題で不安定。後日調査する。
-  test.skip('TC-E-08: perspectiveGenerationTimeoutMs = 300000, perspective generation fails (exitCode !== 0)', async () => {
-    // Given: Timeout = 300000, perspective generation fails (exitCode = 1)
+  test.skip('TC-E-08: perspectiveGenerationTimeoutMs = 600000, perspective generation fails (exitCode !== 0)', async () => {
+    // Given: Timeout = 600000, perspective generation fails (exitCode = 1)
     const taskId = `task-e-08-${Date.now()}`;
     const provider = new MockProvider(1); // exitCode = 1
     const perspectiveDir = path.join(baseTempDir, 'perspectives-e-08');
@@ -7481,7 +7471,7 @@ suite('commands/runWithArtifacts.ts', () => {
         testCommand: '',
         testExecutionReportDir: path.join(baseTempDir, 'reports-e-08'),
         testExecutionRunner: 'extension',
-        perspectiveGenerationTimeoutMs: 300000,
+        perspectiveGenerationTimeoutMs: 600000,
       },
     });
 
@@ -7495,9 +7485,9 @@ suite('commands/runWithArtifacts.ts', () => {
     assert.ok(text.includes('provider exit='), 'Error log should be present');
   });
 
-  // TC-E-09: perspectiveGenerationTimeoutMs = 300000, perspective generation succeeds but markers are missing
-  test('TC-E-09: perspectiveGenerationTimeoutMs = 300000, perspective generation succeeds but markers are missing', async () => {
-    // Given: Timeout = 300000, perspective generation succeeds but markers are missing
+  // TC-E-09: perspectiveGenerationTimeoutMs = 600000, perspective generation succeeds but markers are missing
+  test('TC-E-09: perspectiveGenerationTimeoutMs = 600000, perspective generation succeeds but markers are missing', async () => {
+    // Given: Timeout = 600000, perspective generation succeeds but markers are missing
     const taskId = `task-e-09-${Date.now()}`;
     // perspectiveOutputを指定してマーカーなしの出力を強制
     const provider = new MockProvider(0, undefined, 'Some log without markers');
@@ -7520,7 +7510,7 @@ suite('commands/runWithArtifacts.ts', () => {
         testCommand: '',
         testExecutionReportDir: path.join(baseTempDir, 'reports-e-09'),
         testExecutionRunner: 'extension',
-        perspectiveGenerationTimeoutMs: 300000,
+        perspectiveGenerationTimeoutMs: 600000,
       },
     });
 

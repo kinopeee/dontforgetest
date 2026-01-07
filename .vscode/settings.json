@@ -1,5 +1,7 @@
 {
     "testgen-agent.defaultModel": "",
     "testgen-agent.testStrategyPath": "",
-    "dontforgetest.testStrategyPath": ""
+    "dontforgetest.testStrategyPath": "",
+    "dontforgetest.agentProvider": "geminiCli",
+    "dontforgetest.defaultModel": "gemini-3-pro-preview"
 }

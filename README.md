@@ -5,7 +5,7 @@
 [![Open VSX Version](https://img.shields.io/open-vsx/v/kinopeee/dontforgetest?label=Open%20VSX)](https://open-vsx.org/extension/kinopeee/dontforgetest)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/kinopeee/dontforgetest?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/kinopeee/dontforgetest)
 
-Powered by CLI agents (currently: Cursor Agent / Claude Code; planned: Codex CLI), this extension automatically generates test code from commit diffs and selections.
+Powered by CLI agents (Cursor CLI / Claude Code / Gemini CLI / Codex CLI), this extension automatically generates test code from commit diffs and selections.
 
 - Japanese docs: [README.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/README.ja.md), [docs/usage.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.ja.md)
 
@@ -63,7 +63,7 @@ Powered by CLI agents (currently: Cursor Agent / Claude Code; planned: Codex CLI
 ## Requirements
 
 - **VS Code 1.105+** compatible (Cursor / VS Code / Windsurf)
-- CLI agent executable (e.g., `cursor-agent` or `claude`)
+- CLI agent executable (e.g., `cursor-agent`, `claude`, `gemini`, or `codex`)
 
 ## Development (for contributors)
 

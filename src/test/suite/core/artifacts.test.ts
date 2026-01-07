@@ -165,6 +165,197 @@ suite('core/artifacts.ts', () => {
     }
   });
 
+  suite('perspectiveGenerationTimeoutMs settings', () => {
+    // TC-N-04
+    test('TC-N-04: perspectiveGenerationTimeoutMs defaults to 600000 when unset', async () => {
+      // Given: perspectiveGenerationTimeoutMs is unset in configuration
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Workspace);
+      await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+
+      try {
+        // When: getArtifactSettings is called
+        const settings = getArtifactSettings();
+
+        // Then: Default value is 600000
+        assert.strictEqual(settings.perspectiveGenerationTimeoutMs, 600000);
+      } finally {
+        await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Workspace);
+        await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+      }
+    });
+
+    // TC-B-02
+    test('TC-B-02: perspectiveGenerationTimeoutMs uses 0 when configured as 0', async () => {
+      // Given: perspectiveGenerationTimeoutMs is set to 0
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      await config.update('perspectiveGenerationTimeoutMs', 0, vscode.ConfigurationTarget.Global);
+
+      try {
+        // When: getArtifactSettings is called
+        const settings = getArtifactSettings();
+
+        // Then: Value is 0 (disabled)
+        assert.strictEqual(settings.perspectiveGenerationTimeoutMs, 0);
+      } finally {
+        await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+      }
+    });
+
+    // TC-E-10
+    test('TC-E-10: perspectiveGenerationTimeoutMs uses 0 when configured as -1', async () => {
+      // Given: perspectiveGenerationTimeoutMs is set to -1
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      await config.update('perspectiveGenerationTimeoutMs', -1, vscode.ConfigurationTarget.Global);
+
+      try {
+        // When: getArtifactSettings is called
+        const settings = getArtifactSettings();
+
+        // Then: Value falls back to 0
+        assert.strictEqual(settings.perspectiveGenerationTimeoutMs, 0);
+      } finally {
+        await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+      }
+    });
+
+    // TC-B-01
+    test('TC-B-01: perspectiveGenerationTimeoutMs preserves a value of 1', async () => {
+      // Given: perspectiveGenerationTimeoutMs is set to 1
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      await config.update('perspectiveGenerationTimeoutMs', 1, vscode.ConfigurationTarget.Global);
+
+      try {
+        // When: getArtifactSettings is called
+        const settings = getArtifactSettings();
+
+        // Then: Value is preserved
+        assert.strictEqual(settings.perspectiveGenerationTimeoutMs, 1);
+      } finally {
+        await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+      }
+    });
+
+    // TC-B-04
+    test('TC-B-04: perspectiveGenerationTimeoutMs preserves Number.MAX_SAFE_INTEGER', async () => {
+      // Given: perspectiveGenerationTimeoutMs is set to Number.MAX_SAFE_INTEGER
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      const maxValue = Number.MAX_SAFE_INTEGER;
+      await config.update('perspectiveGenerationTimeoutMs', maxValue, vscode.ConfigurationTarget.Global);
+
+      try {
+        // When: getArtifactSettings is called
+        const settings = getArtifactSettings();
+
+        // Then: Value is preserved
+        assert.strictEqual(settings.perspectiveGenerationTimeoutMs, maxValue);
+      } finally {
+        await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+      }
+    });
+
+    // TC-N-11
+    test('TC-N-11: perspectiveGenerationTimeoutMs preserves Number.MAX_SAFE_INTEGER + 1', async () => {
+      // Given: perspectiveGenerationTimeoutMs is set to Number.MAX_SAFE_INTEGER + 1
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      const maxPlusOne = Number.MAX_SAFE_INTEGER + 1;
+      await config.update('perspectiveGenerationTimeoutMs', maxPlusOne, vscode.ConfigurationTarget.Global);
+
+      try {
+        // When: getArtifactSettings is called
+        const settings = getArtifactSettings();
+
+        // Then: Value is preserved when finite
+        assert.strictEqual(settings.perspectiveGenerationTimeoutMs, maxPlusOne);
+      } finally {
+        await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+      }
+    });
+
+    // TC-B-03
+    test('TC-B-03: perspectiveGenerationTimeoutMs preserves a value of 2', async () => {
+      // Given: perspectiveGenerationTimeoutMs is set to 2
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      await config.update('perspectiveGenerationTimeoutMs', 2, vscode.ConfigurationTarget.Global);
+
+      try {
+        // When: getArtifactSettings is called
+        const settings = getArtifactSettings();
+
+        // Then: Value is preserved
+        assert.strictEqual(settings.perspectiveGenerationTimeoutMs, 2);
+      } finally {
+        await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+      }
+    });
+
+    // TC-E-09
+    test('TC-E-09: perspectiveGenerationTimeoutMs uses 0 when configured as Infinity', async () => {
+      // Given: perspectiveGenerationTimeoutMs is set to Infinity
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      await config.update('perspectiveGenerationTimeoutMs', Infinity, vscode.ConfigurationTarget.Global);
+
+      try {
+        // When: getArtifactSettings is called
+        const settings = getArtifactSettings();
+
+        // Then: Value falls back to 0 for non-finite values
+        assert.strictEqual(settings.perspectiveGenerationTimeoutMs, 0);
+      } finally {
+        await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+      }
+    });
+
+    // TC-CONF-TIMEOUT-0 1: perspectiveGenerationTimeoutMs is not configured
+    test('TC-CONF-TIMEOUT-0 1: perspectiveGenerationTimeoutMs defaults to 600000 when not configured', async () => {
+      // Given: Setting is undefined
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+
+      try {
+        // When: getArtifactSettings is called
+        const settings = getArtifactSettings();
+
+        // Then: Defaults to 600000
+        assert.strictEqual(settings.perspectiveGenerationTimeoutMs, 600000);
+      } finally {
+        await config.update('perspectiveGenerationTimeoutMs', undefined, vscode.ConfigurationTarget.Global);
+      }
+    });
+  });
+
+  // TC-FMT-MD-01: Generating artifact markdown with target files
+  test('TC-FMT-MD-01: buildTestPerspectiveArtifactMarkdown indents target files with 2 spaces', () => {
+    // Given: Target files present
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      targetLabel: 'Label',
+      targetPaths: ['a.ts', 'b.ts'],
+      perspectiveMarkdown: 'content',
+    });
+
+    // When: Generated
+    // Then: Indented with 2 spaces
+    assert.ok(md.includes('\n  - a.ts'));
+    assert.ok(md.includes('\n  - b.ts'));
+  });
+
+  // TC-FMT-MD-02: Generating artifact markdown with NO target files
+  test('TC-FMT-MD-02: buildTestPerspectiveArtifactMarkdown indents "(none)" with 2 spaces', () => {
+    // Given: No target files
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      targetLabel: 'Label',
+      targetPaths: [],
+      perspectiveMarkdown: 'content',
+    });
+
+    // When: Generated
+    // Then: Indented "(none)" (localized)
+    const noneLabel = t('artifact.none');
+    assert.ok(md.includes(`\n  - ${noneLabel}`));
+  });
+
   // TC-RUNNER-N-01: testExecutionRunner default value (not configured)
   test('TC-RUNNER-N-01: testExecutionRunner setting is not configured (default)', async () => {
     // Given: testExecutionRunner setting is not configured (default)
@@ -375,6 +566,24 @@ suite('core/artifacts.ts', () => {
     assert.strictEqual(result, workspaceRoot);
   });
 
+  // TC-N-05
+  test('TC-N-05: buildTestPerspectiveArtifactMarkdown renders target paths with two-space indentation and " - "', () => {
+    // Given: Multiple target paths
+    const targetPaths = ['src/a.ts', 'src/b.ts'];
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      targetLabel: 'Label',
+      targetPaths,
+      perspectiveMarkdown: 'content',
+    });
+
+    // Then: Each target path line starts with two spaces and " - "
+    assert.ok(md.includes('\n  - src/a.ts\n'), 'Should include src/a.ts with 2-space indent and " - "');
+    assert.ok(md.includes('\n  - src/b.ts\n'), 'Should include src/b.ts with 2-space indent and " - "');
+  });
+
   // TC-ART-06: 観点表Markdown生成（正常）
   test('TC-ART-06: 観点表Markdownが正しく生成される（正常系）', () => {
     // Given: 入力パラメータ
@@ -392,10 +601,25 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes('content'), 'コンテンツが含まれること');
   });
 
-  // TC-ART-07: 観点表Markdown生成（対象なし）
-  test('TC-ART-07: 対象ファイルがない場合「(なし)」と表示される', () => {
-    // Given: ターゲットリストが空
-    // When: buildTestPerspectiveArtifactMarkdown を呼び出す
+  // TC-N-07
+  test('TC-N-07: buildTestPerspectiveArtifactMarkdown renders two target paths with two-space indentation', () => {
+    // Given: Two target paths
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      targetLabel: 'Label',
+      targetPaths: ['a.ts', 'b.ts'],
+      perspectiveMarkdown: 'content',
+    });
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    // Then: Each target path is listed with two-space indentation
+    assert.ok(md.includes('\n  - a.ts\n'));
+    assert.ok(md.includes('\n  - b.ts\n'));
+  });
+
+  // TC-E-18
+  test('TC-E-18: buildTestPerspectiveArtifactMarkdown renders "(none)" with two-space indentation when targetPaths is empty', () => {
+    // Given: An empty targetPaths array
     const md = buildTestPerspectiveArtifactMarkdown({
       generatedAtMs: Date.now(),
       targetLabel: 'Label',
@@ -403,8 +627,66 @@ suite('core/artifacts.ts', () => {
       perspectiveMarkdown: 'content',
     });
 
-    // Then: (なし) と表示されること
-    assert.ok(md.includes(`- ${t('artifact.perspectiveTable.targetFiles')}:\n- ${t('artifact.none')}`), '対象ファイルなしの表示が正しいこと');
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    // Then: "(none)" is rendered with two-space indentation
+    assert.ok(md.includes(`\n  - ${t('artifact.none')}\n`));
+  });
+
+  // TC-ART-07: Perspective markdown when target files are empty
+  test('TC-ART-07: buildTestPerspectiveArtifactMarkdown renders nested "(none)" when targetPaths is empty', () => {
+    // Given: An empty targetPaths array
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      targetLabel: 'Label',
+      targetPaths: [],
+      perspectiveMarkdown: 'content',
+    });
+
+    // Then: Markdown renders a nested list with the none label
+    assert.ok(
+      md.includes(`- ${t('artifact.perspectiveTable.targetFiles')}:\n  - ${t('artifact.none')}`),
+      'Empty targetPaths renders a nested "(none)" bullet',
+    );
+  });
+
+  // TC-N-12
+  test('TC-N-12: buildTestPerspectiveArtifactMarkdown uses two-space indentation for target list items', () => {
+    // Given: A single target path
+    const md = buildTestPerspectiveArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      targetLabel: 'Label',
+      targetPaths: ['src/a.ts'],
+      perspectiveMarkdown: 'content',
+    });
+
+    // When: buildTestPerspectiveArtifactMarkdown is called
+    // Then: Target list item uses two-space indentation
+    assert.ok(md.includes('\n  - src/a.ts\n'));
+  });
+
+  // TC-N-13
+  test('TC-N-13: buildTestExecutionArtifactMarkdown uses two-space indentation for empty target list', () => {
+    // Given: Empty targetPaths
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: [],
+      result: {
+        command: 'cmd',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+        extensionLog: '',
+      },
+    });
+
+    // When: buildTestExecutionArtifactMarkdown is called
+    // Then: The "(none)" entry is indented with two spaces
+    assert.ok(md.includes(`\n  - ${t('artifact.none')}\n`));
   });
 
   // TC-ART-08: 実行レポートMarkdown生成（正常）
@@ -437,6 +719,55 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes('[INFO] Extension Log'), '拡張機能ログが含まれること');
     // Added: model未指定時のデフォルト表示確認
     assert.ok(md.includes(`- ${t('artifact.executionReport.model')}: ${t('artifact.executionReport.modelAuto')}`), 'model未指定時は (auto) と表示されること');
+  });
+
+  // TC-N-16
+  test('TC-N-16: buildTestExecutionArtifactMarkdown trims trailing newline at the end', () => {
+    // Given: A minimal execution result with empty output sections
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: ['a.ts'],
+      result: {
+        command: 'cmd',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 1,
+        stdout: '',
+        stderr: '',
+        extensionLog: '',
+      },
+    });
+
+    // When: buildTestExecutionArtifactMarkdown is called
+    // Then: It does not end with a trailing newline
+    assert.ok(!md.endsWith('\n'));
+  });
+
+  // TC-N-08
+  test('TC-N-08: buildTestExecutionArtifactMarkdown preserves blank lines and trims trailing newline', () => {
+    // Given: An execution result that includes empty sections
+    const md = buildTestExecutionArtifactMarkdown({
+      generatedAtMs: Date.now(),
+      generationLabel: 'Label',
+      targetPaths: [],
+      result: {
+        command: 'cmd',
+        cwd: '/tmp',
+        exitCode: 0,
+        signal: null,
+        durationMs: 0,
+        stdout: '',
+        stderr: '',
+        extensionLog: '',
+      },
+    });
+
+    // When: buildTestExecutionArtifactMarkdown is called
+    // Then: It preserves blank lines and trims the final newline
+    assert.ok(md.includes('\n\n'));
+    assert.ok(!md.endsWith('\n'));
   });
 
   // TC-ART-16: 実行レポートMarkdown生成（モデル指定あり）
@@ -813,8 +1144,8 @@ suite('core/artifacts.ts', () => {
   });
 
   // TC-N-22: buildTestExecutionArtifactMarkdown with empty targetPaths array
-  test('TC-N-22: buildTestExecutionArtifactMarkdown generates markdown with "- (なし)" for target files when targetPaths is empty', () => {
-    // Given: Empty targetPaths array
+  test('TC-N-22: buildTestExecutionArtifactMarkdown renders nested "(none)" when targetPaths is empty', () => {
+    // Given: An empty targetPaths array
     // When: buildTestExecutionArtifactMarkdown is called
     const md = buildTestExecutionArtifactMarkdown({
       generatedAtMs: Date.now(),
@@ -831,8 +1162,11 @@ suite('core/artifacts.ts', () => {
       },
     });
 
-    // Then: Markdown contains "- (なし)" for target files
-    assert.ok(md.includes(`- ${t('artifact.none')}`), 'Empty array is handled correctly');
+    // Then: Markdown contains a nested "(none)" bullet under the target files label
+    assert.ok(
+      md.includes(`- ${t('artifact.executionReport.targetFiles')}:\n  - ${t('artifact.none')}`),
+      'Empty targetPaths renders a nested "(none)" bullet',
+    );
   });
 
   // TC-N-23: buildTestExecutionArtifactMarkdown with skipped result
@@ -4746,6 +5080,61 @@ suite('core/artifacts.ts', () => {
       assert.ok(md.includes('| TC-N-01 | a b | p\\|q | ok | note |'), 'Newlines converted to spaces and pipes escaped');
     });
 
+    // TC-N-07: parsePerspectiveJsonV1 parses JSON with braces in string fields (regression test for no-json-object fix)
+    test('TC-N-07: parsePerspectiveJsonV1 parses JSON with braces in string fields', () => {
+      // Given: JSON with braces in expectedResult field (e.g., assert.deepStrictEqual(x, { a: 1 }))
+      const raw = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"x = { a: 1 }","perspective":"Equivalence – normal","expectedResult":"assert.deepStrictEqual(x, { a: 1 })","notes":"-"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=true and parses correctly (direct JSON parse succeeds, avoiding extractJsonObject misdetection)
+      assert.ok(result.ok, 'parsePerspectiveJsonV1 returns ok=true for JSON with braces in strings');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.version, 1);
+      assert.strictEqual(result.value.cases.length, 1);
+      assert.strictEqual(result.value.cases[0]?.caseId, 'TC-N-01');
+      assert.strictEqual(result.value.cases[0]?.expectedResult, 'assert.deepStrictEqual(x, { a: 1 })');
+      assert.strictEqual(result.value.cases[0]?.inputPrecondition, 'x = { a: 1 }');
+    });
+
+    // TC-N-08: parsePerspectiveJsonV1 parses JSON with closing brace in string fields
+    test('TC-N-08: parsePerspectiveJsonV1 parses JSON with closing brace in string fields', () => {
+      // Given: JSON with closing brace in notes field
+      const raw = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"ok","notes":"See { code: 1 } for details"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=true and parses correctly
+      assert.ok(result.ok, 'parsePerspectiveJsonV1 returns ok=true for JSON with closing brace in strings');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.cases.length, 1);
+      assert.strictEqual(result.value.cases[0]?.notes, 'See { code: 1 } for details');
+    });
+
+    // TC-N-09: parsePerspectiveJsonV1 parses JSON with multiple braces in string fields
+    test('TC-N-09: parsePerspectiveJsonV1 parses JSON with multiple braces in string fields', () => {
+      // Given: JSON with multiple braces in expectedResult field
+      const raw = '{"version":1,"cases":[{"caseId":"TC-N-01","inputPrecondition":"x = { a: 1 }, y = { b: 2 }","perspective":"Equivalence – normal","expectedResult":"assert.deepStrictEqual(x, { a: 1 }); assert.deepStrictEqual(y, { b: 2 })","notes":"-"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=true and parses correctly
+      assert.ok(result.ok, 'parsePerspectiveJsonV1 returns ok=true for JSON with multiple braces in strings');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.cases.length, 1);
+      assert.ok(result.value.cases[0]?.expectedResult.includes('{ a: 1 }'), 'First brace pair is preserved');
+      assert.ok(result.value.cases[0]?.expectedResult.includes('{ b: 2 }'), 'Second brace pair is preserved');
+    });
+
     // TC-B-01: JSON array containing zero elements '[]'
     test('TC-B-01: parsePerspectiveJsonV1 returns ok=false with error=json-not-object for empty array', () => {
       // Given: JSON array containing zero elements '[]'
@@ -5157,9 +5546,10 @@ suite('core/artifacts.ts', () => {
       // When: parsePerspectiveJsonV1 is called
       const result = parsePerspectiveJsonV1(raw);
 
-      // Then: parsePerspectiveJsonV1 returns ok=false with error=no-json-object
+      // Then: parsePerspectiveJsonV1 returns ok=false with error starting with invalid-json:
+      // NOTE: 入力が `{` から始まる場合は「直接パースの失敗」を優先して返す（no-json-object よりも原因が分かりやすい）
       assert.ok(!result.ok, 'Returns ok=false');
-      assert.strictEqual(result.error, 'no-json-object');
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
     });
 
     // TC-E-12: Invalid JSON syntax (e.g., '{version:1}')
@@ -5315,9 +5705,10 @@ suite('core/artifacts.ts', () => {
       // When: parsePerspectiveJsonV1 is called
       const result = parsePerspectiveJsonV1(raw);
 
-      // Then: Returns ok=false with error=no-json-object
+      // Then: Returns ok=false with error starting with invalid-json:
+      // NOTE: `{` 始まりで direct parse が失敗した場合、invalid-json を優先する
       assert.ok(!result.ok, 'Returns ok=false');
-      assert.strictEqual(result.error, 'no-json-object');
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
     });
 
     // TC-N-10: parsePerspectiveJsonV1 with extractJsonObject returning undefined and input not matching any special pattern
@@ -5427,6 +5818,90 @@ suite('core/artifacts.ts', () => {
       assert.strictEqual(result.value.cases.length, 2, 'Invalid item is skipped');
       assert.strictEqual(result.value.cases[0]?.caseId, 'TC-N-01');
       assert.strictEqual(result.value.cases[1]?.caseId, 'TC-N-02');
+    });
+
+    test('TC-N-02A: parsePerspectiveJsonV1 normalizes bare newlines inside strings', () => {
+      // Given: JSON 文字列内に改行を含むケース（Gemini 出力の揺れ）
+      const raw = `{
+        "version": 1,
+        "cases": [
+          {
+            "caseId": "TC-N-NEWLINE",
+            "inputPrecondition": "line1
+line2",
+            "perspective": "Equivalence – normal",
+            "expectedResult": "ok",
+            "notes": "-"
+          }
+        ]
+      }`;
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: 改行を含む文字列でもパースできる
+      assert.ok(result.ok, 'parsePerspectiveJsonV1 returns ok=true');
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.cases.length, 1);
+      assert.ok(result.value.cases[0]?.inputPrecondition.includes('\n'), '改行が保持されること');
+    });
+
+    test('ART-JSON-N-03: parsePerspectiveJsonV1 normalizes bare carriage returns', () => {
+      // Given: JSON string with bare carriage return
+      const raw = '{"version":1,"cases":[{"caseId":"CR","inputPrecondition":"a\rb"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Normalized and parsed successfully
+      assert.ok(result.ok);
+      if (result.ok) {
+        assert.strictEqual(result.value.cases[0]?.inputPrecondition, 'a\rb');
+      }
+    });
+
+    test('ART-JSON-N-04: parsePerspectiveJsonV1 handles mixed escaped and bare newlines', () => {
+      // Given: JSON string with both escaped and bare newlines
+      const raw = '{"version":1,"cases":[{"caseId":"MIXED","inputPrecondition":"escaped\\\\nand bare\nnewline"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Parsed successfully with newlines preserved
+      assert.ok(result.ok);
+      if (result.ok) {
+        assert.strictEqual(result.value.cases[0]?.inputPrecondition, 'escaped\\nand bare\nnewline');
+      }
+    });
+
+    test('ART-JSON-N-05: parsePerspectiveJsonV1 normalizes newlines in nested objects', () => {
+      // Given: Nested JSON with bare newlines
+      const raw = '{"version":1,"cases":[{"caseId":"NESTED","inputPrecondition":"{\\n \\"inner\\": \\"line1\nline2\\"\\n}"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Parsed successfully
+      assert.ok(result.ok);
+      if (result.ok) {
+        assert.ok(result.value.cases[0]?.inputPrecondition.includes('line1\nline2'));
+      }
+    });
+
+    test('ART-JSON-E-01: parsePerspectiveJsonV1 still fails on truly invalid JSON', () => {
+      // Given: JSON with missing closing brace
+      const raw = '{"version":1,"cases":[]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
+      }
     });
 
     // TC-E-17: Case item missing required fields (caseId, inputPrecondition, etc.)
@@ -5760,6 +6235,28 @@ suite('core/artifacts.ts', () => {
       assert.strictEqual(result.value.durationMs, 12);
       assert.strictEqual(result.value.stdout, 'out');
       assert.strictEqual(result.value.stderr, '');
+    });
+
+    test('ART-JSON-EXEC-N-01: parseTestExecutionJsonV1 normalizes bare newlines in stdout', () => {
+      // Given: JSON with bare newline in stdout (Gemini style)
+      const raw = `{
+        "version": 1,
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 10,
+        "stdout": "line1
+line2",
+        "stderr": ""
+      }`;
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Normalized and parsed successfully
+      assert.ok(result.ok);
+      if (result.ok) {
+        assert.strictEqual(result.value.stdout, 'line1\nline2');
+      }
     });
 
     // TC-EXECJSON-N-02: JSON with code fences and extra text
@@ -6199,12 +6696,13 @@ suite('core/artifacts.ts', () => {
       // When: parseTestExecutionJsonV1 is called
       const result = parseTestExecutionJsonV1(raw);
 
-      // Then: Returns ok=false with error=no-json-object
+      // Then: Returns ok=false with error starting with invalid-json:
+      // NOTE: `{` 始まりで direct parse が失敗した場合、invalid-json を優先する
       assert.ok(!result.ok, 'Returns ok=false');
       if (result.ok) {
         return;
       }
-      assert.strictEqual(result.error, 'no-json-object');
+      assert.ok(result.error.startsWith('invalid-json:'), 'Error starts with invalid-json:');
     });
 
     // TC-N-20: parseTestExecutionJsonV1 with extractJsonObject returning undefined and input not matching any special pattern
@@ -7858,6 +8356,643 @@ suite('core/artifacts.ts', () => {
       // Then: success===false（判定不能）
       assert.strictEqual(result.success, false);
       assert.strictEqual(result.exitCode, null);
+    });
+  });
+
+  suite('JSON normalization and robust parsing', () => {
+    // TC-N-01
+    test('TC-N-01: parsePerspectiveJsonV1 handles raw newlines inside JSON string values', () => {
+      // Given: A JSON string with a raw newline inside a value
+      const raw = '{"version": 1, "cases": [{"caseId": "TC-1", "inputPrecondition": "", "perspective": "", "expectedResult": "", "notes": "line 1\nline 2"}]}';
+
+      // When: parsePerspectiveJsonV1 is called (which uses normalizeJsonWithBareNewlines internally)
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It successfully parses and the newline is preserved/escaped correctly
+      assert.strictEqual(result.ok, true);
+      if (result.ok) {
+        assert.strictEqual(result.value.cases[0].notes, 'line 1\nline 2');
+      }
+    });
+
+    // TC-N-02
+    test('TC-N-02: parsePerspectiveJsonV1 maintains newlines outside of JSON string values', () => {
+      // Given: A JSON string with a newline between properties (outside quotes)
+      const raw = '{\n  "version": 1,\n  "cases": []\n}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It successfully parses and structure is correct
+      assert.strictEqual(result.ok, true);
+      if (result.ok) {
+        assert.strictEqual(result.value.version, 1);
+      }
+    });
+
+    // TC-E-01
+    test('TC-E-01: parsePerspectiveJsonV1 returns ok=false for empty string', () => {
+      // Given: An empty string
+      const raw = '';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It returns ok=false with error "empty"
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'empty');
+      }
+    });
+
+    // TC-E-02
+    test('TC-E-02: parsePerspectiveJsonV1 fails with invalid-json for incomplete JSON with newline in string', () => {
+      // Given: An incomplete JSON string (unclosed quote) with a newline
+      const raw = '{"version": 1, "cases": [{"caseId": "TC-1", "notes": "unfinished... \n';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It returns ok=false with "invalid-json:" error
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'));
+      }
+    });
+
+    // TC-E-03
+    test('TC-E-03: parsePerspectiveJsonV1 returns invalid-json for unparseable non-JSON strings starting with {', () => {
+      // Given: A string that starts with { but is not valid JSON
+      const raw = '{"key": "value" "missing_comma": true}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It returns ok=false with "invalid-json:" error from parseJsonWithNormalization
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'), `Expected error to start with invalid-json:, got: ${result.error}`);
+      }
+    });
+
+    // TC-E-10
+    test('TC-E-10: parsePerspectiveJsonV1 handles input ending with backslash correctly', () => {
+      // Given: A JSON string ending with a backslash inside a value
+      const raw = '{"version": 1, "cases": [{"caseId": "TC-1", "inputPrecondition": "", "perspective": "", "expectedResult": "", "notes": "backslash at end \\\\"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It successfully parses
+      assert.strictEqual(result.ok, true);
+      if (result.ok) {
+        assert.strictEqual(result.value.cases[0].notes, 'backslash at end \\');
+      }
+    });
+  });
+
+  suite('direct JSON parse safeguards', () => {
+    test('TC-JSON-N-01: parseTestExecutionJsonV1 parses direct JSON with braces in stdout', () => {
+      // Given: Direct JSON that starts with "{" and stdout contains braces
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":12,"stdout":"error: { code: 1 }","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: It parses successfully and preserves stdout
+      assert.strictEqual(result.ok, true);
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.version, 1);
+      assert.strictEqual(result.value.exitCode, 0);
+      assert.strictEqual(result.value.signal, null);
+      assert.strictEqual(result.value.durationMs, 12);
+      assert.strictEqual(result.value.stdout, 'error: { code: 1 }');
+      assert.strictEqual(result.value.stderr, '');
+    });
+
+    test('TC-JSON-E-01: parseTestExecutionJsonV1 returns invalid-json for malformed JSON starting with "{"', () => {
+      // Given: Malformed JSON missing a comma between fields
+      const raw = '{"version":1 "exitCode":0,"signal":null,"durationMs":1,"stdout":"error: { code: 1 }","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: It returns invalid-json with the expected error prefix
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'), `Expected invalid-json prefix, got: ${result.error}`);
+      }
+    });
+
+    test('TC-JSON-E-02: parseTestExecutionJsonV1 returns unsupported-version for version=2 with braces in stdout', () => {
+      // Given: A direct JSON object with unsupported version and braces in stdout
+      const raw = '{"version":2,"exitCode":0,"signal":null,"durationMs":1,"stdout":"warn: { code: 2 }","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: It returns unsupported-version
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'unsupported-version');
+      }
+    });
+
+    test('TC-JSON-E-03: parsePerspectiveJsonV1 returns invalid-json for malformed JSON with braces in string values', () => {
+      // Given: Malformed JSON missing a comma before cases and containing braces in strings
+      const raw =
+        '{"version":1 "cases":[{"caseId":"TC-1","inputPrecondition":"x = { a: 1 }","perspective":"Equivalence – normal","expectedResult":"assert.deepStrictEqual(x, { a: 1 })","notes":"-"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It returns invalid-json with the expected error prefix
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'), `Expected invalid-json prefix, got: ${result.error}`);
+      }
+    });
+  });
+
+  suite('table-specified parsing cases', () => {
+    // TC-N-02
+    test('TC-N-02: parsePerspectiveJsonV1 parses direct JSON with braces in a string field', () => {
+      // Given: Direct JSON starting with "{" and a string field containing braces
+      const raw =
+        '{"version":1,"cases":[{"caseId":"TC-1","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"assert.deepStrictEqual(x, { a: 1 })","notes":"-"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It parses successfully and keeps the cases
+      assert.strictEqual(result.ok, true);
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.version, 1);
+      assert.strictEqual(result.value.cases.length, 1);
+    });
+
+    // TC-E-04
+    test('TC-E-04: parsePerspectiveJsonV1 returns invalid-json for malformed JSON starting with "{"', () => {
+      // Given: Malformed JSON missing a closing brace
+      const raw = '{"version":1,"cases":[';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns invalid-json prefix
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'));
+      }
+    });
+
+    // TC-E-05
+    test('TC-E-05: parsePerspectiveJsonV1 returns error=json-not-object for JSON array', () => {
+      // Given: JSON array input
+      const raw = '[]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns error=json-not-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'json-not-object');
+      }
+    });
+
+    // TC-E-06
+    test('TC-E-06: parsePerspectiveJsonV1 returns error=json-not-object for null primitive', () => {
+      // Given: JSON null primitive
+      const raw = 'null';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns error=json-not-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'json-not-object');
+      }
+    });
+
+    // TC-E-07
+    test('TC-E-07: parsePerspectiveJsonV1 returns error=no-json-object when no JSON is present', () => {
+      // Given: Input with no JSON object
+      const raw = 'no json here';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns error=no-json-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'no-json-object');
+      }
+    });
+
+    // TC-N-03
+    test('TC-N-03: parseTestExecutionJsonV1 parses direct JSON with braces in stdout', () => {
+      // Given: Direct JSON with braces in stdout
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":12,"stdout":"error: { code: 1 }","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: It parses successfully and preserves stdout
+      assert.strictEqual(result.ok, true);
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.version, 1);
+      assert.strictEqual(result.value.stdout, 'error: { code: 1 }');
+    });
+
+    // TC-E-08
+    test('TC-E-08: parseTestExecutionJsonV1 returns invalid-json for malformed JSON starting with "{"', () => {
+      // Given: Malformed JSON input
+      const raw = '{"version":1,"exitCode":0';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns invalid-json prefix
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'));
+      }
+    });
+
+    // TC-N-03
+    test('TC-N-03: parsePerspectiveJsonV1 parses direct JSON with braces in expectedResult string', () => {
+      // Given: Direct JSON starting with "{" and expectedResult includes braces
+      const raw =
+        '{"version":1,"cases":[{"caseId":"TC-1","inputPrecondition":"cond","perspective":"Equivalence – normal","expectedResult":"assert.deepStrictEqual(x, { a: 1 })","notes":"-"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It parses successfully and preserves expectedResult
+      assert.strictEqual(result.ok, true);
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.version, 1);
+      assert.strictEqual(result.value.cases[0].expectedResult, 'assert.deepStrictEqual(x, { a: 1 })');
+    });
+
+    // TC-N-04
+    test('TC-N-04: parsePerspectiveJsonV1 falls back to extractJsonObject when direct parse fails with trailing text', () => {
+      // Given: Direct JSON followed by trailing text
+      const raw = '{"version":1,"cases":[]}\ntrailing';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: It parses successfully and returns empty cases
+      assert.strictEqual(result.ok, true);
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.cases.length, 0);
+    });
+
+    // TC-E-03
+    test('TC-E-03: parsePerspectiveJsonV1 returns error=empty for empty string', () => {
+      // Given: Empty input
+      const raw = '';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns error=empty
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'empty');
+      }
+    });
+
+    // TC-E-04
+    test('TC-E-04: parsePerspectiveJsonV1 returns error=no-json-object for "undefined"', () => {
+      // Given: Non-JSON text "undefined"
+      const raw = 'undefined';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns error=no-json-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'no-json-object');
+      }
+    });
+
+    // TC-E-05
+    test('TC-E-05: parsePerspectiveJsonV1 returns error=json-not-object for "null"', () => {
+      // Given: JSON primitive null
+      const raw = 'null';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns error=json-not-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'json-not-object');
+      }
+    });
+
+    // TC-E-06
+    test('TC-E-06: parsePerspectiveJsonV1 returns invalid-json for malformed JSON starting with "{"', () => {
+      // Given: Malformed JSON that starts with "{"
+      const raw = '{"version":1,';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns invalid-json error prefix
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'));
+      }
+    });
+
+    // TC-E-07
+    test('TC-E-07: parsePerspectiveJsonV1 returns error=unsupported-version for version=2', () => {
+      // Given: JSON with unsupported version
+      const raw = '{"version":2,"cases":[]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns error=unsupported-version
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'unsupported-version');
+      }
+    });
+
+    // TC-E-08
+    test('TC-E-08: parsePerspectiveJsonV1 returns error=cases-not-array when cases is not an array', () => {
+      // Given: JSON with cases as an object
+      const raw = '{"version":1,"cases":{}}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns error=cases-not-array
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'cases-not-array');
+      }
+    });
+
+    // TC-E-09
+    test('TC-E-09: parsePerspectiveJsonV1 returns error=no-json-object for non-JSON text', () => {
+      // Given: Non-JSON input
+      const raw = 'just text';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns error=no-json-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'no-json-object');
+      }
+    });
+
+    // TC-N-05
+    test('TC-N-05: parseTestExecutionJsonV1 parses direct JSON with braces in stdout', () => {
+      // Given: Direct JSON with braces in stdout
+      const raw = '{"version":1,"exitCode":0,"signal":null,"durationMs":12,"stdout":"error: { code: 1 }","stderr":""}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: It parses successfully and preserves stdout
+      assert.strictEqual(result.ok, true);
+      if (!result.ok) {
+        return;
+      }
+      assert.strictEqual(result.value.version, 1);
+      assert.strictEqual(result.value.stdout, 'error: { code: 1 }');
+    });
+
+    // TC-E-10
+    test('TC-E-10: parseTestExecutionJsonV1 returns error=empty for empty string', () => {
+      // Given: Empty input
+      const raw = '';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns error=empty
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'empty');
+      }
+    });
+
+    // TC-E-11
+    test('TC-E-11: parseTestExecutionJsonV1 returns error=no-json-object for "undefined"', () => {
+      // Given: Non-JSON text "undefined"
+      const raw = 'undefined';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns error=no-json-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'no-json-object');
+      }
+    });
+
+    // TC-E-12
+    test('TC-E-12: parseTestExecutionJsonV1 returns error=json-not-object for "null"', () => {
+      // Given: JSON primitive null
+      const raw = 'null';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns error=json-not-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'json-not-object');
+      }
+    });
+
+    // TC-E-13
+    test('TC-E-13: parseTestExecutionJsonV1 returns invalid-json for malformed JSON starting with "{"', () => {
+      // Given: Malformed JSON that starts with "{"
+      const raw = '{"version":1,';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns invalid-json error prefix
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'));
+      }
+    });
+
+    // TC-E-14
+    test('TC-E-14: parseTestExecutionJsonV1 returns error=unsupported-version for version=2', () => {
+      // Given: JSON with unsupported version
+      const raw = '{"version":2}';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns error=unsupported-version
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'unsupported-version');
+      }
+    });
+
+    // TC-E-15
+    test('TC-E-15: parseTestExecutionJsonV1 returns error=no-json-object for non-JSON text', () => {
+      // Given: Non-JSON input
+      const raw = 'text';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns error=no-json-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'no-json-object');
+      }
+    });
+
+    // TC-E-16
+    test('TC-E-16: parseTestExecutionJsonV1 returns error=json-not-object for JSON array', () => {
+      // Given: JSON array input
+      const raw = '[]';
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns error=json-not-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'json-not-object');
+      }
+    });
+
+    // TC-E-08 (from Test Perspectives Table)
+    test('TC-E-08: parseTestExecutionJsonV1 returns direct parse invalid-json error when input starts with { but is malformed', () => {
+      // Given: Input starts with { but has a syntax error
+      const raw = '{"version":1, "stdout": "error: { code: 1" }'; // Missing closing brace for code object if it was intended to be one, or just malformed JSON
+
+      // When: parseTestExecutionJsonV1 is called
+      const result = parseTestExecutionJsonV1(raw);
+
+      // Then: Returns ok=false and the error should be from direct parse
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'));
+      }
+    });
+  });
+
+  suite('New Perspective and Artifact Tests (from Test Perspectives Table)', () => {
+    // TC-N-02
+    test('TC-N-02: parsePerspectiveJsonV1 succeeds when JSON starts with { and contains { } inside string values', () => {
+      // Given: A valid Perspective JSON with nested braces in a string
+      const raw = '{"version":1,"cases":[{"caseId":"TC-1","expectedResult":"assert.deepStrictEqual(x, { a: 1 })"}]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=true
+      assert.strictEqual(result.ok, true);
+      if (result.ok) {
+        assert.strictEqual(result.value.cases[0].expectedResult, 'assert.deepStrictEqual(x, { a: 1 })');
+      }
+    });
+
+    // TC-E-03
+    test('TC-E-03: parsePerspectiveJsonV1 returns detailed invalid-json error when input starts with { but has syntax error', () => {
+      // Given: Input starts with { but is malformed
+      const raw = '{"version":1, "cases": [ { "caseId": "TC-1" }'; // Missing closing ] and }
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false and error starts with invalid-json:
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.ok(result.error.startsWith('invalid-json:'));
+      }
+    });
+
+    // TC-E-04
+    test('TC-E-04: parsePerspectiveJsonV1 returns json-not-object for JSON array []', () => {
+      // Given: Input is a JSON array
+      const raw = '[]';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false and error=json-not-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'json-not-object');
+      }
+    });
+
+    // TC-E-05
+    test('TC-E-05: parsePerspectiveJsonV1 returns json-not-object for JSON null', () => {
+      // Given: Input is JSON null
+      const raw = 'null';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false and error=json-not-object
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.error, 'json-not-object');
+      }
+    });
+
+    // TC-E-06
+    test('TC-E-06: parsePerspectiveJsonV1 returns ok=false when version is not 1', () => {
+      // Given: JSON object with version 2
+      const raw = '{"version":2,"cases":[]}';
+
+      // When: parsePerspectiveJsonV1 is called
+      const result = parsePerspectiveJsonV1(raw);
+
+      // Then: Returns ok=false
+      assert.strictEqual(result.ok, false);
+    });
+
+    // TC-N-05
+    test('TC-N-05: buildTestPerspectiveArtifactMarkdown uses two-space indentation for target file list', () => {
+      // Given: Multiple target paths
+      const targetPaths = ['src/a.ts', 'src/b.ts'];
+
+      // When: buildTestPerspectiveArtifactMarkdown is called
+      const md = buildTestPerspectiveArtifactMarkdown({
+        generatedAtMs: Date.now(),
+        targetLabel: 'Label',
+        targetPaths,
+        perspectiveMarkdown: 'table',
+      });
+
+      // Then: Each path is indented with two spaces
+      assert.ok(md.includes('\n  - src/a.ts\n'));
+      assert.ok(md.includes('\n  - src/b.ts\n'));
     });
   });
 });

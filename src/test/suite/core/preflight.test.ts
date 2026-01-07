@@ -6,6 +6,19 @@ import { ensurePreflight } from '../../../core/preflight';
 
 suite('core/preflight.ts', () => {
   suite('ensurePreflight', () => {
+    let originalAgentProvider: string | undefined;
+
+    setup(async () => {
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      originalAgentProvider = config.get<string>('agentProvider');
+      await config.update('agentProvider', 'cursorAgent', vscode.ConfigurationTarget.Workspace);
+    });
+
+    teardown(async () => {
+      const config = vscode.workspace.getConfiguration('dontforgetest');
+      await config.update('agentProvider', originalAgentProvider, vscode.ConfigurationTarget.Workspace);
+    });
+
     // Given: 正常な環境（ワークスペース開いている、ファイル存在、コマンド利用可能）
     // When: ensurePreflightを呼び出す
     // Then: PreflightOkが返される
@@ -18,8 +31,11 @@ suite('core/preflight.ts', () => {
 
       // Check config reading specifically (TC-N-01 additional check)
       const config = vscode.workspace.getConfiguration('dontforgetest');
-      const cursorAgentPath = config.get('cursorAgentPath');
-      assert.strictEqual(cursorAgentPath, '', 'Default path should be empty');
+      // NOTE:
+      // 開発者のローカル設定で dontforgetest.agentPath が設定されている場合があるため、
+      // 「既定値が空であること」を前提にせず、テスト内で一時的に上書きしてから復元する。
+      const originalAgentPath = config.get<string>('agentPath');
+      await config.update('agentPath', '', vscode.ConfigurationTarget.Workspace);
 
       // このテストは実際の環境に依存するため、条件付きで実行
       // cursor-agentがインストールされていない場合はスキップ
@@ -29,12 +45,14 @@ suite('core/preflight.ts', () => {
         if (result) {
           assert.ok(result.workspaceRoot.length > 0, 'workspaceRootが設定されている');
           assert.ok(result.testStrategyPath.length > 0, 'testStrategyPathが設定されている');
-          assert.ok(result.cursorAgentCommand.length > 0, 'cursorAgentCommandが設定されている');
+          assert.ok(result.agentCommand.length > 0, 'agentCommandが設定されている');
         }
         // resultがundefinedの場合は、環境が整っていないためスキップ
       } catch (err) {
         // エラーが発生した場合はスキップ（環境依存のため）
         console.log('preflight test skipped:', err);
+      } finally {
+        await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
       }
     });
 
@@ -104,10 +122,10 @@ suite('core/preflight.ts', () => {
       }
     });
 
-    // Given: cursorAgentPathが未設定
+    // Given: agentPathが未設定
     // When: ensurePreflightを呼び出す
     // Then: デフォルトの 'cursor-agent' が使用される
-    test('TC-N-02: cursorAgentPathが未設定', async () => {
+    test('TC-N-02: agentPathが未設定', async () => {
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!workspaceRoot) {
         return;
@@ -118,8 +136,8 @@ suite('core/preflight.ts', () => {
       try {
         const result = await ensurePreflight();
         if (result) {
-          // cursorAgentCommandが設定されていることを確認
-          assert.ok(result.cursorAgentCommand.length > 0);
+          // agentCommandが設定されていることを確認
+          assert.ok(result.agentCommand.length > 0);
         }
       } catch (err) {
         console.log('preflight test skipped:', err);
@@ -246,7 +264,7 @@ suite('core/preflight.ts', () => {
         // ファイルが存在しない場合でも、undefined ではなく PreflightOk が返される
         if (result) {
           assert.ok(result.workspaceRoot.length > 0, 'workspaceRootが設定されている');
-          assert.ok(result.cursorAgentCommand.length > 0, 'cursorAgentCommandが設定されている');
+          assert.ok(result.agentCommand.length > 0, 'agentCommandが設定されている');
           // testStrategyPath は空文字になる（内蔵デフォルト使用を示す）
           assert.strictEqual(result.testStrategyPath, '', 'testStrategyPathが空文字になる');
         }
@@ -287,12 +305,14 @@ suite('core/preflight.ts', () => {
     // Test Perspectives Table for ensurePreflight (deterministic coverage)
     // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
     // |---------|----------------------|--------------------------------------|-----------------|-------|
-    // | TC-PF-DET-N-01 | testStrategyPath points to existing file; cursorAgentPath=process.execPath | Equivalence – normal | Returns PreflightOk with testStrategyPath preserved and cursorAgentCommand set; no warning | Numeric boundaries not applicable; empty/null handled in TC-PF-01/04 |
+    // | TC-PF-DET-N-01 | testStrategyPath points to existing file; cursorAgentPath=process.execPath | Equivalence – normal | Returns PreflightOk with testStrategyPath preserved and agentCommand set; no warning | Numeric boundaries not applicable; empty/null handled in TC-PF-01/04 |
     // | TC-PF-DET-E-01 | testStrategyPath points to missing file; cursorAgentPath=process.execPath | Error – missing file | showWarningMessage called with path; PreflightOk.testStrategyPath="" | Empty file path is covered elsewhere |
     // | TC-PF-DET-E-02 | cursorAgentPath missing; VSCODE_TEST_RUNNER=1 | Error – command not found | showErrorMessage called and ensurePreflight returns undefined | Avoids blocking UI in test runner |
     // | TC-PF-DET-E-03 | cursorAgentPath missing; VSCODE_TEST_RUNNER unset; user picks first action | Error – command not found | executeCommand called to open settings; returns undefined | items[0] is openSettings |
     // | TC-PF-DET-E-04 | cursorAgentPath missing; VSCODE_TEST_RUNNER unset; user picks second action | Error – command not found | openExternal called with docs URL; returns undefined | items[1] is openDocs |
     suite('ensurePreflight deterministic coverage', () => {
+      let originalAgentProvider: string | undefined;
+      let originalAgentPath: string | undefined;
       let originalShowWarningMessage: typeof vscode.window.showWarningMessage;
       let originalShowErrorMessage: typeof vscode.window.showErrorMessage;
       let originalExecuteCommand: typeof vscode.commands.executeCommand;
@@ -304,12 +324,18 @@ suite('core/preflight.ts', () => {
       let openExternalUris: vscode.Uri[] = [];
       let selectErrorAction: ((items: string[]) => string | undefined) | undefined;
 
-      setup(() => {
+      setup(async () => {
         warningMessages = [];
         errorCalls = [];
         executeCommands = [];
         openExternalUris = [];
         selectErrorAction = undefined;
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        originalAgentProvider = config.get<string>('agentProvider');
+        originalAgentPath = config.get<string>('agentPath');
+        await config.update('agentProvider', 'cursorAgent', vscode.ConfigurationTarget.Workspace);
+        await config.update('agentPath', '', vscode.ConfigurationTarget.Workspace);
 
         originalShowWarningMessage = vscode.window.showWarningMessage;
         originalShowErrorMessage = vscode.window.showErrorMessage;
@@ -338,7 +364,11 @@ suite('core/preflight.ts', () => {
         }) as typeof vscode.env.openExternal;
       });
 
-      teardown(() => {
+      teardown(async () => {
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        await config.update('agentProvider', originalAgentProvider, vscode.ConfigurationTarget.Workspace);
+        await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+
         vscode.window.showWarningMessage = originalShowWarningMessage;
         vscode.window.showErrorMessage = originalShowErrorMessage;
         vscode.commands.executeCommand = originalExecuteCommand;
@@ -375,7 +405,7 @@ suite('core/preflight.ts', () => {
           assert.ok(result, 'Expected PreflightOk result');
           assert.strictEqual(result?.workspaceRoot, workspaceRoot);
           assert.strictEqual(result?.testStrategyPath, relativePath);
-          assert.strictEqual(result?.cursorAgentCommand, process.execPath);
+          assert.strictEqual(result?.agentCommand, process.execPath);
           assert.strictEqual(warningMessages.length, 0, 'No warning should be emitted');
         } finally {
           await config.update('testStrategyPath', originalPath, vscode.ConfigurationTarget.Workspace);
@@ -418,7 +448,8 @@ suite('core/preflight.ts', () => {
         }
       });
 
-      test('TC-PF-DET-E-02: missing cursorAgentPath returns undefined in test runner mode', async () => {
+      // TC-E-05
+      test('TC-E-05: missing cursorAgentPath returns undefined in test runner mode', async () => {
         // Given: Missing cursorAgentPath and VSCODE_TEST_RUNNER enabled
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!workspaceRoot) {
@@ -479,7 +510,7 @@ suite('core/preflight.ts', () => {
           assert.strictEqual(errorCalls.length, 1, 'Expected one error message');
           assert.strictEqual(executeCommands.length, 1, 'Expected one command execution');
           assert.strictEqual(executeCommands[0]?.command, 'workbench.action.openSettings');
-          assert.strictEqual(executeCommands[0]?.args[0], 'dontforgetest.cursorAgentPath');
+          assert.strictEqual(executeCommands[0]?.args[0], 'dontforgetest.agentPath');
           assert.strictEqual(openExternalUris.length, 0, 'Docs should not be opened');
         } finally {
           if (originalTestRunner === undefined) {
@@ -560,7 +591,7 @@ suite('core/preflight.ts', () => {
           assert.ok(result, 'Expected PreflightOk result');
           assert.strictEqual(result?.workspaceRoot, workspaceRoot);
           assert.strictEqual(result?.testStrategyPath, tempFile);
-          assert.strictEqual(result?.cursorAgentCommand, process.execPath);
+          assert.strictEqual(result?.agentCommand, process.execPath);
         } finally {
           await config.update('testStrategyPath', originalPath, vscode.ConfigurationTarget.Workspace);
           await config.update('cursorAgentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
@@ -613,6 +644,348 @@ suite('core/preflight.ts', () => {
           } catch {
             // ignore
           }
+        }
+      });
+    });
+
+    suite('ensurePreflight with new providers and agentPath', () => {
+      let originalShowErrorMessage: typeof vscode.window.showErrorMessage;
+
+      setup(() => {
+        originalShowErrorMessage = vscode.window.showErrorMessage;
+        vscode.window.showErrorMessage = (async (_message: string, ..._items: unknown[]) => {
+          return undefined;
+        }) as typeof vscode.window.showErrorMessage;
+      });
+
+      teardown(() => {
+        vscode.window.showErrorMessage = originalShowErrorMessage;
+      });
+
+      // TC-N-10
+      test('TC-N-10: agentProvider=geminiCli, agentPath unset uses gemini', async () => {
+        // Given: agentProvider is set to 'geminiCli' and agentPath is unset
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'geminiCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', '', vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          // We use process.execPath to simulate a valid command for canSpawnCommand
+          // Since we can't easily mock canSpawnCommand without rewiring, we use a command that exists.
+          // In real use it would be 'gemini'.
+          // Here we just want to see if it resolves to 'gemini' when agentPath is empty.
+          // But ensurePreflight calls canSpawnCommand('gemini'), which will likely fail in test env.
+          // So we expect result to be undefined if 'gemini' is not in PATH.
+          const result = await ensurePreflight();
+
+          // Then: If gemini is not in PATH, result is undefined. 
+          // If it is, agentCommand should be 'gemini'.
+          if (result) {
+            assert.strictEqual(result.agentCommand, 'gemini');
+          } else {
+            assert.strictEqual(result, undefined);
+          }
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      // TC-N-11
+      test('TC-N-11: agentProvider=codexCli, agentPath unset uses codex', async () => {
+        // Given: agentProvider is set to 'codexCli' and agentPath is unset
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'codexCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', '', vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: result should be codex if available, or undefined
+          if (result) {
+            assert.strictEqual(result.agentCommand, 'codex');
+          } else {
+            assert.strictEqual(result, undefined);
+          }
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      // TC-N-03
+      test('TC-N-03: agentPath overrides default commands', async () => {
+        // Given: a custom agentPath is configured
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          const customPath = process.execPath;
+          await config.update('agentPath', customPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: it should return the custom agent path
+          assert.ok(result);
+          assert.strictEqual(result?.agentCommand, customPath);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      // TC-N-13
+      test('TC-N-13: claudeCode uses agentPath if provided', async () => {
+        // Given: agentProvider is 'claudeCode' and a custom agentPath is set
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'claudeCode', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: it should return the custom agent path
+          assert.ok(result);
+          assert.strictEqual(result?.agentCommand, process.execPath);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      // TC-N-14
+      test('TC-N-14: cursorAgent uses agentPath if provided', async () => {
+        // Given: agentProvider is 'cursorAgent' and a custom agentPath is set
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'cursorAgent', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: it should return the custom agent path
+          assert.ok(result);
+          assert.strictEqual(result?.agentCommand, process.execPath);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      // TC-N-15
+      test('TC-N-15: claudeCode falls back to claudePath if agentPath is empty', async () => {
+        // Given: agentProvider is 'claudeCode', agentPath is empty, but claudePath is set
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalClaudePath = config.get('claudePath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'claudeCode', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', '', vscode.ConfigurationTarget.Workspace);
+          await config.update('claudePath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: it should fall back to claudePath
+          assert.ok(result);
+          assert.strictEqual(result?.agentCommand, process.execPath);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+          await config.update('claudePath', originalClaudePath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      // TC-E-04
+      test('TC-E-04: cursorAgent falls back to cursorAgentPath if agentPath is empty', async () => {
+        // Given: agentProvider is 'cursorAgent', agentPath is empty, but cursorAgentPath is set
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalCursorPath = config.get('cursorAgentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'cursorAgent', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', '', vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: it should fall back to cursorAgentPath
+          assert.ok(result);
+          assert.strictEqual(result?.agentCommand, process.execPath);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', originalCursorPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      // TC-N-17
+      test('TC-N-17: geminiCli uses agentPath if provided', async () => {
+        // Given: agentProvider is 'geminiCli' and a custom agentPath is set
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'geminiCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: it should return the custom agent path
+          assert.ok(result);
+          assert.strictEqual(result?.agentCommand, process.execPath);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      // TC-N-18
+      test('TC-N-18: codexCli uses agentPath if provided', async () => {
+        // Given: agentProvider is 'codexCli' and a custom agentPath is set
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'codexCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: it should return the custom agent path
+          assert.ok(result);
+          assert.strictEqual(result?.agentCommand, process.execPath);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      test('PF-E-10: geminiCli command not found returns undefined in test runner', async () => {
+        // Given: agentProvider is 'geminiCli' and command is missing
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const missingCommand = `missing-gemini-${Date.now()}`;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'geminiCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: returns undefined
+          assert.strictEqual(result, undefined);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      test('PF-E-11: codexCli command not found returns undefined in test runner', async () => {
+        // Given: agentProvider is 'codexCli' and command is missing
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const missingCommand = `missing-codex-${Date.now()}`;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'codexCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: returns undefined
+          assert.strictEqual(result, undefined);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      // TC-E-06
+      test('TC-E-06: agentPath with only whitespace is treated as empty and falls back to legacy path', async () => {
+        // Given: agentPath is set to whitespace only, and cursorAgentPath is set
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalAgentPath = config.get('agentPath');
+        const originalCursorPath = config.get('cursorAgentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentPath', '   ', vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: it should fall back to cursorAgentPath (process.execPath)
+          assert.ok(result);
+          assert.strictEqual(result?.agentCommand, process.execPath);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+          await config.update('cursorAgentPath', originalCursorPath, vscode.ConfigurationTarget.Workspace);
         }
       });
     });

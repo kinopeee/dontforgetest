@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-CLI エージェント（現在対応: Cursor Agent / Claude Code ｜対応予定: Codex CLI）をヘッドレスで非同期呼び出しし、コミット差分や選択範囲からテストコードを自動生成する VS Code 互換拡張機能「Dontforgetest」。TypeScript で記述され、VS Code Extension API を使用。
+CLI エージェント（現在対応: Cursor CLI / Claude Code / Gemini CLI / Codex CLI）をヘッドレスで非同期呼び出しし、コミット差分や選択範囲からテストコードを自動生成する VS Code 互換拡張機能「Dontforgetest」。TypeScript で記述され、VS Code Extension API を使用。
 
 ## 技術スタック
 
@@ -21,7 +21,7 @@ src/
 ├── commands/       # コマンド実装（コミット差分/作業ツリー/成果物付き実行など）
 ├── core/           # 生成戦略・プロンプト・成果物管理・事前チェック等の中核ロジック
 ├── providers/      # CLI エージェント実行や実行制御（Run-to-completion）関連
-                    # 現在対応: Cursor Agent / Claude Code｜対応予定: Codex CLI
+                    # 現在対応: Cursor CLI / Claude Code / Gemini CLI / Codex CLI
 ├── git/            # git差分解析・worktree管理
 ├── ui/             # WebView/TreeView/QuickPick/StatusBar 等のUI層
 └── test/           # VS Code拡張機能テスト（@vscode/test-electron + mocha）

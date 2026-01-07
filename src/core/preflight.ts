@@ -12,7 +12,7 @@ export interface PreflightOk {
   testStrategyPath: string;
   /** 現在選択されている Provider の ID */
   agentProviderId: AgentProviderId;
-  /** 実行するエージェントコマンド（cursor-agent または claude） */
+  /** 実行するエージェントコマンド（cursor-agent / claude / gemini） */
   agentCommand: string;
   /**
    * @deprecated Use `agentCommand` instead. Kept for backward compatibility.
@@ -54,11 +54,12 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
 
   // Provider 選択に応じたコマンド確認
   const agentProviderId = getAgentProviderId();
+  const agentPath = (config.get<string>('agentPath') ?? '').trim();
 
   if (agentProviderId === 'claudeCode') {
     // Claude Code CLI の確認
     const claudePath = (config.get<string>('claudePath') ?? '').trim();
-    const claudeCommand = claudePath.length > 0 ? claudePath : 'claude';
+    const claudeCommand = resolveAgentCommand(agentPath, claudePath, 'claude');
 
     const agentAvailable = await canSpawnCommand(claudeCommand, ['--version'], workspaceRoot);
     if (!agentAvailable) {
@@ -75,7 +76,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
         openDocsLabel,
       );
       if (picked === openSettingsLabel) {
-        await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.claudePath');
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.agentPath');
       }
       if (picked === openDocsLabel) {
         await vscode.env.openExternal(vscode.Uri.parse('https://docs.claude.com/en/docs/claude-code/sdk/sdk-headless'));
@@ -93,9 +94,83 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
     };
   }
 
+  if (agentProviderId === 'geminiCli') {
+    // Gemini CLI の確認
+    const geminiCommand = resolveAgentCommand(agentPath, '', 'gemini');
+
+    const agentAvailable = await canSpawnCommand(geminiCommand, ['--version'], workspaceRoot);
+    if (!agentAvailable) {
+      if (process.env.VSCODE_TEST_RUNNER === '1') {
+        void vscode.window.showErrorMessage(t('geminiCli.notFound', geminiCommand));
+        return undefined;
+      }
+
+      const openSettingsLabel = t('geminiCli.openSettings');
+      const openDocsLabel = t('geminiCli.openDocs');
+      const picked = await vscode.window.showErrorMessage(
+        t('geminiCli.notFound', geminiCommand),
+        openSettingsLabel,
+        openDocsLabel,
+      );
+      if (picked === openSettingsLabel) {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.agentPath');
+      }
+      if (picked === openDocsLabel) {
+        await vscode.env.openExternal(vscode.Uri.parse('https://docs.cloud.google.com/gemini/docs/codeassist/gemini-cli'));
+      }
+      return undefined;
+    }
+
+    return {
+      workspaceRoot,
+      defaultModel: getEffectiveDefaultModel(agentProviderId, getModelSettings()),
+      testStrategyPath: effectiveTestStrategyPath,
+      agentProviderId,
+      agentCommand: geminiCommand,
+      cursorAgentCommand: geminiCommand, // 後方互換
+    };
+  }
+
+  if (agentProviderId === 'codexCli') {
+    // Codex CLI の確認
+    const codexCommand = resolveAgentCommand(agentPath, '', 'codex');
+
+    const agentAvailable = await canSpawnCommand(codexCommand, ['--version'], workspaceRoot);
+    if (!agentAvailable) {
+      if (process.env.VSCODE_TEST_RUNNER === '1') {
+        void vscode.window.showErrorMessage(t('codexCli.notFound', codexCommand));
+        return undefined;
+      }
+
+      const openSettingsLabel = t('codexCli.openSettings');
+      const openDocsLabel = t('codexCli.openDocs');
+      const picked = await vscode.window.showErrorMessage(
+        t('codexCli.notFound', codexCommand),
+        openSettingsLabel,
+        openDocsLabel,
+      );
+      if (picked === openSettingsLabel) {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.agentPath');
+      }
+      if (picked === openDocsLabel) {
+        await vscode.env.openExternal(vscode.Uri.parse('https://developers.openai.com/codex/cli'));
+      }
+      return undefined;
+    }
+
+    return {
+      workspaceRoot,
+      defaultModel: getEffectiveDefaultModel(agentProviderId, getModelSettings()),
+      testStrategyPath: effectiveTestStrategyPath,
+      agentProviderId,
+      agentCommand: codexCommand,
+      cursorAgentCommand: codexCommand, // 後方互換
+    };
+  }
+
   // Cursor Agent CLI の確認（デフォルト）
   const cursorAgentPath = (config.get<string>('cursorAgentPath') ?? '').trim();
-  const cursorAgentCommand = cursorAgentPath.length > 0 ? cursorAgentPath : 'cursor-agent';
+  const cursorAgentCommand = resolveAgentCommand(agentPath, cursorAgentPath, 'cursor-agent');
 
   const agentAvailable = await canSpawnCommand(cursorAgentCommand, ['--version'], workspaceRoot);
   if (!agentAvailable) {
@@ -115,7 +190,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
       openDocsLabel,
     );
     if (picked === openSettingsLabel) {
-      await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.cursorAgentPath');
+      await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.agentPath');
     }
     if (picked === openDocsLabel) {
       await vscode.env.openExternal(vscode.Uri.parse('https://cursor.com/docs/cli/overview'));
@@ -144,6 +219,16 @@ async function fileExists(absolutePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function resolveAgentCommand(agentPath: string, legacyPath: string, defaultCommand: string): string {
+  if (agentPath.length > 0) {
+    return agentPath;
+  }
+  if (legacyPath.length > 0) {
+    return legacyPath;
+  }
+  return defaultCommand;
 }
 
 /**

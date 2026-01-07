@@ -116,6 +116,97 @@ export type ParseTestResultFileResult =
   | { ok: true; value: TestResultFile }
   | { ok: false; error: string };
 
+function parseJsonWithNormalization(raw: string): { ok: true; value: unknown } | { ok: false; error: string } {
+  const first = tryParseJson(raw);
+  if (first.ok) {
+    return first;
+  }
+
+  const normalized = normalizeJsonWithBareNewlines(raw);
+  if (normalized === raw) {
+    return first;
+  }
+
+  const retry = tryParseJson(normalized);
+  return retry;
+}
+
+function tryParseJson(raw: string): { ok: true; value: unknown } | { ok: false; error: string } {
+  try {
+    return { ok: true, value: JSON.parse(raw) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: `invalid-json: ${msg}` };
+  }
+}
+
+/**
+ * 文字列内の「生の改行」をエスケープし、JSONとしてパース可能な形に整える。
+ * - Gemini などが JSON 文字列内に改行を含めるケースの補正用
+ */
+function normalizeJsonWithBareNewlines(raw: string): string {
+  let inString = false;
+  let escaped = false;
+  let changed = false;
+  const out: string[] = [];
+
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        if (ch === '\n') {
+          out.push('\\n');
+          changed = true;
+          continue;
+        }
+        if (ch === '\r') {
+          out.push('\\r');
+          changed = true;
+          continue;
+        }
+        out.push(ch);
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        out.push(ch);
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+        out.push(ch);
+        continue;
+      }
+      if (ch === '\n') {
+        out.push('\\n');
+        changed = true;
+        continue;
+      }
+      if (ch === '\r') {
+        out.push('\\r');
+        changed = true;
+        continue;
+      }
+      out.push(ch);
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      out.push(ch);
+      continue;
+    }
+
+    out.push(ch);
+  }
+
+  if (!changed) {
+    return raw;
+  }
+  return out.join('');
+}
+
 /**
  * cursor-agent の出力から抽出した JSON テキストを、観点表JSONとしてパースする（多少の揺れに寛容）。
  * - コードフェンスが混入しても除去する
@@ -133,13 +224,11 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
   // 入力が JSON 配列から始まる場合は、内側の `{...}` を拾わずに全体をパースして型検証する。
   // 例: `[{"version":1}]` は JSON だが object ではないため json-not-object とする。
   if (trimmedUnfenced.startsWith('[')) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(trimmedUnfenced);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: `invalid-json: ${msg}` };
+    const parsedResult = parseJsonWithNormalization(trimmedUnfenced);
+    if (!parsedResult.ok) {
+      return { ok: false, error: parsedResult.error };
     }
+    const parsed = parsedResult.value;
     const rec = asRecord(parsed);
     if (!rec) {
       return { ok: false, error: 'json-not-object' };
@@ -173,38 +262,86 @@ export function parsePerspectiveJsonV1(raw: string): ParsePerspectiveJsonResult 
     return { ok: true, value: { version: 1, cases } };
   }
 
-  const jsonText = extractJsonObject(unfenced);
-
+  // `{` で始まる場合、まず全体を JSON として直接パースを試す。
+  // これにより「マーカー内が純 JSON なのに extractJsonObject で誤判定」を防ぐ。
+  // 文字列内に `{}` を含む JSON（例: `"assert.deepStrictEqual(x, { a: 1 })"`）でも正しくパースできる。
   let parsed: unknown;
-  if (jsonText) {
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: `invalid-json: ${msg}` };
+  if (trimmedUnfenced.startsWith('{')) {
+    const directParseResult = parseJsonWithNormalization(trimmedUnfenced);
+    if (directParseResult.ok) {
+      const parsedValue = directParseResult.value;
+      const rec = asRecord(parsedValue);
+      if (rec) {
+        // 直接パースが成功し、object として検証可能な場合はここで処理
+        const versionRaw = rec.version;
+        if (versionRaw === 1) {
+          const casesRaw = rec.cases;
+          if (Array.isArray(casesRaw)) {
+            const cases: PerspectiveCase[] = [];
+            for (const item of casesRaw) {
+              const itemRec = asRecord(item);
+              if (!itemRec) {
+                continue;
+              }
+              cases.push({
+                caseId: getStringOrEmpty(itemRec.caseId),
+                inputPrecondition: getStringOrEmpty(itemRec.inputPrecondition),
+                perspective: getStringOrEmpty(itemRec.perspective),
+                expectedResult: getStringOrEmpty(itemRec.expectedResult),
+                notes: getStringOrEmpty(itemRec.notes),
+              });
+            }
+            return { ok: true, value: { version: 1, cases } };
+          }
+        }
+      }
+    }
+    // 直接パースが失敗した場合、エラーを保存して推定抽出へフォールバック
+    // 推定抽出も失敗した場合は、直接パースのエラー（invalid-json: を含む）を返す
+    const directParseError = directParseResult.ok ? undefined : directParseResult.error;
+    const jsonText = extractJsonObject(unfenced);
+    if (jsonText) {
+      const parsedResult = parseJsonWithNormalization(jsonText);
+      if (!parsedResult.ok) {
+        return { ok: false, error: parsedResult.error };
+      }
+      parsed = parsedResult.value;
+    } else {
+      // `{` 始まりで直接パースも extractJsonObject も失敗した場合、
+      // 直接パースのエラー（invalid-json: を含む）を優先して返す
+      if (directParseError) {
+        return { ok: false, error: directParseError };
+      }
+      return { ok: false, error: 'no-json-object' };
     }
   } else {
-    // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
-    // 例: [] / "..." / null / true / false は JSON として成立し、object でないため json-not-object を返したい。
-    if (trimmedUnfenced.startsWith('{')) {
-      // `{` はあるが閉じ `}` がない等のケースは、従来どおり no-json-object 扱いとする。
-      return { ok: false, error: 'no-json-object' };
-    }
-    if (
-      trimmedUnfenced.startsWith('[') ||
-      trimmedUnfenced.startsWith('"') ||
-      trimmedUnfenced === 'null' ||
-      trimmedUnfenced === 'true' ||
-      trimmedUnfenced === 'false'
-    ) {
-      try {
-        parsed = JSON.parse(trimmedUnfenced);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return { ok: false, error: `invalid-json: ${msg}` };
+    // `{` で始まらない場合は従来どおりの処理
+    const jsonText = extractJsonObject(unfenced);
+
+    if (jsonText) {
+      const parsedResult = parseJsonWithNormalization(jsonText);
+      if (!parsedResult.ok) {
+        return { ok: false, error: parsedResult.error };
       }
+      parsed = parsedResult.value;
     } else {
-      return { ok: false, error: 'no-json-object' };
+      // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
+      // 例: [] / "..." / null / true / false は JSON として成立し、object でないため json-not-object を返したい。
+      if (
+        trimmedUnfenced.startsWith('[') ||
+        trimmedUnfenced.startsWith('"') ||
+        trimmedUnfenced === 'null' ||
+        trimmedUnfenced === 'true' ||
+        trimmedUnfenced === 'false'
+      ) {
+        const parsedResult = parseJsonWithNormalization(trimmedUnfenced);
+        if (!parsedResult.ok) {
+          return { ok: false, error: parsedResult.error };
+        }
+        parsed = parsedResult.value;
+      } else {
+        return { ok: false, error: 'no-json-object' };
+      }
     }
   }
 
@@ -258,13 +395,11 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
   // 入力が JSON 配列から始まる場合は、内側の `{...}` を拾わずに全体をパースして型検証する。
   // 例: `[{"version":1}]` は JSON だが object ではないため json-not-object とする。
   if (trimmedUnfenced.startsWith('[')) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(trimmedUnfenced);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: `invalid-json: ${msg}` };
+    const parsedResult = parseJsonWithNormalization(trimmedUnfenced);
+    if (!parsedResult.ok) {
+      return { ok: false, error: parsedResult.error };
     }
+    const parsed = parsedResult.value;
     const rec = asRecord(parsed);
     if (!rec) {
       return { ok: false, error: 'json-not-object' };
@@ -293,19 +428,60 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
     };
   }
 
+  // `{` で始まる場合、まず全体を JSON として直接パースを試す。
+  // これにより「マーカー内が純 JSON なのに extractJsonObject で誤判定」を防ぐ。
+  // 文字列内に `{}` を含む JSON（例: `"stdout": "error: { code: 1 }"`）でも正しくパースできる。
+  let directParseError: string | undefined;
+  if (trimmedUnfenced.startsWith('{')) {
+    const directParseResult = parseJsonWithNormalization(trimmedUnfenced);
+    if (directParseResult.ok) {
+      const parsed = directParseResult.value;
+      const rec = asRecord(parsed);
+      if (rec) {
+        // 直接パースが成功し、object として検証可能な場合はここで処理
+        if (rec.version === 1) {
+          const exitCode = getNumberOrNull(rec.exitCode);
+          const signal = getStringOrNull(rec.signal);
+          const durationMs = getNonNegativeNumberOrDefault(rec.durationMs, 0);
+          const stdout = getStringOrEmpty(rec.stdout);
+          const stderr = getStringOrEmpty(rec.stderr);
+
+          return {
+            ok: true,
+            value: {
+              version: 1,
+              exitCode,
+              signal,
+              durationMs,
+              stdout,
+              stderr,
+            },
+          };
+        }
+      }
+    }
+    // 直接パースが失敗した場合、または object として検証できない場合は推定抽出へフォールバック
+    if (!directParseResult.ok) {
+      directParseError = directParseResult.error;
+    }
+  }
+
   const jsonText = extractJsonObject(unfenced);
 
   let parsed: unknown;
   if (jsonText) {
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: `invalid-json: ${msg}` };
+    const parsedResult = parseJsonWithNormalization(jsonText);
+    if (!parsedResult.ok) {
+      return { ok: false, error: parsedResult.error };
     }
+    parsed = parsedResult.value;
   } else {
     // `{...}` が見つからない場合でも、入力自体が JSON（配列/プリミティブ）であればパースして型検証する。
     if (trimmedUnfenced.startsWith('{')) {
+      // `{` 始まりで直接パースが失敗している場合は invalid-json を優先する（原因が分かりやすい）
+      if (directParseError) {
+        return { ok: false, error: directParseError };
+      }
       return { ok: false, error: 'no-json-object' };
     }
     if (
@@ -315,12 +491,11 @@ export function parseTestExecutionJsonV1(raw: string): ParseTestExecutionJsonRes
       trimmedUnfenced === 'true' ||
       trimmedUnfenced === 'false'
     ) {
-      try {
-        parsed = JSON.parse(trimmedUnfenced);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return { ok: false, error: `invalid-json: ${msg}` };
+      const parsedResult = parseJsonWithNormalization(trimmedUnfenced);
+      if (!parsedResult.ok) {
+        return { ok: false, error: parsedResult.error };
       }
+      parsed = parsedResult.value;
     } else {
       return { ok: false, error: 'no-json-object' };
     }
@@ -560,7 +735,7 @@ export function getArtifactSettings(): ArtifactSettings {
   // 設定値が空文字/空白のみの場合は「未指定」とみなし、既定値（extension）へフォールバックする。
   const runner: ArtifactSettings['testExecutionRunner'] =
     runnerTrimmed.length === 0 ? 'extension' : runnerTrimmed === 'extension' ? 'extension' : 'cursorAgent';
-  const perspectiveTimeoutRaw = config.get<number>('perspectiveGenerationTimeoutMs', 300_000);
+  const perspectiveTimeoutRaw = config.get<number>('perspectiveGenerationTimeoutMs', 600_000);
   const perspectiveGenerationTimeoutMs =
     typeof perspectiveTimeoutRaw === 'number' && Number.isFinite(perspectiveTimeoutRaw) && perspectiveTimeoutRaw > 0 ? perspectiveTimeoutRaw : 0;
   return {
@@ -738,7 +913,7 @@ export function buildTestPerspectiveArtifactMarkdown(params: {
 }): string {
   assertNumber(params.generatedAtMs, 'generatedAtMs');
   const tsLocal = formatLocalIso8601WithOffset(new Date(params.generatedAtMs));
-  const targets = params.targetPaths.map((p) => `- ${p}`).join('\n');
+  const targets = params.targetPaths.map((p) => `  - ${p}`).join('\n');
   const table = params.perspectiveMarkdown.trim();
   return [
     `# ${t('artifact.perspectiveTable.title')}`,
@@ -746,7 +921,7 @@ export function buildTestPerspectiveArtifactMarkdown(params: {
     `- ${t('artifact.perspectiveTable.generatedAt')}: ${tsLocal}`,
     `- ${t('artifact.perspectiveTable.target')}: ${params.targetLabel}`,
     `- ${t('artifact.perspectiveTable.targetFiles')}:`,
-    targets.length > 0 ? targets : `- ${t('artifact.none')}`,
+    targets.length > 0 ? targets : `  - ${t('artifact.none')}`,
     '',
     '---',
     '',
@@ -764,7 +939,7 @@ export function buildTestExecutionArtifactMarkdown(params: {
 }): string {
   assertNumber(params.generatedAtMs, 'generatedAtMs');
   const tsLocal = formatLocalIso8601WithOffset(new Date(params.generatedAtMs));
-  const targets = params.targetPaths.map((p) => `- ${p}`).join('\n');
+  const targets = params.targetPaths.map((p) => `  - ${p}`).join('\n');
   const modelLine =
     params.model && params.model.trim().length > 0
       ? `- ${t('artifact.executionReport.model')}: ${params.model}`
@@ -837,7 +1012,7 @@ export function buildTestExecutionArtifactMarkdown(params: {
     testResultPathLine,
     '',
     `- ${t('artifact.executionReport.targetFiles')}:`,
-    targets.length > 0 ? targets : `- ${t('artifact.none')}`,
+    targets.length > 0 ? targets : `  - ${t('artifact.none')}`,
     '',
     summarySection,
     failureDetailsSection,
@@ -850,9 +1025,7 @@ export function buildTestExecutionArtifactMarkdown(params: {
     extensionLogCollapsible,
   ];
 
-  return sections
-    .filter((line) => line !== '')
-    .join('\n');
+  return sections.join('\n').trimEnd();
 }
 
 export function emitLogEvent(taskId: string, level: 'info' | 'warn' | 'error', message: string): TestGenEvent {

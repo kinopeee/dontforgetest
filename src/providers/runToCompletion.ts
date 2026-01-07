@@ -77,7 +77,7 @@ export async function runProviderToCompletion(params: {
           return;
         }
         const msg =
-          `タイムアウト: cursor-agent の処理が ${timeoutMs}ms を超えたため停止します。` +
+          `タイムアウト: エージェントの処理が ${timeoutMs}ms を超えたため停止します。` +
           `（設定: dontforgetest.perspectiveGenerationTimeoutMs を調整できます）`;
         params.onEvent({ type: 'log', taskId: params.run.taskId, level: 'error', message: msg, timestampMs: nowMs() });
         try {
@@ -90,7 +90,6 @@ export async function runProviderToCompletion(params: {
     }
   });
 }
-
 
 
 

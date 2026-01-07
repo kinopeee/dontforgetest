@@ -65,7 +65,7 @@ export class SettingsPanelViewProvider implements vscode.WebviewViewProvider, vs
 
     if (msg.type === 'setAgentProvider') {
       const agentProvider = (msg as { agentProvider?: unknown }).agentProvider;
-      if (agentProvider !== 'cursorAgent' && agentProvider !== 'claudeCode') {
+      if (agentProvider !== 'cursorAgent' && agentProvider !== 'claudeCode' && agentProvider !== 'geminiCli' && agentProvider !== 'codexCli') {
         return;
       }
       const config = vscode.workspace.getConfiguration('dontforgetest');
@@ -173,6 +173,8 @@ export class SettingsPanelViewProvider implements vscode.WebviewViewProvider, vs
       '        <select id="agentProviderSelect" aria-label="agentProvider">',
       `          <option value="cursorAgent">Cursor CLI</option>`,
       `          <option value="claudeCode">Claude Code</option>`,
+      `          <option value="geminiCli">Gemini CLI</option>`,
+      `          <option value="codexCli">Codex CLI</option>`,
       '        </select>',
       '      </div>',
       '    </div>',

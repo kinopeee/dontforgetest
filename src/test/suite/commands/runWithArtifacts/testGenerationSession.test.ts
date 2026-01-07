@@ -187,6 +187,81 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
       assert.strictEqual(env.DONTFORGETEST_TEST_RESULT_FILE, testResultFilePath);
     });
 
+    // TC-N-04
+    test('TC-N-04: constructor sets DONTFORGETEST_DEBUG_LOG_ROOT to workspaceRoot when it is undefined', () => {
+      // Given: DONTFORGETEST_DEBUG_LOG_ROOT is undefined
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const originalDebugRoot = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+      delete process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+
+      try {
+        // When: A session is created
+        createSession(workspaceRoot);
+
+        // Then: DONTFORGETEST_DEBUG_LOG_ROOT is set to the workspaceRoot
+        assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, workspaceRoot);
+      } finally {
+        process.env.DONTFORGETEST_DEBUG_LOG_ROOT = originalDebugRoot;
+      }
+    });
+
+    test('TC-ENV-DEBUG-03: constructor does NOT overwrite DONTFORGETEST_DEBUG_LOG_ROOT when already set', () => {
+      // Given: DONTFORGETEST_DEBUG_LOG_ROOT is already set
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const originalDebugRoot = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+      const existingValue = '/existing/path';
+      process.env.DONTFORGETEST_DEBUG_LOG_ROOT = existingValue;
+
+      try {
+        // When: A session is created
+        createSession(workspaceRoot);
+
+        // Then: DONTFORGETEST_DEBUG_LOG_ROOT remains unchanged
+        assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, existingValue);
+      } finally {
+        process.env.DONTFORGETEST_DEBUG_LOG_ROOT = originalDebugRoot;
+      }
+    });
+
+    // TC-B-03
+    test('TC-B-03: constructor sets DONTFORGETEST_DEBUG_LOG_ROOT to workspaceRoot when it is an empty string', () => {
+      // Given: DONTFORGETEST_DEBUG_LOG_ROOT is an empty string
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const originalDebugRoot = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+      process.env.DONTFORGETEST_DEBUG_LOG_ROOT = '';
+
+      try {
+        // When: A session is created
+        createSession(workspaceRoot);
+
+        // Then: DONTFORGETEST_DEBUG_LOG_ROOT is set to the workspaceRoot
+        assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, workspaceRoot);
+      } finally {
+        process.env.DONTFORGETEST_DEBUG_LOG_ROOT = originalDebugRoot;
+      }
+    });
+
+    test('TC-B-03 (whitespace): constructor sets DONTFORGETEST_DEBUG_LOG_ROOT to workspaceRoot when it is whitespace only', () => {
+      // Given: DONTFORGETEST_DEBUG_LOG_ROOT is whitespace only
+      const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+      workspaceRoots.push(workspaceRoot);
+      const originalDebugRoot = process.env.DONTFORGETEST_DEBUG_LOG_ROOT;
+      process.env.DONTFORGETEST_DEBUG_LOG_ROOT = '   ';
+
+      try {
+        // When: A session is created
+        createSession(workspaceRoot);
+
+        // Then: DONTFORGETEST_DEBUG_LOG_ROOT is set to the workspaceRoot
+        assert.strictEqual(process.env.DONTFORGETEST_DEBUG_LOG_ROOT, workspaceRoot);
+      } finally {
+        process.env.DONTFORGETEST_DEBUG_LOG_ROOT = originalDebugRoot;
+      }
+    });
+
     test('TC-TGS-READ-E-01: readTestResultFile returns undefined when test-result.json does not exist', async () => {
       // Given: A workspace without the file
       const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
@@ -1885,6 +1960,8 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
           (outputChannel as unknown as { appendEventToOutput: typeof originalAppendEvent }).appendEventToOutput = originalAppendEvent;
         }
       });
+
+      // NOTE: DONTFORGETEST_DEBUG_LOG_ROOT のテストは上部に既に存在するため、ここでは重複定義しない
     });
   });
 });

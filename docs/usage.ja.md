@@ -8,7 +8,7 @@
 
 - **ワークスペースをフォルダとして開いている**（単一ファイルだけ開いている状態は不可）
 - **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf）
-- **CLI エージェント**（例: `cursor-agent`、`claude`）**が実行できる**（PATH に入っている、または設定でパス指定）
+- **CLI エージェント**（例: `cursor-agent`、`claude`、`gemini`）**が実行できる**（PATH に入っている、または設定でパス指定）
 - コミット差分系を使う場合は **Git リポジトリである** こと
 - **現時点の動作確認は macOS 環境のみ**（Windows/Linux は未検証）
 
@@ -49,8 +49,13 @@
 - **`dontforgetest.agentProvider`**: テスト生成に使用するエージェント（既定: `cursorAgent`）
   - `cursorAgent`: Cursor Agent CLI（`cursor-agent`）を使用
   - `claudeCode`: Claude Code CLI（`claude`）を使用
-- **`dontforgetest.cursorAgentPath`**: `cursor-agent` の実行パス（未指定なら PATH から解決）
-- **`dontforgetest.claudePath`**: Claude Code CLI（`claude` コマンド）のパス（未指定なら PATH から解決）
+  - `geminiCli`: Gemini CLI（`gemini`）を使用
+  - `codexCli`: Codex CLI（`codex`）を使用
+- **`dontforgetest.agentPath`**: エージェント実行コマンドのパス（推奨）。空なら旧設定または PATH から解決
+- **`dontforgetest.cursorAgentPath`**: （非推奨）`cursor-agent` の実行パス（未指定なら PATH から解決）
+- **`dontforgetest.claudePath`**: （非推奨）Claude Code CLI（`claude` コマンド）のパス（未指定なら PATH から解決）
+- **`dontforgetest.codexPromptCommand`**: Codex CLI のプロンプトコマンド（空なら既定を使用）
+- **`dontforgetest.codexReasoningEffort`**: Codex CLI の reasoning effort（既定: `medium`）
 - **`dontforgetest.defaultModel`**: エージェントの `--model` オプションに渡すモデル（空なら自動）
 
 - **`dontforgetest.testStrategyPath`**: テスト戦略ファイルのパス（空なら内蔵デフォルトを使用）
@@ -74,7 +79,8 @@
   - `1..5`: 問題が解消するまで生成を再実行します（最大試行回数は指定値）
   - 自動修正後も問題が残る場合は、`dontforgetest.testExecutionReportDir` 配下に `compliance-report_YYYYMMDD_HHmmss.md` を保存します
 
-> **補足（モデル名）**: `dontforgetest.defaultModel` に指定するモデル名は、Cursor Agent CLI（`cursor-agent`）の **`/model`** コマンドでリストされる名前を使用してください。
+> **補足（モデル名）**: `dontforgetest.defaultModel` に指定するモデル名は、使用するエージェントに依存します。  
+> Cursor Agent CLI（`cursor-agent`）の場合は **`/model`** コマンドの一覧を参照してください。
 >
 > 例（2025.12.25 時点）:
 >
@@ -218,8 +224,9 @@
 ### `cursor-agent が見つかりません` / `claude コマンドが見つかりません`
 
 - 対応する CLI ツールをインストール/セットアップする
-- Cursor Agent（`cursor-agent`）の場合: `dontforgetest.cursorAgentPath` にフルパスを設定
-- Claude Code の場合: `dontforgetest.claudePath` にフルパスを設定
+- Cursor Agent（`cursor-agent`）の場合: `dontforgetest.agentPath`（推奨）または `dontforgetest.cursorAgentPath`（旧設定）にフルパスを設定
+- Claude Code の場合: `dontforgetest.agentPath`（推奨）または `dontforgetest.claudePath`（旧設定）にフルパスを設定
+- Gemini CLI の場合: `dontforgetest.agentPath`（推奨）にフルパスを設定
 
 ### テスト戦略ファイルが読み込めない
 

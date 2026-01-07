@@ -8,7 +8,7 @@ This document explains how to use the **Test Generation Agent** extension in VS 
 
 - You opened a workspace as a **folder** (single-file window is not supported)
 - **VS Code 1.105+** compatible (Cursor / VS Code / Windsurf)
-- CLI agent executable (e.g., `cursor-agent` or `claude`; available in PATH, or configured via settings)
+- CLI agent executable (e.g., `cursor-agent`, `claude`, or `gemini`; available in PATH, or configured via settings)
 - For diff-based sources, your workspace must be a **Git repository**
 - **Currently verified only on macOS** (Windows/Linux are not verified yet)
 
@@ -49,8 +49,13 @@ Search `dontforgetest.*` in your editor Settings (Cursor / VS Code / Windsurf).
 - **`dontforgetest.agentProvider`**: Agent provider for test generation (Default: `cursorAgent`)
   - `cursorAgent`: Use Cursor Agent CLI (`cursor-agent`)
   - `claudeCode`: Use Claude Code CLI (`claude`)
-- **`dontforgetest.cursorAgentPath`**: Path to `cursor-agent` (if empty, resolves from PATH)
-- **`dontforgetest.claudePath`**: Path to `claude` command for Claude Code CLI (if empty, resolves from PATH)
+  - `geminiCli`: Use Gemini CLI (`gemini`)
+  - `codexCli`: Use Codex CLI (`codex`)
+- **`dontforgetest.agentPath`**: Path to agent command (preferred). If empty, falls back to legacy provider-specific settings or PATH
+- **`dontforgetest.cursorAgentPath`**: (Deprecated) Path to `cursor-agent` (if empty, resolves from PATH)
+- **`dontforgetest.claudePath`**: (Deprecated) Path to `claude` command for Claude Code CLI (if empty, resolves from PATH)
+- **`dontforgetest.codexPromptCommand`**: Codex CLI prompt command (if empty, uses the default)
+- **`dontforgetest.codexReasoningEffort`**: Codex CLI reasoning effort (Default: `medium`)
 - **`dontforgetest.defaultModel`**: Model passed to the agent `--model` option (if empty, auto)
 
 - **`dontforgetest.testStrategyPath`**: Test strategy file path (if empty, uses the built-in default)
@@ -73,7 +78,8 @@ Search `dontforgetest.*` in your editor Settings (Cursor / VS Code / Windsurf).
   - `1..5`: re-runs generation to fix issues (up to the given number of attempts)
   - When issues remain after attempts: saves `compliance-report_YYYYMMDD_HHmmss.md` under `dontforgetest.testExecutionReportDir`
 
-> **Note (model names)**: The model name for `dontforgetest.defaultModel` must be one of the names listed by Cursor Agent CLI (`cursor-agent`) via **`/model`**.
+> **Note (model names)**: The model name for `dontforgetest.defaultModel` depends on the selected agent.  
+> For Cursor Agent CLI (`cursor-agent`), use the names listed via **`/model`**.
 >
 > Example (as of 2025-12-25):
 >
@@ -212,8 +218,9 @@ You can analyze existing test files from the **Analyze** tab in the Control Pane
 ### `cursor-agent not found` / `claude command not found`
 
 - Install / set up the corresponding CLI tool
-- For Cursor Agent (`cursor-agent`): Set `dontforgetest.cursorAgentPath` to the full path
-- For Claude Code: Set `dontforgetest.claudePath` to the full path
+- For Cursor Agent (`cursor-agent`): Set `dontforgetest.agentPath` (preferred) or `dontforgetest.cursorAgentPath` (legacy)
+- For Claude Code: Set `dontforgetest.agentPath` (preferred) or `dontforgetest.claudePath` (legacy)
+- For Gemini CLI: Set `dontforgetest.agentPath` (preferred)
 
 ### Test strategy file cannot be loaded
 
@@ -231,4 +238,3 @@ You can analyze existing test files from the **Analyze** tab in the Control Pane
 ## Reference
 
 - Built-in default strategy: `src/core/defaultTestStrategy.ts`
-
