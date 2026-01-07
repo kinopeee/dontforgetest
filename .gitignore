@@ -4,6 +4,14 @@ dist
 *.vsix
 .vscode-test
 .DS_Store
+
+# ログ/キャッシュ（ローカル環境依存）
+.npm-cache/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+.cache/
 .cursor/debug.log
 .cursor/environment.json
 .claude/settings.local.json
