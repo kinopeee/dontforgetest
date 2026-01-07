@@ -221,6 +221,22 @@ export function getGeminiCliModelCandidates(settings: ModelSettings = getModelSe
 }
 
 /**
+ * Codex CLI 用のビルトインモデル候補リスト（UI 用のヒント）。
+ *
+ * NOTE:
+ * - getCodexCliModelCandidates から参照されるため、定義を関数より前に置いておく（TDZ を避ける意図）
+ * - CLI 側のモデル一覧は変動し得るため、ここは最小限に留める
+ */
+const CODEX_CLI_BUILTIN_MODELS = [
+  'gpt-5.2-codex',
+  'gpt-5.2-codex-high',
+  'gpt-5.1-codex',
+  'gpt-5.1-codex-high',
+  'gpt-5.1-codex-max',
+  'gpt-5.1-codex-max-high',
+] as const;
+
+/**
  * Codex CLI 用のモデル候補を返す。
  * 設定された defaultModel / customModels のみを表示する。
  */
@@ -240,12 +256,3 @@ export function getCodexCliModelCandidates(settings: ModelSettings = getModelSet
 
   return out;
 }
-
-const CODEX_CLI_BUILTIN_MODELS = [
-  'gpt-5.2-codex',
-  'gpt-5.2-codex-high',
-  'gpt-5.1-codex',
-  'gpt-5.1-codex-high',
-  'gpt-5.1-codex-max',
-  'gpt-5.1-codex-max-high',
-];

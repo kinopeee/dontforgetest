@@ -50,9 +50,12 @@ Search `dontforgetest.*` in your editor Settings (Cursor / VS Code / Windsurf).
   - `cursorAgent`: Use Cursor Agent CLI (`cursor-agent`)
   - `claudeCode`: Use Claude Code CLI (`claude`)
   - `geminiCli`: Use Gemini CLI (`gemini`)
+  - `codexCli`: Use Codex CLI (`codex`)
 - **`dontforgetest.agentPath`**: Path to agent command (preferred). If empty, falls back to legacy provider-specific settings or PATH
 - **`dontforgetest.cursorAgentPath`**: (Deprecated) Path to `cursor-agent` (if empty, resolves from PATH)
 - **`dontforgetest.claudePath`**: (Deprecated) Path to `claude` command for Claude Code CLI (if empty, resolves from PATH)
+- **`dontforgetest.codexPromptCommand`**: Codex CLI prompt command (if empty, uses the default)
+- **`dontforgetest.codexReasoningEffort`**: Codex CLI reasoning effort (Default: `medium`)
 - **`dontforgetest.defaultModel`**: Model passed to the agent `--model` option (if empty, auto)
 
 - **`dontforgetest.testStrategyPath`**: Test strategy file path (if empty, uses the built-in default)

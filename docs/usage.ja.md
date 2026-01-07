@@ -50,9 +50,12 @@
   - `cursorAgent`: Cursor Agent CLI（`cursor-agent`）を使用
   - `claudeCode`: Claude Code CLI（`claude`）を使用
   - `geminiCli`: Gemini CLI（`gemini`）を使用
+  - `codexCli`: Codex CLI（`codex`）を使用
 - **`dontforgetest.agentPath`**: エージェント実行コマンドのパス（推奨）。空なら旧設定または PATH から解決
 - **`dontforgetest.cursorAgentPath`**: （非推奨）`cursor-agent` の実行パス（未指定なら PATH から解決）
 - **`dontforgetest.claudePath`**: （非推奨）Claude Code CLI（`claude` コマンド）のパス（未指定なら PATH から解決）
+- **`dontforgetest.codexPromptCommand`**: Codex CLI のプロンプトコマンド（空なら既定を使用）
+- **`dontforgetest.codexReasoningEffort`**: Codex CLI の reasoning effort（既定: `medium`）
 - **`dontforgetest.defaultModel`**: エージェントの `--model` オプションに渡すモデル（空なら自動）
 
 - **`dontforgetest.testStrategyPath`**: テスト戦略ファイルのパス（空なら内蔵デフォルトを使用）
