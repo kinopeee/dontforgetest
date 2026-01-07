@@ -1,8 +1,8 @@
-# Gemini CLI 対応 実装プラン（Dontforgetest）
+# Gemini CLI 対応 実装プラン（Dontforgetest / 参考: 実装済み）
 
 ## 目的
 
-Dontforgetest に Gemini CLI のヘッドレス実行（`stream-json`）を追加し、既存の Cursor Agent / Claude Code と同じ実行フローでテスト生成を行えるようにする。
+Dontforgetest に Gemini CLI のヘッドレス実行（`stream-json`）を追加し、既存の Cursor CLI / Claude Code / Codex CLI と同じ実行フローでテスト生成を行えるようにする。
 
 ## スコープ
 

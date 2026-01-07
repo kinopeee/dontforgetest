@@ -5,14 +5,14 @@
 [![Open VSX Version](https://img.shields.io/open-vsx/v/kinopeee/dontforgetest?label=Open%20VSX)](https://open-vsx.org/extension/kinopeee/dontforgetest)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/kinopeee/dontforgetest?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/kinopeee/dontforgetest)
 
-CLI エージェント（現在対応: Cursor Agent / Claude Code｜対応予定: Codex CLI）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する VS Code 互換拡張機能です。
+CLI エージェント（対応: Cursor CLI / Claude Code / Gemini CLI / Codex CLI）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する VS Code 互換拡張機能です。
 
 - English docs: [README.md](https://github.com/kinopeee/dontforgetest/blob/main/README.md), [docs/usage.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.md)
 
 ## Requirements
 
 - **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf）
-- CLI エージェント（例: `cursor-agent`、`claude`）が実行可能であること
+- CLI エージェント（例: `cursor-agent`、`claude`、`gemini`、`codex`）が実行可能であること
 
 ## 主な機能
 
@@ -51,7 +51,7 @@ CLI エージェント（現在対応: Cursor Agent / Claude Code｜対応予定
 
 ![テスト観点表](https://raw.githubusercontent.com/kinopeee/dontforgetest/main/docs/images/fig2.png)
 
-> **注意（重要）**: CLI エージェント（例: `cursor-agent`）は **`--force` で実行**される場合があります。  
+> **注意（重要）**: CLI エージェント（例: `cursor-agent` / `claude` / `gemini` / `codex`）は **`--force` で実行**される場合があります。  
 > **Local** は実ファイル（現在のワークスペース）へ書き込みます。  
 > **Worktree** は一時worktreeへ書き込み、`git apply --check` が通る場合のみ **テスト差分だけ** をローカルへ適用します（失敗時はパッチ/スナップショット/AI向け指示を保存）。  
 > 必要に応じてブランチを切る／コミットする等の退避手段を用意してから実行してください。
