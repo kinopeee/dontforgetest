@@ -153,7 +153,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
         await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.agentPath');
       }
       if (picked === openDocsLabel) {
-        await vscode.env.openExternal(vscode.Uri.parse('https://github.com/openai/codex'));
+        await vscode.env.openExternal(vscode.Uri.parse('https://developers.openai.com/codex/cli'));
       }
       return undefined;
     }

@@ -35,16 +35,18 @@ function createMockChild(capture: SpawnCapture): ChildProcessWithoutNullStreams 
 }
 
 suite('providers/codexCliProvider.reasoningEffort', () => {
+  // vscode.workspace.getConfiguration をテスト中だけ差し替えるため、参照を書き換え可能な形で保持する
   const mutableWorkspace = vscode.workspace as unknown as {
     getConfiguration: typeof vscode.workspace.getConfiguration;
   };
+  // テスト終了後に必ず元へ戻すため、元の関数を退避しておく
   const originalGetConfiguration = mutableWorkspace.getConfiguration;
 
   teardown(() => {
     try {
       mutableWorkspace.getConfiguration = originalGetConfiguration;
     } catch {
-      // Ignore teardown errors (e.g., if getConfiguration is read-only)
+      // teardown エラーを無視（例: getConfiguration が読み取り専用の場合）
     }
   });
 

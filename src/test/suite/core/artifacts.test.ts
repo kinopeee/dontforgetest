@@ -584,24 +584,6 @@ suite('core/artifacts.ts', () => {
     assert.ok(md.includes('\n  - src/b.ts\n'), 'Should include src/b.ts with 2-space indent and " - "');
   });
 
-  // TC-N-05
-  test('TC-N-05: buildTestPerspectiveArtifactMarkdown renders target paths with two-space indentation and " - "', () => {
-    // Given: Multiple target paths
-    const targetPaths = ['src/a.ts', 'src/b.ts'];
-
-    // When: buildTestPerspectiveArtifactMarkdown is called
-    const md = buildTestPerspectiveArtifactMarkdown({
-      generatedAtMs: Date.now(),
-      targetLabel: 'Label',
-      targetPaths,
-      perspectiveMarkdown: 'content',
-    });
-
-    // Then: Each target path line starts with two spaces and " - "
-    assert.ok(md.includes('\n  - src/a.ts\n'), 'Should include src/a.ts with 2-space indent and " - "');
-    assert.ok(md.includes('\n  - src/b.ts\n'), 'Should include src/b.ts with 2-space indent and " - "');
-  });
-
   // TC-ART-06: 観点表Markdown生成（正常）
   test('TC-ART-06: 観点表Markdownが正しく生成される（正常系）', () => {
     // Given: 入力パラメータ

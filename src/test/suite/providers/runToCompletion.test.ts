@@ -72,8 +72,8 @@ suite('providers/runToCompletion.ts', () => {
       onEvent: () => {},
     });
 
-    // Then: Provider runs to completion and exitCode is returned
-    assert.strictEqual(exitCode, 0, 'Exit code should be 0');
+    // Then: プロバイダーが正常に完了し、exitCode が返される
+    assert.strictEqual(exitCode, 0, 'exitCode が 0 であること');
   });
 
   // TC-E-11: runProviderToCompletion called but provider times out
@@ -101,8 +101,8 @@ suite('providers/runToCompletion.ts', () => {
       },
     });
 
-    // Then: null exitCode is returned on timeout
-    assert.strictEqual(exitCode, null, 'Exit code should be null on timeout');
+    // Then: タイムアウト時には null の exitCode が返される
+    assert.strictEqual(exitCode, null, 'タイムアウト時には exitCode が null であること');
   });
 
   // TC-B-09: runProviderToCompletion called with timeoutMs=2^31-1
@@ -126,8 +126,8 @@ suite('providers/runToCompletion.ts', () => {
       onEvent: () => {},
     });
 
-    // Then: Should complete normally
-    assert.strictEqual(exitCode, 0, 'Should complete normally');
+    // Then: 正常に完了する
+    assert.strictEqual(exitCode, 0, '正常に完了すること');
   });
 
   // TC-B-10: runProviderToCompletion called with timeoutMs=2^31
@@ -151,8 +151,8 @@ suite('providers/runToCompletion.ts', () => {
       onEvent: () => {},
     });
 
-    // Then: Should complete normally without timeout
-    assert.strictEqual(exitCode, 0, 'Should complete normally without timeout');
+    // Then: タイムアウトせずに正常に完了する
+    assert.strictEqual(exitCode, 0, 'タイムアウトせずに正常に完了すること');
   });
 
   // TC-NULL-05: runProviderToCompletion called with timeoutMs=undefined
@@ -176,8 +176,8 @@ suite('providers/runToCompletion.ts', () => {
       onEvent: () => {},
     });
 
-    // Then: Should complete normally without timeout
-    assert.strictEqual(exitCode, 0, 'Should complete normally without timeout');
+    // Then: タイムアウトせずに正常に完了する
+    assert.strictEqual(exitCode, 0, 'タイムアウトせずに正常に完了すること');
   });
 
   // TC-NULL-06: runProviderToCompletion called with model=undefined
@@ -200,7 +200,7 @@ suite('providers/runToCompletion.ts', () => {
       onEvent: () => {},
     });
 
-    // Then: Should complete normally with undefined model
-    assert.strictEqual(exitCode, 0, 'Should complete normally with undefined model');
+    // Then: model=undefined でも正常に完了する
+    assert.strictEqual(exitCode, 0, 'model=undefined でも正常に完了すること');
   });
 });

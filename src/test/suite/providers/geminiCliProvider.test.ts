@@ -187,7 +187,7 @@ suite('GeminiCliProvider', () => {
       prompt: 'test prompt',
       outputFormat: 'stream-json',
       allowWrite: false,
-      model: undefined, // Boundary – undefined
+      model: undefined, // 境界値 – undefined
       onEvent: () => {},
     };
 
