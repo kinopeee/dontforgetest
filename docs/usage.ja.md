@@ -1,13 +1,13 @@
 # 操作手順（Dontforgetest）
 
-このドキュメントは、VS Code 互換エディタ（Cursor / VS Code / Windsurf）上で「テスト生成エージェント」拡張機能を使うための操作手順です。
+このドキュメントは、VS Code 互換エディタ（Cursor / VS Code / Windsurf / Antigravity）上で「テスト生成エージェント」拡張機能を使うための操作手順です。
 
 - English docs: `../README.md`, `usage.md`
 
 ## 前提条件
 
 - **ワークスペースをフォルダとして開いている**（単一ファイルだけ開いている状態は不可）
-- **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf）
+- **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf / Antigravity）
 - **CLI エージェント**（例: `cursor-agent`、`claude`、`gemini`）**が実行できる**（PATH に入っている、または設定でパス指定）
 - コミット差分系を使う場合は **Git リポジトリである** こと
 - **現時点の動作確認は macOS 環境のみ**（Windows/Linux は未検証）
@@ -20,7 +20,7 @@
 
 ### VSIX からインストール（配布/手動）
 
-1. エディタ（Cursor / VS Code / Windsurf）を開く
+1. エディタ（Cursor / VS Code / Windsurf / Antigravity）を開く
 2. コマンドパレットを開く（macOS: Cmd+Shift+P）
 3. **`Extensions: Install from VSIX...`** を実行
 4. `.vsix` ファイルを選択
@@ -39,7 +39,7 @@
 
 1. 依存関係をインストール: `npm install`
 2. ビルド: `npm run compile`
-3. エディタ（Cursor / VS Code / Windsurf）でこのリポジトリを開き **F5**（Run Extension）
+3. エディタ（Cursor / VS Code / Windsurf / Antigravity）でこのリポジトリを開き **F5**（Run Extension）
 4. Extension Development Host でコマンドを実行して動作確認
 
 ## 設定

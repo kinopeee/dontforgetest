@@ -1,13 +1,13 @@
 # Usage (Dontforgetest)
 
-This document explains how to use the **Test Generation Agent** extension in VS Code-compatible editors (Cursor / VS Code / Windsurf).
+This document explains how to use the **Test Generation Agent** extension in VS Code-compatible editors (Cursor / VS Code / Windsurf / Antigravity).
 
 - Japanese docs: `usage.ja.md`
 
 ## Prerequisites
 
 - You opened a workspace as a **folder** (single-file window is not supported)
-- **VS Code 1.105+** compatible (Cursor / VS Code / Windsurf)
+- **VS Code 1.105+** compatible (Cursor / VS Code / Windsurf / Antigravity)
 - CLI agent executable (e.g., `cursor-agent`, `claude`, or `gemini`; available in PATH, or configured via settings)
 - For diff-based sources, your workspace must be a **Git repository**
 - **Currently verified only on macOS** (Windows/Linux are not verified yet)
@@ -20,7 +20,7 @@ This document explains how to use the **Test Generation Agent** extension in VS 
 
 ### Install from VSIX (manual / distribution)
 
-1. Open your editor (Cursor / VS Code / Windsurf)
+1. Open your editor (Cursor / VS Code / Windsurf / Antigravity)
 2. Open the command palette (macOS: Cmd+Shift+P)
 3. Run **`Extensions: Install from VSIX...`**
 4. Select the `.vsix` file
@@ -39,12 +39,12 @@ You can also install directly from the file tree without using the command palet
 
 1. Install dependencies: `npm install`
 2. Build: `npm run compile`
-3. Open this repository in your editor (Cursor / VS Code / Windsurf) and press **F5** (Run Extension)
+3. Open this repository in your editor (Cursor / VS Code / Windsurf / Antigravity) and press **F5** (Run Extension)
 4. Verify behavior in the Extension Development Host
 
 ## Settings
 
-Search `dontforgetest.*` in your editor Settings (Cursor / VS Code / Windsurf).
+Search `dontforgetest.*` in your editor Settings (Cursor / VS Code / Windsurf / Antigravity).
 
 - **`dontforgetest.agentProvider`**: Agent provider for test generation (Default: `cursorAgent`)
   - `cursorAgent`: Use Cursor Agent CLI (`cursor-agent`)

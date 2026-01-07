@@ -52,7 +52,7 @@
 
 ### Changed
 
-- Documentation: Unified editor compatibility to **VS Code 1.105+** (Cursor / VS Code / Windsurf) and generalized CLI agent wording (current: Cursor Agent / Claude Code; planned: Codex CLI)
+- Documentation: Unified editor compatibility to **VS Code 1.105+** (Cursor / VS Code / Windsurf / Antigravity) and generalized CLI agent wording (current: Cursor Agent / Claude Code; planned: Codex CLI)
 
 ### Fixed
 
@@ -64,7 +64,7 @@
 
 ### 変更
 
-- ドキュメント: 対応エディタ表記を **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf）に統一し、CLI エージェント記載を汎用化しました（現在: Cursor Agent / Claude Code ｜対応予定: Codex CLI）
+- ドキュメント: 対応エディタ表記を **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf / Antigravity）に統一し、CLI エージェント記載を汎用化しました（現在: Cursor Agent / Claude Code ｜対応予定: Codex CLI）
 
 ### 修正
 

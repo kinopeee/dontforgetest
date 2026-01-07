@@ -20,7 +20,7 @@ Powered by CLI agents (Cursor CLI / Claude Code / Gemini CLI / Codex CLI), this 
   - **Perspective table + Generate tests (default)** / **Generate perspective table only**
 - Choose execution target (diff-based sources):
   - **Local**: writes directly into your current workspace
-  - **Worktree**: generates in a temporary worktree and applies **only test diffs** back to local *only when* `git apply --check` passes
+  - **Worktree**: generates in a temporary worktree and applies **only test diffs** back to local _only when_ `git apply --check` passes
     - If auto-apply fails, it saves **patch / snapshot / AI instructions** to help manual merging
 - Consolidates logs in an **Output Channel**
 - Saves **test perspective tables** and **test execution reports** (Markdown; output directories are configurable)
@@ -62,7 +62,7 @@ Powered by CLI agents (Cursor CLI / Claude Code / Gemini CLI / Codex CLI), this 
 
 ## Requirements
 
-- **VS Code 1.105+** compatible (Cursor / VS Code / Windsurf)
+- **VS Code 1.105+** compatible (Cursor / VS Code / Windsurf / Antigravity)
 - CLI agent executable (e.g., `cursor-agent`, `claude`, `gemini`, or `codex`)
 
 ## Development (for contributors)
@@ -91,7 +91,7 @@ npm run watch
 npm test
 ```
 
-To use a locally installed VS Code-compatible editor executable (e.g., VS Code or Cursor), set the executable path (keep the env var name for compatibility).
+To use a locally installed VS Code-compatible editor executable (e.g., VS Code, Cursor, Windsurf, or Antigravity), set the executable path (keep the env var name for compatibility).
 
 ```bash
 DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<path to editor executable>" npm test
@@ -99,7 +99,7 @@ DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<path to editor executable>" npm test
 
 ### Run extension (debug)
 
-1. Open this repository in your editor (Cursor / VS Code / Windsurf)
+1. Open this repository in your editor (Cursor / VS Code / Windsurf / Antigravity)
 2. Press F5 (Run Extension)
 3. In the Extension Development Host, run commands starting with `Dontforgetest:` from the command palette
 

@@ -1,6 +1,6 @@
 {
   "displayName": "Dontforgetest (Test Generation Agent)",
-  "description": "One-click, commit-based test generation for VS Code-compatible editors (Cursor / VS Code / Windsurf).",
+  "description": "One-click, commit-based test generation for VS Code-compatible editors (Cursor / VS Code / Windsurf / Antigravity).",
   "viewsContainers.activitybar.title": "Dontforgetest",
   "views.settingsPanel.name": "Settings",
   "views.controlPanel.name": "Control",

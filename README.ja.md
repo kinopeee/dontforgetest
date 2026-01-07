@@ -11,7 +11,7 @@ CLI エージェント（対応: Cursor CLI / Claude Code / Gemini CLI / Codex C
 
 ## Requirements
 
-- **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf）
+- **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf / Antigravity）
 - CLI エージェント（例: `cursor-agent`、`claude`、`gemini`、`codex`）が実行可能であること
 
 ## 主な機能
@@ -88,7 +88,7 @@ npm run watch
 npm test
 ```
 
-ローカルにインストール済みの VS Code 互換エディタ（例: VS Code / Cursor / Windsurf）を使って実行する場合は、実行ファイルのパスを指定します（環境変数名は互換性のため VSCODE のままです）。
+ローカルにインストール済みの VS Code 互換エディタ（例: VS Code / Cursor / Windsurf / Antigravity）を使って実行する場合は、実行ファイルのパスを指定します（環境変数名は互換性のため VSCODE のままです）。
 
 ```bash
 DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<エディタ実行ファイルのパス>" npm test
@@ -96,7 +96,7 @@ DONTFORGETEST_VSCODE_EXECUTABLE_PATH="<エディタ実行ファイルのパス>"
 
 ### 拡張機能の実行（デバッグ）
 
-1. エディタ（Cursor / VS Code / Windsurf）でこのリポジトリを開く
+1. エディタ（Cursor / VS Code / Windsurf / Antigravity）でこのリポジトリを開く
 2. F5（Run Extension）
 3. Extension Development Host のコマンドパレットで `Dontforgetest:` を実行
 
