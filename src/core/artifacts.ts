@@ -939,7 +939,7 @@ export function buildTestExecutionArtifactMarkdown(params: {
 }): string {
   assertNumber(params.generatedAtMs, 'generatedAtMs');
   const tsLocal = formatLocalIso8601WithOffset(new Date(params.generatedAtMs));
-  const targets = params.targetPaths.map((p) => `- ${p}`).join('\n');
+  const targets = params.targetPaths.map((p) => `  - ${p}`).join('\n');
   const modelLine =
     params.model && params.model.trim().length > 0
       ? `- ${t('artifact.executionReport.model')}: ${params.model}`

@@ -92,28 +92,24 @@ function isEscapedPipeAt(text: string, pipeIndex: number): boolean {
  * これにより、プロンプト内の説明や例よりも、ログ末尾の実際の出力を優先できる。
  */
 export function extractBetweenMarkers(text: string, begin: string, end: string): string | undefined {
-  // 最後の begin マーカーの位置を探す
-  let lastBeginIndex = -1;
-  let searchStart = 0;
-  while (true) {
-    const found = text.indexOf(begin, searchStart);
-    if (found === -1) {
-      break;
+  // 空マーカーは無限ループの原因になるため拒否する（呼び出し側のミス扱い）
+  if (begin.length === 0 || end.length === 0) {
+    return undefined;
+  }
+
+  // 複数のマーカーペアが存在する場合、末尾に「壊れた begin（end が無い）」が混入しても
+  // 直前の **成立しているペア** を返せるよう、begin を後ろから辿って最初に成立したペアを採用する。
+  let beginIndex = text.lastIndexOf(begin);
+  while (beginIndex !== -1) {
+    const afterStart = beginIndex + begin.length;
+    const stop = text.indexOf(end, afterStart);
+    if (stop !== -1) {
+      return text.slice(afterStart, stop).trim();
     }
-    lastBeginIndex = found;
-    searchStart = found + begin.length;
+    beginIndex = text.lastIndexOf(begin, beginIndex - 1);
   }
 
-  if (lastBeginIndex === -1) {
-    return undefined;
-  }
-
-  const afterStart = lastBeginIndex + begin.length;
-  const stop = text.indexOf(end, afterStart);
-  if (stop === -1) {
-    return undefined;
-  }
-  return text.slice(afterStart, stop).trim();
+  return undefined;
 }
 
 /**

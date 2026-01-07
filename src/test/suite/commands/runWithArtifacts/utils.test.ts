@@ -378,6 +378,28 @@ suite('commands/runWithArtifacts/utils.ts', () => {
     assert.strictEqual(result, '{"version":1,"cases":[{"caseId":"TC-1"}]}', 'Should return content from the last complete pair');
   });
 
+  // TC-N-37: extractBetweenMarkers falls back to the last complete pair when trailing begin has no end
+  test('TC-N-37: extractBetweenMarkers falls back to the last complete marker pair when the last begin is incomplete', () => {
+    // Given: Text where an earlier marker pair is complete, but the last begin is missing its end (e.g., truncated stream)
+    const text = [
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->',
+      '{"version":1,"cases":[]}',
+      '<!-- END TEST PERSPECTIVES JSON -->',
+      '...some trailing logs...',
+      '<!-- BEGIN TEST PERSPECTIVES JSON -->',
+      '{"version":1,"cases":[{"caseId":"TC-TRUNC"}]}',
+      // END marker is missing here
+    ].join('\n');
+    const begin = '<!-- BEGIN TEST PERSPECTIVES JSON -->';
+    const end = '<!-- END TEST PERSPECTIVES JSON -->';
+
+    // When: extractBetweenMarkers is called
+    const result = extractBetweenMarkers(text, begin, end);
+
+    // Then: Returns content from the last COMPLETE marker pair
+    assert.strictEqual(result, '{"version":1,"cases":[]}', 'Should fall back to the last complete marker pair');
+  });
+
   // TC-B-28: coerceLegacyPerspectiveMarkdownTable called with markdown missing header
   test('TC-B-28: coerceLegacyPerspectiveMarkdownTable returns undefined when header is missing', () => {
     // Given: Markdown missing header
