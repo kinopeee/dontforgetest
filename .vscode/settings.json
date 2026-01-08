@@ -3,5 +3,5 @@
     "testgen-agent.testStrategyPath": "",
     "dontforgetest.testStrategyPath": "",
     "dontforgetest.agentProvider": "cursorAgent",
-    "dontforgetest.defaultModel": "opus-4.1"
+    "dontforgetest.defaultModel": "gpt-5.2"
 }

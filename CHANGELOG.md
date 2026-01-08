@@ -5,7 +5,7 @@
 ### Changed
 
 - Version bump for release
-- Workspace settings: Updated `dontforgetest.agentProvider` to `cursorAgent` and `dontforgetest.defaultModel` to `opus-4.1`
+- Workspace settings: Updated `dontforgetest.agentProvider` to `cursorAgent` and `dontforgetest.defaultModel` to `gpt-5.2`
 
 ---
 
@@ -32,7 +32,7 @@
 ### 変更
 
 - リリースのためのバージョン更新
-- ワークスペース設定: `dontforgetest.agentProvider` を `cursorAgent` に、`dontforgetest.defaultModel` を `opus-4.1` に変更
+- ワークスペース設定: `dontforgetest.agentProvider` を `cursorAgent` に、`dontforgetest.defaultModel` を `gpt-5.2` に変更
 
 ---
 
