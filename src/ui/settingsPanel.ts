@@ -102,7 +102,10 @@ export class SettingsPanelViewProvider implements vscode.WebviewViewProvider, vs
     const modelCandidates = getModelCandidatesForProvider(agentProvider, settings);
     // 現在の Provider に対して有効なモデルを取得（候補リストの先頭をデフォルトとして使用）
     const effectiveModel = getEffectiveDefaultModel(agentProvider, settings);
-    const currentModel = effectiveModel ?? (modelCandidates.length > 0 ? modelCandidates[0] : '');
+    // defaultModel が未設定の場合、cursor-agent は CLI 側の自動選択（= auto）に委ねる。
+    // UI 上も “実際に実行で使われるモデル” と表示が乖離しないよう、auto を表示する。
+    const currentModel =
+      effectiveModel ?? (agentProvider === 'cursorAgent' && modelCandidates.includes('auto') ? 'auto' : modelCandidates.length > 0 ? modelCandidates[0] : '');
     const message: ExtensionMessage = { type: 'configUpdate', agentProvider, modelCandidates, currentModel };
     void this.view.webview.postMessage(message);
   }
