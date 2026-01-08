@@ -5,6 +5,7 @@
 ### Changed
 
 - Version bump for release
+- Workspace settings: Updated `dontforgetest.agentProvider` to `cursorAgent` and `dontforgetest.defaultModel` to `opus-4.1`
 
 ---
 
@@ -31,6 +32,7 @@
 ### 変更
 
 - リリースのためのバージョン更新
+- ワークスペース設定: `dontforgetest.agentProvider` を `cursorAgent` に、`dontforgetest.defaultModel` を `opus-4.1` に変更
 
 ---
 
