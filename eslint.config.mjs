@@ -26,6 +26,31 @@ export default tseslint.config(
     },
   },
   {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      globals: {
+        // Node.js グローバル
+        require: 'readonly',
+        module: 'readonly',
+        exports: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+        global: 'readonly',
+      },
+      ecmaVersion: 'latest',
+      sourceType: 'script',
+    },
+    rules: {
+      // CommonJS では require() を使用するため許可
+      '@typescript-eslint/no-require-imports': 'off',
+      // console の使用を許可（スクリプトファイルのため）
+      'no-console': 'off',
+    },
+  },
+  {
     ignores: ['out/**', 'node_modules/**', '*.js'],
   }
 );

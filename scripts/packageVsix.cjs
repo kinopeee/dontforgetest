@@ -20,7 +20,6 @@ const pkg = require(path.join(repoRoot, 'package.json'));
 
 const version = typeof pkg?.version === 'string' ? pkg.version : '';
 if (!version) {
-  // eslint-disable-next-line no-console
   console.error('package.json の version が取得できませんでした');
   process.exit(1);
 }
@@ -37,7 +36,8 @@ const args = ['--yes', '@vscode/vsce', 'package', '--out', outFilePath, '--no-re
 // secretlint 側で `concurrency=0` エラーになってパッケージ生成が失敗する。
 // その場合に限り、vsce の secrets/.env スキャンをスキップしてパッケージ生成を継続する。
 // （通常環境ではスキャンを有効なままにする）
-if (Array.isArray(os.cpus()) && os.cpus().length < 1) {
+const cpus = os.cpus();
+if (Array.isArray(cpus) && cpus.length < 1) {
   args.push('--allow-package-all-secrets', '--allow-package-env-file');
 }
 
@@ -51,7 +51,6 @@ try {
   // ここで失敗しても後続で上書きできるため続行する
 }
 
-// eslint-disable-next-line no-console
 console.log(`VSIX を生成します: ${outFilePath}`);
 
 const result = spawnSync(npxCommand, args, {
@@ -60,7 +59,6 @@ const result = spawnSync(npxCommand, args, {
 });
 
 if (result.error) {
-  // eslint-disable-next-line no-console
   console.error(result.error);
   process.exit(1);
 }
