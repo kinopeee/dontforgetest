@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.126
+
+### Changed
+
+- Version bump for release
+
+---
+
 ## 0.0.125
 
 ### Fixed
@@ -15,6 +23,14 @@
 
 - **Test environment**: Increased test result file wait timeout from 3s to 120s to accommodate macOS `open -W` behavior
 - **Test suite**: Added timeout configuration (2000ms) for test environment to prevent hanging when cursor-agent doesn't return completion events
+
+---
+
+## 0.0.126（日本語）
+
+### 変更
+
+- リリースのためのバージョン更新
 
 ---
 
