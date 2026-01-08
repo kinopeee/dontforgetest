@@ -33,6 +33,17 @@ export const TSJS_SCRIPT_TOKENS = [
 ];
 
 /**
+ * scripts 内のトークンマッチ用の正規表現（事前コンパイル）
+ *
+ * NOTE: トークンは定数リストで、英数字のみを想定している。
+ * 将来の拡張時に正規表現メタ文字を含める場合はエスケープを検討すること。
+ */
+const TSJS_SCRIPT_TOKEN_RE = new RegExp(
+  `\\b(${TSJS_SCRIPT_TOKENS.join('|')})\\b`,
+  'i',
+);
+
+/**
  * package.json の内容から TypeScript/JavaScript プロジェクトのシグナルを判定する
  * 
  * @param pkg - package.json のパース済みオブジェクト（unknown 型で受け取る）
@@ -67,12 +78,8 @@ export function isTsjsPackageJsonSignal(pkg: unknown): boolean {
   const scripts = obj.scripts;
   let hasScript = false;
   if (scripts && typeof scripts === 'object') {
-    const tokenRe = new RegExp(
-      `\\b(${TSJS_SCRIPT_TOKENS.join('|')})\\b`,
-      'i'
-    );
     hasScript = Object.values(scripts).some((scriptValue) =>
-      tokenRe.test(String(scriptValue))
+      TSJS_SCRIPT_TOKEN_RE.test(String(scriptValue))
     );
   }
 
