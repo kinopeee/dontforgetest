@@ -2,9 +2,33 @@
 
 ## 0.0.126
 
+### Added
+
+- **Settings**: Added `dontforgetest.projectProfile` to select a project profile for test generation, compliance checking, and worktree application (`auto` / `tsjs`)
+- **Core**: Introduced a project profile abstraction (`ProjectProfile`) to define test file patterns, allowed prompt change scope, and analysis rules
+
 ### Changed
 
 - Version bump for release
+- **Prompt**: Allowed change scope lines are now derived from the resolved project profile
+- **Worktree apply**: Test-like path filtering now uses the resolved profile's predicate
+- **Strategy compliance**: Test file selection and file content analysis are now delegated to the resolved profile (with TS/JS as default fallback)
+
+---
+
+## 0.0.126（日本語）
+
+### 追加
+
+- **設定**: テスト生成・準拠チェック・worktree 適用で使うプロファイルを選択する `dontforgetest.projectProfile` を追加（`auto` / `tsjs`）
+- **コア**: テストファイルパターン、プロンプトの編集可能範囲、解析ルールを定義するプロファイル抽象（`ProjectProfile`）を導入
+
+### 変更
+
+- リリースのためのバージョン更新
+- **プロンプト**: 「編集可能範囲」の記載を解決済みプロファイルから生成するよう変更
+- **worktree 適用**: テストっぽいパスの抽出をプロファイルの判定関数に委譲
+- **戦略準拠**: テストファイル判定と内容解析をプロファイルへ委譲（検出できない場合は TS/JS をフォールバック）
 
 ---
 
@@ -23,14 +47,6 @@
 
 - **Test environment**: Increased test result file wait timeout from 3s to 120s to accommodate macOS `open -W` behavior
 - **Test suite**: Added timeout configuration (2000ms) for test environment to prevent hanging when cursor-agent doesn't return completion events
-
----
-
-## 0.0.126（日本語）
-
-### 変更
-
-- リリースのためのバージョン更新
 
 ---
 
