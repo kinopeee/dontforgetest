@@ -75,9 +75,15 @@ suite('src/ui/settingsPanel.ts', () => {
 
     // Then: "configUpdate" message is posted back to the webview
     assert.strictEqual(postedMessages.length, 1);
-    const msg = postedMessages[0] as { type: string; agentProvider: string };
+    const msg = postedMessages[0] as { type: string; agentProvider: string; modelCandidates: string[]; currentModel: string };
     assert.strictEqual(msg.type, 'configUpdate');
     assert.ok(msg.agentProvider);
+    assert.ok(Array.isArray(msg.modelCandidates), 'modelCandidates should be an array');
+    // defaultModel 未設定時は cursor-agent の実挙動（auto）に合わせて表示する
+    if (msg.agentProvider === 'cursorAgent') {
+      assert.ok(msg.modelCandidates.includes('auto'), 'cursorAgent candidates should include auto');
+      assert.strictEqual(msg.currentModel, 'auto', 'cursorAgent currentModel should be auto when defaultModel is unset');
+    }
   });
 
   // TC-SP-N-03: handle setAgentProvider message

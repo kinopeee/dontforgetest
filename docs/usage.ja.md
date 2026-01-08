@@ -82,7 +82,7 @@
 > **補足（モデル名）**: `dontforgetest.defaultModel` に指定するモデル名は、使用するエージェントに依存します。  
 > Cursor Agent CLI（`cursor-agent`）の場合は **`/model`** コマンドの一覧を参照してください。
 >
-> 例（2025.12.25 時点）:
+> 例（2026.01.08 時点）:
 >
 > ```
 > composer-1

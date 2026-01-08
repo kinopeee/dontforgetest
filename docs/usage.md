@@ -81,7 +81,7 @@ Search `dontforgetest.*` in your editor Settings (Cursor / VS Code / Windsurf / 
 > **Note (model names)**: The model name for `dontforgetest.defaultModel` depends on the selected agent.  
 > For Cursor Agent CLI (`cursor-agent`), use the names listed via **`/model`**.
 >
-> Example (as of 2025-12-25):
+> Example (as of 2026-01-08):
 >
 > ```
 > composer-1
