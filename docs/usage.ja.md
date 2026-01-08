@@ -80,6 +80,12 @@
   - 自動修正後も問題が残る場合は、`dontforgetest.testExecutionReportDir` 配下に `compliance-report_YYYYMMDD_HHmmss.md` を保存します
 - **`dontforgetest.projectProfile`**: テスト生成・準拠チェック・worktree適用で使うプロファイル（既定: `auto`）
   - `auto`: ワークスペースから自動検出（現在は TypeScript/JavaScript プロジェクトを検出）
+    - **強シグナル**: `tsconfig.json`, `jsconfig.json`, `deno.json`, `deno.jsonc`（いずれかが存在すれば TS/JS と判定）
+    - **package.json シグナル**: `package.json` の内容を解析し、以下に該当すれば TS/JS と判定
+      - `types` または `typings` フィールドが存在する
+      - 依存に含まれる: `typescript`, `@types/node`, `jest`, `vitest`, `mocha`, `tsx`, `ts-node`, `vite`, `next`
+      - スクリプトに含まれる: `tsc`, `jest`, `vitest`, `mocha`, `vite`, `next`（単語境界でマッチ）
+    - シグナルが見つからない場合は `tsjs` プロファイルにフォールバック
   - `tsjs`: TypeScript/JavaScript プロファイルを強制
   - プロファイルはテストファイルパターン、プロンプトの編集可能範囲、解析ルールを決定します
 
