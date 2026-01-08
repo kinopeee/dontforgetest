@@ -51,9 +51,9 @@ CLI エージェント（対応: Cursor CLI / Claude Code / Gemini CLI / Codex C
 
 テスト観点表
 
-> **注意（重要）**: CLI エージェント（例: `cursor-agent` / `claude` / `gemini` / `codex`）は `**--force` で実行**される場合があります。  
+> **注意（重要）**: CLI エージェント（例: `cursor-agent` / `claude` / `gemini` / `codex`）は **`--force` で実行**される場合があります。  
 > **Local** は実ファイル（現在のワークスペース）へ書き込みます。  
-> **Worktree** は一時 worktree へ書き込み、`git apply --check` が通る場合のみ **テスト差分だけ\*\* をローカルへ適用します（失敗時はパッチ/スナップショット/AI 向け指示を保存）。  
+> **Worktree** は一時 worktree へ書き込み、`git apply --check` が通る場合のみ **テスト差分だけ** をローカルへ適用します（失敗時はパッチ/スナップショット/AI 向け指示を保存）。  
 > 必要に応じてブランチを切る／コミットする等の退避手段を用意してから実行してください。
 
 ## ドキュメント
