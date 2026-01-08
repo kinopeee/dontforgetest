@@ -177,6 +177,20 @@ export function stubWithProgress(): () => void {
  * @param existsFn パス（fsPath）を受け取り、存在するかどうかを返す関数。trueならダミーのFileStatを返し、falseならFileNotFoundエラーを投げる挙動になる。
  */
 export function stubFileSystemStat(existsFn: (fsPath: string) => boolean): () => void {
+  return stubFileSystem(existsFn, undefined);
+}
+
+/**
+ * vscode.workspace.fs.stat と readFile をスタブ化する。
+ * 返却される関数を呼び出すと元の状態に復元される。
+ * 
+ * @param existsFn パス（fsPath）を受け取り、存在するかどうかを返す関数
+ * @param readFileFn パス（fsPath）を受け取り、ファイル内容（Uint8Array）を返す関数。undefined の場合は readFile は元の実装を使用
+ */
+export function stubFileSystem(
+  existsFn: (fsPath: string) => boolean,
+  readFileFn?: (fsPath: string) => Uint8Array,
+): () => void {
   // NOTE:
   // VS Code の `workspace.fs.stat` は read-only で代入できない環境があるため、
   // `workspace.fs` 自体を getter で差し替える方式にする。
@@ -189,6 +203,7 @@ export function stubFileSystemStat(existsFn: (fsPath: string) => boolean): () =>
     get: (target, prop) => {
       if (prop === 'stat') {
         return async (uri: vscode.Uri): Promise<vscode.FileStat> => {
+          // uri.fsPath は既に正規化されているので、そのまま使用
           if (existsFn(uri.fsPath)) {
             return {
               type: vscode.FileType.File,
@@ -200,18 +215,41 @@ export function stubFileSystemStat(existsFn: (fsPath: string) => boolean): () =>
           throw vscode.FileSystemError.FileNotFound(uri);
         };
       }
+      if (prop === 'readFile' && readFileFn) {
+        return async (uri: vscode.Uri): Promise<Uint8Array> => {
+          // uri.fsPath は既に正規化されているので、そのまま使用
+          if (existsFn(uri.fsPath)) {
+            return readFileFn(uri.fsPath);
+          }
+          throw vscode.FileSystemError.FileNotFound(uri);
+        };
+      }
       return (target as Record<string, unknown>)[prop as string];
     },
   }) as unknown as vscode.FileSystem;
 
-  Object.defineProperty(workspaceObj, 'fs', {
-    configurable: true,
-    get: () => stubFs,
-  });
+  // NOTE:
+  // vscode.workspace は Proxy 的な実装の場合があり、defineProperty が効かない（または拒否される）環境がある。
+  // そのため、まず代入で own-property を作って shadow できるか試し、ダメなら defineProperty にフォールバックする。
+  let restoredByDelete = false;
+  try {
+    (workspaceObj as unknown as Record<string, unknown>).fs = stubFs;
+    restoredByDelete = true;
+  } catch {
+    Object.defineProperty(workspaceObj, 'fs', {
+      configurable: true,
+      get: () => stubFs,
+    });
+  }
 
   return () => {
     if (hadOwn && originalDesc) {
       Object.defineProperty(workspaceObj, 'fs', originalDesc);
+      return;
+    }
+    if (restoredByDelete) {
+      // 代入で作った own-property を削除して元の getter に戻す
+      delete (workspaceObj as unknown as Record<string, unknown>).fs;
       return;
     }
     delete workspaceObj.fs;

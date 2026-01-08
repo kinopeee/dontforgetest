@@ -79,6 +79,12 @@ Search `dontforgetest.*` in your editor Settings (Cursor / VS Code / Windsurf / 
   - When issues remain after attempts: saves `compliance-report_YYYYMMDD_HHmmss.md` under `dontforgetest.testExecutionReportDir`
 - **`dontforgetest.projectProfile`**: Project profile for test generation, compliance checking, and worktree application (Default: `auto`)
   - `auto`: Automatically detect from workspace (currently detects TypeScript/JavaScript projects)
+    - **Strong signals**: `tsconfig.json`, `jsconfig.json`, `deno.json`, `deno.jsonc` (if any exists, detected as TS/JS)
+    - **Package.json signals**: Analyzes `package.json` content and detects TS/JS if:
+      - `types` or `typings` field exists
+      - Dependencies include: `typescript`, `@types/node`, `jest`, `vitest`, `mocha`, `tsx`, `ts-node`, `vite`, `next`
+      - Scripts contain: `tsc`, `jest`, `vitest`, `mocha`, `vite`, `next` (matched as whole words)
+    - If no signals are found, falls back to `tsjs` profile
   - `tsjs`: Force TypeScript/JavaScript profile
   - The profile determines test file patterns, allowed change scope in prompts, and analysis rules
 

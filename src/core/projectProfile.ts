@@ -1,6 +1,19 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { analyzeFileContent, type AnalysisIssue } from './testAnalyzer';
+import { isTsjsPackageJsonSignal } from './detectSignals';
+
+/**
+ * vscode.workspace.fs はテスト環境によっては差し替えが困難なため、
+ * 本モジュール内で参照先を切り替えられるようにする（テスト専用）。
+ */
+type WorkspaceFsLike = Pick<vscode.FileSystem, 'stat' | 'readFile'>;
+
+let workspaceFsOverrideForTest: WorkspaceFsLike | undefined;
+
+function getWorkspaceFs(): WorkspaceFsLike {
+  return workspaceFsOverrideForTest ?? vscode.workspace.fs;
+}
 
 export interface ProjectProfile {
   /** プロファイル識別子（例: "tsjs"） */
@@ -38,12 +51,36 @@ export const tsjsProfile: ProjectProfile = {
   id: 'tsjs',
 
   async detect(workspaceRoot: string): Promise<boolean> {
-    // package.json または tsconfig.json があれば TS/JS プロジェクトとみなす
-    // ※今回は簡易判定。必要に応じて拡張
-    const hasPackageJson = await fileExists(path.join(workspaceRoot, 'package.json'));
+    // 優先順位: 強シグナル（ts/jsconfig, deno.json）→ package.json 内容解析
+
+    // 1. 強シグナル: tsconfig.json / jsconfig.json
     const hasTsConfig = await fileExists(path.join(workspaceRoot, 'tsconfig.json'));
     const hasJsConfig = await fileExists(path.join(workspaceRoot, 'jsconfig.json'));
-    return hasPackageJson || hasTsConfig || hasJsConfig;
+    if (hasTsConfig || hasJsConfig) {
+      return true;
+    }
+
+    // 2. 強シグナル: deno.json / deno.jsonc
+    const hasDenoJson = await fileExists(path.join(workspaceRoot, 'deno.json'));
+    const hasDenoJsonc = await fileExists(path.join(workspaceRoot, 'deno.jsonc'));
+    if (hasDenoJson || hasDenoJsonc) {
+      return true;
+    }
+
+    // 3. package.json の内容を解析してシグナルを判定
+    const packageJsonPath = path.join(workspaceRoot, 'package.json');
+    if (await fileExists(packageJsonPath)) {
+      try {
+        const uri = vscode.Uri.file(packageJsonPath);
+        const content = await getWorkspaceFs().readFile(uri);
+        const pkg = JSON.parse(Buffer.from(content).toString('utf8'));
+        return isTsjsPackageJsonSignal(pkg);
+      } catch {
+        return false;
+      }
+    }
+
+    return false;
   },
 
   allowedChangeScopeLines: [
@@ -114,12 +151,25 @@ const AVAILABLE_PROFILES: ProjectProfile[] = [
 
 async function fileExists(absolutePath: string): Promise<boolean> {
   try {
-    await vscode.workspace.fs.stat(vscode.Uri.file(absolutePath));
+    await getWorkspaceFs().stat(vscode.Uri.file(absolutePath));
     return true;
   } catch {
     return false;
   }
 }
+
+/**
+ * テスト専用の露出
+ */
+export const __test__ = {
+  /**
+   * vscode.workspace.fs の参照先をテスト用に差し替える
+   * - undefined を渡すと元に戻る
+   */
+  setWorkspaceFsOverrideForTest: (fs: WorkspaceFsLike | undefined): void => {
+    workspaceFsOverrideForTest = fs;
+  },
+};
 
 /**
  * ワークスペース設定と自動検出に基づいてプロファイルを解決する
