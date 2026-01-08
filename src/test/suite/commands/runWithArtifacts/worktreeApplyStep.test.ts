@@ -6,6 +6,7 @@ import { applyWorktreeTestChanges } from '../../../../commands/runWithArtifacts/
 import * as gitExecModule from '../../../../git/gitExec';
 import * as mergeAssistanceModule from '../../../../core/mergeAssistancePrompt';
 import * as testPathClassifierModule from '../../../../core/testPathClassifier';
+import * as clipboardModule from '../../../../ui/clipboard';
 import * as outputChannelModule from '../../../../ui/outputChannel';
 import { createMockExtensionContext } from '../../testUtils/vscodeMocks';
 
@@ -565,7 +566,7 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
     });
 
     test('TC-WA-E-08: manual merge actionCopy tolerates clipboard.writeText throwing', async () => {
-      // Given: ユーザーが「プロンプトをコピー」を選ぶが、プロンプト生成が例外を投げる（then内catch確認）
+      // Given: ユーザーが「プロンプトをコピー」を選ぶが、clipboard.writeText が例外を投げる（then内catch確認）
       const extensionContext = createMockExtensionContext({ workspaceRoot });
       const runWorkspaceRoot = await createTempDir('manual-copy-throw');
       const testPath = 'tests/app.test.ts';
@@ -575,11 +576,10 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       diffText = 'diff content';
       await createTestFile(runWorkspaceRoot, testPath);
       warningPickSelector = (items) => items[1];
-      const originalPromptBuilder = mergeAssistanceModule.buildMergeAssistancePromptText;
-      (mergeAssistanceModule as unknown as { buildMergeAssistancePromptText: typeof mergeAssistanceModule.buildMergeAssistancePromptText })
-        .buildMergeAssistancePromptText = () => {
-          throw new Error('prompt build failed');
-        };
+      const originalWriteTextToClipboard = clipboardModule.writeTextToClipboard;
+      (clipboardModule as unknown as { writeTextToClipboard: typeof clipboardModule.writeTextToClipboard }).writeTextToClipboard = async () => {
+        throw new Error('clipboard write failed');
+      };
 
       try {
         // When: applyWorktreeTestChanges を呼び出す（本体は例外にしない）
@@ -596,8 +596,8 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         assert.strictEqual(infoMessages.length, 0);
       } finally {
-        (mergeAssistanceModule as unknown as { buildMergeAssistancePromptText: typeof originalPromptBuilder }).buildMergeAssistancePromptText =
-          originalPromptBuilder;
+        (clipboardModule as unknown as { writeTextToClipboard: typeof originalWriteTextToClipboard }).writeTextToClipboard =
+          originalWriteTextToClipboard;
       }
     });
 
