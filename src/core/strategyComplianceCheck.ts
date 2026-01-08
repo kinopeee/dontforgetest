@@ -1,7 +1,8 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { t } from './l10n';
-import { analyzeFileContent, type AnalysisIssue, type AnalysisSummary } from './testAnalyzer';
+import { type AnalysisIssue, type AnalysisSummary } from './testAnalyzer';
+import { tsjsProfile, type ProjectProfile } from './projectProfile';
 
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -141,20 +142,10 @@ async function readFileContent(absolutePath: string): Promise<string | undefined
 
 /**
  * テストファイルがテスト用のファイルかどうかを判定する。
- * - .test.ts, .spec.ts, .test.tsx, .spec.tsx
- * - src/test/ 配下
+ * - 後方互換のためエクスポート維持、実装はプロファイルへ委譲
  */
 export function isTestFilePath(relativePath: string): boolean {
-  const normalized = relativePath.replace(/\\/g, '/');
-  // .test.ts, .spec.ts, .test.tsx, .spec.tsx などにマッチ
-  if (/\.(test|spec)\.(ts|tsx|js|jsx)$/.test(normalized)) {
-    return true;
-  }
-  // src/test/ 配下、または test/ で始まる、またはパス内に /test/ を含む
-  if (normalized.startsWith('src/test/') || normalized.startsWith('test/') || normalized.includes('/test/')) {
-    return true;
-  }
-  return false;
+  return tsjsProfile.testFilePredicate(relativePath);
 }
 
 /**
@@ -164,14 +155,17 @@ export function isTestFilePath(relativePath: string): boolean {
  * @param testFilePaths 生成されたテストファイルの絶対パス一覧
  * @param perspectiveMarkdown 観点表Markdown（生成された場合）。undefined の場合はcaseIdチェックをスキップ
  * @param includeTestPerspectiveTable 観点表生成設定がONかどうか
+ * @param profile プロジェクトプロファイル（未指定の場合は tsjsProfile を使用）
  */
 export async function runComplianceCheck(params: {
   workspaceRoot: string;
   testFilePaths: string[];
   perspectiveMarkdown?: string;
   includeTestPerspectiveTable: boolean;
+  profile?: ProjectProfile;
 }): Promise<ComplianceCheckResult> {
-  const { workspaceRoot, testFilePaths, perspectiveMarkdown, includeTestPerspectiveTable } = params;
+  const { workspaceRoot, testFilePaths, perspectiveMarkdown, includeTestPerspectiveTable, profile } = params;
+  const effectiveProfile = profile ?? tsjsProfile;
 
   // ファイル内容を読み取り
   const testFileContents = new Map<string, string>();
@@ -183,10 +177,10 @@ export async function runComplianceCheck(params: {
     }
   }
 
-  // testAnalyzerによる分析
+  // testAnalyzerによる分析（プロファイル経由）
   const analysisIssues: AnalysisIssue[] = [];
   for (const [relativePath, content] of testFileContents.entries()) {
-    const fileIssues = analyzeFileContent(relativePath, content);
+    const fileIssues = effectiveProfile.analyzeFileContent(relativePath, content);
     analysisIssues.push(...fileIssues);
   }
 

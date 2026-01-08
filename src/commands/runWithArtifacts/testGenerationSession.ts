@@ -20,9 +20,9 @@ import { runTestCommand } from '../../core/testRunner';
 import {
   runComplianceCheck,
   formatComplianceIssuesForPrompt,
-  isTestFilePath,
   type ComplianceCheckResult,
 } from '../../core/strategyComplianceCheck';
+import { resolveProjectProfile, type ProjectProfile } from '../../core/projectProfile';
 import { createTemporaryWorktree, removeTemporaryWorktree } from '../../git/worktreeManager';
 import { execGitStdout } from '../../git/gitExec';
 import { type RunningTask } from '../../providers/provider';
@@ -91,6 +91,8 @@ export class TestGenerationSession {
   private lastPerspectiveExtracted: boolean = false;
   /** 生成中に fileWrite イベントで収集されたファイルパス（絶対パス） */
   private generatedFilePaths: string[] = [];
+  /** 解決済みプロファイル（セッション開始時に一度だけ解決してキャッシュ） */
+  private profile: ProjectProfile | undefined;
 
   constructor(options: RunWithArtifactsOptions) {
     this.options = options;
@@ -114,6 +116,10 @@ export class TestGenerationSession {
   }
 
   public async run(): Promise<void> {
+    // プロファイルを解決してキャッシュ（セッション開始時に一度だけ）
+    const resolvedProfile = await resolveProjectProfile(this.localWorkspaceRoot);
+    this.profile = resolvedProfile.profile;
+
     // 初期化とタスク登録
     const startedEvent: TestGenEvent = {
       type: 'started',
@@ -484,8 +490,8 @@ export class TestGenerationSession {
         .filter((line) => line.length > 0);
 
       for (const relativePath of allFiles) {
-        // テストファイルのみを対象
-        if (!isTestFilePath(relativePath)) {
+        // テストファイルのみを対象（プロファイルの判定関数を使用）
+        if (!this.profile?.testFilePredicate(relativePath)) {
           continue;
         }
 
@@ -521,7 +527,7 @@ export class TestGenerationSession {
       // 各ループで最新の generatedFilePaths からテスト対象を再計算する。
       const testFilePaths = this.generatedFilePaths.filter((absPath) => {
         const relativePath = path.relative(this.runWorkspaceRoot, absPath);
-        return isTestFilePath(relativePath);
+        return this.profile?.testFilePredicate(relativePath) ?? false;
       });
 
       if (testFilePaths.length === 0) {
@@ -536,6 +542,7 @@ export class TestGenerationSession {
         testFilePaths,
         perspectiveMarkdown,
         includeTestPerspectiveTable: this.settings.includeTestPerspectiveTable,
+        profile: this.profile,
       });
       lastResult = result;
 
@@ -625,7 +632,7 @@ export class TestGenerationSession {
     );
     for (const absPath of this.generatedFilePaths) {
       const relativePath = path.relative(this.runWorkspaceRoot, absPath);
-      if (isTestFilePath(relativePath)) {
+      if (this.profile?.testFilePredicate(relativePath)) {
         parts.push(`- ${relativePath}`);
       }
     }
@@ -718,6 +725,7 @@ export class TestGenerationSession {
         runWorkspaceRoot: this.runWorkspaceRoot,
         extensionContext: this.options.extensionContext,
         preTestCheckCommand: this.settings.preTestCheckCommand,
+        profile: this.profile,
       });
       if (worktreeApplyResult.applied) {
         testWorkspaceRoot = this.localWorkspaceRoot;

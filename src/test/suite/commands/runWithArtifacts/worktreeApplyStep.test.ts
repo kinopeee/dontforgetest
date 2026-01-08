@@ -121,7 +121,7 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
         return { ok: true, stdout: '', stderr: '' };
       };
       (testPathClassifierModule as unknown as { filterTestLikePaths: typeof testPathClassifierModule.filterTestLikePaths }).filterTestLikePaths =
-        () => filteredTestPaths;
+        (_paths, _profile?) => filteredTestPaths;
       (mergeAssistanceModule as unknown as { buildMergeAssistancePromptText: typeof mergeAssistanceModule.buildMergeAssistancePromptText })
         .buildMergeAssistancePromptText = (params) => {
           promptParamsCalls.push(params);
@@ -512,24 +512,35 @@ suite('commands/runWithArtifacts/worktreeApplyStep.ts', () => {
       warningPickSelector = (items) => items[1];
 
       const generationTaskId = `test-manual-copy-${Date.now()}`;
+      const originalWriteTextToClipboard = clipboardModule.writeTextToClipboard;
+      let clipboardCalls = 0;
+      (clipboardModule as unknown as { writeTextToClipboard: typeof clipboardModule.writeTextToClipboard }).writeTextToClipboard = async () => {
+        clipboardCalls += 1;
+      };
 
-      // When: applyWorktreeTestChanges を呼び出す
-      await applyWorktreeTestChanges({
-        generationTaskId,
-        genExit: 1,
-        localWorkspaceRoot: workspaceRoot,
-        runWorkspaceRoot,
-        extensionContext,
-        preTestCheckCommand: '',
-      });
+      try {
+        // When: applyWorktreeTestChanges を呼び出す
+        await applyWorktreeTestChanges({
+          generationTaskId,
+          genExit: 1,
+          localWorkspaceRoot: workspaceRoot,
+          runWorkspaceRoot,
+          extensionContext,
+          preTestCheckCommand: '',
+        });
 
-      // Then: then() の導線が非同期で動くため1tick待って検証する
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      assert.ok(
-        promptParamsCalls.some((p) => p.taskId === generationTaskId),
-        'Expected buildMergeAssistancePromptText to be called for actionCopy',
-      );
-      assert.strictEqual(openTextDocumentCalls.length, 0);
+        // Then: then() の導線が非同期で動くため1tick待って検証する
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.ok(
+          promptParamsCalls.some((p) => p.taskId === generationTaskId),
+          'Expected buildMergeAssistancePromptText to be called for actionCopy',
+        );
+        assert.strictEqual(openTextDocumentCalls.length, 0);
+        assert.strictEqual(clipboardCalls, 1, 'Expected writeTextToClipboard to be called exactly once');
+      } finally {
+        (clipboardModule as unknown as { writeTextToClipboard: typeof originalWriteTextToClipboard }).writeTextToClipboard =
+          originalWriteTextToClipboard;
+      }
     });
 
     test('TC-WA-N-03: manual merge actionOpenInstruction opens instruction document', async () => {

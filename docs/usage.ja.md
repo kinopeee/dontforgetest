@@ -78,6 +78,10 @@
   - `0`: 自動修正なし（レポートのみ）
   - `1..5`: 問題が解消するまで生成を再実行します（最大試行回数は指定値）
   - 自動修正後も問題が残る場合は、`dontforgetest.testExecutionReportDir` 配下に `compliance-report_YYYYMMDD_HHmmss.md` を保存します
+- **`dontforgetest.projectProfile`**: テスト生成・準拠チェック・worktree適用で使うプロファイル（既定: `auto`）
+  - `auto`: ワークスペースから自動検出（現在は TypeScript/JavaScript プロジェクトを検出）
+  - `tsjs`: TypeScript/JavaScript プロファイルを強制
+  - プロファイルはテストファイルパターン、プロンプトの編集可能範囲、解析ルールを決定します
 
 > **補足（モデル名）**: `dontforgetest.defaultModel` に指定するモデル名は、使用するエージェントに依存します。  
 > Cursor Agent CLI（`cursor-agent`）の場合は **`/model`** コマンドの一覧を参照してください。

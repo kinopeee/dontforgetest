@@ -171,6 +171,90 @@ export function stubWithProgress(): () => void {
 }
 
 /**
+ * vscode.workspace.fs.stat をスタブ化する。
+ * 返却される関数を呼び出すと元の状態に復元される。
+ * 
+ * @param existsFn パス（fsPath）を受け取り、存在するかどうかを返す関数。trueならダミーのFileStatを返し、falseならFileNotFoundエラーを投げる挙動になる。
+ */
+export function stubFileSystemStat(existsFn: (fsPath: string) => boolean): () => void {
+  // NOTE:
+  // VS Code の `workspace.fs.stat` は read-only で代入できない環境があるため、
+  // `workspace.fs` 自体を getter で差し替える方式にする。
+  const workspaceObj = vscode.workspace as unknown as { fs?: vscode.FileSystem };
+  const hadOwn = Object.prototype.hasOwnProperty.call(workspaceObj, 'fs');
+  const originalDesc = Object.getOwnPropertyDescriptor(workspaceObj, 'fs');
+  const originalFs = vscode.workspace.fs;
+
+  const stubFs = new Proxy(originalFs as unknown as Record<string, unknown>, {
+    get: (target, prop) => {
+      if (prop === 'stat') {
+        return async (uri: vscode.Uri): Promise<vscode.FileStat> => {
+          if (existsFn(uri.fsPath)) {
+            return {
+              type: vscode.FileType.File,
+              ctime: 0,
+              mtime: 0,
+              size: 0,
+            };
+          }
+          throw vscode.FileSystemError.FileNotFound(uri);
+        };
+      }
+      return (target as Record<string, unknown>)[prop as string];
+    },
+  }) as unknown as vscode.FileSystem;
+
+  Object.defineProperty(workspaceObj, 'fs', {
+    configurable: true,
+    get: () => stubFs,
+  });
+
+  return () => {
+    if (hadOwn && originalDesc) {
+      Object.defineProperty(workspaceObj, 'fs', originalDesc);
+      return;
+    }
+    delete workspaceObj.fs;
+  };
+}
+
+/**
+ * vscode.workspace.getConfiguration をスタブ化する。
+ * 
+ * @param configMap 設定キーと値のマップ（例: { 'dontforgetest.projectProfile': 'tsjs' }）
+ */
+export function stubConfiguration(configMap: Record<string, unknown>): () => void {
+  const original = vscode.workspace.getConfiguration;
+  
+  (vscode.workspace as unknown as { getConfiguration: typeof vscode.workspace.getConfiguration }).getConfiguration = 
+    (section?: string, _scope?: vscode.ConfigurationScope | null): vscode.WorkspaceConfiguration => {
+      // 簡易実装: section が指定されていればプレフィックスとして扱う
+      // 本来の getConfiguration は section を指定するとその配下を返すが、
+      // ここでは get('key') 呼び出し時に section + '.' + key で configMap を引くようにする
+      
+      return {
+        get: <T>(key: string, defaultValue?: T): T => {
+          const fullKey = section ? `${section}.${key}` : key;
+          if (Object.prototype.hasOwnProperty.call(configMap, fullKey)) {
+            return configMap[fullKey] as T;
+          }
+          return defaultValue as T;
+        },
+        has: (key: string) => {
+          const fullKey = section ? `${section}.${key}` : key;
+          return Object.prototype.hasOwnProperty.call(configMap, fullKey);
+        },
+        inspect: () => undefined,
+        update: () => Promise.resolve(),
+      } as unknown as vscode.WorkspaceConfiguration;
+    };
+    
+  return () => {
+    (vscode.workspace as unknown as { getConfiguration: typeof original }).getConfiguration = original;
+  };
+}
+
+/**
  * 複数の復元関数を一括で実行するヘルパー。
  *
  * 使用例:

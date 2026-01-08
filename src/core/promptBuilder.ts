@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { DEFAULT_TEST_STRATEGY, DEFAULT_LANGUAGE_CONFIG } from './defaultTestStrategy';
 import { getArtifactLocale } from './l10n';
+import { resolveProjectProfile } from './projectProfile';
 
 export interface TestGenLanguageConfig {
   answerLanguage: string;
@@ -37,6 +38,10 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
   const { strategyText, languages } = await readStrategyAndLanguages(options.workspaceRoot, options.testStrategyPath);
   // 観点表だけは「実行時の表示言語」に合わせて出力させたい（観点表ファイルの表示言語と一致させるため）
   languages.perspectiveTableLanguage = getArtifactLocale();
+
+  // プロファイルを解決
+  const resolvedProfile = await resolveProjectProfile(options.workspaceRoot);
+  const profile = resolvedProfile.profile;
 
   const targetsText = options.targetPaths
     .map((p) => `- ${p}`)
@@ -102,7 +107,7 @@ export async function buildTestGenPrompt(options: BuildPromptOptions): Promise<{
     `- Test perspective table (Markdown): ${languages.perspectiveTableLanguage}`,
     ``,
     `## Allowed change scope (required)`,
-    `- You may change **ONLY test code** (e.g., \`src/test/**\`, \`**/*.test.ts\`)`,
+    ...profile.allowedChangeScopeLines,
     `- Do NOT edit production/extension implementation files (non-test files under \`src/**\`)`,
     `- Do NOT create or edit documentation/Markdown files (e.g., \`docs/**\`, \`README.md\`, \`*.md\`)`,
     `- Do NOT create new files at the workspace root (e.g., do not create helper files like \`test_perspectives.md\`)`,

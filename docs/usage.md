@@ -77,6 +77,10 @@ Search `dontforgetest.*` in your editor Settings (Cursor / VS Code / Windsurf / 
   - `0`: no automatic fix (report only)
   - `1..5`: re-runs generation to fix issues (up to the given number of attempts)
   - When issues remain after attempts: saves `compliance-report_YYYYMMDD_HHmmss.md` under `dontforgetest.testExecutionReportDir`
+- **`dontforgetest.projectProfile`**: Project profile for test generation, compliance checking, and worktree application (Default: `auto`)
+  - `auto`: Automatically detect from workspace (currently detects TypeScript/JavaScript projects)
+  - `tsjs`: Force TypeScript/JavaScript profile
+  - The profile determines test file patterns, allowed change scope in prompts, and analysis rules
 
 > **Note (model names)**: The model name for `dontforgetest.defaultModel` depends on the selected agent.  
 > For Cursor Agent CLI (`cursor-agent`), use the names listed via **`/model`**.

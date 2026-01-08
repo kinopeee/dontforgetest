@@ -45,5 +45,6 @@
   "command.analyzeTests.title": "Dontforgetest: テストを分析",
   "command.openLatestAnalysisReport.title": "Dontforgetest: 最新の分析レポートを開く",
   "configuration.enableStrategyComplianceCheck.description": "生成後にテストコードが戦略（Given/When/Then、境界値、例外メッセージ検証、ケースID網羅）に準拠しているかをチェックする",
-  "configuration.strategyComplianceAutoFixMaxRetries.description": "戦略準拠の問題が見つかった場合の自動修正最大試行回数（0=自動修正なし、レポートのみ）"
+  "configuration.strategyComplianceAutoFixMaxRetries.description": "戦略準拠の問題が見つかった場合の自動修正最大試行回数（0=自動修正なし、レポートのみ）",
+  "configuration.projectProfile.description": "テスト生成・準拠チェック・worktree適用で使うプロファイル（auto=ワークスペースから推定、tsjs=TypeScript/JavaScript）"
 }
