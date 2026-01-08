@@ -10,6 +10,8 @@
  */
 
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const { spawnSync } = require('child_process');
 
 const repoRoot = path.resolve(__dirname, '..');
@@ -28,6 +30,26 @@ const outFilePath = path.join(repoRoot, `${packageName}-${version}.vsix`);
 
 const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const args = ['--yes', '@vscode/vsce', 'package', '--out', outFilePath, '--no-rewrite-relative-links'];
+
+// NOTE:
+// vsce の secretlint 実行は内部で `os.cpus().length` を concurrency に渡す。
+// 一部の実行環境（CI/サンドボックス等）では cpus が 0 件になることがあり、
+// secretlint 側で `concurrency=0` エラーになってパッケージ生成が失敗する。
+// その場合に限り、vsce の secrets/.env スキャンをスキップしてパッケージ生成を継続する。
+// （通常環境ではスキャンを有効なままにする）
+if (Array.isArray(os.cpus()) && os.cpus().length < 1) {
+  args.push('--allow-package-all-secrets', '--allow-package-env-file');
+}
+
+// 失敗途中で壊れた vsix が残ると、インストール時に
+// "End of central directory record signature not found" が出るため、事前に削除する。
+try {
+  if (fs.existsSync(outFilePath)) {
+    fs.unlinkSync(outFilePath);
+  }
+} catch {
+  // ここで失敗しても後続で上書きできるため続行する
+}
 
 // eslint-disable-next-line no-console
 console.log(`VSIX を生成します: ${outFilePath}`);
