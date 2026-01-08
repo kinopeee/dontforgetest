@@ -45,3 +45,5 @@ out/test/**
 # ローカライズリソースは拡張機能の動作に必須のため、他の除外ルールが増えても必ずパッケージに含める
 !l10n/**
 !package.nls*.json
+
+# Devin verification test
