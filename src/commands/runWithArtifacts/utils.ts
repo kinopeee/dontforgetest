@@ -106,7 +106,16 @@ export function extractBetweenMarkers(text: string, begin: string, end: string):
     if (stop !== -1) {
       return text.slice(afterStart, stop).trim();
     }
-    beginIndex = text.lastIndexOf(begin, beginIndex - 1);
+    // NOTE:
+    // String#lastIndexOf の fromIndex は負数だと 0 扱いになり、
+    // beginIndex===0 のケースで「同じ beginIndex=0 を返し続ける」= 無限ループになる。
+    // 例: text.lastIndexOf(begin, -1) === text.lastIndexOf(begin, 0) === 0（begin が先頭にある場合）
+    // そのため beginIndex=0 で end が見つからない場合は探索を打ち切る。
+    if (beginIndex === 0) {
+      break;
+    }
+    const prevIndex = beginIndex - 1;
+    beginIndex = prevIndex >= 0 ? text.lastIndexOf(begin, prevIndex) : -1;
   }
 
   return undefined;

@@ -13,6 +13,7 @@ export async function runTestCommandViaCursorAgent(params: {
   model: string | undefined;
   testCommand: string;
   allowForce: boolean;
+  timeoutMs?: number;
   onEvent: (event: TestGenEvent) => void;
 }): Promise<TestExecutionResult> {
   const startedAt = nowMs();
@@ -77,6 +78,7 @@ export async function runTestCommandViaCursorAgent(params: {
       outputFormat: 'stream-json',
       allowWrite: params.allowForce,
     },
+    timeoutMs: params.timeoutMs,
     onEvent: (event) => {
       params.onEvent(event);
       if (event.type === 'log') {

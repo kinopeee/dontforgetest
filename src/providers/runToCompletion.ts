@@ -32,6 +32,7 @@ export async function runProviderToCompletion(params: {
   return await new Promise<number | null>((resolve) => {
     let resolved = false;
     let timeout: NodeJS.Timeout | undefined;
+
     const finish = (exitCode: number | null) => {
       if (resolved) {
         return;
@@ -53,7 +54,13 @@ export async function runProviderToCompletion(params: {
       outputFormat: params.run.outputFormat,
       allowWrite: params.run.allowWrite,
       onEvent: (event) => {
-        params.onEvent(event);
+        try {
+          params.onEvent(event);
+        } catch {
+          // Provider のイベント通知先（UI等）が例外を投げても、
+          // completed の受信やタイムアウト処理を妨げない。
+        }
+
         if (event.type === 'completed') {
           finish(event.exitCode);
         }
@@ -76,10 +83,12 @@ export async function runProviderToCompletion(params: {
         if (resolved) {
           return;
         }
-        const msg =
-          `タイムアウト: エージェントの処理が ${timeoutMs}ms を超えたため停止します。` +
-          `（設定: dontforgetest.perspectiveGenerationTimeoutMs を調整できます）`;
-        params.onEvent({ type: 'log', taskId: params.run.taskId, level: 'error', message: msg, timestampMs: nowMs() });
+        const msg = `タイムアウト: エージェントの処理が ${timeoutMs}ms を超えたため停止します。（設定でタイムアウト値を調整できます）`;
+        try {
+          params.onEvent({ type: 'log', taskId: params.run.taskId, level: 'error', message: msg, timestampMs: nowMs() });
+        } catch {
+          // ignore
+        }
         try {
           running.dispose();
         } catch {

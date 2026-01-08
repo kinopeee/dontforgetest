@@ -637,6 +637,12 @@ export interface ArtifactSettings {
   /** 空文字の場合は実行しない */
   testCommand: string;
   /**
+   * テスト実行（cursor-agent）の最大実行時間（ミリ秒）。
+   * - completed が来ない/ログだけが流れ続けるケースの保険
+   * - 0 以下の場合はタイムアウトしない
+   */
+  testExecutionTimeoutMs: number;
+  /**
    * テスト実行の担当者。
    * - extension: 拡張機能（Node child_process）で実行
    * - cursorAgent: cursor-agent に実行させ、結果を抽出して保存
@@ -738,12 +744,16 @@ export function getArtifactSettings(): ArtifactSettings {
   const perspectiveTimeoutRaw = config.get<number>('perspectiveGenerationTimeoutMs', 600_000);
   const perspectiveGenerationTimeoutMs =
     typeof perspectiveTimeoutRaw === 'number' && Number.isFinite(perspectiveTimeoutRaw) && perspectiveTimeoutRaw > 0 ? perspectiveTimeoutRaw : 0;
+  const testExecutionTimeoutRaw = config.get<number>('testExecutionTimeoutMs', 600_000);
+  const testExecutionTimeoutMs =
+    typeof testExecutionTimeoutRaw === 'number' && Number.isFinite(testExecutionTimeoutRaw) && testExecutionTimeoutRaw > 0 ? testExecutionTimeoutRaw : 0;
   return {
     includeTestPerspectiveTable: config.get<boolean>('includeTestPerspectiveTable', true),
     perspectiveReportDir: (config.get<string>('perspectiveReportDir', 'docs/test-perspectives') ?? 'docs/test-perspectives').trim(),
     perspectiveGenerationTimeoutMs,
     testExecutionReportDir: (config.get<string>('testExecutionReportDir', 'docs/test-execution-reports') ?? 'docs/test-execution-reports').trim(),
     testCommand: (config.get<string>('testCommand', 'npm test') ?? 'npm test').trim(),
+    testExecutionTimeoutMs,
     testExecutionRunner: runner,
     allowUnsafeTestCommand: config.get<boolean>('allowUnsafeTestCommand', false),
     cursorAgentForceForTestExecution: config.get<boolean>('cursorAgentForceForTestExecution', false),

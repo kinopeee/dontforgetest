@@ -206,6 +206,12 @@
           "default": "npm test",
           "description": "%configuration.testCommand.description%"
         },
+        "dontforgetest.testExecutionTimeoutMs": {
+          "type": "number",
+          "default": 600000,
+          "minimum": 0,
+          "description": "%configuration.testExecutionTimeoutMs.description%"
+        },
         "dontforgetest.testExecutionRunner": {
           "type": "string",
           "enum": [

@@ -46,7 +46,10 @@ interface V8CoverageFile {
   [key: string]: unknown;
 }
 
-const DEFAULT_TEST_RESULT_WAIT_TIMEOUT_MS = 3000;
+// open 起動（macOS）は `open -W` が「アプリ終了」ではなく「起動完了」を待つため、
+// テスト完走（test-result.json 書き込み）までの待機が必要になる。
+// 既定 3 秒は短すぎて再試行→多重起動を誘発しやすいため、余裕を持った値にする。
+const DEFAULT_TEST_RESULT_WAIT_TIMEOUT_MS = 120_000;
 const DEFAULT_TEST_RESULT_WAIT_INTERVAL_MS = 100;
 const DEFAULT_VSCODE_TEST_MAX_ATTEMPTS = 2;
 const DEFAULT_VSCODE_TEST_LOCALE = 'ja';
@@ -1032,7 +1035,8 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
       // open 起動の場合はプロセスのexit codeが取れない可能性があるため、結果ファイルを参照して最終判定する
       try {
         if (resultWaitTimeoutMs > 0) {
-          await waitForFile({ filePath: testResultFilePath, timeoutMs: resultWaitTimeoutMs, intervalMs: resultWaitIntervalMs });
+          const found = await waitForFile({ filePath: testResultFilePath, timeoutMs: resultWaitTimeoutMs, intervalMs: resultWaitIntervalMs });
+          void found;
         }
         const raw = await fs.promises.readFile(testResultFilePath, 'utf8');
         parseTestResultOrThrow({
