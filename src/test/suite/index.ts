@@ -197,7 +197,7 @@ function resolveTestResultFilePath(): string {
   return path.resolve(__dirname, '../../../.vscode-test/test-result.json');
 }
 
-export async function run(): Promise<void> {
+export async function run() {
   // VS Code APIが利用可能であることを確認
   console.log('VS Code API version:', vscode.version);
 
@@ -222,7 +222,7 @@ export async function run(): Promise<void> {
   const testsRoot = path.resolve(__dirname, '..');
   const resultFilePath = resolveTestResultFilePath();
 
-  return new Promise((c, e) => {
+  return new Promise<void>((c, e) => {
     glob('**/**.test.js', { cwd: testsRoot })
       .then((files) => {
         if (files.length === 0) {

@@ -1035,8 +1035,7 @@ async function runMainWithDeps(deps: MainDeps): Promise<number | null> {
       // open 起動の場合はプロセスのexit codeが取れない可能性があるため、結果ファイルを参照して最終判定する
       try {
         if (resultWaitTimeoutMs > 0) {
-          const found = await waitForFile({ filePath: testResultFilePath, timeoutMs: resultWaitTimeoutMs, intervalMs: resultWaitIntervalMs });
-          void found;
+          await waitForFile({ filePath: testResultFilePath, timeoutMs: resultWaitTimeoutMs, intervalMs: resultWaitIntervalMs });
         }
         const raw = await fs.promises.readFile(testResultFilePath, 'utf8');
         parseTestResultOrThrow({
