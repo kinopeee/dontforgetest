@@ -262,6 +262,15 @@
           "minimum": 0,
           "maximum": 5,
           "description": "%configuration.strategyComplianceAutoFixMaxRetries.description%"
+        },
+        "dontforgetest.projectProfile": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "tsjs"
+          ],
+          "default": "auto",
+          "description": "%configuration.projectProfile.description%"
         }
       }
     }

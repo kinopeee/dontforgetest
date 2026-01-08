@@ -45,5 +45,6 @@
   "command.analyzeTests.title": "Dontforgetest: Analyze Tests",
   "command.openLatestAnalysisReport.title": "Dontforgetest: Open Latest Analysis Report",
   "configuration.enableStrategyComplianceCheck.description": "Check generated test code for strategy compliance (Given/When/Then, boundary values, exception message verification, case ID coverage) after generation",
-  "configuration.strategyComplianceAutoFixMaxRetries.description": "Maximum number of automatic fix attempts when strategy compliance issues are found (0=no automatic fix, just report)"
+  "configuration.strategyComplianceAutoFixMaxRetries.description": "Maximum number of automatic fix attempts when strategy compliance issues are found (0=no automatic fix, just report)",
+  "configuration.projectProfile.description": "Project profile for test generation, compliance checking, and worktree application (auto=detect from workspace, tsjs=TypeScript/JavaScript)"
 }

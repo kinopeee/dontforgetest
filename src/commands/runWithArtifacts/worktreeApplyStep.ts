@@ -5,6 +5,7 @@ import { emitLogEvent } from '../../core/artifacts';
 import { t } from '../../core/l10n';
 import { buildMergeAssistanceInstructionMarkdown, buildMergeAssistancePromptText } from '../../core/mergeAssistancePrompt';
 import { filterTestLikePaths } from '../../core/testPathClassifier';
+import { resolveProjectProfile, type ProjectProfile } from '../../core/projectProfile';
 import { execGitResult, execGitStdout } from '../../git/gitExec';
 import { writeTextToClipboard } from '../../ui/clipboard';
 import { appendEventToOutput } from '../../ui/outputChannel';
@@ -28,6 +29,7 @@ export async function applyWorktreeTestChanges(params: {
   runWorkspaceRoot: string;
   extensionContext: vscode.ExtensionContext;
   preTestCheckCommand: string;
+  profile?: ProjectProfile;
 }): Promise<WorktreeApplyResult> {
   // 念のため。呼び出し側で worktreeDir を保証する想定だが、防御的に扱う。
   if (!params.runWorkspaceRoot || params.runWorkspaceRoot.trim().length === 0) {
@@ -35,10 +37,13 @@ export async function applyWorktreeTestChanges(params: {
   }
 
   try {
+    // プロファイルを解決（未指定の場合は自動解決）
+    const profile = params.profile ?? (await resolveProjectProfile(params.localWorkspaceRoot)).profile;
+
     const trackedChanged = await listGitPaths(params.runWorkspaceRoot, ['diff', '--name-only']);
     const untracked = await listGitPaths(params.runWorkspaceRoot, ['ls-files', '--others', '--exclude-standard']);
     const allChanged = dedupeStable([...trackedChanged, ...untracked]);
-    const testPaths = filterTestLikePaths(allChanged);
+    const testPaths = filterTestLikePaths(allChanged, profile);
 
     if (testPaths.length === 0) {
       appendEventToOutput(emitLogEvent(params.generationTaskId, 'info', t('worktree.apply.noTestDiffFound')));
