@@ -2,6 +2,6 @@
     "testgen-agent.defaultModel": "",
     "testgen-agent.testStrategyPath": "",
     "dontforgetest.testStrategyPath": "",
-    "dontforgetest.agentProvider": "cursorAgent",
-    "dontforgetest.defaultModel": "gpt-5.2"
+    "dontforgetest.agentProvider": "codexCli",
+    "dontforgetest.defaultModel": "gpt-5.2-codex"
 }

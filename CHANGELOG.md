@@ -5,7 +5,6 @@
 ### Changed
 
 - Version bump for release
-- Workspace settings: Updated `dontforgetest.agentProvider` to `cursorAgent` and `dontforgetest.defaultModel` to `gpt-5.2`
 
 ---
 
@@ -32,7 +31,6 @@
 ### 変更
 
 - リリースのためのバージョン更新
-- ワークスペース設定: `dontforgetest.agentProvider` を `cursorAgent` に、`dontforgetest.defaultModel` を `gpt-5.2` に変更
 
 ---
 
