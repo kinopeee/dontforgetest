@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.0.125
+
+### Fixed
+
+- **extractBetweenMarkers**: Fixed infinite loop bug when `begin` marker is at index 0 and no corresponding `end` marker is found (caused by `String#lastIndexOf` treating negative `fromIndex` as 0)
+- **runProviderToCompletion**: Enhanced exception handling to prevent event handler exceptions from blocking completion events and timeout processing
+
+### Added
+
+- **Settings**: Added `dontforgetest.testExecutionTimeoutMs` configuration option to control timeout for test execution via cursor-agent (default: 600000ms, 0 or less disables timeout)
+
+### Changed
+
+- **Test environment**: Increased test result file wait timeout from 3s to 120s to accommodate macOS `open -W` behavior
+- **Test suite**: Added timeout configuration (2000ms) for test environment to prevent hanging when cursor-agent doesn't return completion events
+
+---
+
+## 0.0.125（日本語）
+
+### 修正
+
+- **extractBetweenMarkers**: `begin` マーカーがインデックス 0 にあり、対応する `end` マーカーが見つからない場合の無限ループバグを修正（`String#lastIndexOf` が負の `fromIndex` を 0 として扱うことが原因）
+- **runProviderToCompletion**: イベントハンドラーの例外が completion イベントやタイムアウト処理を妨げないよう、例外処理を強化
+
+### 追加
+
+- **設定**: cursor-agent によるテスト実行のタイムアウトを制御する `dontforgetest.testExecutionTimeoutMs` 設定を追加（既定: 600000ms、0 以下でタイムアウト無効）
+
+### 変更
+
+- **テスト環境**: macOS の `open -W` の挙動に対応するため、テスト結果ファイルの待機タイムアウトを 3 秒から 120 秒に延長
+- **テストスイート**: cursor-agent が completion イベントを返さない場合のスタックを防ぐため、テスト環境でのタイムアウト設定（2000ms）を追加
+
+---
+
 ## 0.0.123
 
 ### Added

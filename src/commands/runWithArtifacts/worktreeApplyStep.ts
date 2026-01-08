@@ -6,6 +6,7 @@ import { t } from '../../core/l10n';
 import { buildMergeAssistanceInstructionMarkdown, buildMergeAssistancePromptText } from '../../core/mergeAssistancePrompt';
 import { filterTestLikePaths } from '../../core/testPathClassifier';
 import { execGitResult, execGitStdout } from '../../git/gitExec';
+import { writeTextToClipboard } from '../../ui/clipboard';
 import { appendEventToOutput } from '../../ui/outputChannel';
 import { dedupeStable } from './utils';
 
@@ -144,7 +145,7 @@ export async function applyWorktreeTestChanges(params: {
             testPaths,
             preTestCheckCommand: params.preTestCheckCommand,
           });
-          await vscode.env.clipboard.writeText(promptText);
+          await writeTextToClipboard(promptText);
           void vscode.window.showInformationMessage(t('worktree.apply.promptCopied'));
           return;
         }

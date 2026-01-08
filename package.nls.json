@@ -34,6 +34,7 @@
   "configuration.perspectiveGenerationTimeoutMs.description": "Maximum execution time for test perspective table generation (cursor-agent) in milliseconds. No timeout if 0 or less.",
   "configuration.testExecutionReportDir.description": "Directory to save test execution reports (auto-generated) (workspace-relative or absolute)",
   "configuration.testCommand.description": "Test execution command (no execution if empty. e.g., npm test, pnpm test, pytest)",
+  "configuration.testExecutionTimeoutMs.description": "Maximum execution time for test execution via cursor-agent in milliseconds. No timeout if 0 or less.",
   "configuration.testExecutionRunner.description": "Test execution handler (cursorAgent=execute via cursor-agent and extract results, extension=execute directly by extension)",
   "configuration.allowUnsafeTestCommand.description": "(Kept for compatibility) Previously, when testExecutionRunner=extension, test commands that might launch VS Code in a separate process were skipped. Now tests are always executed due to improvements, so this setting is basically ignored.",
   "configuration.cursorAgentForceForTestExecution.description": "Add --force to cursor-agent for test execution (bypasses command execution approval, but also allows file editing, so default is false, enable explicitly only when needed)",

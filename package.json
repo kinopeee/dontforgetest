@@ -3,7 +3,7 @@
   "publisher": "kinopeee",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.124",
+  "version": "0.0.125",
   "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.105.0"
@@ -205,6 +205,12 @@
           "type": "string",
           "default": "npm test",
           "description": "%configuration.testCommand.description%"
+        },
+        "dontforgetest.testExecutionTimeoutMs": {
+          "type": "number",
+          "default": 600000,
+          "minimum": 0,
+          "description": "%configuration.testExecutionTimeoutMs.description%"
         },
         "dontforgetest.testExecutionRunner": {
           "type": "string",

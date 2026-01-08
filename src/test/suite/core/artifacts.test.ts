@@ -8891,7 +8891,11 @@ line2",
     // TC-E-08 (from Test Perspectives Table)
     test('TC-E-08: parseTestExecutionJsonV1 returns direct parse invalid-json error when input starts with { but is malformed', () => {
       // Given: Input starts with { but has a syntax error
-      const raw = '{"version":1, "stdout": "error: { code: 1" }'; // Missing closing brace for code object if it was intended to be one, or just malformed JSON
+      // NOTE:
+      // `{` や `}` は文字列内に含まれていても JSON としては問題にならない。
+      // そのため「文字列内の波括弧の不整合」ではなく、
+      // ここでは「JSON オブジェクト自体が未終端（閉じ括弧がない）」という形で malformed を作る。
+      const raw = '{"version":1, "stdout": "error: { code: 1" '; // Missing the closing `}` for the outer object
 
       // When: parseTestExecutionJsonV1 is called
       const result = parseTestExecutionJsonV1(raw);

@@ -822,6 +822,7 @@ export class TestGenerationSession {
       this.captureEvent(started);
 
       const testStartedAt = nowMs();
+
       const result = await runTestCommandViaCursorAgent({
         provider: this.options.provider,
         taskId: `${testTaskId}-agent`,
@@ -830,6 +831,7 @@ export class TestGenerationSession {
         model: this.options.model,
         testCommand: this.settings.testCommand,
         allowForce: this.settings.cursorAgentForceForTestExecution,
+        timeoutMs: this.settings.testExecutionTimeoutMs,
         onEvent: (event) => {
           handleTestGenEventForStatusBar(event);
           appendEventToOutput(event);

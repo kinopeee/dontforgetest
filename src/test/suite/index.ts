@@ -197,9 +197,20 @@ function resolveTestResultFilePath(): string {
   return path.resolve(__dirname, '../../../.vscode-test/test-result.json');
 }
 
-export function run(): Promise<void> {
+export async function run() {
   // VS Code APIが利用可能であることを確認
   console.log('VS Code API version:', vscode.version);
+
+  // テスト環境では「cursor-agent 経由のテスト実行」が completed を返さない等でスタックした場合に
+  // 長時間待たないよう、ワークスペース設定でタイムアウトを短めに設定しておく。
+  // NOTE: テスト用の一時ワークスペースに対する設定なので、ユーザー環境には影響しない。
+  try {
+    await vscode.workspace
+      .getConfiguration('dontforgetest')
+      .update('testExecutionTimeoutMs', 2000, vscode.ConfigurationTarget.Workspace);
+  } catch (e) {
+    console.warn('テスト用設定（testExecutionTimeoutMs）の更新に失敗しました（続行します）:', e);
+  }
 
   // Mochaインスタンスを作成
   const mocha = new Mocha({
@@ -211,7 +222,7 @@ export function run(): Promise<void> {
   const testsRoot = path.resolve(__dirname, '..');
   const resultFilePath = resolveTestResultFilePath();
 
-  return new Promise((c, e) => {
+  return new Promise<void>((c, e) => {
     glob('**/**.test.js', { cwd: testsRoot })
       .then((files) => {
         if (files.length === 0) {
