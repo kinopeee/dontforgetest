@@ -214,6 +214,7 @@ suite('core/modelSettings.ts', () => {
 
   suite('getCursorAgentModelCandidates', () => {
     test('TC-CURSOR-N-01: ビルトインモデルが含まれる', () => {
+      // Case ID: TC-CURSOR-N-01
       // Given: customModels is empty
       const settings: ModelSettings = {
         defaultModel: undefined,
