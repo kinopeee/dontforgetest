@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.0.127
+
+### Changed
+
+- **Project profile detection**: Enhanced `auto` mode detection logic for TypeScript/JavaScript projects
+  - **Strong signals**: Checks for `tsconfig.json`, `jsconfig.json`, `deno.json`, `deno.jsonc` (if any exists, detected as TS/JS)
+  - **Package.json signals**: Analyzes `package.json` content and detects TS/JS if:
+    - `types` or `typings` field exists
+    - Dependencies include: `typescript`, `@types/node`, `jest`, `vitest`, `mocha`, `tsx`, `ts-node`, `vite`, `next`
+    - Scripts contain: `tsc`, `jest`, `vitest`, `mocha`, `vite`, `next` (matched as whole words)
+  - Falls back to `tsjs` profile if no signals are found
+
+### Added
+
+- **Core**: Added `detectSignals.ts` module for TypeScript/JavaScript project signal detection
+- **Tests**: Added comprehensive test coverage for project profile detection and signal detection logic
+
+---
+
+## 0.0.127（日本語）
+
+### 変更
+
+- **プロファイル検出**: TypeScript/JavaScript プロジェクトの `auto` モード検出ロジックを改善
+  - **強シグナル**: `tsconfig.json`, `jsconfig.json`, `deno.json`, `deno.jsonc` の存在をチェック（いずれかが存在すれば TS/JS と判定）
+  - **package.json シグナル**: `package.json` の内容を解析し、以下に該当すれば TS/JS と判定
+    - `types` または `typings` フィールドが存在する
+    - 依存に含まれる: `typescript`, `@types/node`, `jest`, `vitest`, `mocha`, `tsx`, `ts-node`, `vite`, `next`
+    - スクリプトに含まれる: `tsc`, `jest`, `vitest`, `mocha`, `vite`, `next`（単語境界でマッチ）
+  - シグナルが見つからない場合は `tsjs` プロファイルにフォールバック
+
+### 追加
+
+- **コア**: TypeScript/JavaScript プロジェクト検出用のシグナル判定モジュール `detectSignals.ts` を追加
+- **テスト**: プロファイル検出とシグナル検出ロジックの包括的なテストカバレッジを追加
+
+---
+
 ## 0.0.126
 
 ### Added
