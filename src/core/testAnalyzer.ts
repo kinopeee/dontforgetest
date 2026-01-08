@@ -1283,7 +1283,6 @@ export class AnalysisReportSectionBuilder {
       `- ${t('analysis.report.fileCount')}: ${result.analyzedFiles}`,
       '',
       '---',
-      '',
     ].join('\n');
   }
 
@@ -1301,7 +1300,6 @@ export class AnalysisReportSectionBuilder {
       `## ${t('analysis.report.summary')}`,
       '',
       builder.build(),
-      '',
     ].join('\n');
   }
 
@@ -1310,7 +1308,7 @@ export class AnalysisReportSectionBuilder {
    */
   buildDetailsSection(issues: AnalysisIssue[], formatters: IssueFormatter[]): string {
     if (issues.length === 0) {
-      return [t('analysis.noIssues'), ''].join('\n');
+      return t('analysis.noIssues');
     }
 
     const lines: string[] = [
@@ -1384,7 +1382,7 @@ export class AnalysisReportComposer {
       this.sectionBuilder.buildDetailsSection(result.issues, this.formatters),
     ];
 
-    return parts.join('');
+    return parts.join('\n\n');
   }
 }
 
