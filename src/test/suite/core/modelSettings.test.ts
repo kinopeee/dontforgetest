@@ -224,10 +224,11 @@ suite('core/modelSettings.ts', () => {
       const result = getCursorAgentModelCandidates(settings);
 
       // Then: Includes builtin models like 'auto'
+      assert.ok(result.includes('composer-1'), 'Should include composer-1');
       assert.ok(result.includes('auto'), 'Should include auto');
       assert.ok(result.includes('sonnet-4.5'), 'Should include sonnet-4.5');
       assert.ok(result.includes('gpt-5.2'), 'Should include gpt-5.2');
-      assert.strictEqual(result[0], 'auto', 'auto should be first');
+      assert.strictEqual(result[0], 'composer-1', 'composer-1 should be first');
     });
 
     test('TC-CURSOR-N-02: customModels が auto を含む場合は重複しない', () => {

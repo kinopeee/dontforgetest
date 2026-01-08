@@ -119,14 +119,27 @@ export function getClaudeCodeModelCandidates(): string[] {
  * - CLI 側のモデル一覧は変動し得るため、ここは「公開ドキュメント上の例」として最小限に留める
  * - ここに無いモデルは `dontforgetest.customModels` に追加するか、入力で指定する
  *
- * 出典（確認日: 2026-01-04）:
+ * 出典（確認日: 2026-01-08）:
  * - https://cursor.com/docs/cli/overview
  */
 const CURSOR_AGENT_BUILTIN_MODELS = [
+  'composer-1',
   'auto',
   'sonnet-4.5',
+  'sonnet-4.5-thinking',
   'opus-4.5',
+  'opus-4.5-thinking',
+  'gemini-3-pro',
+  'gemini-3-flash',
   'gpt-5.2',
+  'gpt-5.1',
+  'gpt-5.2-high',
+  'gpt-5.1-high',
+  'gpt-5.1-codex',
+  'gpt-5.1-codex-high',
+  'gpt-5.1-codex-max',
+  'gpt-5.1-codex-max-high',
+  'opus-4.1',
   'grok',
 ];
 
