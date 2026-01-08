@@ -56,6 +56,7 @@ Powered by CLI agents (Cursor CLI / Claude Code / Gemini CLI / Codex CLI), this 
 
 ## Documentation
 
+- **DeepWiki**: [deepwiki.com/kinopeee/dontforgetest](https://deepwiki.com/kinopeee/dontforgetest) — AI-generated documentation with overview, architecture, and component details
 - Docs index: [docs/README.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/README.md)
 - Usage: [docs/usage.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.md)
 - Built-in default strategy: [src/core/defaultTestStrategy.ts](https://github.com/kinopeee/dontforgetest/blob/main/src/core/defaultTestStrategy.ts) (used when the setting is empty)
