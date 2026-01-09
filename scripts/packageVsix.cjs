@@ -27,8 +27,10 @@ if (!version) {
 const packageName = typeof pkg?.name === 'string' && pkg.name.trim() !== '' ? pkg.name.trim() : 'extension';
 const outFilePath = path.join(repoRoot, `${packageName}-${version}.vsix`);
 
-const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-const args = ['--yes', '@vscode/vsce', 'package', '--out', outFilePath, '--no-rewrite-relative-links'];
+// NOTE: @vscode/vsce は devDependencies に含まれているため、npm exec でローカルバイナリを実行する。
+// これにより、ネットワークアクセスなしで VSIX を生成できる（npm install 時のみネットワークが必要）。
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const args = ['exec', '--', 'vsce', 'package', '--out', outFilePath, '--allow-missing-repository', '--no-rewrite-relative-links'];
 
 // NOTE:
 // vsce の secretlint 実行は内部で `os.cpus().length` を concurrency に渡す。
@@ -53,7 +55,7 @@ try {
 
 console.log(`VSIX を生成します: ${outFilePath}`);
 
-const result = spawnSync(npxCommand, args, {
+const result = spawnSync(npmCommand, args, {
   cwd: repoRoot,
   stdio: 'inherit',
 });
