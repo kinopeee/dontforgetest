@@ -509,6 +509,388 @@ suite('ClaudeCodeProvider', () => {
         assert.strictEqual(event.path, filePath);
       }
     });
+
+    // ============================================
+    // テスト観点表（追加分）: tool_call subtype=completed と result 本文抽出
+    // ============================================
+    // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+    // |---------|----------------------|--------------------------------------|-----------------|-------|
+    // | TC-CC-N-01 | tool_call completed with success.path | Equivalence – success.path 優先 | fileWrite.path が success.path | - |
+    // | TC-CC-N-02 | tool_call completed with linesAdded | Equivalence – linesCreated | fileWrite.linesCreated に値 | - |
+    // | TC-CC-N-03 | tool_call completed で args.file_path | Equivalence – file_path | fileWrite.path が args.file_path | - |
+    // | TC-CC-N-04 | tool_call completed で lastWritePath | Equivalence – フォールバック | fileWrite.path が lastWritePath | - |
+    // | TC-CC-N-05 | result で result が string | Equivalence – 本文抽出 | log イベントに string が含まれる | - |
+    // | TC-CC-N-06 | result で result.text がある | Equivalence – 本文抽出 | log イベントに text が含まれる | - |
+    // | TC-CC-N-07 | result で result.content 配列 | Equivalence – 本文抽出 | log イベントに content[0].text | - |
+    // | TC-CC-E-01 | tool_call で toolCallBody が無い | Error – 空の tool_call | イベント発火なし | - |
+    // | TC-CC-N-08 | findToolCallName で xxxToolCall | Equivalence – ツール名推定 | fileWrite が発火 | - |
+    // | TC-CC-N-09 | findToolCallName で未知のキー | Equivalence – フォールバック | 最初のキーが使われる | - |
+    // | TC-CC-B-01 | tool_call で isWriteOperation が false | Boundary – 読み取り操作 | イベント発火なし | - |
+    // | TC-CC-N-10 | editToolCall で subtype=started | Equivalence – editToolCall | fileWrite が発火 | - |
+
+    // TC-CC-N-01: tool_call completed with success.path
+    test('TC-CC-N-01: tool_call completed で success.path が優先される', () => {
+      // Given: tool_call completed with success.path
+      const successPath = path.join(workspaceRoot, 'success-path.ts');
+      const argsPath = path.join(workspaceRoot, 'args-path.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: { path: argsPath },
+            result: {
+              success: { path: successPath },
+            },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: fileWrite.path が success.path
+      assert.strictEqual(result.events.length, 1);
+      const event = result.events[0];
+      assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.path, path.relative(workspaceRoot, successPath));
+      }
+    });
+
+    // TC-CC-N-02: tool_call completed with linesAdded
+    test('TC-CC-N-02: tool_call completed で linesAdded が fileWrite.linesCreated に入る', () => {
+      // Given: tool_call completed with linesAdded
+      const filePath = path.join(workspaceRoot, 'with-lines.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: { path: filePath },
+            result: {
+              success: { path: filePath, linesAdded: 42 },
+            },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: fileWrite.linesCreated が 42
+      assert.strictEqual(result.events.length, 1);
+      const event = result.events[0];
+      assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.linesCreated, 42);
+      }
+    });
+
+    // TC-CC-N-03: tool_call completed で args.file_path
+    test('TC-CC-N-03: tool_call completed で args.file_path が使われる', () => {
+      // Given: tool_call completed with args.file_path
+      const filePath = path.join(workspaceRoot, 'file-path.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Edit: {
+            args: { file_path: filePath },
+            result: { success: {} },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: fileWrite.path が args.file_path
+      assert.strictEqual(result.events.length, 1);
+      const event = result.events[0];
+      assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.path, path.relative(workspaceRoot, filePath));
+      }
+    });
+
+    // TC-CC-N-04: tool_call completed で lastWritePath がフォールバックとして使われる
+    test('TC-CC-N-04: tool_call completed で lastWritePath がフォールバックとして使われる', () => {
+      // Given: tool_call completed with no path in args or success, but lastWritePath is set
+      const lastPath = path.join(workspaceRoot, 'last-write-path.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: {},
+            result: { success: {} },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called with lastWritePath
+      const result = runHandle(obj, lastPath);
+
+      // Then: fileWrite.path が lastWritePath
+      assert.strictEqual(result.events.length, 1);
+      const event = result.events[0];
+      assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.path, path.relative(workspaceRoot, lastPath));
+      }
+    });
+
+    // TC-CC-N-05: result で result が string
+    test('TC-CC-N-05: result イベントで result が string の場合ログに含まれる', () => {
+      // Given: result event with string result
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+        result: 'String result text',
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: log イベントに string が含まれる
+      const logs = result.events.filter((e) => e.type === 'log');
+      assert.ok(logs.length >= 2, 'duration と result の 2 つの log が発火');
+      const resultLog = logs.find((e) => e.type === 'log' && e.message === 'String result text');
+      assert.ok(resultLog, 'result の文字列がログに含まれる');
+    });
+
+    // TC-CC-N-06: result で result.text がある
+    test('TC-CC-N-06: result イベントで result.text がある場合ログに含まれる', () => {
+      // Given: result event with result.text
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+        result: { text: 'Result text field' },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: log イベントに text が含まれる
+      const logs = result.events.filter((e) => e.type === 'log');
+      const resultLog = logs.find((e) => e.type === 'log' && e.message === 'Result text field');
+      assert.ok(resultLog, 'result.text がログに含まれる');
+    });
+
+    // TC-CC-N-07: result で result.content 配列
+    test('TC-CC-N-07: result イベントで result.content 配列の場合ログに含まれる', () => {
+      // Given: result event with result.content array
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+        result: {
+          content: [{ text: 'Content array text' }],
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: log イベントに content[0].text が含まれる
+      const logs = result.events.filter((e) => e.type === 'log');
+      const resultLog = logs.find((e) => e.type === 'log' && e.message === 'Content array text');
+      assert.ok(resultLog, 'result.content[0].text がログに含まれる');
+    });
+
+    // TC-CC-E-01: tool_call で toolCall が無い場合
+    test('TC-CC-E-01: tool_call で tool_call プロパティが無いと何も発火しない', () => {
+      // Given: tool_call without tool_call property
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        // tool_call プロパティ無し
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: イベントは発火しない
+      assert.strictEqual(result.events.length, 0, 'tool_call が無い場合はイベント発火なし');
+    });
+
+    // TC-CC-N-08: findToolCallName で writeToolCall
+    test('TC-CC-N-08: findToolCallName で writeToolCall が検出される', () => {
+      // Given: tool_call with writeToolCall key
+      const filePath = path.join(workspaceRoot, 'write-tool-call.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          writeToolCall: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: fileWrite が発火
+      assert.strictEqual(result.events.length, 1);
+      assert.strictEqual(result.events[0]?.type, 'fileWrite');
+    });
+
+    // TC-CC-N-09: findToolCallName で未知のキー
+    test('TC-CC-N-09: findToolCallName で未知のキーは最初のキーが使われる', () => {
+      // Given: tool_call with unknown key containing 'edit' in name
+      const filePath = path.join(workspaceRoot, 'unknown-edit.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          customEditOperation: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: fileWrite が発火（edit を含むので isWriteOperation = true）
+      assert.strictEqual(result.events.length, 1);
+      assert.strictEqual(result.events[0]?.type, 'fileWrite');
+    });
+
+    // TC-CC-B-01: tool_call で isWriteOperation が false
+    test('TC-CC-B-01: tool_call で読み取り操作の場合は fileWrite が発火しない', () => {
+      // Given: tool_call with read operation
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          Read: {
+            args: { path: '/some/path.ts' },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: イベントは発火しない
+      assert.strictEqual(result.events.length, 0, '読み取り操作では fileWrite が発火しない');
+    });
+
+    // TC-CC-N-10: editToolCall で subtype=started
+    test('TC-CC-N-10: editToolCall で subtype=started の場合 fileWrite が発火する', () => {
+      // Given: tool_call with editToolCall and subtype=started
+      const filePath = path.join(workspaceRoot, 'edit-tool-call.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          editToolCall: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: fileWrite が発火
+      assert.strictEqual(result.events.length, 1);
+      assert.strictEqual(result.events[0]?.type, 'fileWrite');
+      if (result.events[0]?.type === 'fileWrite') {
+        assert.strictEqual(result.events[0].path, path.relative(workspaceRoot, filePath));
+      }
+    });
+
+    // TC-CC-N-11: assistant イベントで message.content が空配列
+    test('TC-CC-N-11: assistant イベントで message.content が空配列の場合ログが発火しない', () => {
+      // Given: assistant event with empty content array
+      const obj = {
+        type: 'assistant',
+        message: { content: [] },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: イベントは発火しない
+      assert.strictEqual(result.events.length, 0, '空の content ではログが発火しない');
+    });
+
+    // TC-CC-N-12: system イベントで subtype が無い場合
+    test('TC-CC-N-12: system イベントで subtype が無い場合ログが発火しない', () => {
+      // Given: system event without subtype
+      const obj = { type: 'system' };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: イベントは発火しない
+      assert.strictEqual(result.events.length, 0, 'subtype が無い system ではログが発火しない');
+    });
+
+    // TC-CC-B-02: result で result.message がある場合
+    test('TC-CC-B-02: result イベントで result.message がある場合ログに含まれる', () => {
+      // Given: result event with result.message
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+        result: { message: 'Result message field' },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: log イベントに message が含まれる
+      const logs = result.events.filter((e) => e.type === 'log');
+      const resultLog = logs.find((e) => e.type === 'log' && e.message === 'Result message field');
+      assert.ok(resultLog, 'result.message がログに含まれる');
+    });
+
+    // TC-CC-B-03: tool_call completed で pathFromArgs も pathFromSuccess も無く lastWritePath も無い場合
+    test('TC-CC-B-03: tool_call completed でパスが全く無い場合は fileWrite が発火しない', () => {
+      // Given: tool_call completed with no path anywhere
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: {},
+            result: { success: {} },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called with no lastWritePath
+      const result = runHandle(obj, undefined);
+
+      // Then: イベントは発火しない
+      assert.strictEqual(result.events.length, 0, 'パスが無い場合は fileWrite が発火しない');
+    });
+
+    // TC-CC-N-13: tool_call started で path 更新と fileWrite が両方発火
+    test('TC-CC-N-13: tool_call started で next が返され lastWritePath が更新される', () => {
+      // Given: tool_call started with path
+      const filePath = path.join(workspaceRoot, 'started-path.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          Write: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: fileWrite が発火し、next が返される
+      assert.strictEqual(result.events.length, 1);
+      assert.strictEqual(result.events[0]?.type, 'fileWrite');
+      assert.strictEqual(result.next, filePath, 'next に filePath が返される');
+    });
   });
 
   suite('wireOutput (time-based monitoring)', () => {
