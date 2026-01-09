@@ -4,7 +4,8 @@
 
 ### Changed
 
-- **Internal**: Refactored internal implementation to improve maintainability (no user-facing behavior changes)
+- **Internal**: Refactored internals to resolve SRP violations (no user-facing behavior changes)
+  - Affected: `analyzeFileContent`, `buildAnalysisReportMarkdown`, `buildAutoFixPrompt`
 - **Documentation**: Added DeepWiki link to README documentation section
 
 ---
@@ -13,7 +14,8 @@
 
 ### 変更
 
-- **内部実装**: 保守性向上のため内部実装を整理（ユーザー向け挙動の変更なし）
+- **内部実装**: SRP違反解消のため内部実装を整理（ユーザー向け挙動の変更なし）
+  - 対象: `analyzeFileContent` 関数 / `buildAnalysisReportMarkdown` 関数 / `buildAutoFixPrompt` メソッド
 - **ドキュメント**: READMEのドキュメントセクションにDeepWikiのリンクを追加
 
 ---
