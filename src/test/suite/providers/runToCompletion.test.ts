@@ -51,6 +51,30 @@ class MockProvider implements AgentProvider {
   }
 }
 
+class TimeoutDisposeThrowProvider implements AgentProvider {
+  readonly id = 'timeout-dispose-throw';
+  readonly displayName = 'TimeoutDisposeThrow';
+
+  run(options: AgentRunOptions): RunningTask {
+    // completed は送らず、タイムアウト経路へ誘導する
+    setTimeout(() => {
+      options.onEvent({
+        type: 'log',
+        taskId: options.taskId,
+        level: 'info',
+        message: 'still running...',
+        timestampMs: Date.now(),
+      });
+    }, 10);
+    return {
+      taskId: options.taskId,
+      dispose: () => {
+        throw new Error('dispose failed');
+      },
+    };
+  }
+}
+
 suite('providers/runToCompletion.ts', () => {
   // TC-N-16: runProviderToCompletion called with provider that emits completed event
   test('TC-N-16: runProviderToCompletion completes normally when provider emits completed event', async () => {
@@ -74,6 +98,62 @@ suite('providers/runToCompletion.ts', () => {
 
     // Then: プロバイダーが正常に完了し、exitCode が返される
     assert.strictEqual(exitCode, 0, 'exitCode が 0 であること');
+  });
+
+  test('TC-E-ON-EVENT-01: runProviderToCompletion swallows exceptions thrown by onEvent callbacks', async () => {
+    // Given: A provider that completes normally, and an onEvent that throws
+    const provider = new MockProvider(0);
+    let called = 0;
+
+    // When: runProviderToCompletion is called
+    const exitCode = await runProviderToCompletion({
+      provider,
+      run: {
+        taskId: 'test-task-onEvent-throws',
+        workspaceRoot: process.cwd(),
+        agentCommand: 'mock-agent',
+        prompt: 'test prompt',
+        model: 'test-model',
+        outputFormat: 'stream-json',
+        allowWrite: false,
+      },
+      onEvent: () => {
+        called += 1;
+        throw new Error('onEvent failure');
+      },
+    });
+
+    // Then: It still resolves with the provider exitCode
+    assert.ok(called > 0, 'Expected onEvent to be called');
+    assert.strictEqual(exitCode, 0);
+  });
+
+  test('TC-N-ONRUNNINGTASK-01: runProviderToCompletion calls onRunningTask with the RunningTask returned by provider', async () => {
+    // Given: A provider that completes normally
+    const provider = new MockProvider(0);
+    let runningTaskId: string | undefined;
+
+    // When: runProviderToCompletion is called
+    const exitCode = await runProviderToCompletion({
+      provider,
+      run: {
+        taskId: 'test-task-onRunningTask',
+        workspaceRoot: process.cwd(),
+        agentCommand: 'mock-agent',
+        prompt: 'test prompt',
+        model: 'test-model',
+        outputFormat: 'stream-json',
+        allowWrite: false,
+      },
+      onEvent: () => {},
+      onRunningTask: (runningTask) => {
+        runningTaskId = runningTask.taskId;
+      },
+    });
+
+    // Then: It was notified and the task still completes
+    assert.strictEqual(runningTaskId, 'test-task-onRunningTask');
+    assert.strictEqual(exitCode, 0);
   });
 
   // TC-E-11: runProviderToCompletion called but provider times out
@@ -103,6 +183,38 @@ suite('providers/runToCompletion.ts', () => {
 
     // Then: タイムアウト時には null の exitCode が返される
     assert.strictEqual(exitCode, null, 'タイムアウト時には exitCode が null であること');
+  });
+
+  test('TC-E-DISPOSE-01: timeout path swallows exceptions from running.dispose() and onEvent', async () => {
+    // Given: A provider that never completes and dispose() throws
+    const provider = new TimeoutDisposeThrowProvider();
+    let sawTimeoutLog = false;
+
+    // When: runProviderToCompletion is called with timeout and onEvent throws
+    const exitCode = await runProviderToCompletion({
+      provider,
+      run: {
+        taskId: 'test-task-timeout-dispose-throws',
+        workspaceRoot: process.cwd(),
+        agentCommand: 'mock-agent',
+        prompt: 'test prompt',
+        model: 'test-model',
+        outputFormat: 'stream-json',
+        allowWrite: false,
+      },
+      timeoutMs: 50,
+      onEvent: (event) => {
+        if (event.type === 'log' && event.level === 'error' && event.message.includes('タイムアウト')) {
+          sawTimeoutLog = true;
+        }
+        // throw to cover the internal try/catch in the timeout handler
+        throw new Error('onEvent error');
+      },
+    });
+
+    // Then: It resolves with null and does not throw
+    assert.strictEqual(exitCode, null);
+    assert.strictEqual(sawTimeoutLog, true);
   });
 
   // TC-B-09: runProviderToCompletion called with timeoutMs=2^31-1
