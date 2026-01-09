@@ -73,6 +73,131 @@ async function looksLikeVsCodeLaunchingTestCommand(params: {
   }
 }
 
+/**
+ * 自動修正プロンプトのオプション
+ */
+export interface AutoFixPromptOptions {
+  /** 準拠チェック結果のテキスト */
+  issuesText: string;
+  /** 観点表Markdown（オプション） */
+  perspectiveMarkdown?: string;
+  /** テストファイルの相対パス一覧 */
+  testFilePaths: string[];
+}
+
+/**
+ * プロンプトテンプレートビルダークラス
+ *
+ * 自動修正プロンプトの各セクションを構築する。
+ */
+export class PromptTemplateBuilder {
+  /**
+   * 修正ルールセクションを構築する
+   */
+  buildFixRulesSection(): string {
+    return [
+      '## 修正ルール',
+      '',
+      '1. **Given/When/Then コメント**: 各テストケースに必ず付与',
+      '2. **境界値テスト**: 0 / 最小値 / 最大値 / ±1 / 空 / null / undefined を考慮',
+      '3. **例外メッセージ検証**: 例外の型とメッセージを明示的に検証',
+      '',
+    ].join('\n');
+  }
+
+  /**
+   * 観点表セクションを構築する
+   */
+  buildPerspectiveSection(markdown: string): string {
+    return [
+      '## 観点表',
+      '',
+      markdown,
+      '',
+      '観点表のすべてのケース（Case ID）をテストとして実装し、各テストケースに対応する Case ID をコメントで記載すること。',
+      '',
+    ].join('\n');
+  }
+
+  /**
+   * ファイル制限セクションを構築する
+   */
+  buildFileRestrictionSection(files: string[]): string {
+    const lines = [
+      '## 重要: 編集対象ファイル',
+      '',
+      '以下のファイルのみを編集してください:',
+      '',
+    ];
+    for (const file of files) {
+      lines.push(`- ${file}`);
+    }
+    lines.push('', '**上記以外のファイル（docs/, 設定ファイル等）は編集禁止です。**');
+    return lines.join('\n');
+  }
+}
+
+/**
+ * テストファイルパスリゾルバークラス
+ *
+ * 絶対パスから相対パスへの変換とテストファイルのフィルタリングを担当する。
+ */
+export class TestFilePathResolver {
+  /**
+   * 絶対パスからテストファイルの相対パスを取得する
+   */
+  getRelativeTestFilePaths(
+    absolutePaths: string[],
+    workspaceRoot: string,
+    profile: ProjectProfile | undefined,
+  ): string[] {
+    const result: string[] = [];
+    for (const absPath of absolutePaths) {
+      const relativePath = path.relative(workspaceRoot, absPath);
+      if (profile?.testFilePredicate(relativePath)) {
+        result.push(relativePath);
+      }
+    }
+    return result;
+  }
+}
+
+/**
+ * 自動修正プロンプトコンポーザークラス
+ *
+ * 各セクションを組み合わせて完全なプロンプトを生成する。
+ */
+export class AutoFixPromptComposer {
+  private readonly templateBuilder: PromptTemplateBuilder;
+
+  constructor(templateBuilder?: PromptTemplateBuilder) {
+    this.templateBuilder = templateBuilder ?? new PromptTemplateBuilder();
+  }
+
+  /**
+   * 自動修正プロンプトを生成する
+   */
+  compose(options: AutoFixPromptOptions): string {
+    const parts: string[] = [
+      '## テストコード自動修正',
+      '',
+      '以下のテスト品質の問題が検出されました。各問題を修正してください。',
+      '',
+      options.issuesText,
+      '',
+      this.templateBuilder.buildFixRulesSection(),
+    ];
+
+    if (options.perspectiveMarkdown) {
+      parts.push(this.templateBuilder.buildPerspectiveSection(options.perspectiveMarkdown));
+    }
+
+    parts.push(this.templateBuilder.buildFileRestrictionSection(options.testFilePaths));
+
+    return parts.join('\n');
+  }
+}
+
 export class TestGenerationSession {
   private readonly options: RunWithArtifactsOptions;
   private readonly settings: ArtifactSettings;
@@ -595,50 +720,25 @@ export class TestGenerationSession {
 
   /**
    * 自動修正用のプロンプトを構築する
+   *
+   * 後方互換性のためのファサードメソッド。内部では AutoFixPromptComposer に委譲する。
    */
   private buildAutoFixPrompt(result: ComplianceCheckResult, perspectiveMarkdown: string | undefined): string {
+    const pathResolver = new TestFilePathResolver();
+    const composer = new AutoFixPromptComposer();
+
     const issuesText = formatComplianceIssuesForPrompt(result);
-    const parts: string[] = [
-      '## テストコード自動修正',
-      '',
-      '以下のテスト品質の問題が検出されました。各問題を修正してください。',
-      '',
-      issuesText,
-      '',
-      '## 修正ルール',
-      '',
-      '1. **Given/When/Then コメント**: 各テストケースに必ず付与',
-      '2. **境界値テスト**: 0 / 最小値 / 最大値 / ±1 / 空 / null / undefined を考慮',
-      '3. **例外メッセージ検証**: 例外の型とメッセージを明示的に検証',
-      '',
-    ];
-
-    if (perspectiveMarkdown) {
-      parts.push(
-        '## 観点表',
-        '',
-        perspectiveMarkdown,
-        '',
-        '観点表のすべてのケース（Case ID）をテストとして実装し、各テストケースに対応する Case ID をコメントで記載すること。',
-        '',
-      );
-    }
-
-    parts.push(
-      '## 重要: 編集対象ファイル',
-      '',
-      '以下のファイルのみを編集してください:',
-      '',
+    const testFilePaths = pathResolver.getRelativeTestFilePaths(
+      this.generatedFilePaths,
+      this.runWorkspaceRoot,
+      this.profile,
     );
-    for (const absPath of this.generatedFilePaths) {
-      const relativePath = path.relative(this.runWorkspaceRoot, absPath);
-      if (this.profile?.testFilePredicate(relativePath)) {
-        parts.push(`- ${relativePath}`);
-      }
-    }
-    parts.push('', '**上記以外のファイル（docs/, 設定ファイル等）は編集禁止です。**');
 
-    return parts.join('\n');
+    return composer.compose({
+      issuesText,
+      perspectiveMarkdown,
+      testFilePaths,
+    });
   }
 
   /**

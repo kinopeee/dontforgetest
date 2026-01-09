@@ -68,6 +68,174 @@ interface TestFunction {
 }
 
 /**
+ * 分析コンテキスト - 分析ルールに渡される前処理済みデータ
+ */
+export interface AnalysisContext {
+  /** ワークスペース相対パス */
+  relativePath: string;
+  /** 元のソースコード */
+  content: string;
+  /** コード領域のみのテキスト（文字列/コメント除外済み） */
+  codeOnlyContent: string;
+  /** 抽出されたテスト関数一覧 */
+  testFunctions: TestFunction[];
+}
+
+/**
+ * 分析ルールインターフェース
+ *
+ * 各分析ルールはこのインターフェースを実装し、特定の観点でテストコードを分析する。
+ */
+export interface AnalysisRule {
+  /** ルール識別子 */
+  readonly id: string;
+  /** コンテキストを受け取り、検出された問題を返す */
+  analyze(context: AnalysisContext): AnalysisIssue[];
+}
+
+/**
+ * テストファイル前処理クラス
+ *
+ * ソースコードからコード領域の抽出とテスト関数の抽出を行う。
+ */
+export class TestFilePreprocessor {
+  /**
+   * コード領域のみのテキストを抽出する（文字列/コメントを除外）
+   */
+  extractCodeOnlyContent(content: string): string {
+    return buildCodeOnlyContent(content);
+  }
+
+  /**
+   * テスト関数を抽出する
+   */
+  extractTestFunctions(content: string, codeOnlyContent: string): TestFunction[] {
+    return extractTestFunctions(content, codeOnlyContent);
+  }
+}
+
+/**
+ * Given/When/Then コメント分析ルール
+ *
+ * 各テストケースに Given/When/Then コメントが存在するかをチェックする。
+ */
+export class GivenWhenThenAnalysisRule implements AnalysisRule {
+  readonly id = 'gwt';
+
+  analyze(context: AnalysisContext): AnalysisIssue[] {
+    const issues: AnalysisIssue[] = [];
+
+    for (const testFn of context.testFunctions) {
+      const gwtSearchText = testFn.leadingComments
+        ? `${testFn.leadingComments}\n${testFn.content}`
+        : testFn.content;
+      const gwtResult = checkGivenWhenThenStrict(gwtSearchText);
+      if (!gwtResult.valid) {
+        issues.push({
+          type: 'missing-gwt',
+          file: context.relativePath,
+          line: testFn.startLine,
+          detail: `${testFn.name} (${gwtResult.missing.join(', ')} ${t('analysis.detail.missing')})`,
+        });
+      }
+    }
+
+    return issues;
+  }
+}
+
+/**
+ * 境界値テスト分析ルール
+ *
+ * ファイル単位で境界値テスト（null, undefined, 0, 空文字, 空配列）の存在をチェックする。
+ */
+export class BoundaryValueAnalysisRule implements AnalysisRule {
+  readonly id = 'boundary';
+
+  analyze(context: AnalysisContext): AnalysisIssue[] {
+    const issue = checkBoundaryValueTests(
+      context.relativePath,
+      context.content,
+      context.codeOnlyContent,
+    );
+    return issue ? [issue] : [];
+  }
+}
+
+/**
+ * 例外メッセージ検証分析ルール
+ *
+ * 例外をスローするテストで、メッセージの検証が行われているかをチェックする。
+ */
+export class ExceptionMessageAnalysisRule implements AnalysisRule {
+  readonly id = 'exception';
+
+  analyze(context: AnalysisContext): AnalysisIssue[] {
+    return checkExceptionMessageVerificationStrict(
+      context.relativePath,
+      context.content,
+      context.codeOnlyContent,
+    );
+  }
+}
+
+/**
+ * テストファイル分析パイプラインクラス
+ *
+ * 複数の分析ルールを順次実行し、結果を集約する。
+ */
+export class TestFileAnalysisPipeline {
+  private readonly preprocessor: TestFilePreprocessor;
+  private readonly rules: AnalysisRule[] = [];
+
+  constructor(preprocessor?: TestFilePreprocessor) {
+    this.preprocessor = preprocessor ?? new TestFilePreprocessor();
+  }
+
+  /**
+   * 分析ルールを追加する
+   */
+  addRule(rule: AnalysisRule): this {
+    this.rules.push(rule);
+    return this;
+  }
+
+  /**
+   * ファイル内容を分析して問題を検出する
+   */
+  analyze(relativePath: string, content: string): AnalysisIssue[] {
+    const codeOnlyContent = this.preprocessor.extractCodeOnlyContent(content);
+    const testFunctions = this.preprocessor.extractTestFunctions(content, codeOnlyContent);
+
+    const context: AnalysisContext = {
+      relativePath,
+      content,
+      codeOnlyContent,
+      testFunctions,
+    };
+
+    const issues: AnalysisIssue[] = [];
+    for (const rule of this.rules) {
+      issues.push(...rule.analyze(context));
+    }
+
+    return issues;
+  }
+}
+
+/**
+ * デフォルトの分析パイプラインを作成する
+ *
+ * 標準の3つのルール（G/W/T、境界値、例外メッセージ）を含むパイプラインを返す。
+ */
+export function createDefaultAnalysisPipeline(): TestFileAnalysisPipeline {
+  return new TestFileAnalysisPipeline()
+    .addRule(new GivenWhenThenAnalysisRule())
+    .addRule(new BoundaryValueAnalysisRule())
+    .addRule(new ExceptionMessageAnalysisRule());
+}
+
+/**
  * 分析設定を取得する
  */
 export function getAnalysisSettings(): { reportDir: string; testFilePattern: string } {
@@ -147,45 +315,19 @@ export async function analyzeFile(
 }
 
 /**
+ * デフォルトの分析パイプライン（シングルトン）
+ *
+ * パフォーマンスのため、毎回新規作成せずに再利用する。
+ */
+const defaultPipeline = createDefaultAnalysisPipeline();
+
+/**
  * ファイル内容を分析して問題を検出する
+ *
+ * 後方互換性のためのファサード関数。内部では TestFileAnalysisPipeline に委譲する。
  */
 export function analyzeFileContent(relativePath: string, content: string): AnalysisIssue[] {
-  const issues: AnalysisIssue[] = [];
-
-  // コード領域のみのテキストを生成（文字列/コメントを除外）
-  const codeOnlyContent = buildCodeOnlyContent(content);
-
-  // テスト関数を抽出（codeOnlyContent を使って誤検出を防ぐ）
-  const testFunctions = extractTestFunctions(content, codeOnlyContent);
-
-  // 1. Given/When/Then コメントのチェック（厳格: 全て必須）
-  for (const testFn of testFunctions) {
-    // テスト本文 + 直前コメントを対象に判定する
-    const gwtSearchText = testFn.leadingComments
-      ? `${testFn.leadingComments}\n${testFn.content}`
-      : testFn.content;
-    const gwtResult = checkGivenWhenThenStrict(gwtSearchText);
-    if (!gwtResult.valid) {
-      issues.push({
-        type: 'missing-gwt',
-        file: relativePath,
-        line: testFn.startLine,
-        detail: `${testFn.name} (${gwtResult.missing.join(', ')} ${t('analysis.detail.missing')})`,
-      });
-    }
-  }
-
-  // 2. 境界値テストのチェック（ファイル単位、codeOnlyContent と content を使用）
-  const boundaryIssue = checkBoundaryValueTests(relativePath, content, codeOnlyContent);
-  if (boundaryIssue) {
-    issues.push(boundaryIssue);
-  }
-
-  // 3. 例外メッセージ未検証のチェック（厳格化、codeOnlyContent を使用）
-  const exceptionIssues = checkExceptionMessageVerificationStrict(relativePath, content, codeOnlyContent);
-  issues.push(...exceptionIssues);
-
-  return issues;
+  return defaultPipeline.analyze(relativePath, content);
 }
 
 /**
@@ -995,89 +1137,270 @@ async function readFileContent(filePath: string): Promise<string | undefined> {
 }
 
 /**
+ * Markdownテーブルビルダークラス
+ *
+ * Markdownテーブルの構築を担当する。
+ */
+export class MarkdownTableBuilder {
+  private headers: string[] = [];
+  private rows: string[][] = [];
+
+  /**
+   * ヘッダー行を設定する
+   */
+  addHeader(columns: string[]): this {
+    this.headers = columns;
+    return this;
+  }
+
+  /**
+   * データ行を追加する
+   */
+  addRow(cells: string[]): this {
+    this.rows.push(cells);
+    return this;
+  }
+
+  /**
+   * Markdownテーブル文字列を生成する
+   */
+  build(): string {
+    if (this.headers.length === 0) {
+      return '';
+    }
+
+    const lines: string[] = [];
+    lines.push(`| ${this.headers.join(' | ')} |`);
+    lines.push(`|${this.headers.map(() => '------').join('|')}|`);
+
+    for (const row of this.rows) {
+      lines.push(`| ${row.join(' | ')} |`);
+    }
+
+    return lines.join('\n');
+  }
+}
+
+/**
+ * 問題カテゴリ別フォーマッターインターフェース
+ *
+ * 各問題カテゴリのテーブル形式を定義する。
+ */
+export interface IssueFormatter {
+  /** 問題タイプ */
+  readonly issueType: AnalysisIssueType;
+  /** テーブルヘッダーを取得する */
+  getTableHeaders(): string[];
+  /** 問題をテーブル行にフォーマットする */
+  formatIssueRow(issue: AnalysisIssue): string[];
+}
+
+/**
+ * Given/When/Then 問題フォーマッター
+ */
+export class GwtIssueFormatter implements IssueFormatter {
+  readonly issueType: AnalysisIssueType = 'missing-gwt';
+
+  getTableHeaders(): string[] {
+    return [
+      t('analysis.tableHeader.file'),
+      t('analysis.tableHeader.line'),
+      t('analysis.tableHeader.detail'),
+    ];
+  }
+
+  formatIssueRow(issue: AnalysisIssue): string[] {
+    const lineStr = issue.line !== undefined ? String(issue.line) : '-';
+    return [
+      escapeTableCell(issue.file),
+      lineStr,
+      escapeTableCell(issue.detail),
+    ];
+  }
+}
+
+/**
+ * 境界値テスト問題フォーマッター
+ */
+export class BoundaryIssueFormatter implements IssueFormatter {
+  readonly issueType: AnalysisIssueType = 'missing-boundary';
+
+  getTableHeaders(): string[] {
+    return [
+      t('analysis.tableHeader.file'),
+      t('analysis.tableHeader.detail'),
+    ];
+  }
+
+  formatIssueRow(issue: AnalysisIssue): string[] {
+    return [
+      escapeTableCell(issue.file),
+      escapeTableCell(issue.detail),
+    ];
+  }
+}
+
+/**
+ * 例外メッセージ問題フォーマッター
+ */
+export class ExceptionIssueFormatter implements IssueFormatter {
+  readonly issueType: AnalysisIssueType = 'missing-exception-message';
+
+  getTableHeaders(): string[] {
+    return [
+      t('analysis.tableHeader.file'),
+      t('analysis.tableHeader.line'),
+      t('analysis.tableHeader.detail'),
+    ];
+  }
+
+  formatIssueRow(issue: AnalysisIssue): string[] {
+    const lineStr = issue.line !== undefined ? String(issue.line) : '-';
+    return [
+      escapeTableCell(issue.file),
+      lineStr,
+      escapeTableCell(issue.detail),
+    ];
+  }
+}
+
+/**
+ * レポートセクションビルダークラス
+ *
+ * 分析レポートの各セクションを構築する。
+ */
+export class AnalysisReportSectionBuilder {
+  /**
+   * ヘッダーセクションを構築する
+   */
+  buildHeader(result: AnalysisResult, generatedAtMs: number): string {
+    const tsLocal = formatLocalIso8601WithOffset(new Date(generatedAtMs));
+    return [
+      `# ${t('analysis.report.title')}`,
+      '',
+      `- ${t('analysis.report.generatedAt')}: ${tsLocal}`,
+      `- ${t('analysis.report.target')}: ${result.pattern}`,
+      `- ${t('analysis.report.fileCount')}: ${result.analyzedFiles}`,
+      '',
+      '---',
+    ].join('\n');
+  }
+
+  /**
+   * サマリーテーブルセクションを構築する
+   */
+  buildSummaryTable(summary: AnalysisSummary): string {
+    const builder = new MarkdownTableBuilder()
+      .addHeader([t('analysis.tableHeader.category'), t('analysis.tableHeader.count')])
+      .addRow([t('analysis.category.missingGwt'), String(summary.missingGwt)])
+      .addRow([t('analysis.category.missingBoundary'), String(summary.missingBoundary)])
+      .addRow([t('analysis.category.missingExceptionMessage'), String(summary.missingExceptionMessage)]);
+
+    return [
+      `## ${t('analysis.report.summary')}`,
+      '',
+      builder.build(),
+    ].join('\n');
+  }
+
+  /**
+   * 詳細セクションを構築する
+   */
+  buildDetailsSection(issues: AnalysisIssue[], formatters: IssueFormatter[]): string {
+    if (issues.length === 0) {
+      return t('analysis.noIssues');
+    }
+
+    const lines: string[] = [
+      '---',
+      '',
+      `## ${t('analysis.report.details')}`,
+      '',
+    ];
+
+    for (const formatter of formatters) {
+      const categoryIssues = issues.filter((i) => i.type === formatter.issueType);
+      if (categoryIssues.length === 0) {
+        continue;
+      }
+
+      const categoryName = this.getCategoryName(formatter.issueType);
+      lines.push(`### ${categoryName} (${categoryIssues.length}${t('analysis.unit.count')})`);
+      lines.push('');
+
+      const builder = new MarkdownTableBuilder().addHeader(formatter.getTableHeaders());
+      for (const issue of categoryIssues) {
+        builder.addRow(formatter.formatIssueRow(issue));
+      }
+      lines.push(builder.build());
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  }
+
+  private getCategoryName(issueType: AnalysisIssueType): string {
+    switch (issueType) {
+      case 'missing-gwt':
+        return t('analysis.category.missingGwt');
+      case 'missing-boundary':
+        return t('analysis.category.missingBoundary');
+      case 'missing-exception-message':
+        return t('analysis.category.missingExceptionMessage');
+    }
+  }
+}
+
+/**
+ * 分析レポートコンポーザークラス
+ *
+ * 各セクションを組み合わせて完全なレポートを生成する。
+ */
+export class AnalysisReportComposer {
+  private readonly sectionBuilder: AnalysisReportSectionBuilder;
+  private readonly formatters: IssueFormatter[];
+
+  constructor(
+    sectionBuilder?: AnalysisReportSectionBuilder,
+    formatters?: IssueFormatter[],
+  ) {
+    this.sectionBuilder = sectionBuilder ?? new AnalysisReportSectionBuilder();
+    this.formatters = formatters ?? [
+      new GwtIssueFormatter(),
+      new BoundaryIssueFormatter(),
+      new ExceptionIssueFormatter(),
+    ];
+  }
+
+  /**
+   * 分析結果からMarkdownレポートを生成する
+   */
+  compose(result: AnalysisResult, generatedAtMs: number): string {
+    const parts: string[] = [
+      this.sectionBuilder.buildHeader(result, generatedAtMs),
+      this.sectionBuilder.buildSummaryTable(result.summary),
+      this.sectionBuilder.buildDetailsSection(result.issues, this.formatters),
+    ];
+
+    return parts.join('\n\n');
+  }
+}
+
+/**
+ * デフォルトのレポートコンポーザー（シングルトン）
+ */
+const defaultReportComposer = new AnalysisReportComposer();
+
+/**
  * 分析レポートを Markdown として生成する
+ *
+ * 後方互換性のためのファサード関数。内部では AnalysisReportComposer に委譲する。
  */
 export function buildAnalysisReportMarkdown(
   result: AnalysisResult,
   generatedAtMs: number,
 ): string {
-  const tsLocal = formatLocalIso8601WithOffset(new Date(generatedAtMs));
-  const totalIssues = result.issues.length;
-
-  const lines: string[] = [
-    `# ${t('analysis.report.title')}`,
-    '',
-    `- ${t('analysis.report.generatedAt')}: ${tsLocal}`,
-    `- ${t('analysis.report.target')}: ${result.pattern}`,
-    `- ${t('analysis.report.fileCount')}: ${result.analyzedFiles}`,
-    '',
-    '---',
-    '',
-  ];
-
-  // サマリー
-  lines.push(`## ${t('analysis.report.summary')}`);
-  lines.push('');
-  lines.push(`| ${t('analysis.tableHeader.category')} | ${t('analysis.tableHeader.count')} |`);
-  lines.push('|----------|------|');
-  lines.push(`| ${t('analysis.category.missingGwt')} | ${result.summary.missingGwt} |`);
-  lines.push(`| ${t('analysis.category.missingBoundary')} | ${result.summary.missingBoundary} |`);
-  lines.push(`| ${t('analysis.category.missingExceptionMessage')} | ${result.summary.missingExceptionMessage} |`);
-  lines.push('');
-
-  if (totalIssues === 0) {
-    lines.push(t('analysis.noIssues'));
-    lines.push('');
-    return lines.join('\n');
-  }
-
-  lines.push('---');
-  lines.push('');
-  lines.push(`## ${t('analysis.report.details')}`);
-  lines.push('');
-
-  // Given/When/Then コメントなし
-  const gwtIssues = result.issues.filter((i) => i.type === 'missing-gwt');
-  if (gwtIssues.length > 0) {
-    lines.push(`### ${t('analysis.category.missingGwt')} (${gwtIssues.length}${t('analysis.unit.count')})`);
-    lines.push('');
-    lines.push(`| ${t('analysis.tableHeader.file')} | ${t('analysis.tableHeader.line')} | ${t('analysis.tableHeader.detail')} |`);
-    lines.push('|----------|-----|------|');
-    for (const issue of gwtIssues) {
-      const lineStr = issue.line !== undefined ? String(issue.line) : '-';
-      lines.push(`| ${escapeTableCell(issue.file)} | ${lineStr} | ${escapeTableCell(issue.detail)} |`);
-    }
-    lines.push('');
-  }
-
-  // 境界値テスト不足
-  const boundaryIssues = result.issues.filter((i) => i.type === 'missing-boundary');
-  if (boundaryIssues.length > 0) {
-    lines.push(`### ${t('analysis.category.missingBoundary')} (${boundaryIssues.length}${t('analysis.unit.count')})`);
-    lines.push('');
-    lines.push(`| ${t('analysis.tableHeader.file')} | ${t('analysis.tableHeader.detail')} |`);
-    lines.push('|----------|------|');
-    for (const issue of boundaryIssues) {
-      lines.push(`| ${escapeTableCell(issue.file)} | ${escapeTableCell(issue.detail)} |`);
-    }
-    lines.push('');
-  }
-
-  // 例外メッセージ未検証
-  const exceptionIssues = result.issues.filter((i) => i.type === 'missing-exception-message');
-  if (exceptionIssues.length > 0) {
-    lines.push(`### ${t('analysis.category.missingExceptionMessage')} (${exceptionIssues.length}${t('analysis.unit.count')})`);
-    lines.push('');
-    lines.push(`| ${t('analysis.tableHeader.file')} | ${t('analysis.tableHeader.line')} | ${t('analysis.tableHeader.detail')} |`);
-    lines.push('|----------|-----|------|');
-    for (const issue of exceptionIssues) {
-      const lineStr = issue.line !== undefined ? String(issue.line) : '-';
-      lines.push(`| ${escapeTableCell(issue.file)} | ${lineStr} | ${escapeTableCell(issue.detail)} |`);
-    }
-    lines.push('');
-  }
-
-  return lines.join('\n');
+  return defaultReportComposer.compose(result, generatedAtMs);
 }
 
 /**
