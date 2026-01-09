@@ -1,4 +1,8 @@
 import { t } from '../../core/l10n';
+import { truncateText } from '../../utils/textUtils';
+
+// 共通ユーティリティを再エクスポート（既存の利用箇所との互換性のため）
+export { truncateText };
 
 /**
  * 観点表ヘッダ検出用キーワード（英語）
@@ -194,13 +198,6 @@ export function coerceLegacyPerspectiveMarkdownTable(markdown: string): string |
   const normalizedSeparator = PERSPECTIVE_TABLE_SEPARATOR;
   const all = [normalizedHeader, normalizedSeparator, ...body].join('\n');
   return `${all}\n`;
-}
-
-export function truncateText(text: string, maxChars: number): string {
-  if (text.length <= maxChars) {
-    return text;
-  }
-  return `${text.slice(0, maxChars)}\n\n... (truncated: ${text.length} chars -> ${maxChars} chars)`;
 }
 
 export function dedupeStable(paths: string[]): string[] {

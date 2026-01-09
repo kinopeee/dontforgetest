@@ -19,8 +19,8 @@ import { generateTestWithQuickPick } from './ui/quickPick';
 import { initializeTestGenStatusBar } from './ui/statusBar';
 import { initializeProgressTreeView } from './ui/progressTreeView';
 import { initializeOutputTreeView } from './ui/outputTreeView';
+import { type RunLocation } from './utils/runOptions';
 
-type RunLocation = 'local' | 'worktree';
 type RunMode = TestGenerationRunMode;
 
 /**
@@ -40,6 +40,60 @@ export function normalizeRunLocation(value: unknown): RunLocation {
  */
 export function normalizeRunMode(value: unknown): RunMode {
   return value === 'perspectiveOnly' ? 'perspectiveOnly' : 'full';
+}
+
+/**
+ * 最新の成果物ファイルを開く共通関数。
+ *
+ * @param workspaceRoot ワークスペースルートパス
+ * @param directory 検索対象ディレクトリ（ワークスペース相対または絶対）
+ * @param prefix ファイル名のプレフィックス（例: 'test-perspectives_'）
+ * @param notFoundMessageKey 見つからない場合に表示するメッセージのキー
+ */
+async function openLatestArtifact(
+  workspaceRoot: string,
+  directory: string,
+  prefix: string,
+  notFoundMessageKey: string,
+): Promise<void> {
+  const latestPath = await findLatestArtifact(workspaceRoot, directory, prefix);
+
+  if (!latestPath) {
+    await vscode.window.showInformationMessage(t(notFoundMessageKey));
+    return;
+  }
+
+  try {
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latestPath));
+    await vscode.window.showTextDocument(doc);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await vscode.window.showErrorMessage(t('artifact.openFailed', latestPath, message));
+  }
+}
+
+interface GenerateCommandArgs {
+  runLocation?: RunLocation;
+  modelOverride?: string;
+  runMode?: RunMode;
+}
+
+/**
+ * テスト生成コマンドの共通引数を正規化する。
+ *
+ * @param args コマンド引数
+ * @returns 正規化された引数オブジェクト
+ */
+function normalizeGenerateCommandArgs(args?: GenerateCommandArgs): {
+  runLocation: RunLocation;
+  modelOverride: string | undefined;
+  runMode: RunMode;
+} {
+  return {
+    runLocation: normalizeRunLocation(args?.runLocation),
+    modelOverride: typeof args?.modelOverride === 'string' ? args.modelOverride : undefined,
+    runMode: normalizeRunMode(args?.runMode),
+  };
 }
 
 /**
@@ -83,39 +137,25 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'dontforgetest.generateTestFromCommit',
-      async (args?: { runLocation?: RunLocation; modelOverride?: string; runMode?: RunMode }) => {
-        // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
-        const provider = createAgentProvider();
-        const runLocation = normalizeRunLocation(args?.runLocation);
-        const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
-        const runMode = normalizeRunMode(args?.runMode);
-        await generateTestFromLatestCommit(provider, modelOverride, { runLocation, runMode, extensionContext: context });
-      },
-    ),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'dontforgetest.generateTestFromCommitRange',
-      async (args?: { runLocation?: RunLocation; modelOverride?: string; runMode?: RunMode }) => {
-        // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
-        const provider = createAgentProvider();
-        const runLocation = normalizeRunLocation(args?.runLocation);
-        const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
-        const runMode = normalizeRunMode(args?.runMode);
-        await generateTestFromCommitRange(provider, modelOverride, { runLocation, runMode, extensionContext: context });
-      },
-    ),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('dontforgetest.generateTestFromWorkingTree', async (args?: { modelOverride?: string; runMode?: RunMode }) => {
-      // 実行時に設定を読み取り、Provider を生成する（Provider 切り替えが即時反映されるようにする）
+    vscode.commands.registerCommand('dontforgetest.generateTestFromCommit', async (args?: GenerateCommandArgs) => {
       const provider = createAgentProvider();
-      const modelOverride = typeof args?.modelOverride === 'string' ? args.modelOverride : undefined;
-      const runMode = normalizeRunMode(args?.runMode);
+      const { runLocation, modelOverride, runMode } = normalizeGenerateCommandArgs(args);
+      await generateTestFromLatestCommit(provider, modelOverride, { runLocation, runMode, extensionContext: context });
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('dontforgetest.generateTestFromCommitRange', async (args?: GenerateCommandArgs) => {
+      const provider = createAgentProvider();
+      const { runLocation, modelOverride, runMode } = normalizeGenerateCommandArgs(args);
+      await generateTestFromCommitRange(provider, modelOverride, { runLocation, runMode, extensionContext: context });
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('dontforgetest.generateTestFromWorkingTree', async (args?: GenerateCommandArgs) => {
+      const provider = createAgentProvider();
+      const { modelOverride, runMode } = normalizeGenerateCommandArgs(args);
       await generateTestFromWorkingTree(provider, modelOverride, { runMode });
     }),
   );
@@ -151,18 +191,9 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.showWarningMessage(t('workspace.notOpen'));
         return;
       }
-
       const workspaceRoot = workspaceFolders[0].uri.fsPath;
       const settings = getArtifactSettings();
-      const latestPath = await findLatestArtifact(workspaceRoot, settings.perspectiveReportDir, 'test-perspectives_');
-
-      if (!latestPath) {
-        await vscode.window.showInformationMessage(t('artifact.latestPerspective.notFound'));
-        return;
-      }
-
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latestPath));
-      await vscode.window.showTextDocument(doc);
+      await openLatestArtifact(workspaceRoot, settings.perspectiveReportDir, 'test-perspectives_', 'artifact.latestPerspective.notFound');
     }),
   );
 
@@ -173,18 +204,9 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.showWarningMessage(t('workspace.notOpen'));
         return;
       }
-
       const workspaceRoot = workspaceFolders[0].uri.fsPath;
       const settings = getArtifactSettings();
-      const latestPath = await findLatestArtifact(workspaceRoot, settings.testExecutionReportDir, 'test-execution_');
-
-      if (!latestPath) {
-        await vscode.window.showInformationMessage(t('artifact.latestExecutionReport.notFound'));
-        return;
-      }
-
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latestPath));
-      await vscode.window.showTextDocument(doc);
+      await openLatestArtifact(workspaceRoot, settings.testExecutionReportDir, 'test-execution_', 'artifact.latestExecutionReport.notFound');
     }),
   );
 
@@ -243,18 +265,9 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.showWarningMessage(t('workspace.notOpen'));
         return;
       }
-
       const workspaceRoot = workspaceFolders[0].uri.fsPath;
       const settings = getAnalysisSettings();
-      const latestPath = await findLatestArtifact(workspaceRoot, settings.reportDir, 'test-analysis_');
-
-      if (!latestPath) {
-        await vscode.window.showInformationMessage(t('analysis.latestReport.notFound'));
-        return;
-      }
-
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latestPath));
-      await vscode.window.showTextDocument(doc);
+      await openLatestArtifact(workspaceRoot, settings.reportDir, 'test-analysis_', 'analysis.latestReport.notFound');
     }),
   );
 }
