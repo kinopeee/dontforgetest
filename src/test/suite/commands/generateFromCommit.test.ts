@@ -10,15 +10,18 @@ import { createMockExtensionContext } from '../testUtils/vscodeMocks';
 import { MockGenerateProvider } from '../testUtils/mockProviders';
 
 suite('commands/generateFromCommit.ts', () => {
-  // Test Perspectives Table for generateTestFromLatestCommit (deterministic branch coverage)
-  // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
-  // |---------|----------------------|--------------------------------------|-----------------|-------|
-  // | TC-GC-E-01 | ensurePreflight returns undefined | Error – preflight failure | git/runner functions are not called; no runWithArtifacts call | 0/min/max/±1 not applicable |
-  // | TC-GC-E-02 | HEAD commit hash cannot be resolved | Error – missing data | showErrorMessage called once; runWithArtifacts not called | Message content varies by locale |
-  // | TC-GC-E-03 | changedFiles is empty | Boundary – empty | showInformationMessage called once with short commit; runWithArtifacts not called | - |
-  // | TC-GC-E-04 | runLocation=worktree and extensionContext is undefined | Error – invalid options | showErrorMessage called; runWithArtifacts not called | - |
-  // | TC-GC-N-01 | runLocation=local with valid commit/diff | Equivalence – normal | runWithArtifacts called with targetPaths and model override | - |
-  // | TC-GC-N-02 | runLocation=worktree with extensionContext | Equivalence – normal | runWithArtifacts called with runLocation=worktree | - |
+  // generateTestFromLatestCommit のテスト観点テーブル（決定的な分岐カバレッジ）
+  // | ケースID | 入力 / 前提条件 | 観点（同値 / 境界） | 期待結果 | 備考 |
+  // |---------|----------------|-------------------|---------|------|
+  // | TC-GC-E-01 | ensurePreflight が undefined を返す | エラー - プリフライト失敗 | git/runner 関数が呼ばれない; runWithArtifacts 呼び出しなし | 0/最小/最大/±1 は該当なし |
+  // | TC-GC-E-02 | HEAD コミットハッシュが解決できない | エラー - データ不足 | showErrorMessage が1回呼ばれる; runWithArtifacts 呼び出しなし | メッセージ内容はロケールにより異なる |
+  // | TC-GC-E-03 | changedFiles が空 | 境界 - 空 | showInformationMessage が短縮コミットと共に1回呼ばれる; runWithArtifacts 呼び出しなし | - |
+  // | TC-GC-E-04 | runLocation=worktree かつ extensionContext が undefined | エラー - 無効なオプション | showErrorMessage 呼び出し; runWithArtifacts 呼び出しなし | - |
+  // | TC-GC-E-05 | rev-parse が例外を投げる | エラー - git コマンド失敗 | showErrorMessage 呼び出し; runWithArtifacts 呼び出しなし | - |
+  // | TC-GC-E-06 | diff-tree が例外を投げる | エラー - git コマンド失敗 | showInformationMessage 呼び出し; runWithArtifacts 呼び出しなし | - |
+  // | TC-GC-E-07 | show が例外を投げる | エラー - フォールバック動作 | diffText がフォールバック文言になり、runWithArtifacts は実行される | - |
+  // | TC-GC-N-01 | runLocation=local で有効なコミット/差分 | 同値 - 正常系 | runWithArtifacts が targetPaths とモデル上書きで呼ばれる | - |
+  // | TC-GC-N-02 | runLocation=worktree で extensionContext あり | 同値 - 正常系 | runWithArtifacts が runLocation=worktree で呼ばれる | - |
   suite('generateTestFromLatestCommit deterministic coverage', () => {
     let originalEnsurePreflight: typeof preflightModule.ensurePreflight;
     let originalExecGitStdout: typeof gitExecModule.execGitStdout;
