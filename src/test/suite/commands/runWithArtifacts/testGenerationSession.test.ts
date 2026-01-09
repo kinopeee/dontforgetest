@@ -1961,6 +1961,563 @@ suite('commands/runWithArtifacts/testGenerationSession.ts', () => {
         }
       });
 
+      test('TC-SES-WT-N-01: runTestExecution uses localWorkspaceRoot as cwd when worktree changes are applied (applied=true)', async () => {
+        // Case ID: TC-SES-WT-N-01
+        // Given: A worktree-mode session where applyWorktreeTestChanges returns applied=true
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+        workspaceRoots.push(workspaceRoot);
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const worktreeApplyStep = require('../../../../commands/runWithArtifacts/worktreeApplyStep') as typeof import('../../../../commands/runWithArtifacts/worktreeApplyStep');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const artifacts = require('../../../../core/artifacts') as typeof import('../../../../core/artifacts');
+
+        const originalApply = worktreeApplyStep.applyWorktreeTestChanges;
+        const originalSave = artifacts.saveTestExecutionReport;
+
+        let captured: import('../../../../core/artifacts').TestExecutionResult | undefined;
+        let capturedRunWorkspaceRoot: string | undefined;
+
+        worktreeApplyStep.applyWorktreeTestChanges = (async (params: { runWorkspaceRoot: string }) => {
+          capturedRunWorkspaceRoot = params.runWorkspaceRoot;
+          return { applied: true, reason: 'ok' };
+        }) as unknown as typeof worktreeApplyStep.applyWorktreeTestChanges;
+
+        artifacts.saveTestExecutionReport = (async (params: { result: import('../../../../core/artifacts').TestExecutionResult }) => {
+          captured = params.result;
+          return { absolutePath: '/tmp/report.md' };
+        }) as unknown as typeof artifacts.saveTestExecutionReport;
+
+        const session = new TestGenerationSession({
+          provider: dummyProvider,
+          workspaceRoot,
+          cursorAgentCommand: 'cursor-agent',
+          testStrategyPath: '',
+          generationLabel: 'Label',
+          targetPaths: [],
+          generationPrompt: '',
+          perspectiveReferenceText: '',
+          model: undefined,
+          generationTaskId: 'task-worktree-applied',
+          runLocation: 'worktree',
+          settingsOverride: {
+            includeTestPerspectiveTable: false,
+            testExecutionRunner: 'extension',
+            testCommand: '', // force skip branch so cwd is observable via saved report
+            enablePreTestCheck: false,
+          },
+          extensionContext: { globalStorageUri: { fsPath: workspaceRoot } } as unknown as import('vscode').ExtensionContext,
+        });
+
+        // Simulate that generation ran in worktree
+        const fakeWorktreeRoot = path.join(workspaceRoot, '.worktree');
+        (session as unknown as { worktreeDir?: string; runWorkspaceRoot?: string }).worktreeDir = fakeWorktreeRoot;
+        (session as unknown as { runWorkspaceRoot?: string }).runWorkspaceRoot = fakeWorktreeRoot;
+
+        try {
+          // When: runTestExecution is called
+          const runTestExecution = (session as unknown as { runTestExecution: (genExit: number | null) => Promise<void> }).runTestExecution.bind(session);
+          await runTestExecution(0);
+
+          // Then: applyWorktreeTestChanges received runWorkspaceRoot=worktree, but test execution cwd is localWorkspaceRoot
+          assert.strictEqual(capturedRunWorkspaceRoot, fakeWorktreeRoot);
+          assert.ok(captured, 'Expected saveTestExecutionReport to be called');
+          assert.strictEqual(captured?.cwd, workspaceRoot, 'Expected cwd to be localWorkspaceRoot when applied=true');
+        } finally {
+          worktreeApplyStep.applyWorktreeTestChanges = originalApply;
+          artifacts.saveTestExecutionReport = originalSave;
+        }
+      });
+
+      suite('compliance report (saveComplianceReport / formatComplianceReportMarkdown)', () => {
+        test('TC-SES-COMPLY-N-01: saveComplianceReport writes markdown and logs reportSaved', async () => {
+          // Case ID: TC-SES-COMPLY-N-01
+          // Given: A session and a writable report directory
+          const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+          workspaceRoots.push(workspaceRoot);
+
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+
+          const originalAppend = outputChannel.appendEventToOutput;
+          const events: Array<{ type: string; level?: unknown; message?: unknown }> = [];
+          (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = (event) => {
+            events.push({ type: event.type, level: (event as unknown as { level?: unknown }).level, message: (event as unknown as { message?: unknown }).message });
+          };
+
+          const reportDirAbs = path.join(workspaceRoot, 'reports');
+
+          const session = new TestGenerationSession({
+            provider: dummyProvider,
+            workspaceRoot,
+            cursorAgentCommand: 'cursor-agent',
+            testStrategyPath: '',
+            generationLabel: 'Label',
+            targetPaths: [],
+            generationPrompt: '',
+            perspectiveReferenceText: '',
+            model: undefined,
+            generationTaskId: 'task-compliance-report',
+            runLocation: 'local',
+            settingsOverride: {
+              includeTestPerspectiveTable: false,
+              testExecutionRunner: 'extension',
+              testCommand: '',
+              enablePreTestCheck: false,
+              testExecutionReportDir: reportDirAbs,
+            },
+            extensionContext: { extension: { packageJSON: { version: '0.0.0' } } } as unknown as vscode.ExtensionContext,
+          });
+
+          const complianceResult = {
+            passed: false,
+            analyzedFiles: 2,
+            analysisIssues: [
+              { type: 'missing-gwt', file: 'src/x.test.ts', line: 10, detail: 'missing Given/When/Then comment' },
+            ],
+            analysisSummary: {
+              missingGwt: 1,
+              missingBoundary: 0,
+              missingExceptionMessage: 0,
+            },
+            missingCaseIdIssues: [
+              { caseId: 'TC-N-001', file: 'src/x.test.ts', detail: 'missing implementation' },
+            ],
+            perspectiveSkippedWarning: 'perspective was skipped',
+          } as unknown as import('../../../../core/strategyComplianceCheck').ComplianceCheckResult;
+
+          try {
+            // When: saveComplianceReport is called
+            const saveComplianceReport = (session as unknown as { saveComplianceReport: (r: unknown) => Promise<void> }).saveComplianceReport.bind(session);
+            await saveComplianceReport(complianceResult);
+
+            // Then: It logs compliance.reportSaved with a relative path that includes compliance-report_
+            const savedLog = events.find((e) => e.type === 'log' && e.level === 'info' && typeof e.message === 'string' && (e.message as string).includes('compliance-report_'));
+            assert.ok(savedLog, 'Expected an info log containing compliance-report_');
+
+            // And: formatted markdown includes expected sections (to cover formatComplianceReportMarkdown branches)
+            const formatted = (session as unknown as { formatComplianceReportMarkdown: (r: unknown) => string }).formatComplianceReportMarkdown.bind(session)(complianceResult);
+            assert.ok(formatted.includes('# Strategy Compliance Report'));
+            assert.ok(formatted.includes('## Test Quality Issues'));
+            assert.ok(formatted.includes('## Missing Case ID Implementations'));
+            assert.ok(formatted.includes('## Warnings'));
+            assert.ok(formatted.includes('missing-gwt'));
+            assert.ok(formatted.includes('TC-N-001'));
+          } finally {
+            (outputChannel as unknown as { appendEventToOutput: typeof originalAppend }).appendEventToOutput = originalAppend;
+          }
+        });
+
+        test('TC-SES-COMPLY-E-01: saveComplianceReport logs reportSaveFailed when writeFile throws', async () => {
+          // Case ID: TC-SES-COMPLY-E-01
+          // Given: A session and fs.promises.writeFile stubbed to throw
+          const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+          workspaceRoots.push(workspaceRoot);
+
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+
+          const originalAppend = outputChannel.appendEventToOutput;
+          const events: Array<{ type: string; level?: unknown; message?: unknown }> = [];
+          (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = (event) => {
+            events.push({ type: event.type, level: (event as unknown as { level?: unknown }).level, message: (event as unknown as { message?: unknown }).message });
+          };
+
+          const originalWriteFile = fs.promises.writeFile;
+          (fs.promises as unknown as { writeFile: typeof fs.promises.writeFile }).writeFile = (async () => {
+            throw new Error('write failed');
+          }) as unknown as typeof fs.promises.writeFile;
+
+          const session = new TestGenerationSession({
+            provider: dummyProvider,
+            workspaceRoot,
+            cursorAgentCommand: 'cursor-agent',
+            testStrategyPath: '',
+            generationLabel: 'Label',
+            targetPaths: [],
+            generationPrompt: '',
+            perspectiveReferenceText: '',
+            model: undefined,
+            generationTaskId: 'task-compliance-report-fail',
+            runLocation: 'local',
+            settingsOverride: {
+              includeTestPerspectiveTable: false,
+              testExecutionRunner: 'extension',
+              testCommand: '',
+              enablePreTestCheck: false,
+              testExecutionReportDir: path.join(workspaceRoot, 'reports'),
+            },
+            extensionContext: { extension: { packageJSON: { version: '0.0.0' } } } as unknown as vscode.ExtensionContext,
+          });
+
+          const complianceResult = {
+            passed: true,
+            analyzedFiles: 0,
+            analysisIssues: [],
+            analysisSummary: {
+              missingGwt: 0,
+              missingBoundary: 0,
+              missingExceptionMessage: 0,
+            },
+            missingCaseIdIssues: [],
+            perspectiveSkippedWarning: '',
+          } as unknown as import('../../../../core/strategyComplianceCheck').ComplianceCheckResult;
+
+          try {
+            // When: saveComplianceReport is called
+            const saveComplianceReport = (session as unknown as { saveComplianceReport: (r: unknown) => Promise<void> }).saveComplianceReport.bind(session);
+            await saveComplianceReport(complianceResult);
+
+            // Then: It logs an error with reportSaveFailed and includes our error message
+            const errorLog = events.find((e) => e.type === 'log' && e.level === 'error' && typeof e.message === 'string' && (e.message as string).includes('write failed'));
+            assert.ok(errorLog, 'Expected an error log containing "write failed"');
+          } finally {
+            (outputChannel as unknown as { appendEventToOutput: typeof originalAppend }).appendEventToOutput = originalAppend;
+            (fs.promises as unknown as { writeFile: typeof originalWriteFile }).writeFile = originalWriteFile;
+          }
+        });
+      });
+
+      suite('cleanup (worktree removal logging)', () => {
+        test('TC-SES-CLEAN-N-01: cleanup logs worktree.deleted when removeTemporaryWorktree succeeds', async () => {
+          // Case ID: TC-SES-CLEAN-N-01
+          const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+          workspaceRoots.push(workspaceRoot);
+
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+          const originalAppend = outputChannel.appendEventToOutput;
+          const events: Array<{ type: string; level?: unknown; message?: unknown }> = [];
+          (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = (event) => {
+            events.push({ type: event.type, level: (event as unknown as { level?: unknown }).level, message: (event as unknown as { message?: unknown }).message });
+          };
+
+          const session = new TestGenerationSession({
+            provider: dummyProvider,
+            workspaceRoot,
+            cursorAgentCommand: 'cursor-agent',
+            testStrategyPath: '',
+            generationLabel: 'Label',
+            targetPaths: [],
+            generationPrompt: '',
+            perspectiveReferenceText: '',
+            model: undefined,
+            generationTaskId: 'task-cleanup-ok',
+            runLocation: 'worktree',
+            settingsOverride: {
+              includeTestPerspectiveTable: false,
+              testExecutionRunner: 'extension',
+              testCommand: '',
+              enablePreTestCheck: false,
+            },
+            extensionContext: { globalStorageUri: { fsPath: workspaceRoot } } as unknown as import('vscode').ExtensionContext,
+          });
+
+          (session as unknown as { worktreeDir?: string }).worktreeDir = path.join(workspaceRoot, '.worktree');
+          (session as unknown as { worktreeOps?: unknown }).worktreeOps = {
+            createTemporaryWorktree: async () => ({ worktreeDir: path.join(workspaceRoot, '.worktree') }),
+            removeTemporaryWorktree: async () => {},
+          };
+
+          try {
+            // When: cleanup is called
+            const cleanup = (session as unknown as { cleanup: () => Promise<void> }).cleanup.bind(session);
+            await cleanup();
+
+            // Then: It logs worktree.deleted
+            assert.ok(events.some((e) => e.type === 'log' && e.level === 'info' && e.message === l10n.t('worktree.deleted')));
+          } finally {
+            (outputChannel as unknown as { appendEventToOutput: typeof originalAppend }).appendEventToOutput = originalAppend;
+          }
+        });
+
+        test('TC-SES-CLEAN-E-01: cleanup logs worktree.deleteFailed when removeTemporaryWorktree throws', async () => {
+          // Case ID: TC-SES-CLEAN-E-01
+          const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+          workspaceRoots.push(workspaceRoot);
+
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+          const originalAppend = outputChannel.appendEventToOutput;
+          const events: Array<{ type: string; level?: unknown; message?: unknown }> = [];
+          (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = (event) => {
+            events.push({ type: event.type, level: (event as unknown as { level?: unknown }).level, message: (event as unknown as { message?: unknown }).message });
+          };
+
+          const session = new TestGenerationSession({
+            provider: dummyProvider,
+            workspaceRoot,
+            cursorAgentCommand: 'cursor-agent',
+            testStrategyPath: '',
+            generationLabel: 'Label',
+            targetPaths: [],
+            generationPrompt: '',
+            perspectiveReferenceText: '',
+            model: undefined,
+            generationTaskId: 'task-cleanup-fail',
+            runLocation: 'worktree',
+            settingsOverride: {
+              includeTestPerspectiveTable: false,
+              testExecutionRunner: 'extension',
+              testCommand: '',
+              enablePreTestCheck: false,
+            },
+            extensionContext: { globalStorageUri: { fsPath: workspaceRoot } } as unknown as import('vscode').ExtensionContext,
+          });
+
+          (session as unknown as { worktreeDir?: string }).worktreeDir = path.join(workspaceRoot, '.worktree');
+          (session as unknown as { worktreeOps?: unknown }).worktreeOps = {
+            createTemporaryWorktree: async () => ({ worktreeDir: path.join(workspaceRoot, '.worktree') }),
+            removeTemporaryWorktree: async () => {
+              throw new Error('boom');
+            },
+          };
+
+          try {
+            // When: cleanup is called
+            const cleanup = (session as unknown as { cleanup: () => Promise<void> }).cleanup.bind(session);
+            await cleanup();
+
+            // Then: It logs worktree.deleteFailed (message contains the error)
+            assert.ok(
+              events.some((e) => e.type === 'log' && e.level === 'warn' && typeof e.message === 'string' && (e.message as string).includes(l10n.t('worktree.deleteFailed', 'boom'))),
+            );
+          } finally {
+            (outputChannel as unknown as { appendEventToOutput: typeof originalAppend }).appendEventToOutput = originalAppend;
+          }
+        });
+      });
+
+      suite('strategy compliance (supplementGeneratedFilePathsFromGit / runComplianceCheckAndAutoFix / buildAutoFixPrompt)', () => {
+        test('TC-SES-GIT-N-01: supplementGeneratedFilePathsFromGit merges diff+untracked and filters by testFilePredicate', async () => {
+          // Case ID: TC-SES-GIT-N-01
+          const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+          workspaceRoots.push(workspaceRoot);
+
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const gitExec = require('../../../../git/gitExec') as typeof import('../../../../git/gitExec');
+
+          const originalExec = gitExec.execGitStdout;
+          gitExec.execGitStdout = (async (_cwd: string, args: string[]) => {
+            if (args[0] === 'diff') {
+              return ['src/a.test.ts', 'src/not-a-test.ts', 'src/dup.test.ts'].join('\n');
+            }
+            if (args[0] === 'ls-files') {
+              return ['src/b.test.ts', 'src/dup.test.ts'].join('\n');
+            }
+            return '';
+          }) as unknown as typeof gitExec.execGitStdout;
+
+          const session = new TestGenerationSession({
+            provider: dummyProvider,
+            workspaceRoot,
+            cursorAgentCommand: 'cursor-agent',
+            testStrategyPath: '',
+            generationLabel: 'Label',
+            targetPaths: [],
+            generationPrompt: '',
+            perspectiveReferenceText: '',
+            model: undefined,
+            generationTaskId: 'task-git-supplement',
+            runLocation: 'local',
+            settingsOverride: {
+              includeTestPerspectiveTable: false,
+              testExecutionRunner: 'extension',
+              testCommand: '',
+              enablePreTestCheck: false,
+            },
+            extensionContext: { extension: { packageJSON: { version: '0.0.0' } } } as unknown as vscode.ExtensionContext,
+          });
+
+          // Set a minimal profile with testFilePredicate
+          (session as unknown as { profile?: unknown }).profile = {
+            testFilePredicate: (relativePath: string) => relativePath.endsWith('.test.ts'),
+          };
+
+          // Ensure state is clean
+          (session as unknown as { generatedFilePaths?: string[] }).generatedFilePaths = [];
+
+          try {
+            // When: supplementGeneratedFilePathsFromGit is called
+            const supplement = (session as unknown as { supplementGeneratedFilePathsFromGit: () => Promise<void> }).supplementGeneratedFilePathsFromGit.bind(session);
+            await supplement();
+
+            // Then: Only *.test.ts are added, and duplicates are de-duplicated
+            const generated = (session as unknown as { generatedFilePaths: string[] }).generatedFilePaths;
+            const rel = generated.map((abs) => path.relative(workspaceRoot, abs)).sort();
+            assert.deepStrictEqual(rel, ['src/a.test.ts', 'src/b.test.ts', 'src/dup.test.ts'].sort());
+          } finally {
+            gitExec.execGitStdout = originalExec;
+          }
+        });
+
+        test('TC-SES-COMPLY-B-01: runComplianceCheckAndAutoFix logs noTestFiles and returns when there are no test files', async () => {
+          // Case ID: TC-SES-COMPLY-B-01
+          const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+          workspaceRoots.push(workspaceRoot);
+
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+          const originalAppend = outputChannel.appendEventToOutput;
+          const events: Array<{ type: string; level?: unknown; message?: unknown }> = [];
+          (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = (event) => {
+            events.push({ type: event.type, level: (event as unknown as { level?: unknown }).level, message: (event as unknown as { message?: unknown }).message });
+          };
+
+          const session = new TestGenerationSession({
+            provider: dummyProvider,
+            workspaceRoot,
+            cursorAgentCommand: 'cursor-agent',
+            testStrategyPath: '',
+            generationLabel: 'Label',
+            targetPaths: [],
+            generationPrompt: '',
+            perspectiveReferenceText: '',
+            model: undefined,
+            generationTaskId: 'task-compliance-no-files',
+            runLocation: 'local',
+            settingsOverride: {
+              includeTestPerspectiveTable: false,
+              testExecutionRunner: 'extension',
+              testCommand: '',
+              enablePreTestCheck: false,
+              strategyComplianceAutoFixMaxRetries: 1,
+            },
+            extensionContext: { extension: { packageJSON: { version: '0.0.0' } } } as unknown as vscode.ExtensionContext,
+          });
+
+          // profile は存在するが、generatedFilePaths が空になるようにする
+          (session as unknown as { profile?: unknown }).profile = {
+            testFilePredicate: () => true,
+          };
+          (session as unknown as { generatedFilePaths?: string[] }).generatedFilePaths = [];
+
+          try {
+            // When: runComplianceCheckAndAutoFix is called
+            const runCompliance = (session as unknown as { runComplianceCheckAndAutoFix: (m: string | undefined) => Promise<void> }).runComplianceCheckAndAutoFix.bind(session);
+            await runCompliance(undefined);
+
+            // Then: It logs compliance.noTestFiles and returns
+            assert.ok(events.some((e) => e.type === 'log' && e.level === 'info' && e.message === l10n.t('compliance.noTestFiles')));
+          } finally {
+            (outputChannel as unknown as { appendEventToOutput: typeof originalAppend }).appendEventToOutput = originalAppend;
+          }
+        });
+
+        test('TC-SES-COMPLY-E-02: runComplianceCheckAndAutoFix runs auto-fix loop and saves report when limit reached', async () => {
+          // Case ID: TC-SES-COMPLY-E-02
+          const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-'));
+          workspaceRoots.push(workspaceRoot);
+
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const compliance = require('../../../../core/strategyComplianceCheck') as typeof import('../../../../core/strategyComplianceCheck');
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const outputChannel = require('../../../../ui/outputChannel') as typeof import('../../../../ui/outputChannel');
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const l10n = require('../../../../core/l10n') as typeof import('../../../../core/l10n');
+
+          const originalRunComplianceCheck = compliance.runComplianceCheck;
+          const originalAppend = outputChannel.appendEventToOutput;
+          const originalShowWarning = vscode.window.showWarningMessage;
+
+          const events: Array<{ type: string; level?: unknown; message?: unknown }> = [];
+          (outputChannel as unknown as { appendEventToOutput: typeof outputChannel.appendEventToOutput }).appendEventToOutput = (event) => {
+            events.push({ type: event.type, level: (event as unknown as { level?: unknown }).level, message: (event as unknown as { message?: unknown }).message });
+          };
+          (vscode.window as unknown as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = async () => undefined;
+
+          let complianceCalls = 0;
+          compliance.runComplianceCheck = (async () => {
+            complianceCalls += 1;
+            return {
+              passed: false,
+              analyzedFiles: 1,
+              analysisIssues: [{ type: 'missing-gwt', file: 'src/x.test.ts', line: 1, detail: 'missing' }],
+              analysisSummary: { missingGwt: 1, missingBoundary: 0, missingExceptionMessage: 0 },
+              missingCaseIdIssues: [{ caseId: 'TC-X', file: 'src/x.test.ts', detail: 'missing' }],
+              perspectiveSkippedWarning: '',
+            } as import('../../../../core/strategyComplianceCheck').ComplianceCheckResult;
+          }) as unknown as typeof compliance.runComplianceCheck;
+
+          const session = new TestGenerationSession({
+            provider: dummyProvider,
+            workspaceRoot,
+            cursorAgentCommand: 'cursor-agent',
+            testStrategyPath: '',
+            generationLabel: 'Label',
+            targetPaths: [],
+            generationPrompt: '',
+            perspectiveReferenceText: '',
+            model: undefined,
+            generationTaskId: 'task-compliance-loop',
+            runLocation: 'local',
+            settingsOverride: {
+              includeTestPerspectiveTable: false,
+              testExecutionRunner: 'extension',
+              testCommand: '',
+              enablePreTestCheck: false,
+              strategyComplianceAutoFixMaxRetries: 1,
+            },
+            extensionContext: { extension: { packageJSON: { version: '0.0.0' } } } as unknown as vscode.ExtensionContext,
+          });
+
+          // 実行ルート/生成ファイル/プロファイルをセット
+          (session as unknown as { runWorkspaceRoot?: string }).runWorkspaceRoot = workspaceRoot;
+          (session as unknown as { profile?: unknown }).profile = {
+            testFilePredicate: (relativePath: string) => relativePath.endsWith('.test.ts'),
+          };
+          (session as unknown as { generatedFilePaths?: string[] }).generatedFilePaths = [path.join(workspaceRoot, 'src/x.test.ts')];
+
+          let capturedFixPrompt: string | undefined;
+          (session as unknown as { runGenerationWithFileCollection?: (prompt: string) => Promise<number | null> }).runGenerationWithFileCollection =
+            async (prompt: string) => {
+              capturedFixPrompt = prompt;
+              return 0;
+            };
+
+          let savedReportCalled = false;
+          (session as unknown as { saveComplianceReport?: (r: unknown) => Promise<void> }).saveComplianceReport = async () => {
+            savedReportCalled = true;
+          };
+
+          try {
+            // When: runComplianceCheckAndAutoFix is called
+            const runCompliance = (session as unknown as { runComplianceCheckAndAutoFix: (m: string | undefined) => Promise<void> }).runComplianceCheckAndAutoFix.bind(session);
+            await runCompliance(undefined);
+
+            // Then: compliance check was executed at least twice (initial + after auto-fix)
+            assert.ok(complianceCalls >= 2, `Expected runComplianceCheck to be called >=2 times, got ${complianceCalls}`);
+            assert.ok(typeof capturedFixPrompt === 'string' && capturedFixPrompt.length > 0, 'Expected an auto-fix prompt to be built');
+            assert.ok((capturedFixPrompt ?? '').includes('## 重要: 編集対象ファイル'), 'Expected file restriction section in auto-fix prompt');
+            assert.ok(savedReportCalled, 'Expected saveComplianceReport to be called after limit reached');
+
+            // And: log contains autoFixLimitReached warning
+            assert.ok(
+              events.some(
+                (e) =>
+                  e.type === 'log' &&
+                  e.level === 'warn' &&
+                  typeof e.message === 'string' &&
+                  (e.message as string).includes(l10n.t('compliance.autoFixLimitReached', '1')),
+              ),
+            );
+          } finally {
+            compliance.runComplianceCheck = originalRunComplianceCheck;
+            (outputChannel as unknown as { appendEventToOutput: typeof originalAppend }).appendEventToOutput = originalAppend;
+            (vscode.window as unknown as { showWarningMessage: typeof originalShowWarning }).showWarningMessage = originalShowWarning;
+          }
+        });
+      });
+
       // NOTE: DONTFORGETEST_DEBUG_LOG_ROOT のテストは上部に既に存在するため、ここでは重複定義しない
     });
   });
