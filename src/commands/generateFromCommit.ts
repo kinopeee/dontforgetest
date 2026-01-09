@@ -5,6 +5,8 @@ import { buildTestGenPrompt } from '../core/promptBuilder';
 import { execGitStdout } from '../git/gitExec';
 import { runWithArtifacts, type TestGenerationRunMode } from './runWithArtifacts';
 import { type AgentProvider } from '../providers/provider';
+import { truncateText } from '../utils/textUtils';
+import { resolveRunOptions } from '../utils/runOptions';
 
 /**
  * 最新コミット（HEAD）の差分に対してテスト生成を実行する。
@@ -60,11 +62,8 @@ export async function generateTestFromLatestCommit(
   const taskId = `fromCommit-${Date.now()}`;
   const generationLabel = t('prompt.generationLabel.latestCommit', commit.slice(0, 7));
 
-  const runMode: TestGenerationRunMode = options.runMode === 'perspectiveOnly' ? 'perspectiveOnly' : 'full';
-  const requestedRunLocation = options.runLocation === 'worktree' ? 'worktree' : 'local';
-  const effectiveRunLocation = runMode === 'perspectiveOnly' ? 'local' : requestedRunLocation;
-  if (effectiveRunLocation === 'worktree' && !options.extensionContext) {
-    vscode.window.showErrorMessage(t('worktree.extensionContextRequired'));
+  const resolved = resolveRunOptions(options);
+  if (!resolved) {
     return;
   }
 
@@ -79,8 +78,8 @@ export async function generateTestFromLatestCommit(
     perspectiveReferenceText: diffForPrompt,
     model: modelOverride ?? defaultModel,
     generationTaskId: taskId,
-    runMode,
-    runLocation: effectiveRunLocation,
+    runMode: resolved.runMode,
+    runLocation: resolved.effectiveRunLocation,
     extensionContext: options.extensionContext,
   });
 }
@@ -114,12 +113,5 @@ async function getHeadDiffText(cwd: string): Promise<string> {
   } catch {
     return t('git.diff.failed');
   }
-}
-
-function truncateText(text: string, maxChars: number): string {
-  if (text.length <= maxChars) {
-    return text;
-  }
-  return `${text.slice(0, maxChars)}\n\n... (truncated: ${text.length} chars -> ${maxChars} chars)`;
 }
 

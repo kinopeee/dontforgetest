@@ -5,6 +5,8 @@ import { buildTestGenPrompt } from '../core/promptBuilder';
 import { analyzeGitUnifiedDiff, extractChangedPaths, getCommitRangeDiff } from '../git/diffAnalyzer';
 import { type AgentProvider } from '../providers/provider';
 import { runWithArtifacts, type TestGenerationRunMode } from './runWithArtifacts';
+import { truncateText } from '../utils/textUtils';
+import { resolveRunOptions } from '../utils/runOptions';
 
 export interface GenerateTestCommandOptions {
   runLocation?: 'local' | 'worktree';
@@ -83,11 +85,8 @@ export async function generateTestFromCommitRange(
   const taskId = `fromCommitRange-${Date.now()}`;
   const generationLabel = t('prompt.generationLabel.commitRange', trimmedRange);
 
-  const runMode: TestGenerationRunMode = options.runMode === 'perspectiveOnly' ? 'perspectiveOnly' : 'full';
-  const requestedRunLocation = options.runLocation === 'worktree' ? 'worktree' : 'local';
-  const effectiveRunLocation = runMode === 'perspectiveOnly' ? 'local' : requestedRunLocation;
-  if (effectiveRunLocation === 'worktree' && !options.extensionContext) {
-    vscode.window.showErrorMessage(t('worktree.extensionContextRequired'));
+  const resolved = resolveRunOptions(options);
+  if (!resolved) {
     return;
   }
 
@@ -102,16 +101,9 @@ export async function generateTestFromCommitRange(
     perspectiveReferenceText: diffForPrompt,
     model: modelOverride ?? defaultModel,
     generationTaskId: taskId,
-    runMode,
-    runLocation: effectiveRunLocation,
+    runMode: resolved.runMode,
+    runLocation: resolved.effectiveRunLocation,
     extensionContext: options.extensionContext,
   });
-}
-
-function truncateText(text: string, maxChars: number): string {
-  if (text.length <= maxChars) {
-    return text;
-  }
-  return `${text.slice(0, maxChars)}\n\n... (truncated: ${text.length} chars -> ${maxChars} chars)`;
 }
 
