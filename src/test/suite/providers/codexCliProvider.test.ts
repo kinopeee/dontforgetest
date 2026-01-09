@@ -45,7 +45,7 @@ suite('providers/codexCliProvider.ts', () => {
 
   // TC-N-05
   test('TC-N-05: reasoning effort is set, spawn args include -c and prompt is written to stdin', () => {
-    // Given: A Codex CLI provider with reasoning effort configured
+    // 前提 (Given): A Codex CLI provider with reasoning effort configured
     const config = {
       get: () => 'high',
     } as unknown as vscode.WorkspaceConfiguration;
@@ -80,10 +80,10 @@ suite('providers/codexCliProvider.ts', () => {
     } as AgentRunOptions;
     const prompt = 'hello world';
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex(options, prompt);
 
-    // Then: spawn receives exec args with reasoning effort and prompt goes to stdin
+    // 検証 (Then): spawn receives exec args with reasoning effort and prompt goes to stdin
     assert.ok(spawnCall.args, 'spawn should be called with args');
     const spawnArgs = spawnCall.args;
     assert.deepStrictEqual(spawnArgs, [
@@ -102,7 +102,7 @@ suite('providers/codexCliProvider.ts', () => {
 
   // TC-N-03
   test('TC-N-03: dontforgetest.codexReasoningEffort is injected into spawn args', () => {
-    // Given: reasoning effort is configured to 'medium'
+    // 前提 (Given): reasoning effort is configured to 'medium'
     const config = {
       get: (key: string) => (key === 'codexReasoningEffort' ? 'medium' : ''),
     } as unknown as vscode.WorkspaceConfiguration;
@@ -115,17 +115,17 @@ suite('providers/codexCliProvider.ts', () => {
     }) as typeof childProcess.spawn;
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex({ agentCommand: 'codex' }, 'prompt');
 
-    // Then: spawn args include -c model_reasoning_effort="medium"
+    // 検証 (Then): spawn args include -c model_reasoning_effort="medium"
     assert.ok(spawnCall.args?.includes('-c'));
     assert.ok(spawnCall.args?.includes('model_reasoning_effort="medium"'));
   });
 
   // TC-E-07
   test('TC-E-07: CodexCliProvider.run does not throw when child.stdin.write fails', () => {
-    // Given: child.stdin.write throws an error
+    // 前提 (Given): child.stdin.write throws an error
     const child = createMockChild();
     child.stdin.write = () => {
       throw new Error('Write failed');
@@ -142,14 +142,14 @@ suite('providers/codexCliProvider.ts', () => {
       onEvent: () => {},
     };
 
-    // When: run is called
-    // Then: It does not throw
+    // 実行 (When): run is called
+    // 検証 (Then): It does not throw
     assert.doesNotThrow(() => provider.run(options as CodexCliProviderRunOptions));
   });
 
   // TC-E-11
   test('TC-E-11: reasoning effort is empty string, -c is not added', () => {
-    // Given: An empty reasoning effort config
+    // 前提 (Given): An empty reasoning effort config
     const config = {
       get: () => '',
     } as unknown as vscode.WorkspaceConfiguration;
@@ -163,16 +163,16 @@ suite('providers/codexCliProvider.ts', () => {
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
     const options = { agentCommand: 'codex-cli', model: 'test-model' } as AgentRunOptions;
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex(options, 'prompt');
 
-    // Then: args exclude the reasoning effort override
+    // 検証 (Then): args exclude the reasoning effort override
     assert.deepStrictEqual(spawnCall.args, ['exec', '--model', 'test-model', '-']);
   });
 
   // TC-E-12
   test('TC-E-12: reasoning effort is whitespace, -c is not added', () => {
-    // Given: A whitespace-only reasoning effort config
+    // 前提 (Given): A whitespace-only reasoning effort config
     const config = {
       get: () => '   ',
     } as unknown as vscode.WorkspaceConfiguration;
@@ -186,16 +186,16 @@ suite('providers/codexCliProvider.ts', () => {
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
     const options = { agentCommand: 'codex-cli', model: 'test-model' } as AgentRunOptions;
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex(options, 'prompt');
 
-    // Then: args exclude the reasoning effort override
+    // 検証 (Then): args exclude the reasoning effort override
     assert.deepStrictEqual(spawnCall.args, ['exec', '--model', 'test-model', '-']);
   });
 
   // TC-E-14
   test('TC-E-14: reasoning effort is null, -c is not added', () => {
-    // Given: A null reasoning effort config
+    // 前提 (Given): A null reasoning effort config
     const config = {
       get: () => null,
     } as unknown as vscode.WorkspaceConfiguration;
@@ -209,16 +209,16 @@ suite('providers/codexCliProvider.ts', () => {
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
     const options = { agentCommand: 'codex-cli', model: 'test-model' } as AgentRunOptions;
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex(options, 'prompt');
 
-    // Then: args exclude the reasoning effort override
+    // 検証 (Then): args exclude the reasoning effort override
     assert.deepStrictEqual(spawnCall.args, ['exec', '--model', 'test-model', '-']);
   });
 
   // TC-E-13
   test('TC-E-13: reasoning effort is undefined, -c is not added', () => {
-    // Given: An undefined reasoning effort config
+    // 前提 (Given): An undefined reasoning effort config
     const config = {
       get: () => undefined,
     } as unknown as vscode.WorkspaceConfiguration;
@@ -232,15 +232,15 @@ suite('providers/codexCliProvider.ts', () => {
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
     const options = { agentCommand: 'codex-cli', model: 'test-model' } as AgentRunOptions;
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex(options, 'prompt');
 
-    // Then: args exclude the reasoning effort override
+    // 検証 (Then): args exclude the reasoning effort override
     assert.deepStrictEqual(spawnCall.args, ['exec', '--model', 'test-model', '-']);
   });
 
   test('TC-E-05: spawn throws, error propagates with message', () => {
-    // Given: spawn throws an error
+    // 前提 (Given): spawn throws an error
     mutableWorkspace.getConfiguration = (() =>
       ({ get: () => 'high' } as unknown as vscode.WorkspaceConfiguration)) as unknown as typeof vscode.workspace.getConfiguration;
     const mockSpawn = (() => {
@@ -249,8 +249,8 @@ suite('providers/codexCliProvider.ts', () => {
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
     const options = { agentCommand: 'codex-cli', model: 'test-model' } as AgentRunOptions;
 
-    // When: spawnCodex is called
-    // Then: the error is thrown with the expected type and message
+    // 実行 (When): spawnCodex is called
+    // 検証 (Then): the error is thrown with the expected type and message
     assert.throws(
       () => provider.spawnCodex(options, 'prompt'),
       (error: unknown) =>
@@ -259,15 +259,15 @@ suite('providers/codexCliProvider.ts', () => {
   });
 
   test('TC-E-06: getConfiguration throws, error propagates with message', () => {
-    // Given: getConfiguration throws an error
+    // 前提 (Given): getConfiguration throws an error
     mutableWorkspace.getConfiguration = (() => {
       throw new Error('config failed');
     }) as unknown as typeof vscode.workspace.getConfiguration;
     const provider = new CodexCliProvider() as unknown as CodexCliProviderPrivate;
     const options = { agentCommand: 'codex-cli', model: 'test-model' } as AgentRunOptions;
 
-    // When: spawnCodex is called
-    // Then: the error is thrown with the expected type and message
+    // 実行 (When): spawnCodex is called
+    // 検証 (Then): the error is thrown with the expected type and message
     assert.throws(
       () => provider.spawnCodex(options, 'prompt'),
       (error: unknown) =>
@@ -277,7 +277,7 @@ suite('providers/codexCliProvider.ts', () => {
 
   // TC- CODEX-ARG-01: codexReasoningEffort is set to 'medium' (default)
   test('TC- CODEX-ARG-01: codexReasoningEffort="medium" injects model_reasoning_effort="medium"', () => {
-    // Given: Configured to 'medium'
+    // 前提 (Given): Configured to 'medium'
     const config = {
       get: (key: string) => (key === 'codexReasoningEffort' ? 'medium' : ''),
     } as unknown as vscode.WorkspaceConfiguration;
@@ -290,17 +290,17 @@ suite('providers/codexCliProvider.ts', () => {
     }) as typeof childProcess.spawn;
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex({ agentCommand: 'codex' }, 'prompt');
 
-    // Then: args include -c model_reasoning_effort="medium"
+    // 検証 (Then): args include -c model_reasoning_effort="medium"
     assert.ok(spawnCall.args?.includes('-c'));
     assert.ok(spawnCall.args?.includes('model_reasoning_effort="medium"'));
   });
 
   // TC-CODEX-ARG-02: codexReasoningEffort is set to 'high'
   test('TC-CODEX-ARG-02: codexReasoningEffort="high" injects model_reasoning_effort="high"', () => {
-    // Given: Configured to 'high'
+    // 前提 (Given): Configured to 'high'
     const config = {
       get: (key: string) => (key === 'codexReasoningEffort' ? 'high' : ''),
     } as unknown as vscode.WorkspaceConfiguration;
@@ -313,17 +313,17 @@ suite('providers/codexCliProvider.ts', () => {
     }) as typeof childProcess.spawn;
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex({ agentCommand: 'codex' }, 'prompt');
 
-    // Then: args include -c model_reasoning_effort="high"
+    // 検証 (Then): args include -c model_reasoning_effort="high"
     assert.ok(spawnCall.args?.includes('-c'));
     assert.ok(spawnCall.args?.includes('model_reasoning_effort="high"'));
   });
 
   // TC-CODEX-ARG-03: codexReasoningEffort is empty string -> No injection
   test('TC-CODEX-ARG-03: codexReasoningEffort="" injects nothing', () => {
-    // Given: Configured to ''
+    // 前提 (Given): Configured to ''
     const config = {
       get: (key: string) => (key === 'codexReasoningEffort' ? '' : ''),
     } as unknown as vscode.WorkspaceConfiguration;
@@ -336,16 +336,16 @@ suite('providers/codexCliProvider.ts', () => {
     }) as typeof childProcess.spawn;
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex({ agentCommand: 'codex' }, 'prompt');
 
-    // Then: args DO NOT include -c
+    // 検証 (Then): args DO NOT include -c
     assert.ok(!spawnCall.args?.includes('-c'));
   });
 
   // TC-CODEX-STDIN-01: Run agent with specific prompt via stdin
   test('TC-CODEX-STDIN-01: Prompt is written to child process stdin', () => {
-    // Given: A specific prompt
+    // 前提 (Given): A specific prompt
     const prompt = 'My specific prompt';
     const config = {
       get: () => '',
@@ -360,16 +360,16 @@ suite('providers/codexCliProvider.ts', () => {
     const mockSpawn = (() => child) as unknown as typeof childProcess.spawn;
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex({ agentCommand: 'codex' }, prompt);
 
-    // Then: Prompt + newline is written to stdin
+    // 検証 (Then): Prompt + newline is written to stdin
     assert.strictEqual(written, `${prompt}\n`);
   });
 
   // TC-CODEX-CMD-01: Run agent command structure
   test('TC-CODEX-CMD-01: Spawn args start with ["exec"] and end with ["-"]', () => {
-    // Given: Standard run
+    // 前提 (Given): Standard run
     const config = {
       get: () => '',
     } as unknown as vscode.WorkspaceConfiguration;
@@ -382,10 +382,10 @@ suite('providers/codexCliProvider.ts', () => {
     }) as typeof childProcess.spawn;
     const provider = new CodexCliProvider(mockSpawn) as unknown as CodexCliProviderPrivate;
 
-    // When: spawnCodex is called
+    // 実行 (When): spawnCodex is called
     provider.spawnCodex({ agentCommand: 'codex' }, 'prompt');
 
-    // Then: Args start with 'exec' and end with '-'
+    // 検証 (Then): Args start with 'exec' and end with '-'
     assert.strictEqual(spawnCall.args?.[0], 'exec');
     assert.strictEqual(spawnCall.args?.[spawnCall.args.length - 1], '-');
   });
@@ -410,7 +410,7 @@ suite('providers/codexCliProvider.ts', () => {
     type EventEmitterExt = EventEmitter & {
       stdout: EventEmitter;
       stderr: EventEmitter;
-      stdin: { write: () => boolean; end: () => void };
+      stdin: { write: (chunk: string | Uint8Array) => boolean; end: () => void };
       kill: () => boolean;
     };
 
@@ -428,7 +428,7 @@ suite('providers/codexCliProvider.ts', () => {
       const child = Object.assign(emitter, {
         stdout,
         stderr,
-        stdin: { write: () => true, end: () => {} },
+        stdin: { write: (_chunk: string | Uint8Array) => true, end: () => {} },
         kill: () => {
           killedRef.killed = true;
           return true;
@@ -440,7 +440,7 @@ suite('providers/codexCliProvider.ts', () => {
 
     // TC-CX-E-02: activeChild 存在時に run() → 旧 child.kill() が呼ばれ、warn ログが発火
     test('TC-CX-E-02: activeChild 存在時に run() すると旧 child.kill() が呼ばれ warn ログが発火する', () => {
-      // Given: 既に activeChild が存在する状態
+      // 前提 (Given): 既に activeChild が存在する状態
       const config = {
         get: () => '',
       } as unknown as vscode.WorkspaceConfiguration;
@@ -475,20 +475,20 @@ suite('providers/codexCliProvider.ts', () => {
         onEvent: (event) => events.push(event),
       };
 
-      // When: run() を呼び出す
+      // 実行 (When): run() を呼び出す
       const task = provider.run(options);
       task.dispose();
 
-      // Then: 旧 child.kill() が呼ばれ、warn ログが発火
+      // 検証 (Then): 旧 child.kill() が呼ばれ、warn ログが発火
       assert.strictEqual(prevKilledCount, 1, '旧 activeChild.kill() が 1 回呼ばれる');
       const warnLogs = events.filter((e) => e.type === 'log' && e.level === 'warn');
       assert.ok(warnLogs.length >= 1, 'warn ログが少なくとも 1 件発火');
-      assert.ok(warnLogs[0]?.message?.includes('prev-task-codex'), 'warn メッセージに旧タスク ID が含まれる');
+      assert.ok(warnLogs.some(e => e.message?.includes('prev-task-codex')), 'warn メッセージに旧タスク ID が含まれる');
     });
 
     // TC-CX-N-03: stdout 複数行出力 → 各行が info ログとして発火
     test('TC-CX-N-03: stdout 複数行出力で各行が info ログとして発火する', () => {
-      // Given: wireOutput をテスト対象に
+      // 前提 (Given): wireOutput をテスト対象に
       const config = {
         get: () => '',
       } as unknown as vscode.WorkspaceConfiguration;
@@ -511,10 +511,10 @@ suite('providers/codexCliProvider.ts', () => {
 
       wireOutput(child as unknown as ChildProcessWithoutNullStreams, options);
 
-      // When: stdout に複数行が送られる
+      // 実行 (When): stdout に複数行が送られる
       stdout.emit('data', Buffer.from('line1\nline2\nline3\n'));
 
-      // Then: 各行が info ログとして発火
+      // 検証 (Then): 各行が info ログとして発火
       const infoLogs = events.filter((e) => e.type === 'log' && e.level === 'info');
       assert.strictEqual(infoLogs.length, 3, '3 行分の info ログが発火');
       assert.strictEqual(infoLogs[0]?.message, 'line1');
@@ -524,7 +524,7 @@ suite('providers/codexCliProvider.ts', () => {
 
     // TC-CX-N-04: close 時にバッファ末尾あり → tail として info ログ発火
     test('TC-CX-N-04: close 時にバッファ末尾（改行なし）があれば tail として info ログ発火', () => {
-      // Given: wireOutput をテスト対象に
+      // 前提 (Given): wireOutput をテスト対象に
       const config = {
         get: () => '',
       } as unknown as vscode.WorkspaceConfiguration;
@@ -547,11 +547,11 @@ suite('providers/codexCliProvider.ts', () => {
 
       wireOutput(child as unknown as ChildProcessWithoutNullStreams, options);
 
-      // When: stdout に改行なしデータが送られ、その後 close
+      // 実行 (When): stdout に改行なしデータが送られ、その後 close
       stdout.emit('data', Buffer.from('incomplete line'));
       child.emit('close', 0);
 
-      // Then: tail が info ログとして発火し、completed(0) が発火
+      // 検証 (Then): tail が info ログとして発火し、completed(0) が発火
       const infoLogs = events.filter((e) => e.type === 'log' && e.level === 'info');
       assert.ok(infoLogs.some((e) => e.message === 'incomplete line'), 'tail の info ログが発火');
       const completed = events.filter((e) => e.type === 'completed');
@@ -561,7 +561,7 @@ suite('providers/codexCliProvider.ts', () => {
 
     // TC-CX-E-03: stderr 出力あり → error レベルのログ発火
     test('TC-CX-E-03: stderr 出力で error レベルのログが発火する', () => {
-      // Given: wireOutput をテスト対象に
+      // 前提 (Given): wireOutput をテスト対象に
       const config = {
         get: () => '',
       } as unknown as vscode.WorkspaceConfiguration;
@@ -584,10 +584,10 @@ suite('providers/codexCliProvider.ts', () => {
 
       wireOutput(child as unknown as ChildProcessWithoutNullStreams, options);
 
-      // When: stderr にエラーメッセージが送られる
+      // 実行 (When): stderr にエラーメッセージが送られる
       stderr.emit('data', Buffer.from('Some error occurred'));
 
-      // Then: error レベルのログが発火
+      // 検証 (Then): error レベルのログが発火
       const errorLogs = events.filter((e) => e.type === 'log' && e.level === 'error');
       assert.strictEqual(errorLogs.length, 1, 'error ログが 1 件発火');
       assert.strictEqual(errorLogs[0]?.message, 'Some error occurred');
@@ -595,7 +595,7 @@ suite('providers/codexCliProvider.ts', () => {
 
     // TC-CX-E-04: child.on('error') → error ログと completed(null) 発火
     test('TC-CX-E-04: child.on error で error ログと completed(null) が発火する', () => {
-      // Given: wireOutput をテスト対象に
+      // 前提 (Given): wireOutput をテスト対象に
       const config = {
         get: () => '',
       } as unknown as vscode.WorkspaceConfiguration;
@@ -621,13 +621,13 @@ suite('providers/codexCliProvider.ts', () => {
 
       wireOutput(child as unknown as ChildProcessWithoutNullStreams, options);
 
-      // When: child が error イベントを発火
+      // 実行 (When): child が error イベントを発火
       child.emit('error', new Error('spawn ENOENT'));
 
-      // Then: error ログと completed(null) が発火
+      // 検証 (Then): error ログと completed(null) が発火
       const errorLogs = events.filter((e) => e.type === 'log' && e.level === 'error');
       assert.ok(errorLogs.length >= 1, 'error ログが発火');
-      assert.ok(errorLogs[0]?.message?.includes('codex 実行エラー'), 'エラーメッセージが含まれる');
+      assert.ok(errorLogs.some(e => e.message?.includes('codex 実行エラー')), 'エラーメッセージが含まれる');
 
       const completed = events.filter((e) => e.type === 'completed');
       assert.strictEqual(completed.length, 1, 'completed イベントが 1 件発火');
@@ -636,7 +636,7 @@ suite('providers/codexCliProvider.ts', () => {
 
     // TC-CX-N-05: child.on('close', 0) → completed(0) イベント発火
     test('TC-CX-N-05: child.on close(0) で completed(0) イベントが発火する', () => {
-      // Given: wireOutput をテスト対象に
+      // 前提 (Given): wireOutput をテスト対象に
       const config = {
         get: () => '',
       } as unknown as vscode.WorkspaceConfiguration;
@@ -662,10 +662,10 @@ suite('providers/codexCliProvider.ts', () => {
 
       wireOutput(child as unknown as ChildProcessWithoutNullStreams, options);
 
-      // When: child が close イベントを発火
+      // 実行 (When): child が close イベントを発火
       child.emit('close', 0);
 
-      // Then: completed(0) が発火
+      // 検証 (Then): completed(0) が発火
       const completed = events.filter((e) => e.type === 'completed');
       assert.strictEqual(completed.length, 1, 'completed イベントが 1 件発火');
       assert.strictEqual(completed[0]?.exitCode, 0, 'exitCode が 0');
@@ -673,7 +673,7 @@ suite('providers/codexCliProvider.ts', () => {
 
     // TC-CX-N-06: run() の started イベントに detail が含まれる
     test('TC-CX-N-06: run() で started イベントが発火し detail に情報が含まれる', () => {
-      // Given: run() をテスト対象に
+      // 前提 (Given): run() をテスト対象に
       const config = {
         get: () => '',
       } as unknown as vscode.WorkspaceConfiguration;
@@ -697,11 +697,11 @@ suite('providers/codexCliProvider.ts', () => {
         onEvent: (event) => events.push(event),
       };
 
-      // When: run() を呼び出す
+      // 実行 (When): run() を呼び出す
       const task = provider.run(options);
       task.dispose();
 
-      // Then: started イベントが発火し、detail に情報が含まれる
+      // 検証 (Then): started イベントが発火し、detail に情報が含まれる
       const started = events.filter((e) => e.type === 'started');
       assert.strictEqual(started.length, 1, 'started イベントが 1 件発火');
       assert.strictEqual(started[0]?.label, 'codex-cli');
@@ -711,7 +711,7 @@ suite('providers/codexCliProvider.ts', () => {
 
     // TC-CX-E-05: completed が複数回呼ばれても 1 回のみ発火（冪等性）
     test('TC-CX-E-05: completed は複数回呼んでも 1 回のみ発火する', () => {
-      // Given: wireOutput をテスト対象に
+      // 前提 (Given): wireOutput をテスト対象に
       const config = {
         get: () => '',
       } as unknown as vscode.WorkspaceConfiguration;
@@ -734,12 +734,12 @@ suite('providers/codexCliProvider.ts', () => {
 
       wireOutput(child as unknown as ChildProcessWithoutNullStreams, options);
 
-      // When: close と error が両方発火
+      // 実行 (When): close と error が両方発火
       child.emit('close', 0);
       child.emit('error', new Error('late error'));
       child.emit('close', 1);
 
-      // Then: completed は 1 回のみ
+      // 検証 (Then): completed は 1 回のみ
       const completed = events.filter((e) => e.type === 'completed');
       assert.strictEqual(completed.length, 1, 'completed イベントは 1 回のみ発火');
       assert.strictEqual(completed[0]?.exitCode, 0, '最初の exitCode が使われる');
@@ -747,7 +747,7 @@ suite('providers/codexCliProvider.ts', () => {
 
     // TC-CX-B-01: stdout が空行を含む場合、空行はスキップされる
     test('TC-CX-B-01: stdout の空行はスキップされる', () => {
-      // Given: wireOutput をテスト対象に
+      // 前提 (Given): wireOutput をテスト対象に
       const config = {
         get: () => '',
       } as unknown as vscode.WorkspaceConfiguration;
@@ -770,10 +770,10 @@ suite('providers/codexCliProvider.ts', () => {
 
       wireOutput(child as unknown as ChildProcessWithoutNullStreams, options);
 
-      // When: stdout に空行を含むデータが送られる
+      // 実行 (When): stdout に空行を含むデータが送られる
       stdout.emit('data', Buffer.from('line1\n\n   \nline2\n'));
 
-      // Then: 空行はスキップされ、line1 と line2 のみ発火
+      // 検証 (Then): 空行はスキップされ、line1 と line2 のみ発火
       const infoLogs = events.filter((e) => e.type === 'log' && e.level === 'info');
       assert.strictEqual(infoLogs.length, 2, '空行以外の 2 行分の info ログが発火');
       assert.strictEqual(infoLogs[0]?.message, 'line1');
@@ -782,7 +782,7 @@ suite('providers/codexCliProvider.ts', () => {
 
     // TC-CX-B-02: stderr が空白のみの場合、ログはスキップされる
     test('TC-CX-B-02: stderr が空白のみの場合はログがスキップされる', () => {
-      // Given: wireOutput をテスト対象に
+      // 前提 (Given): wireOutput をテスト対象に
       const config = {
         get: () => '',
       } as unknown as vscode.WorkspaceConfiguration;
@@ -805,10 +805,10 @@ suite('providers/codexCliProvider.ts', () => {
 
       wireOutput(child as unknown as ChildProcessWithoutNullStreams, options);
 
-      // When: stderr に空白のみのデータが送られる
+      // 実行 (When): stderr に空白のみのデータが送られる
       stderr.emit('data', Buffer.from('   \n'));
 
-      // Then: error ログは発火しない
+      // 検証 (Then): error ログは発火しない
       const errorLogs = events.filter((e) => e.type === 'log' && e.level === 'error');
       assert.strictEqual(errorLogs.length, 0, '空白のみの場合は error ログが発火しない');
     });

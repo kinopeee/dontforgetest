@@ -365,6 +365,7 @@ test('TC-N-10: handles another case', () => {});
   // | TC-SCC-E-03 | perspectiveMarkdown 無し、includeTestPerspectiveTable=false | Error – 観点表スキップ警告 | perspectiveSkippedWarning が設定される | - |
   // | TC-SCC-B-01 | テストファイルが存在しない | Boundary – ファイル読み取り失敗 | analyzedFiles が 0 | - |
   // | TC-SCC-B-02 | perspectiveMarkdown の caseId が 0 件 | Boundary – 空の観点表 | missingCaseIdIssues が空 | - |
+  // | TC-SCC-N-03 | perspectiveMarkdown あり、includeTestPerspectiveTable=true | Equivalence – 観点表生成ON | perspectiveSkippedWarning が無い | - |
 
   suite('runComplianceCheck end-to-end', () => {
     const getWorkspaceRoot = (): string | undefined =>
@@ -392,9 +393,7 @@ test('TC-N-10: handles another case', () => {});
     test('TC-SCC-N-01: GWT 完備のテストファイルで analysisIssues が空になる', async () => {
       // Given: GWT コメント完備のテストファイル
       const workspaceRoot = getWorkspaceRoot();
-      if (!workspaceRoot) {
-        return;
-      }
+      assert.ok(workspaceRoot, 'workspace root must be available for end-to-end tests');
 
       const tempDir = await createTempDir(workspaceRoot, `scc-n-01-${Date.now()}`);
       const testFilePath = path.join(tempDir, 'complete.test.ts');
@@ -404,10 +403,12 @@ test('TC-N-10: handles another case', () => {});
 test('TC-N-01: handles valid input', () => {
   // Given: valid input
   const input = 'valid';
+  const boundaryNull = null;
   // When: processing
   const result = process(input);
   // Then: success
   assert.strictEqual(result, true);
+  assert.strictEqual(boundaryNull, null);
 });
 `;
         await writeFile(testFilePath, testContent);
@@ -432,9 +433,7 @@ test('TC-N-01: handles valid input', () => {
     test('TC-SCC-N-02: perspectiveMarkdown の caseId が全て実装されている場合 missingCaseIdIssues が空', async () => {
       // Given: 観点表の caseId がすべて実装されているテストファイル
       const workspaceRoot = getWorkspaceRoot();
-      if (!workspaceRoot) {
-        return;
-      }
+      assert.ok(workspaceRoot, 'workspace root must be available for end-to-end tests');
 
       const tempDir = await createTempDir(workspaceRoot, `scc-n-02-${Date.now()}`);
       const testFilePath = path.join(tempDir, 'covered.test.ts');
@@ -475,9 +474,7 @@ test('TC-N-02: handles edge case', () => {});
     test('TC-SCC-E-01: GWT 不足のテストファイルで analysisIssues に missing-gwt が含まれる', async () => {
       // Given: GWT コメントが不足しているテストファイル
       const workspaceRoot = getWorkspaceRoot();
-      if (!workspaceRoot) {
-        return;
-      }
+      assert.ok(workspaceRoot, 'workspace root must be available for end-to-end tests');
 
       const tempDir = await createTempDir(workspaceRoot, `scc-e-01-${Date.now()}`);
       const testFilePath = path.join(tempDir, 'incomplete.test.ts');
@@ -516,9 +513,7 @@ test('handles valid input', () => {
     test('TC-SCC-E-02: perspectiveMarkdown の caseId が未実装の場合 missingCaseIdIssues に含まれる', async () => {
       // Given: 観点表の caseId が一部未実装のテストファイル
       const workspaceRoot = getWorkspaceRoot();
-      if (!workspaceRoot) {
-        return;
-      }
+      assert.ok(workspaceRoot, 'workspace root must be available for end-to-end tests');
 
       const tempDir = await createTempDir(workspaceRoot, `scc-e-02-${Date.now()}`);
       const testFilePath = path.join(tempDir, 'partial.test.ts');
@@ -527,7 +522,7 @@ test('handles valid input', () => {
         const testContent = `
 // Given/When/Then: placeholder
 test('TC-N-01: handles valid input', () => {});
-// TC-N-02 と TC-E-01 は未実装
+// 一部のケースIDは未実装
 `;
         await writeFile(testFilePath, testContent);
 
@@ -561,9 +556,7 @@ test('TC-N-01: handles valid input', () => {});
     test('TC-SCC-E-03: perspectiveMarkdown 無しで includeTestPerspectiveTable=false の場合 perspectiveSkippedWarning が設定される', async () => {
       // Given: 観点表生成がOFFの設定
       const workspaceRoot = getWorkspaceRoot();
-      if (!workspaceRoot) {
-        return;
-      }
+      assert.ok(workspaceRoot, 'workspace root must be available for end-to-end tests');
 
       const tempDir = await createTempDir(workspaceRoot, `scc-e-03-${Date.now()}`);
       const testFilePath = path.join(tempDir, 'no-perspective.test.ts');
@@ -595,9 +588,7 @@ test('handles input', () => {});
     test('TC-SCC-B-01: テストファイルが存在しない場合 analyzedFiles が 0', async () => {
       // Given: 存在しないファイルパス
       const workspaceRoot = getWorkspaceRoot();
-      if (!workspaceRoot) {
-        return;
-      }
+      assert.ok(workspaceRoot, 'workspace root must be available for end-to-end tests');
 
       const nonExistentPath = path.join(workspaceRoot, 'out', 'non-existent', `missing-${Date.now()}.test.ts`);
 
@@ -618,9 +609,7 @@ test('handles input', () => {});
     test('TC-SCC-B-02: perspectiveMarkdown の caseId が 0 件の場合 missingCaseIdIssues が空', async () => {
       // Given: caseId が無い観点表
       const workspaceRoot = getWorkspaceRoot();
-      if (!workspaceRoot) {
-        return;
-      }
+      assert.ok(workspaceRoot, 'workspace root must be available for end-to-end tests');
 
       const tempDir = await createTempDir(workspaceRoot, `scc-b-02-${Date.now()}`);
       const testFilePath = path.join(tempDir, 'empty-perspective.test.ts');
@@ -657,9 +646,7 @@ test('handles input', () => {});
     test('TC-SCC-N-03: perspectiveMarkdown ありで includeTestPerspectiveTable=true の場合 perspectiveSkippedWarning が無い', async () => {
       // Given: 観点表生成がONで、観点表が提供されている
       const workspaceRoot = getWorkspaceRoot();
-      if (!workspaceRoot) {
-        return;
-      }
+      assert.ok(workspaceRoot, 'workspace root must be available for end-to-end tests');
 
       const tempDir = await createTempDir(workspaceRoot, `scc-n-03-${Date.now()}`);
       const testFilePath = path.join(tempDir, 'with-perspective.test.ts');
