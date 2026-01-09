@@ -19,8 +19,8 @@ import { generateTestWithQuickPick } from './ui/quickPick';
 import { initializeTestGenStatusBar } from './ui/statusBar';
 import { initializeProgressTreeView } from './ui/progressTreeView';
 import { initializeOutputTreeView } from './ui/outputTreeView';
+import { type RunLocation } from './utils/runOptions';
 
-type RunLocation = 'local' | 'worktree';
 type RunMode = TestGenerationRunMode;
 
 /**
@@ -63,8 +63,13 @@ async function openLatestArtifact(
     return;
   }
 
-  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latestPath));
-  await vscode.window.showTextDocument(doc);
+  try {
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(latestPath));
+    await vscode.window.showTextDocument(doc);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await vscode.window.showErrorMessage(t('artifact.openFailed', latestPath, message));
+  }
 }
 
 interface GenerateCommandArgs {

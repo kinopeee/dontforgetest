@@ -4,15 +4,11 @@ import { t } from '../core/l10n';
 import { buildTestGenPrompt } from '../core/promptBuilder';
 import { analyzeGitUnifiedDiff, extractChangedPaths, getCommitRangeDiff } from '../git/diffAnalyzer';
 import { type AgentProvider } from '../providers/provider';
-import { runWithArtifacts, type TestGenerationRunMode } from './runWithArtifacts';
+import { runWithArtifacts } from './runWithArtifacts';
 import { truncateText } from '../utils/textUtils';
-import { resolveRunOptions } from '../utils/runOptions';
+import { resolveRunOptions, type GenerateTestCommandOptions } from '../utils/runOptions';
 
-export interface GenerateTestCommandOptions {
-  runLocation?: 'local' | 'worktree';
-  runMode?: TestGenerationRunMode;
-  extensionContext?: vscode.ExtensionContext;
-}
+export type { GenerateTestCommandOptions } from '../utils/runOptions';
 
 /**
  * 指定したコミット範囲の差分に対してテスト生成を実行する。

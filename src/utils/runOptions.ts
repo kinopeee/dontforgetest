@@ -4,6 +4,16 @@ import { type TestGenerationRunMode } from '../commands/runWithArtifacts';
 
 export type RunLocation = 'local' | 'worktree';
 
+/**
+ * テスト生成コマンドの共通オプションインターフェース。
+ * generateFromCommit と generateFromCommitRange で共有される。
+ */
+export interface GenerateTestCommandOptions {
+  runLocation?: RunLocation;
+  runMode?: TestGenerationRunMode;
+  extensionContext?: vscode.ExtensionContext;
+}
+
 export interface ResolveRunOptionsInput {
   runMode?: TestGenerationRunMode;
   runLocation?: RunLocation;
