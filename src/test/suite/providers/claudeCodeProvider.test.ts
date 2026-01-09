@@ -369,6 +369,233 @@ suite('ClaudeCodeProvider', () => {
       }
     });
 
+    test('TC-PROV-CLAUDE-TOOLCALL-COMPLETED-PREFER-SUCCESS: subtype=completed では success.path を優先し linesAdded を反映する', () => {
+      // Given: tool_call completed（args.path と success.path が両方ある）
+      const argsPath = path.join(workspaceRoot, 'src', 'from-args.ts');
+      const successPath = path.join(workspaceRoot, 'src', 'from-success.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: { path: argsPath },
+            result: { success: { path: successPath, linesAdded: 12 } },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: success.path が採用され、linesCreated が入った fileWrite が発火する
+      assert.strictEqual(result.events.length, 1);
+      const event = result.events[0];
+      assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.path, path.relative(workspaceRoot, successPath));
+        assert.strictEqual(event.linesCreated, 12);
+      }
+      assert.strictEqual(result.next, successPath);
+    });
+
+    test('TC-PROV-CLAUDE-TOOLCALL-COMPLETED-ARGS-FILEPATH: success.path が無い場合、args.file_path が採用される', () => {
+      // Given: tool_call completed（args.file_path のみ）
+      const argsFilePath = path.join(workspaceRoot, 'src', 'from-file-path.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Edit: {
+            args: { file_path: argsFilePath },
+            result: { success: { linesAdded: 1 } },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: args.file_path が採用され、fileWrite が発火する
+      assert.strictEqual(result.events.length, 1);
+      const event = result.events[0];
+      assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.path, path.relative(workspaceRoot, argsFilePath));
+        assert.strictEqual(event.linesCreated, 1);
+      }
+      assert.strictEqual(result.next, argsFilePath);
+    });
+
+    test('TC-PROV-CLAUDE-TOOLCALL-COMPLETED-FALLBACK-LAST: path が無い場合、lastWritePath にフォールバックする', () => {
+      // Given: tool_call completed だが path 情報が無い（lastWritePath はある）
+      const lastWritePath = path.join(workspaceRoot, 'src', 'fallback.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Edit: {
+            args: {},
+            result: { success: {} },
+          },
+        },
+      } as Record<string, unknown>;
+
+      // When: handleStreamJson is called with lastWritePath
+      const result = runHandle(obj, lastWritePath);
+
+      // Then: lastWritePath が採用され fileWrite が発火する
+      assert.strictEqual(result.events.length, 1);
+      const event = result.events[0];
+      assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.path, path.relative(workspaceRoot, lastWritePath));
+      }
+      assert.strictEqual(result.next, lastWritePath);
+    });
+
+    test('TC-PROV-CLAUDE-TOOLCALL-EDITTOOLCALL: tool_call キーが editToolCall の場合も書き込みとして扱う', () => {
+      // Given: tool_call with editToolCall
+      const filePath = path.join(workspaceRoot, 'src', 'editToolCall.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          editToolCall: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: fileWrite event is emitted
+      assert.strictEqual(result.events.length, 1);
+      const event = result.events[0];
+      assert.strictEqual(event?.type, 'fileWrite');
+      if (event?.type === 'fileWrite') {
+        assert.strictEqual(event.path, path.relative(workspaceRoot, filePath));
+      }
+    });
+
+    test('TC-PROV-CLAUDE-TOOLCALL-UNKNOWN-IGNORE: 未知キーのみの tool_call は fileWrite せず無視する', () => {
+      // Given: tool_call with unknown operation name (not write/edit)
+      const filePath = path.join(workspaceRoot, 'src', 'ignored.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          Foo: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: No events are emitted
+      assert.strictEqual(result.events.length, 0);
+      assert.strictEqual(result.next, undefined);
+    });
+
+    test('TC-PROV-CLAUDE-E-TOOLCALL-EMPTY: tool_call が空オブジェクトの場合は何もしない', () => {
+      // Given: tool_call with empty object
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {},
+      };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: No events are emitted
+      assert.strictEqual(result.events.length, 0);
+      assert.strictEqual(result.next, undefined);
+    });
+
+    test('TC-PROV-CLAUDE-E-TOOLCALL-NONRECORD: tool_call が Record でない場合は何もしない', () => {
+      // Given: tool_call is null (non-record)
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: null,
+      } as unknown as Record<string, unknown>;
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: No events are emitted
+      assert.strictEqual(result.events.length, 0);
+      assert.strictEqual(result.next, undefined);
+    });
+
+    test('TC-PROV-CLAUDE-E-TOOLCALL-STARTED-NOPATH: started でも path が無ければ fileWrite しない', () => {
+      // Given: tool_call started with Write but no path in args
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          Write: {
+            args: {},
+          },
+        },
+      } as Record<string, unknown>;
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: No events are emitted
+      assert.strictEqual(result.events.length, 0);
+      assert.strictEqual(result.next, undefined);
+    });
+
+    test('TC-PROV-CLAUDE-E-TOOLCALL-COMPLETED-NOPATH: completed で path と lastWritePath が無ければ fileWrite しない', () => {
+      // Given: tool_call completed with no path and no lastWritePath
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Edit: {
+            args: {},
+            result: { success: {} },
+          },
+        },
+      } as Record<string, unknown>;
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: No events are emitted
+      assert.strictEqual(result.events.length, 0);
+      assert.strictEqual(result.next, undefined);
+    });
+
+    test('TC-PROV-CLAUDE-E-SYSTEM-NOSUBTYPE: system(subtype 無し) は何もしない', () => {
+      // Given: system event without subtype
+      const obj = { type: 'system' } as Record<string, unknown>;
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: No events are emitted
+      assert.strictEqual(result.events.length, 0);
+      assert.strictEqual(result.next, undefined);
+    });
+
+    test('TC-PROV-CLAUDE-E-ASSISTANT-INVALID: assistant メッセージ形式が不正な場合は log を出さない', () => {
+      // Given: assistant event with invalid message shape
+      const obj = { type: 'assistant', message: { content: [] } };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: No events are emitted
+      assert.strictEqual(result.events.length, 0);
+      assert.strictEqual(result.next, undefined);
+    });
+
     // TC-N-23: result イベント受信で log イベント発火
     test('TC-N-23: result イベント受信で log イベントが発火する (duration_ms 含む)', () => {
       // Given: result event with duration_ms
@@ -385,6 +612,48 @@ suite('ClaudeCodeProvider', () => {
         assert.strictEqual(event.level, 'info');
         assert.ok(event.message.includes('result:'), 'Message should contain result:');
         assert.ok(event.message.includes('duration_ms=12345'), 'Message should contain duration_ms');
+      }
+    });
+
+    test('TC-PROV-CLAUDE-RESULTTEXT-STRING: result.result が string の場合、本文 log が追加で発火する', () => {
+      // Given: result event with result.result as string
+      const obj = { type: 'result', duration_ms: 1, result: 'FINAL_RESULT_TEXT' };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: duration ログ + 本文ログ（計2件）
+      assert.strictEqual(result.events.length, 2);
+      const durationLog = result.events[0];
+      const textLog = result.events[1];
+      assert.strictEqual(durationLog?.type, 'log');
+      assert.strictEqual(textLog?.type, 'log');
+      if (durationLog?.type === 'log') {
+        assert.ok(durationLog.message.includes('duration_ms=1'));
+      }
+      if (textLog?.type === 'log') {
+        assert.strictEqual(textLog.message, 'FINAL_RESULT_TEXT');
+      }
+    });
+
+    test('TC-PROV-CLAUDE-RESULTTEXT-ARRAY: result.result.content[0].text を抽出して本文 log を出す', () => {
+      // Given: result event with result.result.content array
+      const obj = { type: 'result', duration_ms: 2, result: { content: [{ text: 'ARRAY_RESULT_TEXT' }] } };
+
+      // When: handleStreamJson is called
+      const result = runHandle(obj);
+
+      // Then: duration ログ + 本文ログ（計2件）
+      assert.strictEqual(result.events.length, 2);
+      const durationLog = result.events[0];
+      const textLog = result.events[1];
+      assert.strictEqual(durationLog?.type, 'log');
+      assert.strictEqual(textLog?.type, 'log');
+      if (durationLog?.type === 'log') {
+        assert.ok(durationLog.message.includes('duration_ms=2'));
+      }
+      if (textLog?.type === 'log') {
+        assert.strictEqual(textLog.message, 'ARRAY_RESULT_TEXT');
       }
     });
 

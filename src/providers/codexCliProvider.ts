@@ -7,6 +7,10 @@ import { nowMs, type TestGenEvent } from '../core/event';
 import { type AgentProvider, type AgentRunOptions, type RunningTask } from './provider';
 
 type CommandPrompt = { commandName: string; filePath: string; text: string };
+type CodexPromptDeps = {
+  homedir: () => string;
+  readFileSync: (filePath: string, encoding: BufferEncoding) => string;
+};
 
 /**
  * Codex CLI（codex）を呼び出してテスト生成を実行するProvider。
@@ -20,12 +24,18 @@ export class CodexCliProvider implements AgentProvider {
   private activeChild: ChildProcessWithoutNullStreams | undefined;
   private activeTaskId: string | undefined;
   private readonly spawnFn: typeof spawn;
+  private readonly promptDeps: CodexPromptDeps;
 
   /**
    * @param spawnFn テスト用に注入可能な spawn 関数（デフォルト: 実際の child_process.spawn）
+   * @param deps テスト用に注入可能な依存関係（外部FSに依存しないための hook）
    */
-  constructor(spawnFn?: typeof spawn) {
+  constructor(spawnFn?: typeof spawn, deps?: Partial<CodexPromptDeps>) {
     this.spawnFn = spawnFn ?? spawn;
+    this.promptDeps = {
+      homedir: deps?.homedir ?? os.homedir,
+      readFileSync: deps?.readFileSync ?? fs.readFileSync,
+    };
   }
 
   public run(options: AgentRunOptions): RunningTask {
@@ -49,7 +59,7 @@ export class CodexCliProvider implements AgentProvider {
       });
     }
 
-    const injected = buildPromptWithCodexCommand(options);
+    const injected = buildPromptWithCodexCommand(options, this.promptDeps);
     const child = this.spawnCodex(options, injected.prompt);
     this.activeChild = child;
     this.activeTaskId = options.taskId;
@@ -223,14 +233,17 @@ export class CodexCliProvider implements AgentProvider {
   }
 }
 
-function buildPromptWithCodexCommand(options: AgentRunOptions): { prompt: string; commandName?: string; commandPrompt?: CommandPrompt } {
+function buildPromptWithCodexCommand(
+  options: AgentRunOptions,
+  deps: CodexPromptDeps,
+): { prompt: string; commandName?: string; commandPrompt?: CommandPrompt } {
   const config = vscode.workspace.getConfiguration('dontforgetest');
   const commandName = (config.get<string>('codexPromptCommand') ?? '').trim();
   if (commandName.length === 0) {
     return { prompt: options.prompt };
   }
 
-  const commandPrompt = readCodexCommandPrompt(commandName);
+  const commandPrompt = readCodexCommandPrompt(commandName, deps);
   if (!commandPrompt) {
     return { prompt: options.prompt, commandName };
   }
@@ -239,13 +252,13 @@ function buildPromptWithCodexCommand(options: AgentRunOptions): { prompt: string
   return { prompt: injectedPrompt, commandName: commandPrompt.commandName, commandPrompt };
 }
 
-function readCodexCommandPrompt(commandName: string): CommandPrompt | undefined {
-  const promptDir = path.join(os.homedir(), '.codex', 'prompts');
+function readCodexCommandPrompt(commandName: string, deps: CodexPromptDeps): CommandPrompt | undefined {
+  const promptDir = path.join(deps.homedir(), '.codex', 'prompts');
   const normalized = commandName.endsWith('.md') ? commandName : `${commandName}.md`;
   const filePath = path.join(promptDir, normalized);
 
   try {
-    const text = fs.readFileSync(filePath, 'utf8');
+    const text = deps.readFileSync(filePath, 'utf8');
     if (text.trim().length === 0) {
       return undefined;
     }
