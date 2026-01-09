@@ -51,7 +51,7 @@ CLI エージェントをヘッドレスで非同期呼び出しし、コミッ�
 
 ## プロジェクト構造（抜粋）
 
-```
+```text
 src/
 ├── extension.ts    # 拡張機能エントリ（activate/deactivate）
 ├── commands/       # コマンド実装
