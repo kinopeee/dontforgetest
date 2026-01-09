@@ -155,6 +155,210 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
     }
   });
 
+  test('TC-AT-N-04: target 未指定で QuickPick が「全テスト」を選んだ場合、analyzeTestFiles が呼ばれる', async () => {
+    // Given: workspace が有効
+    const workspaceRoot = process.cwd();
+    const restoreWorkspace = setWorkspaceFolders([
+      { uri: vscode.Uri.file(workspaceRoot), name: 'test', index: 0 },
+    ]);
+
+    // Given: QuickPick が「全テスト」を返す
+    const originalShowQuickPick = vscode.window.showQuickPick;
+    (vscode.window as unknown as Record<string, unknown>).showQuickPick =
+      async (): Promise<vscode.QuickPickItem | undefined> => {
+        return { label: t('controlPanel.analysis.allTests'), description: '' };
+      };
+
+    // Given: analyzeTestFiles / analyzeFile をスタブ
+    const originalAnalyzeTestFiles = testAnalyzerModule.analyzeTestFiles;
+    const originalAnalyzeFile = testAnalyzerModule.analyzeFile;
+    let analyzeTestFilesCalled = false;
+    let analyzeFileCalled = false;
+    (testAnalyzerModule as unknown as { analyzeTestFiles: typeof testAnalyzerModule.analyzeTestFiles }).analyzeTestFiles =
+      async () => {
+        analyzeTestFilesCalled = true;
+        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 }, pattern: '' };
+      };
+    (testAnalyzerModule as unknown as { analyzeFile: typeof testAnalyzerModule.analyzeFile }).analyzeFile =
+      async () => {
+        analyzeFileCalled = true;
+        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 }, pattern: '' };
+      };
+
+    // saveAnalysisReport / outputChannel / openTextDocument / showTextDocument / showInformationMessage / withProgress を最小スタブ
+    const originalSaveReport = testAnalyzerModule.saveAnalysisReport;
+    (testAnalyzerModule as unknown as { saveAnalysisReport: typeof testAnalyzerModule.saveAnalysisReport }).saveAnalysisReport =
+      async () => ({ absolutePath: path.join(workspaceRoot, 'docs/test-analysis-reports/test-analysis_mock.md'), relativePath: 'docs/test-analysis-reports/test-analysis_mock.md' });
+
+    const originalGetChannel = outputChannelModule.getTestGenOutputChannel;
+    (outputChannelModule as unknown as { getTestGenOutputChannel: typeof outputChannelModule.getTestGenOutputChannel }).getTestGenOutputChannel =
+      () => ({
+        appendLine: () => { },
+        append: () => { },
+        clear: () => { },
+        show: () => { },
+        hide: () => { },
+        dispose: () => { },
+        name: 'Dontforgetest',
+        replace: () => { },
+      });
+
+    const originalOpenDoc = vscode.workspace.openTextDocument;
+    const originalShowDoc = vscode.window.showTextDocument;
+    (vscode.workspace as unknown as Record<string, unknown>).openTextDocument =
+      async (uri: vscode.Uri) => ({ uri } as vscode.TextDocument);
+    (vscode.window as unknown as { showTextDocument: typeof vscode.window.showTextDocument }).showTextDocument =
+      async () => ({} as vscode.TextEditor);
+
+    const originalShowInfo = vscode.window.showInformationMessage;
+    (vscode.window as unknown as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage =
+      async () => undefined;
+
+    const originalWithProgress = vscode.window.withProgress;
+    (vscode.window as unknown as Record<string, unknown>).withProgress =
+      async <T>(
+        _options: vscode.ProgressOptions,
+        task: (
+          progress: vscode.Progress<{ message?: string; increment?: number }>,
+          token: vscode.CancellationToken,
+        ) => Thenable<T>,
+      ): Promise<T> => {
+        const dummyProgress: vscode.Progress<{ message?: string; increment?: number }> = { report: () => { } };
+        const dummyToken: vscode.CancellationToken = {
+          isCancellationRequested: false,
+          onCancellationRequested: new vscode.EventEmitter<void>().event,
+        };
+        return await task(dummyProgress, dummyToken);
+      };
+
+    try {
+      // When: target を指定せずに analyzeTestsCommand を実行する
+      await analyzeTestsCommand();
+
+      // Then: QuickPick の分岐により analyzeTestFiles が呼ばれる
+      assert.strictEqual(analyzeTestFilesCalled, true);
+      assert.strictEqual(analyzeFileCalled, false);
+    } finally {
+      restoreWorkspace();
+      (vscode.window as unknown as Record<string, unknown>).showQuickPick = originalShowQuickPick;
+      (testAnalyzerModule as unknown as { analyzeTestFiles: typeof originalAnalyzeTestFiles }).analyzeTestFiles = originalAnalyzeTestFiles;
+      (testAnalyzerModule as unknown as { analyzeFile: typeof originalAnalyzeFile }).analyzeFile = originalAnalyzeFile;
+      (testAnalyzerModule as unknown as { saveAnalysisReport: typeof originalSaveReport }).saveAnalysisReport = originalSaveReport;
+      (outputChannelModule as unknown as { getTestGenOutputChannel: typeof originalGetChannel }).getTestGenOutputChannel = originalGetChannel;
+      (vscode.workspace as unknown as Record<string, unknown>).openTextDocument = originalOpenDoc;
+      (vscode.window as unknown as { showTextDocument: typeof originalShowDoc }).showTextDocument = originalShowDoc;
+      (vscode.window as unknown as { showInformationMessage: typeof originalShowInfo }).showInformationMessage = originalShowInfo;
+      (vscode.window as unknown as Record<string, unknown>).withProgress = originalWithProgress;
+    }
+  });
+
+  test('TC-AT-N-05: target 未指定で QuickPick が「現在ファイル」を選んだ場合、analyzeFile が呼ばれる', async () => {
+    // Given: workspace が有効
+    const workspaceRoot = process.cwd();
+    const restoreWorkspace = setWorkspaceFolders([
+      { uri: vscode.Uri.file(workspaceRoot), name: 'test', index: 0 },
+    ]);
+
+    // Given: QuickPick が「現在ファイル」を返す
+    const originalShowQuickPick = vscode.window.showQuickPick;
+    (vscode.window as unknown as Record<string, unknown>).showQuickPick =
+      async (): Promise<vscode.QuickPickItem | undefined> => {
+        return { label: t('controlPanel.analysis.currentFile'), description: '' };
+      };
+
+    // Given: アクティブエディタが存在する
+    const fakeFilePath = path.join(workspaceRoot, 'src', 'dummy.test.ts');
+    const restoreEditor = setActiveTextEditor({
+      document: { uri: vscode.Uri.file(fakeFilePath) } as vscode.TextDocument,
+    } as vscode.TextEditor);
+
+    // Given: analyzeTestFiles / analyzeFile をスタブ
+    const originalAnalyzeTestFiles = testAnalyzerModule.analyzeTestFiles;
+    const originalAnalyzeFile = testAnalyzerModule.analyzeFile;
+    let analyzeTestFilesCalled = false;
+    let analyzeFileCalled = false;
+    let analyzedFilePath: string | undefined;
+    (testAnalyzerModule as unknown as { analyzeTestFiles: typeof testAnalyzerModule.analyzeTestFiles }).analyzeTestFiles =
+      async () => {
+        analyzeTestFilesCalled = true;
+        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 }, pattern: '' };
+      };
+    (testAnalyzerModule as unknown as { analyzeFile: typeof testAnalyzerModule.analyzeFile }).analyzeFile =
+      async (filePath: string) => {
+        analyzeFileCalled = true;
+        analyzedFilePath = filePath;
+        return { analyzedFiles: 1, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 }, pattern: '' };
+      };
+
+    // saveAnalysisReport / outputChannel / openTextDocument / showTextDocument / showInformationMessage / withProgress を最小スタブ
+    const originalSaveReport = testAnalyzerModule.saveAnalysisReport;
+    (testAnalyzerModule as unknown as { saveAnalysisReport: typeof testAnalyzerModule.saveAnalysisReport }).saveAnalysisReport =
+      async () => ({ absolutePath: path.join(workspaceRoot, 'docs/test-analysis-reports/test-analysis_mock.md'), relativePath: 'docs/test-analysis-reports/test-analysis_mock.md' });
+
+    const originalGetChannel = outputChannelModule.getTestGenOutputChannel;
+    (outputChannelModule as unknown as { getTestGenOutputChannel: typeof outputChannelModule.getTestGenOutputChannel }).getTestGenOutputChannel =
+      () => ({
+        appendLine: () => { },
+        append: () => { },
+        clear: () => { },
+        show: () => { },
+        hide: () => { },
+        dispose: () => { },
+        name: 'Dontforgetest',
+        replace: () => { },
+      });
+
+    const originalOpenDoc = vscode.workspace.openTextDocument;
+    const originalShowDoc = vscode.window.showTextDocument;
+    (vscode.workspace as unknown as Record<string, unknown>).openTextDocument =
+      async (uri: vscode.Uri) => ({ uri } as vscode.TextDocument);
+    (vscode.window as unknown as { showTextDocument: typeof vscode.window.showTextDocument }).showTextDocument =
+      async () => ({} as vscode.TextEditor);
+
+    const originalShowInfo = vscode.window.showInformationMessage;
+    (vscode.window as unknown as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage =
+      async () => undefined;
+
+    const originalWithProgress = vscode.window.withProgress;
+    (vscode.window as unknown as Record<string, unknown>).withProgress =
+      async <T>(
+        _options: vscode.ProgressOptions,
+        task: (
+          progress: vscode.Progress<{ message?: string; increment?: number }>,
+          token: vscode.CancellationToken,
+        ) => Thenable<T>,
+      ): Promise<T> => {
+        const dummyProgress: vscode.Progress<{ message?: string; increment?: number }> = { report: () => { } };
+        const dummyToken: vscode.CancellationToken = {
+          isCancellationRequested: false,
+          onCancellationRequested: new vscode.EventEmitter<void>().event,
+        };
+        return await task(dummyProgress, dummyToken);
+      };
+
+    try {
+      // When: target を指定せずに analyzeTestsCommand を実行する
+      await analyzeTestsCommand();
+
+      // Then: QuickPick の分岐により analyzeFile が呼ばれる
+      assert.strictEqual(analyzeTestFilesCalled, false);
+      assert.strictEqual(analyzeFileCalled, true);
+      assert.strictEqual(analyzedFilePath, fakeFilePath);
+    } finally {
+      restoreEditor();
+      restoreWorkspace();
+      (vscode.window as unknown as Record<string, unknown>).showQuickPick = originalShowQuickPick;
+      (testAnalyzerModule as unknown as { analyzeTestFiles: typeof originalAnalyzeTestFiles }).analyzeTestFiles = originalAnalyzeTestFiles;
+      (testAnalyzerModule as unknown as { analyzeFile: typeof originalAnalyzeFile }).analyzeFile = originalAnalyzeFile;
+      (testAnalyzerModule as unknown as { saveAnalysisReport: typeof originalSaveReport }).saveAnalysisReport = originalSaveReport;
+      (outputChannelModule as unknown as { getTestGenOutputChannel: typeof originalGetChannel }).getTestGenOutputChannel = originalGetChannel;
+      (vscode.workspace as unknown as Record<string, unknown>).openTextDocument = originalOpenDoc;
+      (vscode.window as unknown as { showTextDocument: typeof originalShowDoc }).showTextDocument = originalShowDoc;
+      (vscode.window as unknown as { showInformationMessage: typeof originalShowInfo }).showInformationMessage = originalShowInfo;
+      (vscode.window as unknown as Record<string, unknown>).withProgress = originalWithProgress;
+    }
+  });
+
   // ============================================================
   // TC-AT-N-01: target=all で analyzeTestFiles が呼ばれる
   // ============================================================

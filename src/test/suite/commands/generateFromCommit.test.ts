@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { generateTestFromLatestCommit } from '../../../commands/generateFromCommit';
+import { t } from '../../../core/l10n';
 import * as preflightModule from '../../../core/preflight';
 import * as promptBuilderModule from '../../../core/promptBuilder';
 import * as gitExecModule from '../../../git/gitExec';
@@ -140,10 +141,37 @@ suite('commands/generateFromCommit.ts', () => {
       assert.strictEqual(runWithArtifactsCalls.length, 0);
     });
 
+    test('TC-GC-E-05: rev-parse throws -> treated as missing HEAD commit and shows error', async () => {
+      // Given: rev-parse が例外を投げる
+      execGitStdoutResponses.set('rev-parse', new Error('boom-rev-parse'));
+
+      // When: generateTestFromLatestCommit を呼び出す
+      await generateTestFromLatestCommit(provider, undefined, { runLocation: 'local' });
+
+      // Then: エラーメッセージが表示され、runWithArtifacts は呼ばれない
+      assert.strictEqual(showErrorMessages.length, 1);
+      assert.strictEqual(showErrorMessages[0], t('git.head.resolveFailed'));
+      assert.strictEqual(runWithArtifactsCalls.length, 0);
+    });
+
     test('TC-GC-E-03: empty changed files shows info and returns', async () => {
       // Given: HEAD は解決できるが差分ファイルが空
       execGitStdoutResponses.set('rev-parse', 'abcdef1234567890');
       execGitStdoutResponses.set('diff-tree', '');
+
+      // When: generateTestFromLatestCommit を呼び出す
+      await generateTestFromLatestCommit(provider, undefined, { runLocation: 'local' });
+
+      // Then: 情報メッセージが表示され、runWithArtifacts は呼ばれない
+      assert.strictEqual(showInfoMessages.length, 1);
+      assert.ok(showInfoMessages[0]?.includes('abcdef1'), '短縮コミットが含まれる');
+      assert.strictEqual(runWithArtifactsCalls.length, 0);
+    });
+
+    test('TC-GC-E-06: diff-tree throws -> treated as empty changed files and shows info', async () => {
+      // Given: HEAD は解決できるが diff-tree が例外を投げる
+      execGitStdoutResponses.set('rev-parse', 'abcdef1234567890');
+      execGitStdoutResponses.set('diff-tree', new Error('boom-diff-tree'));
 
       // When: generateTestFromLatestCommit を呼び出す
       await generateTestFromLatestCommit(provider, undefined, { runLocation: 'local' });
@@ -167,6 +195,22 @@ suite('commands/generateFromCommit.ts', () => {
       assert.strictEqual(showErrorMessages.length, 1);
       assert.ok(showErrorMessages[0]?.length > 0, 'エラーメッセージは空でない');
       assert.strictEqual(runWithArtifactsCalls.length, 0);
+    });
+
+    test('TC-GC-E-07: show throws -> diffText falls back and still runs', async () => {
+      // Given: HEAD と changedFiles は取れるが git show が例外を投げる
+      execGitStdoutResponses.set('rev-parse', 'abcdef1234567890');
+      execGitStdoutResponses.set('diff-tree', 'src/app.test.ts');
+      execGitStdoutResponses.set('show', new Error('boom-show'));
+
+      // When: generateTestFromLatestCommit を呼び出す
+      await generateTestFromLatestCommit(provider, undefined, { runLocation: 'local' });
+
+      // Then: runWithArtifacts が呼ばれ、プロンプト内の差分テキストはフォールバック文言になる
+      assert.strictEqual(showErrorMessages.length, 0);
+      assert.strictEqual(runWithArtifactsCalls.length, 1);
+      const call = runWithArtifactsCalls[0];
+      assert.ok(call.generationPrompt.includes(t('git.diff.failed')), 'フォールバック文言が含まれる');
     });
 
     test('CM-N-PO-NOCTX-01: perspectiveOnly locks runLocation to local and does not require extensionContext', async () => {

@@ -355,6 +355,90 @@ suite('src/extension.ts command handlers (high priority coverage)', () => {
     }
   });
 
+  test('TC-EXTCMD-E-15: dontforgetest.openLatestPerspective shows error when openTextDocument throws', async () => {
+    // Given: findLatestArtifact returns a deterministic file path
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const fakePath = path.join(workspaceRoot, 'docs', 'test-perspectives', 'test-perspectives_20990101_000000.md');
+
+    const originalFindLatest = artifactsModule.findLatestArtifact;
+    (artifactsModule as unknown as { findLatestArtifact: typeof artifactsModule.findLatestArtifact }).findLatestArtifact = async () => fakePath;
+
+    // Given: openTextDocument throws
+    const workspaceAny = vscode.workspace as unknown as { openTextDocument: unknown };
+    const originalOpenTextDocument = workspaceAny.openTextDocument as typeof vscode.workspace.openTextDocument;
+    const expectedErrorMessage = 'boom-openTextDocument';
+    workspaceAny.openTextDocument = (async () => {
+      throw new Error(expectedErrorMessage);
+    }) as unknown;
+
+    // Given: showErrorMessage is stubbed
+    const originalShowError = vscode.window.showErrorMessage;
+    const errors: string[] = [];
+    (vscode.window as unknown as { showErrorMessage: typeof vscode.window.showErrorMessage }).showErrorMessage = async (message: string) => {
+      errors.push(message);
+      return undefined;
+    };
+
+    try {
+      // When: Executing the command
+      await vscode.commands.executeCommand('dontforgetest.openLatestPerspective');
+
+      // Then: It shows an error containing the path and the thrown message, and does not throw
+      assert.strictEqual(errors.length, 1);
+      assert.ok(errors[0]?.includes(fakePath), `Expected error message to include path: ${fakePath}`);
+      assert.ok(errors[0]?.includes(expectedErrorMessage), `Expected error message to include: ${expectedErrorMessage}`);
+    } finally {
+      (artifactsModule as unknown as { findLatestArtifact: typeof originalFindLatest }).findLatestArtifact = originalFindLatest;
+      workspaceAny.openTextDocument = originalOpenTextDocument as unknown;
+      (vscode.window as unknown as { showErrorMessage: typeof originalShowError }).showErrorMessage = originalShowError;
+    }
+  });
+
+  test('TC-EXTCMD-E-16: dontforgetest.openLatestPerspective shows error when showTextDocument throws', async () => {
+    // Given: findLatestArtifact returns a deterministic file path
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const fakePath = path.join(workspaceRoot, 'docs', 'test-perspectives', 'test-perspectives_20990101_000000.md');
+
+    const originalFindLatest = artifactsModule.findLatestArtifact;
+    (artifactsModule as unknown as { findLatestArtifact: typeof artifactsModule.findLatestArtifact }).findLatestArtifact = async () => fakePath;
+
+    // Given: openTextDocument returns a dummy doc and showTextDocument throws
+    const workspaceAny = vscode.workspace as unknown as { openTextDocument: unknown };
+    const originalOpenTextDocument = workspaceAny.openTextDocument as typeof vscode.workspace.openTextDocument;
+    workspaceAny.openTextDocument = (async () => {
+      return {} as unknown as vscode.TextDocument;
+    }) as unknown;
+
+    const originalShowTextDocument = vscode.window.showTextDocument;
+    const expectedErrorMessage = 'boom-showTextDocument';
+    (vscode.window as unknown as { showTextDocument: typeof vscode.window.showTextDocument }).showTextDocument = async () => {
+      throw new Error(expectedErrorMessage);
+    };
+
+    // Given: showErrorMessage is stubbed
+    const originalShowError = vscode.window.showErrorMessage;
+    const errors: string[] = [];
+    (vscode.window as unknown as { showErrorMessage: typeof vscode.window.showErrorMessage }).showErrorMessage = async (message: string) => {
+      errors.push(message);
+      return undefined;
+    };
+
+    try {
+      // When: Executing the command
+      await vscode.commands.executeCommand('dontforgetest.openLatestPerspective');
+
+      // Then: It shows an error containing the path and the thrown message, and does not throw
+      assert.strictEqual(errors.length, 1);
+      assert.ok(errors[0]?.includes(fakePath), `Expected error message to include path: ${fakePath}`);
+      assert.ok(errors[0]?.includes(expectedErrorMessage), `Expected error message to include: ${expectedErrorMessage}`);
+    } finally {
+      (artifactsModule as unknown as { findLatestArtifact: typeof originalFindLatest }).findLatestArtifact = originalFindLatest;
+      workspaceAny.openTextDocument = originalOpenTextDocument as unknown;
+      (vscode.window as unknown as { showTextDocument: typeof originalShowTextDocument }).showTextDocument = originalShowTextDocument;
+      (vscode.window as unknown as { showErrorMessage: typeof originalShowError }).showErrorMessage = originalShowError;
+    }
+  });
+
   test('TC-EXTCMD-E-06: dontforgetest.openLatestPerspective shows info when latest artifact is not found', async () => {
     // Given: findLatestArtifact returns undefined
     const originalFindLatest = artifactsModule.findLatestArtifact;

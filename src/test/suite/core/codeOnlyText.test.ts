@@ -212,6 +212,49 @@ suite('codeOnlyText', () => {
       assert.ok(!result.includes('value is'));
     });
 
+    test('handles template literal expressions with nested braces (object literal) without leaking suffix', () => {
+      // Given: ${...} の式部分にオブジェクトリテラルの { } が含まれる
+      const content = 'const x = `prefix ${(() => { return { a: 1 }; })()} suffix`; const z = 3;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 長さが維持され、式部分のコードは保持される（suffix/prefix は空白化される）
+      assert.strictEqual(result.length, content.length);
+      assert.ok(result.includes('return { a: 1 };'));
+      assert.ok(result.includes('const z = 3;'));
+      assert.ok(!result.includes('prefix'));
+      assert.ok(!result.includes('suffix'));
+    });
+
+    test('handles nested template literal inside ${...} expression', () => {
+      // Given: ${...} の中にネストしたテンプレートリテラルがある（その中にも ${y} がある）
+      const content = `const x = \`outer \${\`inner \${y}\`}\`; const z = 1;`;
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: ネストした ${y} のコードは保持され、テンプレート文字列部分は空白化される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(result.includes('y'));
+      assert.ok(result.includes('const z = 1;'));
+      assert.ok(!result.includes('outer'));
+      assert.ok(!result.includes('inner'));
+    });
+
+    test('does not terminate template literal on escaped backtick (regression)', () => {
+      // Given: テンプレート文字列内にエスケープされたバッククォート（\\`）が含まれる
+      const content = 'const x = `a\\`b`; const y = 1;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: テンプレート文字列部分は空白化されるが、後続コードは保持される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(result.includes('const y = 1;'));
+      assert.ok(!result.includes('a\\`b'));
+    });
+
     test('does not leak template suffix text after ${...} expression', () => {
       // Given: ${...} の後にテンプレート文字列が続き、その後に通常コードが続く
       const content = 'const x = `prefix ${y + 1} suffix`; const z = 3;';
@@ -225,6 +268,20 @@ suite('codeOnlyText', () => {
       assert.ok(result.includes('const z = 3'));
       assert.ok(!result.includes('prefix'));
       assert.ok(!result.includes('suffix'));
+    });
+
+    test('treats regex literal after "(" as regex and preserves following code', () => {
+      // Given: "(" の直後に正規表現リテラルが来るケース（/ が除算として誤認されると壊れる）
+      const content = 'const ok = (/a\\/b/gi).test(s); const n = 1;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 正規表現パターンは空白化され、後続の .test と後続コードは保持される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(result.includes('.test(s)'));
+      assert.ok(result.includes('const n = 1;'));
+      assert.ok(!result.includes('/a'));
     });
 
     test('handles complex nested structures', () => {
