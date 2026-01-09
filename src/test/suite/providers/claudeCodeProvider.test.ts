@@ -776,4 +776,602 @@ suite('ClaudeCodeProvider', () => {
       assert.ok(startedEvent !== undefined, 'started event should be emitted');
     });
   });
+
+  suite('handleStreamJson tool_call subtype=completed', () => {
+    type HandleStreamJson = (
+      obj: Record<string, unknown>,
+      options: AgentRunOptions,
+      lastWritePath: string | undefined,
+      emitEvent: (event: TestGenEvent) => void,
+    ) => string | undefined;
+
+    const provider = new ClaudeCodeProvider();
+    const handleStreamJson = (provider as unknown as { handleStreamJson: HandleStreamJson }).handleStreamJson.bind(provider);
+
+    const workspaceRoot = path.resolve('tmp-workspace-claude-tc');
+    const baseOptions: AgentRunOptions = {
+      taskId: 'claude-task-tc',
+      workspaceRoot,
+      prompt: 'test prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: () => {},
+    };
+
+    // TC-CLAUDE-TC-N-01: tool_call completed with success.path
+    test('TC-CLAUDE-TC-N-01: tool_call completed with success.path -> fileWrite uses success.path', () => {
+      // Given: tool_call completed with success.path
+      const successPath = path.join(workspaceRoot, 'success-path.ts');
+      const argsPath = path.join(workspaceRoot, 'args-path.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: { path: argsPath },
+            result: {
+              success: { path: successPath },
+            },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite uses success.path (priority over args.path)
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+      if (events[0]?.type === 'fileWrite') {
+        assert.strictEqual(events[0].path, 'success-path.ts');
+      }
+    });
+
+    // TC-CLAUDE-TC-N-02: tool_call completed with args.path (no success.path)
+    test('TC-CLAUDE-TC-N-02: tool_call completed with args.path -> fileWrite uses args.path', () => {
+      // Given: tool_call completed with args.path but no success.path
+      const argsPath = path.join(workspaceRoot, 'args-only.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: { path: argsPath },
+            result: {
+              success: {},
+            },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite uses args.path
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+      if (events[0]?.type === 'fileWrite') {
+        assert.strictEqual(events[0].path, 'args-only.ts');
+      }
+    });
+
+    // TC-CLAUDE-TC-N-03: tool_call completed with args.file_path
+    test('TC-CLAUDE-TC-N-03: tool_call completed with args.file_path -> fileWrite uses file_path', () => {
+      // Given: tool_call completed with args.file_path
+      const filePath = path.join(workspaceRoot, 'file-path-variant.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: { file_path: filePath },
+            result: {
+              success: {},
+            },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite uses file_path
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+      if (events[0]?.type === 'fileWrite') {
+        assert.strictEqual(events[0].path, 'file-path-variant.ts');
+      }
+    });
+
+    // TC-CLAUDE-TC-N-04: tool_call completed with lastWritePath fallback
+    test('TC-CLAUDE-TC-N-04: tool_call completed with lastWritePath fallback', () => {
+      // Given: tool_call completed without path in args or success, but lastWritePath provided
+      const lastWritePath = path.join(workspaceRoot, 'last-write.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: {},
+            result: {
+              success: {},
+            },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called with lastWritePath
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, lastWritePath, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite uses lastWritePath
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+      if (events[0]?.type === 'fileWrite') {
+        assert.strictEqual(events[0].path, 'last-write.ts');
+      }
+    });
+
+    // TC-CLAUDE-TC-N-05: tool_call completed with linesAdded
+    test('TC-CLAUDE-TC-N-05: tool_call completed with linesAdded -> fileWrite includes linesCreated', () => {
+      // Given: tool_call completed with linesAdded in success
+      const filePath = path.join(workspaceRoot, 'lines-added.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: { path: filePath },
+            result: {
+              success: { linesAdded: 42 },
+            },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite includes linesCreated
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+      if (events[0]?.type === 'fileWrite') {
+        assert.strictEqual(events[0].linesCreated, 42);
+      }
+    });
+
+    // TC-CLAUDE-TC-B-01: tool_call completed without any path
+    test('TC-CLAUDE-TC-B-01: tool_call completed without any path -> no fileWrite', () => {
+      // Given: tool_call completed without any path
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: {},
+            result: {
+              success: {},
+            },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called without lastWritePath
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: No fileWrite event
+      assert.strictEqual(events.length, 0, 'No event should be emitted');
+    });
+
+    // TC-CLAUDE-TC-B-02: tool_call completed with linesAdded=0
+    test('TC-CLAUDE-TC-B-02: tool_call completed with linesAdded=0 -> fileWrite with linesCreated=0', () => {
+      // Given: tool_call completed with linesAdded=0
+      const filePath = path.join(workspaceRoot, 'zero-lines.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: { path: filePath },
+            result: {
+              success: { linesAdded: 0 },
+            },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite with linesCreated=0
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+      if (events[0]?.type === 'fileWrite') {
+        assert.strictEqual(events[0].linesCreated, 0);
+      }
+    });
+  });
+
+  suite('extractResultText (via result event)', () => {
+    type HandleStreamJson = (
+      obj: Record<string, unknown>,
+      options: AgentRunOptions,
+      lastWritePath: string | undefined,
+      emitEvent: (event: TestGenEvent) => void,
+    ) => string | undefined;
+
+    const provider = new ClaudeCodeProvider();
+    const handleStreamJson = (provider as unknown as { handleStreamJson: HandleStreamJson }).handleStreamJson.bind(provider);
+
+    const workspaceRoot = path.resolve('tmp-workspace-claude-ert');
+    const baseOptions: AgentRunOptions = {
+      taskId: 'claude-task-ert',
+      workspaceRoot,
+      prompt: 'test prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: () => {},
+    };
+
+    // TC-CLAUDE-ERT-N-01: result field is string
+    test('TC-CLAUDE-ERT-N-01: result field is string -> log includes string', () => {
+      // Given: result event with result as string
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+        result: 'Direct string result',
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: Two log events (duration + result text)
+      assert.ok(events.length >= 2, 'Should emit at least 2 log events');
+      const resultTextLog = events.find((e) => e.type === 'log' && e.message === 'Direct string result');
+      assert.ok(resultTextLog, 'Should emit log with result string');
+    });
+
+    // TC-CLAUDE-ERT-N-02: result.text exists
+    test('TC-CLAUDE-ERT-N-02: result.text exists -> log includes text', () => {
+      // Given: result event with result.text
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+        result: {
+          text: 'Text field result',
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: Log includes text field
+      const resultTextLog = events.find((e) => e.type === 'log' && e.message === 'Text field result');
+      assert.ok(resultTextLog, 'Should emit log with result.text');
+    });
+
+    // TC-CLAUDE-ERT-N-03: result.content is string
+    test('TC-CLAUDE-ERT-N-03: result.content is string -> log includes content', () => {
+      // Given: result event with result.content as string
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+        result: {
+          content: 'Content string result',
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: Log includes content
+      const resultTextLog = events.find((e) => e.type === 'log' && e.message === 'Content string result');
+      assert.ok(resultTextLog, 'Should emit log with result.content');
+    });
+
+    // TC-CLAUDE-ERT-N-04: result.message exists
+    test('TC-CLAUDE-ERT-N-04: result.message exists -> log includes message', () => {
+      // Given: result event with result.message
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+        result: {
+          message: 'Message field result',
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: Log includes message
+      const resultTextLog = events.find((e) => e.type === 'log' && e.message === 'Message field result');
+      assert.ok(resultTextLog, 'Should emit log with result.message');
+    });
+
+    // TC-CLAUDE-ERT-N-05: result.content is array with text
+    test('TC-CLAUDE-ERT-N-05: result.content is array with text -> log includes first text', () => {
+      // Given: result event with result.content as array
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+        result: {
+          content: [{ text: 'Array content text' }],
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: Log includes array content text
+      const resultTextLog = events.find((e) => e.type === 'log' && e.message === 'Array content text');
+      assert.ok(resultTextLog, 'Should emit log with array content text');
+    });
+
+    // TC-CLAUDE-ERT-B-01: result is undefined
+    test('TC-CLAUDE-ERT-B-01: result is undefined -> only duration log', () => {
+      // Given: result event without result field
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: Only duration log, no result text log
+      assert.strictEqual(events.length, 1, 'Should emit only 1 log event');
+      assert.ok(events[0]?.type === 'log' && events[0].message.includes('duration_ms'), 'Should be duration log');
+    });
+
+    // TC-CLAUDE-ERT-B-02: result.content is empty array
+    test('TC-CLAUDE-ERT-B-02: result.content is empty array -> only duration log', () => {
+      // Given: result event with empty content array
+      const obj = {
+        type: 'result',
+        duration_ms: 1000,
+        result: {
+          content: [],
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: Only duration log
+      assert.strictEqual(events.length, 1, 'Should emit only 1 log event');
+    });
+  });
+
+  suite('findToolCallName branches', () => {
+    type HandleStreamJson = (
+      obj: Record<string, unknown>,
+      options: AgentRunOptions,
+      lastWritePath: string | undefined,
+      emitEvent: (event: TestGenEvent) => void,
+    ) => string | undefined;
+
+    const provider = new ClaudeCodeProvider();
+    const handleStreamJson = (provider as unknown as { handleStreamJson: HandleStreamJson }).handleStreamJson.bind(provider);
+
+    const workspaceRoot = path.resolve('tmp-workspace-claude-ftc');
+    const baseOptions: AgentRunOptions = {
+      taskId: 'claude-task-ftc',
+      workspaceRoot,
+      prompt: 'test prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: () => {},
+    };
+
+    // TC-CLAUDE-FTC-N-01: toolCall has 'Write' key
+    test('TC-CLAUDE-FTC-N-01: toolCall has Write key -> recognized as write operation', () => {
+      // Given: tool_call with Write key
+      const filePath = path.join(workspaceRoot, 'write-key.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          Write: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite event is emitted
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+    });
+
+    // TC-CLAUDE-FTC-N-02: toolCall has 'Edit' key
+    test('TC-CLAUDE-FTC-N-02: toolCall has Edit key -> recognized as write operation', () => {
+      // Given: tool_call with Edit key
+      const filePath = path.join(workspaceRoot, 'edit-key.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          Edit: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite event is emitted
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+    });
+
+    // TC-CLAUDE-FTC-N-03: toolCall has 'editToolCall' key
+    test('TC-CLAUDE-FTC-N-03: toolCall has editToolCall key -> recognized as write operation', () => {
+      // Given: tool_call with editToolCall key
+      const filePath = path.join(workspaceRoot, 'edit-tool-call.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          editToolCall: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite event is emitted
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+    });
+
+    // TC-CLAUDE-FTC-N-04: toolCall has 'writeToolCall' key
+    test('TC-CLAUDE-FTC-N-04: toolCall has writeToolCall key -> recognized as write operation', () => {
+      // Given: tool_call with writeToolCall key
+      const filePath = path.join(workspaceRoot, 'write-tool-call.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          writeToolCall: {
+            args: { path: filePath },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite event is emitted
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+    });
+
+    // TC-CLAUDE-FTC-N-05: toolCall has unknown key only (not write/edit related)
+    test('TC-CLAUDE-FTC-N-05: toolCall has unknown key -> no fileWrite', () => {
+      // Given: tool_call with unknown key (not write/edit)
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          ReadFile: {
+            args: { path: '/some/path.ts' },
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: No fileWrite event (ReadFile is not a write operation)
+      assert.strictEqual(events.length, 0, 'No event should be emitted for non-write tool');
+    });
+
+    // TC-CLAUDE-FTC-B-01: toolCall is empty object
+    test('TC-CLAUDE-FTC-B-01: toolCall is empty object -> no fileWrite', () => {
+      // Given: tool_call with empty tool_call object
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {},
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: No fileWrite event
+      assert.strictEqual(events.length, 0, 'No event should be emitted for empty tool_call');
+    });
+
+    // TC-CLAUDE-FTC-B-02: toolCall has multiple keys without preferred
+    test('TC-CLAUDE-FTC-B-02: toolCall has multiple keys -> first key used', () => {
+      // Given: tool_call with multiple non-preferred keys
+      const filePath = path.join(workspaceRoot, 'multi-key.ts');
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          customWrite: {
+            args: { path: filePath },
+          },
+          anotherTool: {
+            args: {},
+          },
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events: TestGenEvent[] = [];
+      handleStreamJson(obj, baseOptions, undefined, (event) => {
+        events.push(event);
+      });
+
+      // Then: fileWrite event is emitted (customWrite contains 'write')
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+    });
+  });
 });
