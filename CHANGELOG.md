@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.128
+
+### Changed
+
+- **Internal**: Refactored internal implementation to improve maintainability (no user-facing behavior changes)
+- **Documentation**: Added DeepWiki link to README documentation section
+
+---
+
+## 0.0.128（日本語）
+
+### 変更
+
+- **内部実装**: 保守性向上のため内部実装を整理（ユーザー向け挙動の変更なし）
+- **ドキュメント**: READMEのドキュメントセクションにDeepWikiのリンクを追加
+
+---
+
 ## 0.0.127
 
 ### Changed
