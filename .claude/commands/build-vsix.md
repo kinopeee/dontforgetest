@@ -72,7 +72,7 @@ cd "$(git rev-parse --show-toplevel)" && npm run vsix:install
 #### ワンライナー（最短）
 
 ```bash
-npm version patch --no-git-tag-version && npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "dontforgetest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links && echo "✅ 生成完了: dontforgetest-$VERSION.vsix"
+npm version patch --no-git-tag-version && npm run compile && npm test && npm run vsix:build && echo "✅ 生成完了: dontforgetest-$(node -p \"require('./package.json').version\").vsix"
 ```
 
 > **注意**: `npm test` が VS Code を起動する場合（`@vscode/test-electron` 使用時）、テストは長時間かかるかスキップされる可能性があります。VSIX 生成自体には影響しません。
@@ -88,8 +88,7 @@ npm run compile
 npm test
 
 # 3) VSIX を生成
-VERSION=$(node -p "require('./package.json').version")
-npx --yes @vscode/vsce package --out "dontforgetest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links
+npm run vsix:build
 
 # 4) 生成確認
 echo "✅ 生成完了: dontforgetest-$VERSION.vsix"
@@ -98,7 +97,7 @@ echo "✅ 生成完了: dontforgetest-$VERSION.vsix"
 ### B) バージョンを上げずに VSIX を生成（ローカル検証用）
 
 ```bash
-npm run compile && npm test && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "dontforgetest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links && echo "✅ 生成完了: dontforgetest-$VERSION.vsix"
+npm run compile && npm test && npm run vsix:build && echo "✅ 生成完了: dontforgetest-$(node -p \"require('./package.json').version\").vsix"
 ```
 
 ### C) テストをスキップして VSIX を生成（高速化）
@@ -106,7 +105,7 @@ npm run compile && npm test && VERSION=$(node -p "require('./package.json').vers
 テストが VS Code 起動を必要とする場合や、ビルドのみ確認したい場合：
 
 ```bash
-npm version patch --no-git-tag-version && npm run compile && VERSION=$(node -p "require('./package.json').version") && npx --yes @vscode/vsce package --out "dontforgetest-$VERSION.vsix" --allow-missing-repository --no-rewrite-relative-links && echo "✅ 生成完了: dontforgetest-$VERSION.vsix"
+npm version patch --no-git-tag-version && npm run compile && npm run vsix:build && echo "✅ 生成完了: dontforgetest-$(node -p \"require('./package.json').version\").vsix"
 ```
 
 ## バージョン更新のコミット
@@ -151,6 +150,12 @@ cd "$(git rev-parse --show-toplevel)" && npm run vsix:install
 cd "$(git rev-parse --show-toplevel)" && npm run vsix:build:bump
 cd "$(git rev-parse --show-toplevel)" && npm run vsix:install
 ```
+
+## ⚠️ Cursor サンドボックス権限について
+
+`npm run vsix:build` を使用する場合、`@vscode/vsce` は `devDependencies` に含まれているため、**ネットワークアクセスは不要**です（`npm install` 時のみネットワークが必要）。
+
+手動で `npm exec -- vsce` を使用する場合も同様に、ローカルの `node_modules` から実行されるため、ネットワーク権限プロンプトは表示されません。
 
 ## ノート
 
