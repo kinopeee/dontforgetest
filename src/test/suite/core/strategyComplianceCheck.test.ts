@@ -384,8 +384,23 @@ test('TC-N-10: handles another case', () => {});
     const cleanupDir = async (dirPath: string): Promise<void> => {
       try {
         await vscode.workspace.fs.delete(vscode.Uri.file(dirPath), { recursive: true, useTrash: false });
-      } catch {
-        // ignore
+      } catch (error: unknown) {
+        // テストクリーンアップ時のエラーは基本的に無視するが、デバッグ容易性のためログは残す。
+        // ただし「存在しない」ケースはクリーンアップとして自然なので黙って無視する。
+        const isFileNotFound =
+          error instanceof vscode.FileSystemError
+            ? error.code === 'FileNotFound'
+            : typeof error === 'object' &&
+                error !== null &&
+                'code' in error &&
+                (error as { code?: unknown }).code === 'FileNotFound';
+
+        if (isFileNotFound) {
+          return;
+        }
+
+        const errorMessage = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        console.warn(`[strategyComplianceCheck.test] cleanupDir failed (${dirPath}): ${errorMessage}`, error);
       }
     };
 
