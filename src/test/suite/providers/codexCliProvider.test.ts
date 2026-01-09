@@ -3,6 +3,9 @@ import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
 import * as childProcess from 'child_process';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { CodexCliProvider } from '../../../providers/codexCliProvider';
 
@@ -34,6 +37,7 @@ suite('providers/codexCliProvider.ts', () => {
     getConfiguration: typeof vscode.workspace.getConfiguration;
   };
   const originalGetConfiguration = mutableWorkspace.getConfiguration;
+  const originalHomedir = os.homedir;
 
   teardown(() => {
     try {
@@ -41,7 +45,18 @@ suite('providers/codexCliProvider.ts', () => {
     } catch {
       // Ignore teardown errors (e.g., if getConfiguration is read-only)
     }
+    try {
+      (os as { homedir: () => string }).homedir = originalHomedir;
+    } catch {
+      // Ignore teardown errors
+    }
   });
+
+  const createTempHome = (): string => {
+    const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    (os as { homedir: () => string }).homedir = () => homeDir;
+    return homeDir;
+  };
 
   // TC-N-05
   test('TC-N-05: reasoning effort is set, spawn args include -c and prompt is written to stdin', () => {
@@ -388,5 +403,269 @@ suite('providers/codexCliProvider.ts', () => {
     // Then: Args start with 'exec' and end with '-'
     assert.strictEqual(spawnCall.args?.[0], 'exec');
     assert.strictEqual(spawnCall.args?.[spawnCall.args.length - 1], '-');
+  });
+
+  test('TC-CODEX-P-01: codexPromptCommand が空の場合、プロンプト注入しない', () => {
+    // Given: codexPromptCommand が空
+    const config = {
+      get: (key: string) => (key === 'codexPromptCommand' ? '' : ''),
+    } as unknown as vscode.WorkspaceConfiguration;
+    mutableWorkspace.getConfiguration = (() => config) as unknown as typeof vscode.workspace.getConfiguration;
+    createTempHome();
+    const child = createMockChild();
+    let written = '';
+    child.stdin.write = ((chunk: string | Uint8Array) => {
+      written += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+      return true;
+    }) as typeof child.stdin.write;
+    const mockSpawn = (() => child) as unknown as typeof childProcess.spawn;
+    const provider = new CodexCliProvider(mockSpawn);
+    const options: CodexCliProviderRunOptions = {
+      taskId: 'codex-prompt-empty',
+      workspaceRoot: '/tmp',
+      prompt: 'Base Prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: () => {},
+    };
+
+    // When: run を呼び出す
+    provider.run(options);
+
+    // Then: プロンプトは注入されず元のまま送られる
+    assert.strictEqual(written, 'Base Prompt\n');
+  });
+
+  test('TC-CODEX-P-02: codex コマンドプロンプトが存在する場合、先頭に注入される', () => {
+    // Given: codexPromptCommand が有効で prompt ファイルが存在
+    const config = {
+      get: (key: string) => (key === 'codexPromptCommand' ? 'custom' : ''),
+    } as unknown as vscode.WorkspaceConfiguration;
+    mutableWorkspace.getConfiguration = (() => config) as unknown as typeof vscode.workspace.getConfiguration;
+    const homeDir = createTempHome();
+    const promptDir = path.join(homeDir, '.codex', 'prompts');
+    fs.mkdirSync(promptDir, { recursive: true });
+    fs.writeFileSync(path.join(promptDir, 'custom.md'), 'Injected Prompt');
+    const child = createMockChild();
+    let written = '';
+    child.stdin.write = ((chunk: string | Uint8Array) => {
+      written += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+      return true;
+    }) as typeof child.stdin.write;
+    const mockSpawn = (() => child) as unknown as typeof childProcess.spawn;
+    const provider = new CodexCliProvider(mockSpawn);
+    const options: CodexCliProviderRunOptions = {
+      taskId: 'codex-prompt-inject',
+      workspaceRoot: '/tmp',
+      prompt: 'Base Prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: () => {},
+    };
+
+    // When: run を呼び出す
+    provider.run(options);
+
+    // Then: 注入されたプロンプトが先頭に入る
+    assert.strictEqual(written, 'Injected Prompt\n\nBase Prompt\n');
+  });
+
+  test('TC-CODEX-P-03: codex コマンドプロンプトが空の場合、warn ログが出る', () => {
+    // Given: codexPromptCommand は指定されるがファイルが空
+    const config = {
+      get: (key: string) => (key === 'codexPromptCommand' ? 'empty' : ''),
+    } as unknown as vscode.WorkspaceConfiguration;
+    mutableWorkspace.getConfiguration = (() => config) as unknown as typeof vscode.workspace.getConfiguration;
+    const homeDir = createTempHome();
+    const promptDir = path.join(homeDir, '.codex', 'prompts');
+    fs.mkdirSync(promptDir, { recursive: true });
+    fs.writeFileSync(path.join(promptDir, 'empty.md'), '');
+    const child = createMockChild();
+    const events: Array<{ type: string; level?: string; message?: string }> = [];
+    const mockSpawn = (() => child) as unknown as typeof childProcess.spawn;
+    const provider = new CodexCliProvider(mockSpawn);
+    const options: CodexCliProviderRunOptions = {
+      taskId: 'codex-prompt-empty-file',
+      workspaceRoot: '/tmp',
+      prompt: 'Base Prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: (event) => events.push(event),
+    };
+
+    // When: run を呼び出す
+    provider.run(options);
+
+    // Then: warn ログが出る
+    const warnLog = events.find((event) => event.type === 'log' && event.level === 'warn');
+    assert.ok(warnLog?.message?.includes('codex コマンドプロンプトが見つからないためスキップしました'));
+  });
+
+  test('TC-CODEX-P-04: activeChild がある場合、旧 child を kill して warn ログを出す', () => {
+    // Given: 既存タスクが動作中の CodexCliProvider
+    const child1 = createMockChild();
+    let killCount = 0;
+    child1.kill = () => {
+      killCount += 1;
+      return true;
+    };
+    const child2 = createMockChild();
+    let spawnCount = 0;
+    const mockSpawn = (() => {
+      spawnCount += 1;
+      return spawnCount === 1 ? child1 : child2;
+    }) as unknown as typeof childProcess.spawn;
+    const provider = new CodexCliProvider(mockSpawn);
+    const events: Array<{ type: string; level?: string; message?: string }> = [];
+    const baseOptions: CodexCliProviderRunOptions = {
+      taskId: 'codex-active-1',
+      workspaceRoot: '/tmp',
+      prompt: 'Base Prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: (event) => events.push(event),
+    };
+
+    // When: run を2回呼び出す
+    provider.run(baseOptions);
+    provider.run({ ...baseOptions, taskId: 'codex-active-2' });
+
+    // Then: 旧 child.kill が呼ばれ warn ログが出る
+    assert.strictEqual(killCount, 1);
+    const warnLog = events.find((event) => event.type === 'log' && event.level === 'warn');
+    assert.ok(warnLog?.message?.includes('前回の codex タスク'));
+  });
+
+  test('TC-CODEX-P-05: stdout が複数行の場合、行ごとに info ログが出る', () => {
+    // Given: wireOutput を設定した child
+    const child = createMockChild();
+    const provider = new CodexCliProvider();
+    const events: Array<{ type: string; level?: string; message?: string }> = [];
+    const options: CodexCliProviderRunOptions = {
+      taskId: 'codex-stdout-lines',
+      workspaceRoot: '/tmp',
+      prompt: 'prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: (event) => events.push(event),
+    };
+    (provider as unknown as { wireOutput: (child: ChildProcessWithoutNullStreams, options: CodexCliProviderRunOptions) => void }).wireOutput(
+      child,
+      options,
+    );
+
+    // When: 複数行の stdout を送る
+    (child.stdout as PassThrough).write('line-1\nline-2\n');
+
+    // Then: 行ごとに info ログが出る
+    const messages = events.filter((event) => event.type === 'log' && event.level === 'info').map((event) => event.message);
+    assert.deepStrictEqual(messages, ['line-1', 'line-2']);
+  });
+
+  test('TC-CODEX-P-06: stdout 末尾が改行なしの場合、close 時に tail がログされる', () => {
+    // Given: wireOutput を設定した child
+    const child = createMockChild();
+    const provider = new CodexCliProvider();
+    const events: Array<{ type: string; level?: string; message?: string }> = [];
+    const options: CodexCliProviderRunOptions = {
+      taskId: 'codex-stdout-tail',
+      workspaceRoot: '/tmp',
+      prompt: 'prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: (event) => events.push(event),
+    };
+    (provider as unknown as { wireOutput: (child: ChildProcessWithoutNullStreams, options: CodexCliProviderRunOptions) => void }).wireOutput(
+      child,
+      options,
+    );
+
+    // When: 末尾に改行のない stdout と close を送る
+    (child.stdout as PassThrough).write('line-1\nline-2');
+    child.emit('close', 0);
+
+    // Then: tail が info ログされる
+    const messages = events.filter((event) => event.type === 'log' && event.level === 'info').map((event) => event.message);
+    assert.deepStrictEqual(messages, ['line-1', 'line-2']);
+  });
+
+  test('TC-CODEX-P-07: stderr 出力は error ログになる', () => {
+    // Given: wireOutput を設定した child
+    const child = createMockChild();
+    const provider = new CodexCliProvider();
+    const events: Array<{ type: string; level?: string; message?: string }> = [];
+    const options: CodexCliProviderRunOptions = {
+      taskId: 'codex-stderr',
+      workspaceRoot: '/tmp',
+      prompt: 'prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: (event) => events.push(event),
+    };
+    (provider as unknown as { wireOutput: (child: ChildProcessWithoutNullStreams, options: CodexCliProviderRunOptions) => void }).wireOutput(
+      child,
+      options,
+    );
+
+    // When: stderr に出力する
+    (child.stderr as PassThrough).write('oops');
+
+    // Then: error ログが出る
+    const errorLog = events.find((event) => event.type === 'log' && event.level === 'error');
+    assert.strictEqual(errorLog?.message, 'oops');
+  });
+
+  test('TC-CODEX-P-08: child error で error ログと completed(null) が出る', () => {
+    // Given: wireOutput を設定した child
+    const child = createMockChild();
+    const provider = new CodexCliProvider();
+    const events: Array<{ type: string; level?: string; message?: string; exitCode?: number | null }> = [];
+    const options: CodexCliProviderRunOptions = {
+      taskId: 'codex-error',
+      workspaceRoot: '/tmp',
+      prompt: 'prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: (event) => events.push(event),
+    };
+    (provider as unknown as { wireOutput: (child: ChildProcessWithoutNullStreams, options: CodexCliProviderRunOptions) => void }).wireOutput(
+      child,
+      options,
+    );
+
+    // When: error を発火する
+    child.emit('error', new Error('boom'));
+
+    // Then: error ログと completed(null) が出る
+    const errorLog = events.find((event) => event.type === 'log' && event.level === 'error');
+    const completed = events.find((event) => event.type === 'completed');
+    assert.ok(errorLog?.message?.includes('codex 実行エラー: boom'));
+    assert.strictEqual(completed?.exitCode ?? undefined, null);
+  });
+
+  test('TC-CODEX-P-09: close で completed(code) が出る', () => {
+    // Given: wireOutput を設定した child
+    const child = createMockChild();
+    const provider = new CodexCliProvider();
+    const events: Array<{ type: string; exitCode?: number | null }> = [];
+    const options: CodexCliProviderRunOptions = {
+      taskId: 'codex-close',
+      workspaceRoot: '/tmp',
+      prompt: 'prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: (event) => events.push(event),
+    };
+    (provider as unknown as { wireOutput: (child: ChildProcessWithoutNullStreams, options: CodexCliProviderRunOptions) => void }).wireOutput(
+      child,
+      options,
+    );
+
+    // When: close を発火する
+    child.emit('close', 2);
+
+    // Then: completed(code) が出る
+    const completed = events.find((event) => event.type === 'completed');
+    assert.strictEqual(completed?.exitCode, 2);
   });
 });

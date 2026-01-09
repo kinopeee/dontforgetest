@@ -214,6 +214,179 @@ suite('ClaudeCodeProvider', () => {
     await waitForAsyncCleanup();
   });
 
+  suite('handleStreamJson', () => {
+    type HandleStreamJson = (
+      obj: Record<string, unknown>,
+      options: AgentRunOptions,
+      lastWritePath: string | undefined,
+      emitEvent: (event: TestGenEvent) => void,
+    ) => string | undefined;
+
+    const provider = new ClaudeCodeProvider();
+    const handleStreamJson = (provider as unknown as { handleStreamJson: HandleStreamJson }).handleStreamJson.bind(provider);
+    const baseOptions: AgentRunOptions = {
+      taskId: 'claude-hsj',
+      workspaceRoot: path.resolve('/tmp/claude-workspace'),
+      prompt: 'prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: () => {},
+    };
+
+    test('TC-CLAUDE-P-01: completed で success.path を優先し linesAdded を含める', () => {
+      // Given: success.path がある tool_call completed
+      const events: TestGenEvent[] = [];
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Write: {
+            args: {
+              path: path.join(baseOptions.workspaceRoot, 'args.ts'),
+            },
+            result: {
+              success: {
+                path: path.join(baseOptions.workspaceRoot, 'success.ts'),
+                linesAdded: 12,
+              },
+            },
+          },
+        },
+      };
+
+      // When: handleStreamJson を呼び出す
+      handleStreamJson(obj, baseOptions, undefined, (event) => events.push(event));
+
+      // Then: success.path が優先され linesCreated が含まれる
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+      if (events[0]?.type === 'fileWrite') {
+        assert.strictEqual(events[0].path, 'success.ts');
+        assert.strictEqual(events[0].linesCreated, 12);
+      }
+    });
+
+    test('TC-CLAUDE-P-02: completed で args.path を使用する', () => {
+      // Given: args.path がある tool_call completed
+      const events: TestGenEvent[] = [];
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          Edit: {
+            args: {
+              path: path.join(baseOptions.workspaceRoot, 'from-args.ts'),
+            },
+            result: {},
+          },
+        },
+      };
+
+      // When: handleStreamJson を呼び出す
+      handleStreamJson(obj, baseOptions, undefined, (event) => events.push(event));
+
+      // Then: args.path が使われる
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+      if (events[0]?.type === 'fileWrite') {
+        assert.strictEqual(events[0].path, 'from-args.ts');
+      }
+    });
+
+    test('TC-CLAUDE-P-03: completed で lastWritePath を使用する', () => {
+      // Given: path が無い tool_call completed
+      const events: TestGenEvent[] = [];
+      const obj = {
+        type: 'tool_call',
+        subtype: 'completed',
+        tool_call: {
+          writeToolCall: {
+            args: {},
+            result: {},
+          },
+        },
+      };
+
+      // When: handleStreamJson を呼び出す
+      handleStreamJson(obj, baseOptions, path.join(baseOptions.workspaceRoot, 'fallback.ts'), (event) => events.push(event));
+
+      // Then: lastWritePath が使われる
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+      if (events[0]?.type === 'fileWrite') {
+        assert.strictEqual(events[0].path, 'fallback.ts');
+      }
+    });
+
+    test('TC-CLAUDE-P-04: result 本文の string/object/array を抽出してログする', () => {
+      // Given: string/object/array の result イベント
+      const events: TestGenEvent[] = [];
+      const resultString = { type: 'result', result: 'string-result' };
+      const resultObject = { type: 'result', result: { text: 'object-result' } };
+      const resultArray = { type: 'result', result: { content: [{ text: 'array-result' }] } };
+
+      // When: handleStreamJson を呼び出す
+      handleStreamJson(resultString, baseOptions, undefined, (event) => events.push(event));
+      handleStreamJson(resultObject, baseOptions, undefined, (event) => events.push(event));
+      handleStreamJson(resultArray, baseOptions, undefined, (event) => events.push(event));
+
+      // Then: 本文ログが追加される
+      const messages = events
+        .filter((event): event is Extract<TestGenEvent, { type: 'log' }> => event.type === 'log' && event.level === 'info')
+        .map((event) => event.message);
+      assert.ok(messages.includes('string-result'));
+      assert.ok(messages.includes('object-result'));
+      assert.ok(messages.includes('array-result'));
+    });
+
+    test('TC-CLAUDE-P-05: tool_call 名が editToolCall を優先して fileWrite する', () => {
+      // Given: editToolCall と別キーがある tool_call
+      const events: TestGenEvent[] = [];
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          Unknown: {
+            args: { path: path.join(baseOptions.workspaceRoot, 'unknown.ts') },
+          },
+          editToolCall: {
+            args: { path: path.join(baseOptions.workspaceRoot, 'edit.ts') },
+          },
+        },
+      };
+
+      // When: handleStreamJson を呼び出す
+      handleStreamJson(obj, baseOptions, undefined, (event) => events.push(event));
+
+      // Then: editToolCall が優先され fileWrite が出る
+      assert.strictEqual(events.length, 1);
+      assert.strictEqual(events[0]?.type, 'fileWrite');
+      if (events[0]?.type === 'fileWrite') {
+        assert.strictEqual(events[0].path, 'edit.ts');
+      }
+    });
+
+    test('TC-CLAUDE-P-06: tool_call 名が未知の場合は fileWrite しない', () => {
+      // Given: 未知ツール名の tool_call
+      const events: TestGenEvent[] = [];
+      const obj = {
+        type: 'tool_call',
+        subtype: 'started',
+        tool_call: {
+          Unknown: {
+            args: { path: path.join(baseOptions.workspaceRoot, 'unknown.ts') },
+          },
+        },
+      };
+
+      // When: handleStreamJson を呼び出す
+      handleStreamJson(obj, baseOptions, undefined, (event) => events.push(event));
+
+      // Then: fileWrite は出ない
+      assert.strictEqual(events.length, 0);
+    });
+  });
+
   // TC-N-29: dispose() 呼び出しでエラーなく終了
   test('TC-N-29: dispose() 呼び出しでエラーなく終了する', async () => {
     // Given: 実行中タスクを開始する
