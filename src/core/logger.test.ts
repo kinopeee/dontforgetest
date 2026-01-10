@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { LogLevel, Logger, ContextLogger, getLogger } from './logger';
+import { LogLevel, Logger, ContextLogger, getLogger, type LogEntry } from './logger';
 
 // Mock VS Code API
 const mockOutputChannel = {
@@ -113,17 +113,24 @@ suite('Logger', () => {
   });
 
   test('最大エントリ数を超えると古いログが削除される', () => {
-    // 小さな最大数を設定するために直接プライベートプロパティを操作
-    (logger as { maxEntries: number }).maxEntries = 2;
+    // 小さな最大数を設定するためにリフレクションを使用
+    const loggerInstance = logger as unknown as { maxEntries: number; saveEntry: (entry: LogEntry) => void };
+    const originalMaxEntries = loggerInstance.maxEntries;
+    loggerInstance.maxEntries = 2;
     
-    logger.info('message 1');
-    logger.info('message 2');
-    logger.info('message 3');
-    
-    const entries = logger.getLogEntries();
-    assert.strictEqual(entries.length, 2);
-    assert.strictEqual(entries[0].message, 'message 2');
-    assert.strictEqual(entries[1].message, 'message 3');
+    try {
+      logger.info('message 1');
+      logger.info('message 2');
+      logger.info('message 3');
+      
+      const entries = logger.getLogEntries();
+      assert.strictEqual(entries.length, 2);
+      assert.strictEqual(entries[0].message, 'message 2');
+      assert.strictEqual(entries[1].message, 'message 3');
+    } finally {
+      // 元の値に戻す
+      loggerInstance.maxEntries = originalMaxEntries;
+    }
   });
 
   test('clear でログがクリアされる', () => {
