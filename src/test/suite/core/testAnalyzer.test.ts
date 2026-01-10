@@ -7,7 +7,6 @@ import {
   analyzeTestFiles,
   getAnalysisSettings,
   saveAnalysisReport,
-  type AnalysisIssue,
   type AnalysisResult,
 } from '../../../core/testAnalyzer';
 import { stubConfiguration, stubFileSystem } from '../testUtils/stubHelpers';
