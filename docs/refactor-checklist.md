@@ -3,49 +3,49 @@
 ## 1. testAnalyzer.ts の分割
 
 ### Week 1: Day 1-2 - 型定義とパーサー模块立
-- [ ] `analysis/types.ts` を作成し、型定義を移動
-  - [ ] `AnalysisIssue`
-  - [ ] `AnalysisResult`
-  - [ ] `AnalysisSummary`
-  - [ ] `TestFunction`
-  - [ ] `AnalysisContext`
-- [ ] `parsers/testParser.ts` を作成
-  - [ ] `extractTestFunctions()` を移動
-  - [ ] `findFunctionEnd()` を移動
-  - [ ] `extractPrecedingComments()` を移動
-- [ ] `parsers/codeExtractor.ts` を作成
-  - [ ] `extractCodeOnlyContent()` を移動
-  - [ ] `hasEmptyStringLiteralInCode()` を移動
-  - [ ] `isRegexStart()` を移動
-- [ ] `parsers/index.ts` でエクスポートを整理
-- [ ] 既存のテストが通ることを確認
+- [x] `analysis/types.ts` を作成し、型定義を移動
+  - [x] `AnalysisIssue`
+  - [x] `AnalysisResult`
+  - [x] `AnalysisSummary`
+  - [x] `TestFunction`
+  - [x] `AnalysisContext`
+- [x] `parsers/testParser.ts` を作成
+  - [x] `extractTestFunctions()` を移動
+  - [x] `findFunctionEnd()` を移動
+  - [x] `extractPrecedingComments()` を移動
+- [x] `parsers/codeExtractor.ts` を作成
+  - [x] `extractCodeOnlyContent()` を移動
+  - [x] `hasEmptyStringLiteralInCode()` を移動
+  - [x] `isRegexStart()` を移動
+- [x] `parsers/index.ts` でエクスポートを整理
+- [x] 既存のテストが通ることを確認
 
 ### Week 1: Day 3-4 - 分析ルールの分離
-- [ ] `analysis/rules/baseRule.ts` を作成
-  - [ ] `BaseAnalysisRule` 抽象クラスを実装
-- [ ] `analysis/rules/givenWhenThenRule.ts` を作成
-  - [ ] `GivenWhenThenAnalysisRule` を移動
-  - [ ] `checkGivenWhenThenStrict()` を移動
-- [ ] `analysis/rules/boundaryValueRule.ts` を作成
-  - [ ] `BoundaryValueAnalysisRule` を移動
-  - [ ] `checkBoundaryValue()` を移動
-- [ ] `analysis/rules/exceptionMessageRule.ts` を作成
-  - [ ] `ExceptionMessageAnalysisRule` を移動
-  - [ ] `checkExceptionMessage()` を移動
-- [ ] `analysis/rules/index.ts` でエクスポートを整理
-- [ ] 既存のテストが通ることを確認
+- [x] `analysis/rules/baseRule.ts` を作成
+  - [x] `BaseAnalysisRule` 抽象クラスを実装
+- [x] `analysis/rules/givenWhenThenRule.ts` を作成
+  - [x] `GivenWhenThenAnalysisRule` を移動
+  - [x] `checkGivenWhenThenStrict()` を移動
+- [x] `analysis/rules/boundaryValueRule.ts` を作成
+  - [x] `BoundaryValueAnalysisRule` を移動
+  - [x] `checkBoundaryValue()` を移動
+- [x] `analysis/rules/exceptionMessageRule.ts` を作成
+  - [x] `ExceptionMessageAnalysisRule` を移動
+  - [x] `checkExceptionMessage()` を移動
+- [x] `analysis/rules/index.ts` でエクスポートを整理
+- [x] 既存のテストが通ることを確認
 
 ### Week 1: Day 5 - レポート生成模块立と残りの整理
-- [ ] `reporting/summaryCalculator.ts` を作成
-  - [ ] `calculateSummary()` を移動
-- [ ] `reporting/analysisReporter.ts` を作成
-  - [ ] レポート出力関連関数を移動
-- [ ] `analysis/analyzer.ts` を作成
-  - [ ] `TestFileAnalysisPipeline` を移動
-  - [ ] `createDefaultAnalysisPipeline()` を移動
-- [ ] `testAnalyzer.ts` を整理
-  - [ ] パイプライン調整のみに絞る
-  - [ ] エクスポート関数を整理
+- [x] `reporting/summaryCalculator.ts` を作成
+  - [x] `calculateSummary()` を移動
+- [x] `reporting/analysisReporter.ts` を作成
+  - [x] レポート出力関連関数を移動
+- [x] `analysis/analyzer.ts` を作成
+  - [x] `TestFileAnalysisPipeline` を移動
+  - [x] `createDefaultAnalysisPipeline()` を移動
+- [x] `testAnalyzer.ts` を整理
+  - [x] パイプライン調整のみに絞る
+  - [x] エクスポート関数を整理
 - [ ] すべてのファイルが300行以内であることを確認
 - [ ] 既存のテストが通ることを確認
 
@@ -140,10 +140,10 @@
 
 ## 進捗率
 
-- [ ] 1. testAnalyzer.ts の分割: 0%
+- [x] 1. testAnalyzer.ts の分割: 90%
 - [ ] 2. 不安定なテストの修正: 0%
 - [ ] 3. ロギングの統一: 0%
-- [ ] **全体進捗: 0%**
+- [ ] **全体進捗: 30%**
 
 ---
 

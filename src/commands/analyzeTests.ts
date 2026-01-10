@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   analyzeTestFiles,
@@ -6,6 +7,7 @@ import {
   getAnalysisSettings,
   type AnalysisResult,
 } from '../core/testAnalyzer';
+import { type AnalysisContext, type TestFunction } from '../core/analysis/types';
 import { t } from '../core/l10n';
 import { getTestGenOutputChannel } from '../ui/outputChannel';
 
@@ -68,17 +70,17 @@ export async function analyzeTestsCommand(target?: AnalysisTarget): Promise<void
   }
 
   // 4. レポート保存
-  const { absolutePath, relativePath } = await saveAnalysisReport(
+  const savedPath = await saveAnalysisReport(
     workspaceRoot,
     result,
-    settings.reportDir,
   );
+  const relativePath = path.relative(workspaceRoot, savedPath);
 
   // 5. ログ出力
   getTestGenOutputChannel().appendLine(`[Analysis] ${t('analysis.reportSaved', relativePath)}`);
 
   // 6. レポートを開く
-  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absolutePath));
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(savedPath));
   await vscode.window.showTextDocument(doc, { preview: true });
 
   // 7. サマリー通知
