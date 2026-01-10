@@ -7,7 +7,6 @@ import {
   getAnalysisSettings,
   type AnalysisResult,
 } from '../core/testAnalyzer';
-import { type AnalysisContext, type TestFunction } from '../core/analysis/types';
 import { t } from '../core/l10n';
 import { getTestGenOutputChannel } from '../ui/outputChannel';
 

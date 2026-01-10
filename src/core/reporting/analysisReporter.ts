@@ -1,9 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as vscode from 'vscode';
 import { type AnalysisResult } from '../analysis/types';
 import { formatTimestamp } from '../artifacts';
-import { t } from '../l10n';
 
 /**
  * 分析結果をMarkdownファイルとして保存する

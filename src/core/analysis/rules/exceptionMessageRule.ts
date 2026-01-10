@@ -17,7 +17,7 @@ import { t } from '../../l10n';
  * @returns 例外メッセージの検証が存在しない場合 true
  */
 function checkExceptionMessage(content: string, testFn: { name: string; originalContent: string }): boolean {
-  // テスト名に例外関連のキーワードが含まれるかチェック
+  // テスト名に例外関連のキーワードが含まれるかチェック（将来的に使用する可能性あり）
   const testName = testFn.name.toLowerCase();
   const exceptionKeywords = [
     'error',
@@ -28,7 +28,9 @@ function checkExceptionMessage(content: string, testFn: { name: string; original
     'reject',
   ];
 
+  // Note: hasExceptionInName は将来的に例外テストの分類に使用する可能性があるため残す
   const hasExceptionInName = exceptionKeywords.some(keyword => testName.includes(keyword));
+  void hasExceptionInName; // 使用されていないが意図的な変数であることを明示
 
   // 例外がスローされるかチェック
   const throwPatterns = [

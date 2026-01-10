@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import { type TestFunction } from '../analysis/types';
 
 /**
@@ -29,36 +28,6 @@ function findFunctionEnd(codeOnlyLines: string[], startIndex: number): number {
   }
 
   return codeOnlyLines.length;
-}
-
-/**
- * 指定行より前のコメント行を収集する（逆順で返す）
- *
- * @param lines 元のソースコードを行分割したもの
- * @param startIndex 収集開始行インデックス（この行は含まない）
- * @returns 収集したコメント行の配列
- */
-function collectPrecedingCommentLines(lines: string[], startIndex: number): string[] {
-  const collected: string[] = [];
-
-  for (let i = startIndex - 1; i >= 0; i--) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    // 空行は無視
-    if (trimmed === '') {
-      continue;
-    }
-
-    const isLineComment = trimmed.startsWith('//');
-    const isBlockCommentFragment =
-      trimmed.startsWith('/*') || trimmed.startsWith('*') || trimmed.startsWith('*/');
-    if (!isLineComment && !isBlockCommentFragment) {
-      break;
-    }
-    collected.push(line);
-  }
-  return collected.reverse();
 }
 
 /**
