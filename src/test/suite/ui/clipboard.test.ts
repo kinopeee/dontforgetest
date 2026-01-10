@@ -3,12 +3,41 @@
  *
  * このファイルは src/ui/clipboard.ts の writeTextToClipboard 関数をテストする。
  * VS Code API のモックを使用して動作をシミュレートする。
+ *
+ * 注意: 実クリップボードを使用するため、suiteSetup/suiteTeardown で
+ * 元のクリップボード内容を退避・復元し、他テストやユーザー環境への影響を抑える。
  */
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { writeTextToClipboard } from '../../../ui/clipboard';
 
 suite('ui/clipboard.ts', () => {
+  // テスト開始前のクリップボード内容を退避
+  let originalClipboardText: string | undefined;
+
+  suiteSetup(async () => {
+    // Given: テスト開始前のクリップボード内容を保存
+    try {
+      originalClipboardText = await vscode.env.clipboard.readText();
+    } catch (err) {
+      // クリップボード読み取りに失敗しても続行（環境依存）
+      console.warn('クリップボード内容の退避に失敗しました（続行します）:', err);
+      originalClipboardText = undefined;
+    }
+  });
+
+  suiteTeardown(async () => {
+    // クリーンアップ: テスト終了後に元のクリップボード内容を復元
+    if (originalClipboardText !== undefined) {
+      try {
+        await vscode.env.clipboard.writeText(originalClipboardText);
+      } catch (err) {
+        // 復元に失敗しても続行
+        console.warn('クリップボード内容の復元に失敗しました:', err);
+      }
+    }
+  });
+
   suite('writeTextToClipboard', () => {
     // TC-CB-N-01: 正常系 - テキストがクリップボードに書き込まれる
     test('TC-CB-N-01: テキストがクリップボードに正しく書き込まれる', async () => {
