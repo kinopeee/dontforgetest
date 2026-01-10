@@ -1468,3 +1468,13 @@ function pad3(n: number): string {
   }
   return String(n);
 }
+
+/**
+ * テスト専用の内部エクスポート。
+ * 本番利用は禁止。
+ */
+export const __test__ = {
+  pad2,
+  pad3,
+  formatLocalIso8601WithOffset,
+};

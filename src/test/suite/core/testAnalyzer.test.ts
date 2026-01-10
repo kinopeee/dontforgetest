@@ -5,6 +5,7 @@ import {
   getAnalysisSettings,
   type AnalysisIssue,
   type AnalysisResult,
+  __test__ as testAnalyzerTest,
 } from '../../../core/testAnalyzer';
 
 suite('testAnalyzer', () => {
@@ -888,6 +889,133 @@ ${testFn}(\`should work\`, () => {
       assert.ok(typeof settings.testFilePattern === 'string');
       assert.ok(settings.reportDir.length > 0);
       assert.ok(settings.testFilePattern.length > 0);
+    });
+  });
+
+  // === pad2/pad3 テスト観点表 ===
+  // | Case ID       | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |---------------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-PAD2-B-01  | n=0                  | Boundary – 最小値                    | '00'            | -     |
+  // | TC-PAD2-B-02  | n=9                  | Boundary – 1桁最大                   | '09'            | -     |
+  // | TC-PAD2-B-03  | n=10                 | Boundary – 2桁最小                   | '10'            | -     |
+  // | TC-PAD2-B-04  | n=99                 | Boundary – 2桁最大                   | '99'            | -     |
+  // | TC-PAD3-B-01  | n=0                  | Boundary – 最小値                    | '000'           | -     |
+  // | TC-PAD3-B-02  | n=9                  | Boundary – 1桁最大                   | '009'           | -     |
+  // | TC-PAD3-B-03  | n=10                 | Boundary – 2桁最小                   | '010'           | -     |
+  // | TC-PAD3-B-04  | n=99                 | Boundary – 2桁最大                   | '099'           | -     |
+  // | TC-PAD3-B-05  | n=100                | Boundary – 3桁最小                   | '100'           | -     |
+  // | TC-PAD3-B-06  | n=999                | Boundary – 3桁最大                   | '999'           | -     |
+
+  suite('pad2 (internal)', () => {
+    test('TC-PAD2-B-01: n=0 returns "00"', () => {
+      // Given: n=0（最小値）
+      // When: pad2 を呼び出す
+      const result = testAnalyzerTest.pad2(0);
+      // Then: '00' が返る
+      assert.strictEqual(result, '00');
+    });
+
+    test('TC-PAD2-B-02: n=9 returns "09"', () => {
+      // Given: n=9（1桁最大）
+      // When: pad2 を呼び出す
+      const result = testAnalyzerTest.pad2(9);
+      // Then: '09' が返る
+      assert.strictEqual(result, '09');
+    });
+
+    test('TC-PAD2-B-03: n=10 returns "10"', () => {
+      // Given: n=10（2桁最小）
+      // When: pad2 を呼び出す
+      const result = testAnalyzerTest.pad2(10);
+      // Then: '10' が返る
+      assert.strictEqual(result, '10');
+    });
+
+    test('TC-PAD2-B-04: n=99 returns "99"', () => {
+      // Given: n=99（2桁最大）
+      // When: pad2 を呼び出す
+      const result = testAnalyzerTest.pad2(99);
+      // Then: '99' が返る
+      assert.strictEqual(result, '99');
+    });
+  });
+
+  suite('pad3 (internal)', () => {
+    test('TC-PAD3-B-01: n=0 returns "000"', () => {
+      // Given: n=0（最小値）
+      // When: pad3 を呼び出す
+      const result = testAnalyzerTest.pad3(0);
+      // Then: '000' が返る
+      assert.strictEqual(result, '000');
+    });
+
+    test('TC-PAD3-B-02: n=9 returns "009"', () => {
+      // Given: n=9（1桁最大、n<10 の境界）
+      // When: pad3 を呼び出す
+      const result = testAnalyzerTest.pad3(9);
+      // Then: '009' が返る
+      assert.strictEqual(result, '009');
+    });
+
+    test('TC-PAD3-B-03: n=10 returns "010"', () => {
+      // Given: n=10（2桁最小、n>=10 の境界）
+      // When: pad3 を呼び出す
+      const result = testAnalyzerTest.pad3(10);
+      // Then: '010' が返る
+      assert.strictEqual(result, '010');
+    });
+
+    test('TC-PAD3-B-04: n=99 returns "099"', () => {
+      // Given: n=99（2桁最大、n<100 の境界）
+      // When: pad3 を呼び出す
+      const result = testAnalyzerTest.pad3(99);
+      // Then: '099' が返る
+      assert.strictEqual(result, '099');
+    });
+
+    test('TC-PAD3-B-05: n=100 returns "100"', () => {
+      // Given: n=100（3桁最小、n>=100 の境界）
+      // When: pad3 を呼び出す
+      const result = testAnalyzerTest.pad3(100);
+      // Then: '100' が返る
+      assert.strictEqual(result, '100');
+    });
+
+    test('TC-PAD3-B-06: n=999 returns "999"', () => {
+      // Given: n=999（3桁最大）
+      // When: pad3 を呼び出す
+      const result = testAnalyzerTest.pad3(999);
+      // Then: '999' が返る
+      assert.strictEqual(result, '999');
+    });
+  });
+
+  suite('formatLocalIso8601WithOffset (internal)', () => {
+    test('TC-FMT-N-01: formats date with milliseconds < 10', () => {
+      // Given: ミリ秒が 5 の Date オブジェクト
+      const date = new Date(2024, 0, 15, 10, 30, 45, 5);
+      // When: formatLocalIso8601WithOffset を呼び出す
+      const result = testAnalyzerTest.formatLocalIso8601WithOffset(date);
+      // Then: ミリ秒部分が '005' でパディングされている
+      assert.ok(result.includes('.005'), `Expected .005 in result: ${result}`);
+    });
+
+    test('TC-FMT-N-02: formats date with milliseconds 10-99', () => {
+      // Given: ミリ秒が 50 の Date オブジェクト
+      const date = new Date(2024, 0, 15, 10, 30, 45, 50);
+      // When: formatLocalIso8601WithOffset を呼び出す
+      const result = testAnalyzerTest.formatLocalIso8601WithOffset(date);
+      // Then: ミリ秒部分が '050' でパディングされている
+      assert.ok(result.includes('.050'), `Expected .050 in result: ${result}`);
+    });
+
+    test('TC-FMT-N-03: formats date with milliseconds >= 100', () => {
+      // Given: ミリ秒が 500 の Date オブジェクト
+      const date = new Date(2024, 0, 15, 10, 30, 45, 500);
+      // When: formatLocalIso8601WithOffset を呼び出す
+      const result = testAnalyzerTest.formatLocalIso8601WithOffset(date);
+      // Then: ミリ秒部分が '500' でそのまま出力される
+      assert.ok(result.includes('.500'), `Expected .500 in result: ${result}`);
     });
   });
 });
