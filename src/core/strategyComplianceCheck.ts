@@ -189,6 +189,9 @@ export async function runComplianceCheck(params: {
     missingGwt: analysisIssues.filter((i) => i.type === 'missing-gwt').length,
     missingBoundary: analysisIssues.filter((i) => i.type === 'missing-boundary').length,
     missingExceptionMessage: analysisIssues.filter((i) => i.type === 'missing-exception-message').length,
+    weakAssertion: analysisIssues.filter((i) => i.type === 'weak-assertion').length,
+    unverifiedMock: analysisIssues.filter((i) => i.type === 'unverified-mock').length,
+    globalStateLeak: analysisIssues.filter((i) => i.type === 'global-state-leak').length,
   };
 
   // 観点表caseIdチェック

@@ -280,7 +280,7 @@ test('TC-N-10: handles another case', () => {});
           { type: 'missing-gwt', file: 'test.test.ts', line: 10, detail: 'test case (Given missing)' },
           { type: 'missing-boundary', file: 'test.test.ts', detail: 'No boundary tests' },
         ],
-        analysisSummary: { missingGwt: 1, missingBoundary: 1, missingExceptionMessage: 0 },
+        analysisSummary: { missingGwt: 1, missingBoundary: 1, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 },
         missingCaseIdIssues: [],
         passed: false,
       };
@@ -300,7 +300,7 @@ test('TC-N-10: handles another case', () => {});
       const result: ComplianceCheckResult = {
         analyzedFiles: 1,
         analysisIssues: [],
-        analysisSummary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 },
+        analysisSummary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 },
         missingCaseIdIssues: [
           { caseId: 'TC-N-01', file: 'test.test.ts', detail: 'Not implemented' },
           { caseId: 'TC-E-01', file: 'test.test.ts', detail: 'Not implemented' },
@@ -322,7 +322,7 @@ test('TC-N-10: handles another case', () => {});
       const result: ComplianceCheckResult = {
         analyzedFiles: 1,
         analysisIssues: [],
-        analysisSummary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 },
+        analysisSummary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 },
         missingCaseIdIssues: [],
         perspectiveSkippedWarning: 'Perspective table was skipped',
         passed: true,
@@ -341,7 +341,7 @@ test('TC-N-10: handles another case', () => {});
       const result: ComplianceCheckResult = {
         analyzedFiles: 1,
         analysisIssues: [],
-        analysisSummary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 },
+        analysisSummary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 },
         missingCaseIdIssues: [],
         passed: true,
       };

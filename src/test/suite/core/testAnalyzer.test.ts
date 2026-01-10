@@ -811,6 +811,9 @@ ${testFn}(\`should work\`, () => {
           missingGwt: 0,
           missingBoundary: 0,
           missingExceptionMessage: 0,
+          weakAssertion: 0,
+          unverifiedMock: 0,
+          globalStateLeak: 0,
         },
         pattern: 'src/test/**/*.test.ts',
       };
@@ -838,6 +841,9 @@ ${testFn}(\`should work\`, () => {
           missingGwt: 2,
           missingBoundary: 1,
           missingExceptionMessage: 1,
+          weakAssertion: 0,
+          unverifiedMock: 0,
+          globalStateLeak: 0,
         },
         pattern: 'src/test/**/*.test.ts',
       };
@@ -866,6 +872,9 @@ ${testFn}(\`should work\`, () => {
           missingGwt: 1,
           missingBoundary: 0,
           missingExceptionMessage: 0,
+          weakAssertion: 0,
+          unverifiedMock: 0,
+          globalStateLeak: 0,
         },
         pattern: 'test.test.ts',
       };
@@ -1016,6 +1025,225 @@ ${testFn}(\`should work\`, () => {
       const result = testAnalyzerTest.formatLocalIso8601WithOffset(date);
       // Then: ミリ秒部分が '500' でそのまま出力される
       assert.ok(result.includes('.500'), `Expected .500 in result: ${result}`);
+    });
+  });
+
+  // === 新規分析ルールテスト観点表 ===
+  // | Case ID       | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |---------------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-WA-N-01    | assert.ok(true)      | Equivalence – 意味のないアサーション | weak-assertion検出 | -   |
+  // | TC-WA-N-02    | 正常なアサーション   | Equivalence – 正常系                 | 検出なし        | -     |
+  // | TC-UM-N-01    | sinon.stub検証なし   | Equivalence – 未検証モック           | unverified-mock検出 | - |
+  // | TC-UM-N-02    | sinon.stub検証あり   | Equivalence – 検証済みモック         | 検出なし        | -     |
+  // | TC-GSL-N-01   | process.env変更復元なし | Equivalence – グローバル状態リーク | global-state-leak検出 | - |
+  // | TC-GSL-N-02   | process.env変更復元あり | Equivalence – 正常なクリーンアップ | 検出なし        | -     |
+
+  suite('analyzeFileContent Weak assertion detection', () => {
+    const testFn = 'te' + 'st';
+
+    test('TC-WA-N-01: detects assert.ok(true) as weak assertion', () => {
+      // Given: assert.ok(true) を含むテストコード
+      const content = `
+${testFn}('should work', () => {
+  // Given: precondition
+  // When: action
+  // Then: assertion
+  assert.ok(true);
+});
+`;
+
+      // When: ファイル内容を分析する
+      const issues = analyzeFileContent('test.test.ts', content);
+
+      // Then: weak-assertion の問題が検出される
+      const weakIssues = issues.filter((i) => i.type === 'weak-assertion');
+      assert.strictEqual(weakIssues.length, 1);
+      assert.strictEqual(weakIssues[0].file, 'test.test.ts');
+    });
+
+    test('TC-WA-N-02: does not report weak assertion for normal assertions', () => {
+      // Given: 正常なアサーションを含むテストコード
+      const content = `
+${testFn}('should work', () => {
+  // Given: precondition
+  const result = someFunction();
+  // When: action
+  // Then: assertion
+  assert.ok(result);
+  assert.strictEqual(result, expected);
+});
+`;
+
+      // When: ファイル内容を分析する
+      const issues = analyzeFileContent('test.test.ts', content);
+
+      // Then: weak-assertion の問題は検出されない
+      const weakIssues = issues.filter((i) => i.type === 'weak-assertion');
+      assert.strictEqual(weakIssues.length, 0);
+    });
+
+    test('TC-WA-N-03: detects expect(true).toBe(true) as weak assertion', () => {
+      // Given: expect(true).toBe(true) を含むテストコード
+      const content = `
+${testFn}('should work', () => {
+  // Given: precondition
+  // When: action
+  // Then: assertion
+  expect(true).toBe(true);
+});
+`;
+
+      // When: ファイル内容を分析する
+      const issues = analyzeFileContent('test.test.ts', content);
+
+      // Then: weak-assertion の問題が検出される
+      const weakIssues = issues.filter((i) => i.type === 'weak-assertion');
+      assert.strictEqual(weakIssues.length, 1);
+    });
+  });
+
+  suite('analyzeFileContent Unverified mock detection', () => {
+    const testFn = 'te' + 'st';
+
+    test('TC-UM-N-01: detects sinon.stub without verification', () => {
+      // Given: sinon.stub を使用しているが検証がないテストコード
+      const content = `
+${testFn}('should work', () => {
+  // Given: precondition
+  const stub = sinon.stub(obj, 'method');
+  // When: action
+  someFunction();
+  // Then: assertion
+  assert.ok(true);
+});
+`;
+
+      // When: ファイル内容を分析する
+      const issues = analyzeFileContent('test.test.ts', content);
+
+      // Then: unverified-mock の問題が検出される
+      const mockIssues = issues.filter((i) => i.type === 'unverified-mock');
+      assert.strictEqual(mockIssues.length, 1);
+      assert.strictEqual(mockIssues[0].file, 'test.test.ts');
+    });
+
+    test('TC-UM-N-02: does not report when mock is verified with calledWith', () => {
+      // Given: sinon.stub を使用し calledWith で検証しているテストコード
+      const content = `
+${testFn}('should work', () => {
+  // Given: precondition
+  const stub = sinon.stub(obj, 'method');
+  // When: action
+  someFunction();
+  // Then: assertion
+  assert.ok(stub.calledWith('arg'));
+});
+`;
+
+      // When: ファイル内容を分析する
+      const issues = analyzeFileContent('test.test.ts', content);
+
+      // Then: unverified-mock の問題は検出されない
+      const mockIssues = issues.filter((i) => i.type === 'unverified-mock');
+      assert.strictEqual(mockIssues.length, 0);
+    });
+
+    test('TC-UM-N-03: does not report when jest mock is verified with toHaveBeenCalled', () => {
+      // Given: jest.fn を使用し toHaveBeenCalled で検証しているテストコード
+      const content = `
+${testFn}('should work', () => {
+  // Given: precondition
+  const mockFn = jest.fn();
+  // When: action
+  someFunction(mockFn);
+  // Then: assertion
+  expect(mockFn).toHaveBeenCalled();
+});
+`;
+
+      // When: ファイル内容を分析する
+      const issues = analyzeFileContent('test.test.ts', content);
+
+      // Then: unverified-mock の問題は検出されない
+      const mockIssues = issues.filter((i) => i.type === 'unverified-mock');
+      assert.strictEqual(mockIssues.length, 0);
+    });
+  });
+
+  suite('analyzeFileContent Global state leak detection', () => {
+    const testFn = 'te' + 'st';
+
+    test('TC-GSL-N-01: detects process.env modification without cleanup', () => {
+      // Given: process.env を変更しているが復元がないテストコード
+      const content = `
+${testFn}('should work', () => {
+  // Given: precondition
+  process.env.TEST_VAR = 'value';
+  // When: action
+  someFunction();
+  // Then: assertion
+  assert.ok(true);
+});
+`;
+
+      // When: ファイル内容を分析する
+      const issues = analyzeFileContent('test.test.ts', content);
+
+      // Then: global-state-leak の問題が検出される
+      const leakIssues = issues.filter((i) => i.type === 'global-state-leak');
+      assert.strictEqual(leakIssues.length, 1);
+      assert.strictEqual(leakIssues[0].file, 'test.test.ts');
+    });
+
+    test('TC-GSL-N-02: does not report when process.env is restored in finally', () => {
+      // Given: process.env を変更し finally で復元しているテストコード
+      const content = `
+${testFn}('should work', () => {
+  // Given: precondition
+  const original = process.env.TEST_VAR;
+  process.env.TEST_VAR = 'value';
+  try {
+    // When: action
+    someFunction();
+    // Then: assertion
+    assert.ok(true);
+  } finally {
+    process.env.TEST_VAR = original;
+  }
+});
+`;
+
+      // When: ファイル内容を分析する
+      const issues = analyzeFileContent('test.test.ts', content);
+
+      // Then: global-state-leak の問題は検出されない
+      const leakIssues = issues.filter((i) => i.type === 'global-state-leak');
+      assert.strictEqual(leakIssues.length, 0);
+    });
+
+    test('TC-GSL-N-03: does not report when process.env is deleted for cleanup', () => {
+      // Given: process.env を変更し delete で復元しているテストコード
+      const content = `
+${testFn}('should work', () => {
+  // Given: precondition
+  process.env.TEST_VAR = 'value';
+  try {
+    // When: action
+    someFunction();
+    // Then: assertion
+    assert.ok(true);
+  } finally {
+    delete process.env.TEST_VAR;
+  }
+});
+`;
+
+      // When: ファイル内容を分析する
+      const issues = analyzeFileContent('test.test.ts', content);
+
+      // Then: global-state-leak の問題は検出されない
+      const leakIssues = issues.filter((i) => i.type === 'global-state-leak');
+      assert.strictEqual(leakIssues.length, 0);
     });
   });
 });

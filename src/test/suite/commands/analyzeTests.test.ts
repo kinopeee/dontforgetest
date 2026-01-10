@@ -199,12 +199,12 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
     (testAnalyzerModule as unknown as { analyzeTestFiles: typeof testAnalyzerModule.analyzeTestFiles }).analyzeTestFiles =
       async () => {
         analyzeTestFilesCalled = true;
-        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 }, pattern: '' };
+        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 }, pattern: '' };
       };
     (testAnalyzerModule as unknown as { analyzeFile: typeof testAnalyzerModule.analyzeFile }).analyzeFile =
       async () => {
         analyzeFileCalled = true;
-        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 }, pattern: '' };
+        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 }, pattern: '' };
       };
 
     try {
@@ -244,12 +244,12 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
     (testAnalyzerModule as unknown as { analyzeTestFiles: typeof testAnalyzerModule.analyzeTestFiles }).analyzeTestFiles =
       async () => {
         analyzeTestFilesCalled = true;
-        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 }, pattern: '' };
+        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 }, pattern: '' };
       };
     (testAnalyzerModule as unknown as { analyzeFile: typeof testAnalyzerModule.analyzeFile }).analyzeFile =
       async () => {
         analyzeFileCalled = true;
-        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 }, pattern: '' };
+        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 }, pattern: '' };
       };
 
     const uiStubs = createMinimalAnalysisUiStubs(workspaceRoot);
@@ -299,13 +299,13 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
     (testAnalyzerModule as unknown as { analyzeTestFiles: typeof testAnalyzerModule.analyzeTestFiles }).analyzeTestFiles =
       async () => {
         analyzeTestFilesCalled = true;
-        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 }, pattern: '' };
+        return { analyzedFiles: 0, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 }, pattern: '' };
       };
     (testAnalyzerModule as unknown as { analyzeFile: typeof testAnalyzerModule.analyzeFile }).analyzeFile =
       async (filePath: string) => {
         analyzeFileCalled = true;
         analyzedFilePath = filePath;
-        return { analyzedFiles: 1, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 }, pattern: '' };
+        return { analyzedFiles: 1, issues: [], summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 }, pattern: '' };
       };
 
     const uiStubs = createMinimalAnalysisUiStubs(workspaceRoot);
@@ -352,7 +352,7 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
           issues: [
             { type: 'missing-gwt' as const, file: 'test.test.ts', line: 10, detail: 'test case' },
           ],
-          summary: { missingGwt: 1, missingBoundary: 0, missingExceptionMessage: 0 },
+          summary: { missingGwt: 1, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 },
           pattern,
         };
       };
@@ -492,7 +492,7 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
         return {
           analyzedFiles: 1,
           issues: [],
-          summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 },
+          summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 },
           pattern: filePath,
         };
       };
@@ -672,7 +672,7 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
         return {
           analyzedFiles: 5,
           issues: [],
-          summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 },
+          summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0, weakAssertion: 0, unverifiedMock: 0, globalStateLeak: 0 },
           pattern,
         };
       };

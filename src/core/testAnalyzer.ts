@@ -11,7 +11,10 @@ import { t } from './l10n';
 export type AnalysisIssueType =
   | 'missing-gwt'
   | 'missing-boundary'
-  | 'missing-exception-message';
+  | 'missing-exception-message'
+  | 'weak-assertion'
+  | 'unverified-mock'
+  | 'global-state-leak';
 
 /**
  * 分析で検出された個別の問題
@@ -33,6 +36,9 @@ export interface AnalysisSummary {
   missingGwt: number;
   missingBoundary: number;
   missingExceptionMessage: number;
+  weakAssertion: number;
+  unverifiedMock: number;
+  globalStateLeak: number;
 }
 
 /**
@@ -180,6 +186,57 @@ export class ExceptionMessageAnalysisRule implements AnalysisRule {
 }
 
 /**
+ * アサーション品質分析ルール
+ *
+ * 意味のないアサーション（assert.ok(true) など）を検出する。
+ */
+export class WeakAssertionAnalysisRule implements AnalysisRule {
+  readonly id = 'weak-assertion';
+
+  analyze(context: AnalysisContext): AnalysisIssue[] {
+    return checkWeakAssertions(
+      context.relativePath,
+      context.codeOnlyContent,
+      context.testFunctions,
+    );
+  }
+}
+
+/**
+ * モック検証分析ルール
+ *
+ * モックの呼び出し回数・引数の検証漏れを検出する。
+ */
+export class UnverifiedMockAnalysisRule implements AnalysisRule {
+  readonly id = 'unverified-mock';
+
+  analyze(context: AnalysisContext): AnalysisIssue[] {
+    return checkUnverifiedMocks(
+      context.relativePath,
+      context.codeOnlyContent,
+      context.testFunctions,
+    );
+  }
+}
+
+/**
+ * グローバル状態リーク分析ルール
+ *
+ * グローバル状態の変更とクリーンアップ漏れを検出する。
+ */
+export class GlobalStateLeakAnalysisRule implements AnalysisRule {
+  readonly id = 'global-state-leak';
+
+  analyze(context: AnalysisContext): AnalysisIssue[] {
+    return checkGlobalStateLeaks(
+      context.relativePath,
+      context.content,
+      context.testFunctions,
+    );
+  }
+}
+
+/**
  * テストファイル分析パイプラインクラス
  *
  * 複数の分析ルールを順次実行し、結果を集約する。
@@ -226,13 +283,16 @@ export class TestFileAnalysisPipeline {
 /**
  * デフォルトの分析パイプラインを作成する
  *
- * 標準の3つのルール（G/W/T、境界値、例外メッセージ）を含むパイプラインを返す。
+ * 標準の6つのルール（G/W/T、境界値、例外メッセージ、弱いアサーション、未検証モック、グローバル状態リーク）を含むパイプラインを返す。
  */
 export function createDefaultAnalysisPipeline(): TestFileAnalysisPipeline {
   return new TestFileAnalysisPipeline()
     .addRule(new GivenWhenThenAnalysisRule())
     .addRule(new BoundaryValueAnalysisRule())
-    .addRule(new ExceptionMessageAnalysisRule());
+    .addRule(new ExceptionMessageAnalysisRule())
+    .addRule(new WeakAssertionAnalysisRule())
+    .addRule(new UnverifiedMockAnalysisRule())
+    .addRule(new GlobalStateLeakAnalysisRule());
 }
 
 /**
@@ -1104,6 +1164,182 @@ function skipWhitespaceReverse(content: string, index: number): number {
   }
   return index;
 }
+
+/**
+ * テスト関数の情報（内部型）
+ */
+interface TestFunctionInfo {
+  name: string;
+  startLine: number;
+  endLine: number;
+  content: string;
+  leadingComments: string;
+}
+
+/**
+ * 意味のないアサーションをチェックする
+ *
+ * 検出パターン:
+ * - assert.ok(true)
+ * - assert.strictEqual(true, true)
+ * - expect(true).toBe(true)
+ * - assert.ok(1)
+ */
+function checkWeakAssertions(
+  relativePath: string,
+  codeOnlyContent: string,
+  testFunctions: TestFunctionInfo[],
+): AnalysisIssue[] {
+  const issues: AnalysisIssue[] = [];
+
+  // 意味のないアサーションパターン
+  const weakPatterns = [
+    /assert\.ok\s*\(\s*true\s*\)/,
+    /assert\.ok\s*\(\s*1\s*\)/,
+    /assert\.strictEqual\s*\(\s*true\s*,\s*true\s*\)/,
+    /assert\.strictEqual\s*\(\s*1\s*,\s*1\s*\)/,
+    /expect\s*\(\s*true\s*\)\s*\.toBe\s*\(\s*true\s*\)/,
+    /expect\s*\(\s*1\s*\)\s*\.toBe\s*\(\s*1\s*\)/,
+  ];
+
+  for (const testFn of testFunctions) {
+    for (const pattern of weakPatterns) {
+      if (pattern.test(codeOnlyContent.slice(0, testFn.endLine * 100))) {
+        // テスト関数内で検出された場合のみ報告
+        const testContent = codeOnlyContent.split('\n').slice(testFn.startLine - 1, testFn.endLine).join('\n');
+        if (pattern.test(testContent)) {
+          issues.push({
+            type: 'weak-assertion',
+            file: relativePath,
+            line: testFn.startLine,
+            detail: `${testFn.name}: ${t('analysis.detail.weakAssertion')}`,
+          });
+          break; // 1つのテスト関数につき1つの問題のみ報告
+        }
+      }
+    }
+  }
+
+  return issues;
+}
+
+/**
+ * 未検証のモックをチェックする
+ *
+ * 検出パターン:
+ * - sinon.stub() / sinon.spy() が作成されているが、calledWith / calledOnce などの検証がない
+ * - jest.fn() が作成されているが、toHaveBeenCalled などの検証がない
+ */
+function checkUnverifiedMocks(
+  relativePath: string,
+  codeOnlyContent: string,
+  testFunctions: TestFunctionInfo[],
+): AnalysisIssue[] {
+  const issues: AnalysisIssue[] = [];
+
+  // モック作成パターン
+  const mockCreationPatterns = [
+    /sinon\.(stub|spy|mock)\s*\(/,
+    /jest\.fn\s*\(/,
+    /vi\.fn\s*\(/,
+  ];
+
+  // モック検証パターン
+  const mockVerificationPatterns = [
+    /\.calledWith\b/,
+    /\.calledOnce\b/,
+    /\.calledTwice\b/,
+    /\.called\b/,
+    /\.notCalled\b/,
+    /\.callCount\b/,
+    /toHaveBeenCalled/,
+    /toHaveBeenCalledWith/,
+    /toHaveBeenCalledTimes/,
+    /\.verify\s*\(/,
+  ];
+
+  for (const testFn of testFunctions) {
+    const testContent = codeOnlyContent.split('\n').slice(testFn.startLine - 1, testFn.endLine).join('\n');
+
+    // モックが作成されているかチェック
+    const hasMockCreation = mockCreationPatterns.some((p) => p.test(testContent));
+    if (!hasMockCreation) {
+      continue;
+    }
+
+    // モック検証があるかチェック
+    const hasMockVerification = mockVerificationPatterns.some((p) => p.test(testContent));
+    if (!hasMockVerification) {
+      issues.push({
+        type: 'unverified-mock',
+        file: relativePath,
+        line: testFn.startLine,
+        detail: `${testFn.name}: ${t('analysis.detail.unverifiedMock')}`,
+      });
+    }
+  }
+
+  return issues;
+}
+
+/**
+ * グローバル状態のリークをチェックする
+ *
+ * 検出パターン:
+ * - process.env の変更があるが、復元がない
+ * - global / window オブジェクトの変更があるが、復元がない
+ * - Object.defineProperty の使用があるが、復元がない
+ */
+function checkGlobalStateLeaks(
+  relativePath: string,
+  content: string,
+  testFunctions: TestFunctionInfo[],
+): AnalysisIssue[] {
+  const issues: AnalysisIssue[] = [];
+
+  // グローバル状態変更パターン
+  const globalStatePatterns = [
+    /process\.env\s*\[/,
+    /process\.env\.\w+\s*=/,
+    /Object\.defineProperty\s*\(/,
+    /global\.\w+\s*=/,
+    /window\.\w+\s*=/,
+  ];
+
+  // 復元パターン（finally, afterEach, restore などのキーワード）
+  const restorePatterns = [
+    /finally\s*\{/,
+    /afterEach\s*\(/,
+    /\.restore\s*\(/,
+    /delete\s+process\.env/,
+    /delete\s+global\./,
+    /delete\s+window\./,
+  ];
+
+  for (const testFn of testFunctions) {
+    const testContent = content.split('\n').slice(testFn.startLine - 1, testFn.endLine).join('\n');
+
+    // グローバル状態の変更があるかチェック
+    const hasGlobalStateChange = globalStatePatterns.some((p) => p.test(testContent));
+    if (!hasGlobalStateChange) {
+      continue;
+    }
+
+    // 復元処理があるかチェック
+    const hasRestore = restorePatterns.some((p) => p.test(testContent));
+    if (!hasRestore) {
+      issues.push({
+        type: 'global-state-leak',
+        file: relativePath,
+        line: testFn.startLine,
+        detail: `${testFn.name}: ${t('analysis.detail.globalStateLeak')}`,
+      });
+    }
+  }
+
+  return issues;
+}
+
 /**
  * サマリーを計算する
  */
@@ -1112,6 +1348,9 @@ function calculateSummary(issues: AnalysisIssue[]): AnalysisSummary {
     missingGwt: issues.filter((i) => i.type === 'missing-gwt').length,
     missingBoundary: issues.filter((i) => i.type === 'missing-boundary').length,
     missingExceptionMessage: issues.filter((i) => i.type === 'missing-exception-message').length,
+    weakAssertion: issues.filter((i) => i.type === 'weak-assertion').length,
+    unverifiedMock: issues.filter((i) => i.type === 'unverified-mock').length,
+    globalStateLeak: issues.filter((i) => i.type === 'global-state-leak').length,
   };
 }
 
@@ -1265,6 +1504,78 @@ export class ExceptionIssueFormatter implements IssueFormatter {
 }
 
 /**
+ * 意味のないアサーション問題フォーマッター
+ */
+export class WeakAssertionIssueFormatter implements IssueFormatter {
+  readonly issueType: AnalysisIssueType = 'weak-assertion';
+
+  getTableHeaders(): string[] {
+    return [
+      t('analysis.tableHeader.file'),
+      t('analysis.tableHeader.line'),
+      t('analysis.tableHeader.detail'),
+    ];
+  }
+
+  formatIssueRow(issue: AnalysisIssue): string[] {
+    const lineStr = issue.line !== undefined ? String(issue.line) : '-';
+    return [
+      escapeTableCell(issue.file),
+      lineStr,
+      escapeTableCell(issue.detail),
+    ];
+  }
+}
+
+/**
+ * 未検証モック問題フォーマッター
+ */
+export class UnverifiedMockIssueFormatter implements IssueFormatter {
+  readonly issueType: AnalysisIssueType = 'unverified-mock';
+
+  getTableHeaders(): string[] {
+    return [
+      t('analysis.tableHeader.file'),
+      t('analysis.tableHeader.line'),
+      t('analysis.tableHeader.detail'),
+    ];
+  }
+
+  formatIssueRow(issue: AnalysisIssue): string[] {
+    const lineStr = issue.line !== undefined ? String(issue.line) : '-';
+    return [
+      escapeTableCell(issue.file),
+      lineStr,
+      escapeTableCell(issue.detail),
+    ];
+  }
+}
+
+/**
+ * グローバル状態リーク問題フォーマッター
+ */
+export class GlobalStateLeakIssueFormatter implements IssueFormatter {
+  readonly issueType: AnalysisIssueType = 'global-state-leak';
+
+  getTableHeaders(): string[] {
+    return [
+      t('analysis.tableHeader.file'),
+      t('analysis.tableHeader.line'),
+      t('analysis.tableHeader.detail'),
+    ];
+  }
+
+  formatIssueRow(issue: AnalysisIssue): string[] {
+    const lineStr = issue.line !== undefined ? String(issue.line) : '-';
+    return [
+      escapeTableCell(issue.file),
+      lineStr,
+      escapeTableCell(issue.detail),
+    ];
+  }
+}
+
+/**
  * レポートセクションビルダークラス
  *
  * 分析レポートの各セクションを構築する。
@@ -1294,7 +1605,10 @@ export class AnalysisReportSectionBuilder {
       .addHeader([t('analysis.tableHeader.category'), t('analysis.tableHeader.count')])
       .addRow([t('analysis.category.missingGwt'), String(summary.missingGwt)])
       .addRow([t('analysis.category.missingBoundary'), String(summary.missingBoundary)])
-      .addRow([t('analysis.category.missingExceptionMessage'), String(summary.missingExceptionMessage)]);
+      .addRow([t('analysis.category.missingExceptionMessage'), String(summary.missingExceptionMessage)])
+      .addRow([t('analysis.category.weakAssertion'), String(summary.weakAssertion)])
+      .addRow([t('analysis.category.unverifiedMock'), String(summary.unverifiedMock)])
+      .addRow([t('analysis.category.globalStateLeak'), String(summary.globalStateLeak)]);
 
     return [
       `## ${t('analysis.report.summary')}`,
@@ -1347,6 +1661,12 @@ export class AnalysisReportSectionBuilder {
         return t('analysis.category.missingBoundary');
       case 'missing-exception-message':
         return t('analysis.category.missingExceptionMessage');
+      case 'weak-assertion':
+        return t('analysis.category.weakAssertion');
+      case 'unverified-mock':
+        return t('analysis.category.unverifiedMock');
+      case 'global-state-leak':
+        return t('analysis.category.globalStateLeak');
     }
   }
 }
@@ -1369,6 +1689,9 @@ export class AnalysisReportComposer {
       new GwtIssueFormatter(),
       new BoundaryIssueFormatter(),
       new ExceptionIssueFormatter(),
+      new WeakAssertionIssueFormatter(),
+      new UnverifiedMockIssueFormatter(),
+      new GlobalStateLeakIssueFormatter(),
     ];
   }
 
