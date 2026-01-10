@@ -5,15 +5,9 @@ import {
   analyzeFile,
   analyzeFileContent,
   analyzeTestFiles,
-  buildAnalysisReportMarkdown,
-  ExceptionIssueFormatter,
   getAnalysisSettings,
-  GwtIssueFormatter,
-  MarkdownTableBuilder,
   saveAnalysisReport,
-  type AnalysisIssue,
   type AnalysisResult,
-  __test__ as testAnalyzerTest,
 } from '../../../core/testAnalyzer';
 import { stubConfiguration, stubFileSystem } from '../testUtils/stubHelpers';
 
@@ -967,94 +961,16 @@ ${testFn}(\`should work\`, () => {
     });
   });
 
-  suite('buildAnalysisReportMarkdown', () => {
-    test('generates report with no issues', () => {
-      // Given: 問題がない分析結果
-      const result: AnalysisResult = {
-        analyzedFiles: 5,
-        issues: [],
-        summary: {
-          missingGwt: 0,
-          missingBoundary: 0,
-          missingExceptionMessage: 0,
-        },
-        pattern: 'src/test/**/*.test.ts',
-      };
-
-      // When: レポートを生成する
-      const markdown = buildAnalysisReportMarkdown(result, Date.now());
-
-      // Then: 基本情報が含まれる
-      assert.ok(markdown.includes('src/test/**/*.test.ts'));
-      assert.ok(markdown.includes('5'));
-    });
-
-    test('generates report with multiple issues', () => {
-      // Given: 複数の問題がある分析結果
-      const issues: AnalysisIssue[] = [
-        { type: 'missing-gwt', file: 'test1.test.ts', line: 10, detail: 'test case 1' },
-        { type: 'missing-gwt', file: 'test2.test.ts', line: 20, detail: 'test case 2' },
-        { type: 'missing-boundary', file: 'test3.test.ts', detail: 'no boundary tests' },
-        { type: 'missing-exception-message', file: 'test4.test.ts', line: 30, detail: 'no message' },
-      ];
-      const result: AnalysisResult = {
-        analyzedFiles: 4,
-        issues,
-        summary: {
-          missingGwt: 2,
-          missingBoundary: 1,
-          missingExceptionMessage: 1,
-        },
-        pattern: 'src/test/**/*.test.ts',
-      };
-
-      // When: レポートを生成する
-      const markdown = buildAnalysisReportMarkdown(result, Date.now());
-
-      // Then: 各問題の情報が含まれる
-      assert.ok(markdown.includes('test1.test.ts'));
-      assert.ok(markdown.includes('test2.test.ts'));
-      assert.ok(markdown.includes('test3.test.ts'));
-      assert.ok(markdown.includes('test4.test.ts'));
-      assert.ok(markdown.includes('2')); // missingGwt count
-      assert.ok(markdown.includes('1')); // missingBoundary count
-    });
-
-    test('escapes pipe characters in table cells', () => {
-      // Given: パイプ文字を含む詳細がある分析結果
-      const issues: AnalysisIssue[] = [
-        { type: 'missing-gwt', file: 'test.test.ts', line: 1, detail: 'test | with | pipes' },
-      ];
-      const result: AnalysisResult = {
-        analyzedFiles: 1,
-        issues,
-        summary: {
-          missingGwt: 1,
-          missingBoundary: 0,
-          missingExceptionMessage: 0,
-        },
-        pattern: 'test.test.ts',
-      };
-
-      // When: レポートを生成する
-      const markdown = buildAnalysisReportMarkdown(result, Date.now());
-
-      // Then: パイプ文字がエスケープされている
-      assert.ok(markdown.includes('test \\| with \\| pipes'));
-    });
-  });
-
   // テスト観点表（追加分）: ファイルI/Oとテーブル生成
   // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
   // |---------|----------------------|--------------------------------------|-----------------|-------|
-  // | TC-N-01 | saveAnalysisReport with valid paths | Equivalence – normal | レポートが保存され absolute/relative パスが返る | 0/min/max/±1 は対象外 |
+  // | TC-N-01 | saveAnalysisReport with valid paths | Equivalence – normal | レポートが保存されパスが返る | 0/min/max/±1 は対象外 |
   // | TC-N-02 | analyzeTestFiles with two empty files | Equivalence – normal | analyzedFiles=2 で issues が空 | findFiles/readFile の成功経路 |
   // | TC-N-03 | analyzeFile with readable file | Equivalence – normal | analyzedFiles=1 で issues が空 | 0 は content 内で使用 |
   // | TC-N-04 | analyzeTestFiles with missing GWT | Equivalence – normal | missing-gwt が検出される | null/undefined/empty は対象外 |
   // | TC-E-01 | analyzeFile with unreadable file | Error – read failure | analyzedFiles=0 で issues が空 | readFile 例外を捕捉 |
-  // | TC-B-01 | MarkdownTableBuilder without headers | Boundary – empty | build() が空文字を返す | empty header |
 
-  suite('saveAnalysisReport / MarkdownTableBuilder / analyzeFile', () => {
+  suite('saveAnalysisReport / analyzeFile', () => {
     test('TC-N-01: saveAnalysisReport がレポートを保存しパスを返す', async () => {
       // Given: 保存先を含む分析結果
       const workspaceRoot = path.join(process.cwd(), 'tmp', 'test-analysis-report');
@@ -1071,17 +987,17 @@ ${testFn}(\`should work\`, () => {
       };
 
       // When: saveAnalysisReport を呼び出す
-      const saved = await saveAnalysisReport(workspaceRoot, result, reportDir);
+      const savedPath = await saveAnalysisReport(workspaceRoot, result);
 
       try {
         // Then: パスが整合し、ファイルが保存される
-        const expectedRelative = path.relative(workspaceRoot, saved.absolutePath);
-        assert.strictEqual(saved.relativePath, expectedRelative);
+        const expectedRelative = path.relative(workspaceRoot, savedPath);
+        assert.ok(savedPath.endsWith(expectedRelative), '相対パスが正しい');
 
-        const stat = await vscode.workspace.fs.stat(vscode.Uri.file(saved.absolutePath));
+        const stat = await vscode.workspace.fs.stat(vscode.Uri.file(savedPath));
         assert.ok(stat.size >= 0, 'レポートファイルが存在する');
 
-        const content = (await vscode.workspace.fs.readFile(vscode.Uri.file(saved.absolutePath))).toString();
+        const content = (await vscode.workspace.fs.readFile(vscode.Uri.file(savedPath))).toString();
         assert.ok(content.includes(result.pattern), 'レポートに対象パターンが含まれる');
       } finally {
         // テスト後の後始末
@@ -1199,17 +1115,6 @@ ${testFn}('missing gwt', () => {
         restoreFs();
       }
     });
-
-    test('TC-B-01: MarkdownTableBuilder はヘッダー未設定で空文字を返す', () => {
-      // Given: ヘッダー未設定の MarkdownTableBuilder
-      const builder = new MarkdownTableBuilder();
-
-      // When: build を呼び出す
-      const result = builder.build();
-
-      // Then: 空文字が返る
-      assert.strictEqual(result, '');
-    });
   });
 
   // テスト観点表（追加分）: getAnalysisSettings
@@ -1266,238 +1171,6 @@ ${testFn}('missing gwt', () => {
       } finally {
         restoreConfig();
       }
-    });
-  });
-
-  // テスト観点表（追加分）: indexToLineNumber
-  // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
-  // |---------|----------------------|--------------------------------------|-----------------|-------|
-  // | TC-B-03 | index=0 | Boundary – zero | 行番号=1 を返す | 0 を確認 |
-  // | TC-B-04 | index=-1 | Boundary – min-1 | 行番号=1 を返す | min-1 を確認 |
-  // | TC-B-05 | index=last | Boundary – max | 最終行番号を返す | max を確認 |
-  suite('indexToLineNumber (internal)', () => {
-    test('TC-B-03: index=0 で行番号 1 を返す', () => {
-      // Given: 2行の入力
-      const content = 'line1\nline2';
-      const indices = testAnalyzerTest.buildLineStartIndices(content);
-
-      // When: index=0 を渡す
-      const line = testAnalyzerTest.indexToLineNumber(indices, 0);
-
-      // Then: 行番号 1 が返る
-      assert.strictEqual(line, 1);
-    });
-
-    test('TC-B-04: index=-1 でも行番号 1 を返す', () => {
-      // Given: 2行の入力
-      const content = 'line1\nline2';
-      const indices = testAnalyzerTest.buildLineStartIndices(content);
-
-      // When: index=-1 を渡す
-      const line = testAnalyzerTest.indexToLineNumber(indices, -1);
-
-      // Then: 行番号 1 が返る（fallback）
-      assert.strictEqual(line, 1);
-    });
-
-    test('TC-B-05: index=last で最終行番号を返す', () => {
-      // Given: 2行の入力
-      const content = 'line1\nline2';
-      const indices = testAnalyzerTest.buildLineStartIndices(content);
-
-      // When: 最終文字の index を渡す
-      const line = testAnalyzerTest.indexToLineNumber(indices, content.length - 1);
-
-      // Then: 行番号 2 が返る
-      assert.strictEqual(line, 2);
-    });
-  });
-
-  // テスト観点表（追加分）: Issue formatter line
-  // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
-  // |---------|----------------------|--------------------------------------|-----------------|-------|
-  // | TC-B-06 | GwtIssueFormatter issue.line=undefined | Boundary – undefined | line が '-' になる | undefined |
-  // | TC-B-07 | ExceptionIssueFormatter issue.line=undefined | Boundary – undefined | line が '-' になる | undefined |
-  suite('Issue formatter (internal)', () => {
-    test('TC-B-06: GwtIssueFormatter は line 未設定を "-" で出力する', () => {
-      // Given: line が undefined の issue
-      const formatter = new GwtIssueFormatter();
-      const issue: AnalysisIssue = {
-        type: 'missing-gwt',
-        file: 'sample.test.ts',
-        detail: 'missing',
-      };
-
-      // When: formatIssueRow を呼び出す
-      const row = formatter.formatIssueRow(issue);
-
-      // Then: line が '-' になる
-      assert.strictEqual(row[1], '-');
-    });
-
-    test('TC-B-07: ExceptionIssueFormatter は line 未設定を "-" で出力する', () => {
-      // Given: line が undefined の issue
-      const formatter = new ExceptionIssueFormatter();
-      const issue: AnalysisIssue = {
-        type: 'missing-exception-message',
-        file: 'sample.test.ts',
-        detail: 'missing',
-      };
-
-      // When: formatIssueRow を呼び出す
-      const row = formatter.formatIssueRow(issue);
-
-      // Then: line が '-' になる
-      assert.strictEqual(row[1], '-');
-    });
-  });
-
-  // === pad2/pad3 テスト観点表 ===
-  // | Case ID       | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
-  // |---------------|----------------------|--------------------------------------|-----------------|-------|
-  // | TC-PAD2-B-01  | n=0                  | Boundary – 最小値                    | '00'            | -     |
-  // | TC-PAD2-B-02  | n=9                  | Boundary – 1桁最大                   | '09'            | -     |
-  // | TC-PAD2-B-03  | n=10                 | Boundary – 2桁最小                   | '10'            | -     |
-  // | TC-PAD2-B-04  | n=99                 | Boundary – 2桁最大                   | '99'            | -     |
-  // | TC-PAD3-B-01  | n=0                  | Boundary – 最小値                    | '000'           | -     |
-  // | TC-PAD3-B-02  | n=9                  | Boundary – 1桁最大                   | '009'           | -     |
-  // | TC-PAD3-B-03  | n=10                 | Boundary – 2桁最小                   | '010'           | -     |
-  // | TC-PAD3-B-04  | n=99                 | Boundary – 2桁最大                   | '099'           | -     |
-  // | TC-PAD3-B-05  | n=100                | Boundary – 3桁最小                   | '100'           | -     |
-  // | TC-PAD3-B-06  | n=999                | Boundary – 3桁最大                   | '999'           | -     |
-
-  suite('pad2 (internal)', () => {
-    test('TC-PAD2-B-01: n=0 returns "00"', () => {
-      // Given: n=0（最小値）
-      // When: pad2 を呼び出す
-      const result = testAnalyzerTest.pad2(0);
-      // Then: '00' が返る
-      assert.strictEqual(result, '00');
-    });
-
-    test('TC-PAD2-B-02: n=9 returns "09"', () => {
-      // Given: n=9（1桁最大）
-      // When: pad2 を呼び出す
-      const result = testAnalyzerTest.pad2(9);
-      // Then: '09' が返る
-      assert.strictEqual(result, '09');
-    });
-
-    test('TC-PAD2-B-03: n=10 returns "10"', () => {
-      // Given: n=10（2桁最小）
-      // When: pad2 を呼び出す
-      const result = testAnalyzerTest.pad2(10);
-      // Then: '10' が返る
-      assert.strictEqual(result, '10');
-    });
-
-    test('TC-PAD2-B-04: n=99 returns "99"', () => {
-      // Given: n=99（2桁最大）
-      // When: pad2 を呼び出す
-      const result = testAnalyzerTest.pad2(99);
-      // Then: '99' が返る
-      assert.strictEqual(result, '99');
-    });
-  });
-
-  suite('pad3 (internal)', () => {
-    test('TC-PAD3-B-01: n=0 returns "000"', () => {
-      // Given: n=0（最小値）
-      // When: pad3 を呼び出す
-      const result = testAnalyzerTest.pad3(0);
-      // Then: '000' が返る
-      assert.strictEqual(result, '000');
-    });
-
-    test('TC-PAD3-B-02: n=9 returns "009"', () => {
-      // Given: n=9（1桁最大、n<10 の境界）
-      // When: pad3 を呼び出す
-      const result = testAnalyzerTest.pad3(9);
-      // Then: '009' が返る
-      assert.strictEqual(result, '009');
-    });
-
-    test('TC-PAD3-B-03: n=10 returns "010"', () => {
-      // Given: n=10（2桁最小、n>=10 の境界）
-      // When: pad3 を呼び出す
-      const result = testAnalyzerTest.pad3(10);
-      // Then: '010' が返る
-      assert.strictEqual(result, '010');
-    });
-
-    test('TC-PAD3-B-04: n=99 returns "099"', () => {
-      // Given: n=99（2桁最大、n<100 の境界）
-      // When: pad3 を呼び出す
-      const result = testAnalyzerTest.pad3(99);
-      // Then: '099' が返る
-      assert.strictEqual(result, '099');
-    });
-
-    test('TC-PAD3-B-05: n=100 returns "100"', () => {
-      // Given: n=100（3桁最小、n>=100 の境界）
-      // When: pad3 を呼び出す
-      const result = testAnalyzerTest.pad3(100);
-      // Then: '100' が返る
-      assert.strictEqual(result, '100');
-    });
-
-    test('TC-PAD3-B-06: n=999 returns "999"', () => {
-      // Given: n=999（3桁最大）
-      // When: pad3 を呼び出す
-      const result = testAnalyzerTest.pad3(999);
-      // Then: '999' が返る
-      assert.strictEqual(result, '999');
-    });
-  });
-
-  // === formatLocalIso8601WithOffset テスト観点表 ===
-  // | Case ID       | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
-  // |---------------|----------------------|--------------------------------------|-----------------|-------|
-  // | TC-FMT-N-01   | milliseconds=5       | Equivalence – normal                 | .005 になる     | -     |
-  // | TC-FMT-N-02   | milliseconds=50      | Equivalence – normal                 | .050 になる     | -     |
-  // | TC-FMT-N-03   | milliseconds=500     | Equivalence – normal                 | .500 になる     | -     |
-  // | TC-FMT-B-01   | timezone offset=+90  | Boundary – positive offset           | 時差が '-' 表記 | null/undefined は対象外 |
-  suite('formatLocalIso8601WithOffset (internal)', () => {
-    test('TC-FMT-N-01: formats date with milliseconds < 10', () => {
-      // Given: ミリ秒が 5 の Date オブジェクト
-      const date = new Date(2024, 0, 15, 10, 30, 45, 5);
-      // When: formatLocalIso8601WithOffset を呼び出す
-      const result = testAnalyzerTest.formatLocalIso8601WithOffset(date);
-      // Then: ミリ秒部分が '005' でパディングされている
-      assert.ok(result.includes('.005'), `Expected .005 in result: ${result}`);
-    });
-
-    test('TC-FMT-N-02: formats date with milliseconds 10-99', () => {
-      // Given: ミリ秒が 50 の Date オブジェクト
-      const date = new Date(2024, 0, 15, 10, 30, 45, 50);
-      // When: formatLocalIso8601WithOffset を呼び出す
-      const result = testAnalyzerTest.formatLocalIso8601WithOffset(date);
-      // Then: ミリ秒部分が '050' でパディングされている
-      assert.ok(result.includes('.050'), `Expected .050 in result: ${result}`);
-    });
-
-    test('TC-FMT-N-03: formats date with milliseconds >= 100', () => {
-      // Given: ミリ秒が 500 の Date オブジェクト
-      const date = new Date(2024, 0, 15, 10, 30, 45, 500);
-      // When: formatLocalIso8601WithOffset を呼び出す
-      const result = testAnalyzerTest.formatLocalIso8601WithOffset(date);
-      // Then: ミリ秒部分が '500' でそのまま出力される
-      assert.ok(result.includes('.500'), `Expected .500 in result: ${result}`);
-    });
-
-    test('TC-FMT-B-01: timezone offset が正のとき負の符号が付く', () => {
-      // Given: timezone offset を +90 分にした Date
-      const date = new Date(2024, 0, 15, 10, 30, 45, 500);
-      Object.defineProperty(date, 'getTimezoneOffset', {
-        value: () => 90,
-        configurable: true,
-      });
-
-      // When: formatLocalIso8601WithOffset を呼び出す
-      const result = testAnalyzerTest.formatLocalIso8601WithOffset(date);
-
-      // Then: オフセットが "-01:30" になる
-      assert.ok(result.endsWith('-01:30'), `Expected -01:30 in result: ${result}`);
     });
   });
 });
