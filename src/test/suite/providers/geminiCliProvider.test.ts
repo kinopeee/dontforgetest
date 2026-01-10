@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { EventEmitter } from 'events';
-import { GeminiCliProvider } from '../../../providers/geminiCliProvider';
+import { GeminiCliProvider, __test__ as geminiCliProviderTest } from '../../../providers/geminiCliProvider';
 import { type TestGenEvent } from '../../../core/event';
 import { type AgentRunOptions } from '../../../providers/provider';
 
@@ -37,6 +37,16 @@ suite('GeminiCliProvider', () => {
 
     task.dispose();
   });
+
+  // テスト観点表（追加分）: run/spawn/内部ヘルパー
+  // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |---------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-E-02 | activeChild.kill throws | Error – kill failure | warn ログが発火し run 継続 | prevTaskId=unknown |
+  // | TC-E-03 | dispose() kill throws | Error – dispose | dispose が例外を投げない | - |
+  // | TC-B-03 | wireOutput receives empty line | Boundary – empty stdout | イベントが発火しない | 空行は無視 |
+  // | TC-B-04 | tool_use without parameters | Boundary – missing params | fileWrite が発火しない | parameters 未指定 |
+  // | TC-E-04 | tryParseJson invalid JSON | Error – parse | undefined を返す | helper |
+  // | TC-B-05 | extractMessageText with empty message | Boundary – undefined | undefined を返す | helper |
 
   suite('handleStreamJson', () => {
     type HandleStreamJson = (
@@ -177,6 +187,179 @@ suite('GeminiCliProvider', () => {
         assert.strictEqual(events[0].message, 'Something went wrong');
       }
     });
+
+    test('TC-B-04: tool_use で parameters が無い場合は fileWrite が発火しない', () => {
+      // Given: parameters が無い tool_use
+      const obj = {
+        type: 'tool_use',
+        tool_name: 'write_file',
+        tool_id: 'tool-missing-params',
+      };
+
+      // When: handleStreamJson is called
+      const events = runHandle(obj);
+
+      // Then: fileWrite が発火しない
+      assert.strictEqual(events.length, 0);
+    });
+
+    test('TC-B-01: message.content が空配列の場合は log が発火しない', () => {
+      // Given: content が空配列の message
+      const obj = {
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [],
+        },
+      };
+
+      // When: handleStreamJson is called
+      const events = runHandle(obj);
+
+      // Then: log イベントが発火しない
+      assert.strictEqual(events.length, 0);
+    });
+
+    test('TC-B-02: message=null の場合は log が発火しない', () => {
+      // Given: message が null のイベント
+      const obj = {
+        type: 'message',
+        message: null,
+      };
+
+      // When: handleStreamJson is called
+      const events = runHandle(obj);
+
+      // Then: log イベントが発火しない
+      assert.strictEqual(events.length, 0);
+    });
+
+    test('TC-E-01: tool_result で output が取得できない場合は log が発火しない', () => {
+      // Given: tool_result だが output/result が無い
+      const provider = new GeminiCliProvider();
+      const handleStreamJson = (provider as unknown as { handleStreamJson: HandleStreamJson }).handleStreamJson.bind(provider);
+      const events: TestGenEvent[] = [];
+      const toolIdToPath = new Map<string, string>();
+      toolIdToPath.set('tool-no-output', 'file.ts');
+
+      const obj = {
+        type: 'tool_result',
+        tool_id: 'tool-no-output',
+      };
+
+      // When: handleStreamJson is called
+      handleStreamJson(obj, baseOptions, toolIdToPath, () => {}, (event) => {
+        events.push(event);
+      });
+
+      // Then: log イベントが発火しない
+      assert.strictEqual(events.length, 0);
+    });
+  });
+
+  test('TC-E-02: activeChild.kill が失敗しても run は継続する', async () => {
+    // Given: activeChild が kill 時に例外を投げる
+    const provider = new GeminiCliProvider();
+    const events: TestGenEvent[] = [];
+    const prevChild = {
+      kill: () => {
+        throw new Error('kill failed');
+      },
+    };
+    (provider as unknown as { activeChild?: unknown }).activeChild = prevChild;
+    (provider as unknown as { activeTaskId?: string }).activeTaskId = undefined;
+    (provider as unknown as { spawnGeminiCli: (options: AgentRunOptions) => unknown }).spawnGeminiCli = () => ({
+      kill: () => true,
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      stdin: { end: () => {} },
+    });
+    (provider as unknown as { wireOutput: (child: unknown, options: AgentRunOptions) => void }).wireOutput = () => {};
+
+    const options: AgentRunOptions = {
+      taskId: 'gemini-task-restart',
+      workspaceRoot: '/tmp',
+      prompt: 'test prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: (event) => events.push(event),
+    };
+
+    // When: run() is called
+    const task = provider.run(options);
+
+    // Then: warn ログが発火する
+    const warnLogs = events.filter((e) => e.type === 'log' && e.level === 'warn');
+    assert.ok(warnLogs.length >= 1, 'warn ログが発火する');
+    const warnMessage = warnLogs[0]?.type === 'log' ? warnLogs[0].message : '';
+    assert.ok(warnMessage.includes('unknown'), 'prevTaskId が unknown になる');
+
+    task.dispose();
+  });
+
+  test('TC-E-03: dispose で kill が例外を投げても落ちない', () => {
+    // Given: kill が例外を投げる child
+    const provider = new GeminiCliProvider();
+    (provider as unknown as { spawnGeminiCli: (options: AgentRunOptions) => unknown }).spawnGeminiCli = () => ({
+      kill: () => {
+        throw new Error('dispose kill failed');
+      },
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      stdin: { end: () => {} },
+    });
+    (provider as unknown as { wireOutput: (child: unknown, options: AgentRunOptions) => void }).wireOutput = () => {};
+
+    const options: AgentRunOptions = {
+      taskId: 'gemini-dispose-err',
+      workspaceRoot: '/tmp',
+      prompt: 'test prompt',
+      outputFormat: 'stream-json',
+      allowWrite: false,
+      onEvent: () => {},
+    };
+
+    // When/Then: dispose が例外を投げない
+    const task = provider.run(options);
+    assert.doesNotThrow(() => task.dispose());
+  });
+
+  suite('helper functions (internal)', () => {
+    test('TC-E-04: tryParseJson は不正 JSON で undefined を返す', () => {
+      // Given: 不正な JSON 文字列
+      const input = '{ invalid }';
+
+      // When: tryParseJson を呼び出す
+      const result = geminiCliProviderTest.tryParseJson(input);
+
+      // Then: undefined が返る
+      assert.strictEqual(result, undefined);
+    });
+
+    test('TC-B-05: extractMessageText は message が undefined のとき undefined を返す', () => {
+      // Given: message が undefined
+      const message = undefined;
+
+      // When: extractMessageText を呼び出す
+      const result = geminiCliProviderTest.extractMessageText(message);
+
+      // Then: undefined が返る
+      assert.strictEqual(result, undefined);
+    });
+
+    test('TC-B-06: extractMessageText は content 配列の非テキスト要素を無視する', () => {
+      // Given: text を含まない content 配列
+      const message = {
+        role: 'assistant',
+        content: [{ foo: 'bar' }],
+      };
+
+      // When: extractMessageText を呼び出す
+      const result = geminiCliProviderTest.extractMessageText(message as Record<string, unknown>);
+
+      // Then: undefined が返る
+      assert.strictEqual(result, undefined);
+    });
   });
 
   test('TC-GEM-E-08: run() with undefined model', () => {
@@ -218,6 +401,15 @@ suite('GeminiCliProvider', () => {
   // | TC-GEM-E-05 | stderr 出力 | Error – stderr | error レベルのログ発火 | - |
   // | TC-GEM-N-14 | message で delta あり | Equivalence – delta テキスト | log イベントに delta が含まれる | - |
   // | TC-GEM-B-02 | message で content 配列（文字列要素） | Boundary – テキスト抽出 | log イベントにテキストが含まれる | - |
+  //
+  // テスト観点表（追加分）: message/tool_result の未抽出パス
+  // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |---------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-B-01 | message.content=[] | Boundary – empty | log が発火しない | min/max/±1 は対象外 |
+  // | TC-B-02 | message=null | Boundary – null | log が発火しない | normalizeGeminiMessage が undefined |
+  // | TC-E-01 | tool_result without output/result | Error – missing output | log が発火しない | output が取得できない |
+  // | TC-B-03 | wireOutput 空行 | Boundary – empty | イベントが発火しない | 空行は無視 |
+  // | TC-N-16 | wireOutput init 行 | Equivalence – started | started が発火する | startedEmitted false |
   // | TC-GEM-N-15 | 未知の type イベント | Equivalence – デフォルト処理 | log に event:type が含まれる | - |
 
   suite('wireOutput / handleStreamJson 追加カバレッジ', () => {
@@ -310,6 +502,47 @@ suite('GeminiCliProvider', () => {
       const warnLogs = events.filter((e) => e.type === 'log' && e.level === 'warn');
       assert.ok(warnLogs.length >= 1, 'warn ログが発火');
       assert.ok(warnLogs[0]?.type === 'log' && warnLogs[0].message.includes('parse error'), 'パースエラーメッセージが含まれる');
+    });
+
+    test('TC-B-03: 空行は無視される', () => {
+      // Given: wireOutput のテスト
+      const provider = new GeminiCliProvider();
+      const wireOutput = (provider as unknown as { wireOutput: WireOutput }).wireOutput.bind(provider);
+      const { child, stdout } = createFakeChild();
+      const events: TestGenEvent[] = [];
+      const options: AgentRunOptions = {
+        ...baseOptions,
+        onEvent: (event) => events.push(event),
+      };
+
+      wireOutput(child, options);
+
+      // When: 空行のみを送信
+      stdout.emit('data', Buffer.from('\n'));
+
+      // Then: 何も発火しない
+      assert.strictEqual(events.length, 0);
+    });
+
+    test('TC-N-16: init 行で started が発火する', () => {
+      // Given: wireOutput のテスト
+      const provider = new GeminiCliProvider();
+      const wireOutput = (provider as unknown as { wireOutput: WireOutput }).wireOutput.bind(provider);
+      const { child, stdout } = createFakeChild();
+      const events: TestGenEvent[] = [];
+      const options: AgentRunOptions = {
+        ...baseOptions,
+        onEvent: (event) => events.push(event),
+      };
+
+      wireOutput(child, options);
+
+      // When: init イベントを送信
+      stdout.emit('data', Buffer.from('{"type":"init"}\n'));
+
+      // Then: started が発火する
+      const started = events.find((event) => event.type === 'started');
+      assert.ok(started, 'started が発火する');
     });
 
     // TC-GEM-N-09: tool_use で replace も fileWrite として扱う
