@@ -26,8 +26,8 @@ suite('integration/uiToCoreIntegration', () => {
   suite('TaskManager と UI コンポーネントの連携', () => {
     // TC-INT-TM-01: TaskManager のタスク登録が UI に反映される
     test('TC-INT-TM-01: TaskManager のタスク登録が正常に動作する', () => {
-      // Given: 新しいタスクID
-      const taskId = `test-task-${Date.now()}`;
+      // Given: 新しいタスクID（ユニークな ID で他テストと分離）
+      const taskId = `test-task-${Date.now()}-${Math.random()}`;
       const label = 'テストタスク';
       const mockRunningTask = {
         taskId,
@@ -38,18 +38,21 @@ suite('integration/uiToCoreIntegration', () => {
         // When: TaskManager にタスクを登録
         taskManager.register(taskId, label, mockRunningTask);
 
-        // Then: タスクが登録されている
+        // Then: タスクが登録されている（getRunningTaskIds に含まれる）
         assert.ok(!taskManager.isCancelled(taskId), 'タスクがキャンセルされていない');
+        assert.ok(taskManager.getRunningTaskIds().includes(taskId), '登録したタスクが getRunningTaskIds に含まれる');
       } finally {
         // クリーンアップ
         taskManager.unregister(taskId);
+        // Then: unregister 後はタスクが削除されている
+        assert.ok(!taskManager.getRunningTaskIds().includes(taskId), 'unregister 後にタスクが削除されている');
       }
     });
 
     // TC-INT-TM-02: TaskManager のフェーズ更新が正常に動作する
     test('TC-INT-TM-02: TaskManager のフェーズ更新が正常に動作する', () => {
-      // Given: 登録済みのタスク
-      const taskId = `test-task-phase-${Date.now()}`;
+      // Given: 登録済みのタスク（ユニークな ID で他テストと分離）
+      const taskId = `test-task-phase-${Date.now()}-${Math.random()}`;
       const label = 'フェーズテストタスク';
       const mockRunningTask = {
         taskId,
@@ -60,11 +63,19 @@ suite('integration/uiToCoreIntegration', () => {
         taskManager.register(taskId, label, mockRunningTask);
 
         // When: フェーズを更新
+        // Then: 例外なく実行される（シングルトンのため getCurrentPhaseLabel は他タスクの影響を受ける可能性があり、
+        //       ここでは updatePhase が例外なく実行されることのみを検証）
         assert.doesNotThrow(() => {
           taskManager.updatePhase(taskId, 'preparing', 'preparing');
-        }, 'フェーズ更新が例外なく実行される');
+        }, 'フェーズ更新（preparing）が例外なく実行される');
 
-        // Then: フェーズが更新されている（内部状態の確認は困難なため、例外が発生しないことを確認）
+        // When: 別のフェーズに更新
+        assert.doesNotThrow(() => {
+          taskManager.updatePhase(taskId, 'generating', 'generating');
+        }, 'フェーズ更新（generating）が例外なく実行される');
+
+        // Then: タスクがまだ登録されている
+        assert.ok(taskManager.getRunningTaskIds().includes(taskId), 'フェーズ更新後もタスクが登録されている');
       } finally {
         taskManager.unregister(taskId);
       }
@@ -72,8 +83,8 @@ suite('integration/uiToCoreIntegration', () => {
 
     // TC-INT-TM-03: TaskManager のキャンセルが正常に動作する
     test('TC-INT-TM-03: TaskManager のキャンセルが正常に動作する', () => {
-      // Given: 登録済みのタスク
-      const taskId = `test-task-cancel-${Date.now()}`;
+      // Given: 登録済みのタスク（ユニークな ID で他テストと分離）
+      const taskId = `test-task-cancel-${Date.now()}-${Math.random()}`;
       const label = 'キャンセルテストタスク';
       const mockRunningTask = {
         taskId,
@@ -82,13 +93,18 @@ suite('integration/uiToCoreIntegration', () => {
 
       try {
         taskManager.register(taskId, label, mockRunningTask);
+        assert.ok(taskManager.getRunningTaskIds().includes(taskId), '登録後にタスクが存在する');
 
-        // When: タスクをキャンセル
-        taskManager.cancelAll();
+        // When: タスクをキャンセル（cancelAll は他テストのタスクも影響するため、cancel(taskId) を使用）
+        const cancelled = taskManager.cancel(taskId);
 
         // Then: タスクがキャンセルされている
+        assert.ok(cancelled, 'cancel() が true を返す');
         assert.ok(taskManager.isCancelled(taskId), 'タスクがキャンセルされている');
+        // Then: キャンセル後はタスクが削除されている
+        assert.ok(!taskManager.getRunningTaskIds().includes(taskId), 'キャンセル後にタスクが削除されている');
       } finally {
+        // cancel() で既に削除されているが、念のため unregister を呼ぶ（冪等）
         taskManager.unregister(taskId);
       }
     });
@@ -96,6 +112,8 @@ suite('integration/uiToCoreIntegration', () => {
 
   suite('イベントシステムと UI の連携', () => {
     // TC-INT-EV-01: started イベントが ProgressView に正しく渡される
+    // 注意: initializeProgressTreeView() が呼ばれていない場合は no-op になるが、
+    // 例外なく処理されることを確認する（安全性のテスト）
     test('TC-INT-EV-01: started イベントが ProgressView に正しく渡される', () => {
       // Given: started イベント
       const event: TestGenEvent = {
@@ -107,7 +125,7 @@ suite('integration/uiToCoreIntegration', () => {
       };
 
       // When: handleTestGenEventForProgressView を呼び出す
-      // Then: 例外なく処理される
+      // Then: 例外なく処理される（未初期化時は no-op で安全に処理される）
       assert.doesNotThrow(() => {
         handleTestGenEventForProgressView(event);
       }, 'started イベントが例外なく処理される');
@@ -215,6 +233,8 @@ suite('integration/uiToCoreIntegration', () => {
 
   suite('StatusBar の統合', () => {
     // TC-INT-SB-01: started イベントが StatusBar に正しく渡される
+    // 注意: initializeTestGenStatusBar() が呼ばれていない場合は no-op になるが、
+    // 例外なく処理されることを確認する（安全性のテスト）
     test('TC-INT-SB-01: started イベントが StatusBar に正しく渡される', () => {
       // Given: started イベント
       const event: TestGenEvent = {
@@ -225,13 +245,15 @@ suite('integration/uiToCoreIntegration', () => {
       };
 
       // When: handleTestGenEventForStatusBar を呼び出す
-      // Then: 例外なく処理される
+      // Then: 例外なく処理される（未初期化時は no-op で安全に処理される）
       assert.doesNotThrow(() => {
         handleTestGenEventForStatusBar(event);
       }, 'started イベントが StatusBar で例外なく処理される');
     });
 
     // TC-INT-SB-02: completed イベントが StatusBar に正しく渡される
+    // 注意: initializeTestGenStatusBar() が呼ばれていない場合は no-op になるが、
+    // 例外なく処理されることを確認する（安全性のテスト）
     test('TC-INT-SB-02: completed イベントが StatusBar に正しく渡される', () => {
       // Given: completed イベント
       const event: TestGenEvent = {
@@ -242,7 +264,7 @@ suite('integration/uiToCoreIntegration', () => {
       };
 
       // When: handleTestGenEventForStatusBar を呼び出す
-      // Then: 例外なく処理される
+      // Then: 例外なく処理される（未初期化時は no-op で安全に処理される）
       assert.doesNotThrow(() => {
         handleTestGenEventForStatusBar(event);
       }, 'completed イベントが StatusBar で例外なく処理される');
@@ -252,8 +274,8 @@ suite('integration/uiToCoreIntegration', () => {
   suite('複合シナリオ', () => {
     // TC-INT-COMP-01: タスクのライフサイクル全体が正常に動作する
     test('TC-INT-COMP-01: タスクのライフサイクル全体が正常に動作する', () => {
-      // Given: 新しいタスク
-      const taskId = `test-lifecycle-${Date.now()}`;
+      // Given: 新しいタスク（ユニークな ID で他テストと分離）
+      const taskId = `test-lifecycle-${Date.now()}-${Math.random()}`;
       const label = 'ライフサイクルテスト';
       const mockRunningTask = {
         taskId,
@@ -263,6 +285,9 @@ suite('integration/uiToCoreIntegration', () => {
       try {
         // When: タスクを登録
         taskManager.register(taskId, label, mockRunningTask);
+
+        // Then: タスクが登録されている
+        assert.ok(taskManager.getRunningTaskIds().includes(taskId), 'タスク登録後に getRunningTaskIds に含まれる');
 
         // Then: started イベントを発行
         const startedEvent: TestGenEvent = {
@@ -278,9 +303,14 @@ suite('integration/uiToCoreIntegration', () => {
         }, 'started イベントが全 UI コンポーネントで処理される');
 
         // When: フェーズを更新
-        const phaseEvent = emitPhaseEvent(taskId, 'generating', 'テスト生成中');
+        // 注意: getCurrentPhaseLabel() はシングルトンのため他タスクの影響を受ける可能性があり、
+        //       ここでは updatePhase が例外なく実行されることのみを検証
         assert.doesNotThrow(() => {
           taskManager.updatePhase(taskId, 'generating', 'generating');
+        }, 'フェーズ更新が例外なく実行される');
+
+        const phaseEvent = emitPhaseEvent(taskId, 'generating', 'テスト生成中');
+        assert.doesNotThrow(() => {
           handleTestGenEventForProgressView(phaseEvent);
           appendEventToOutput(phaseEvent);
         }, 'phase イベントが全 UI コンポーネントで処理される');
@@ -299,16 +329,19 @@ suite('integration/uiToCoreIntegration', () => {
         }, 'completed イベントが全 UI コンポーネントで処理される');
       } finally {
         taskManager.unregister(taskId);
+        // Then: unregister 後はタスクが削除されている
+        assert.ok(!taskManager.getRunningTaskIds().includes(taskId), 'unregister 後にタスクが削除されている');
       }
     });
 
     // TC-INT-COMP-02: 複数のタスクが同時に管理できる
     test('TC-INT-COMP-02: 複数のタスクが同時に管理できる', () => {
-      // Given: 複数のタスク
+      // Given: 複数のタスク（ユニークな ID で他テストと分離）
+      const suffix = `${Date.now()}-${Math.random()}`;
       const taskIds = [
-        `test-multi-1-${Date.now()}`,
-        `test-multi-2-${Date.now()}`,
-        `test-multi-3-${Date.now()}`,
+        `test-multi-1-${suffix}`,
+        `test-multi-2-${suffix}`,
+        `test-multi-3-${suffix}`,
       ];
 
       try {
@@ -321,20 +354,34 @@ suite('integration/uiToCoreIntegration', () => {
           taskManager.register(taskId, `タスク ${taskId}`, mockRunningTask);
         }
 
+        // Then: すべてのタスクが getRunningTaskIds に含まれている
+        const runningIds = taskManager.getRunningTaskIds();
+        for (const taskId of taskIds) {
+          assert.ok(runningIds.includes(taskId), `タスク ${taskId} が getRunningTaskIds に含まれる`);
+        }
+
         // Then: すべてのタスクがキャンセルされていない
         for (const taskId of taskIds) {
           assert.ok(!taskManager.isCancelled(taskId), `タスク ${taskId} がキャンセルされていない`);
         }
 
-        // When: cancelAll を呼び出す
-        taskManager.cancelAll();
+        // When: 各タスクを個別にキャンセル（cancelAll は他テストに影響するため避ける）
+        for (const taskId of taskIds) {
+          taskManager.cancel(taskId);
+        }
 
         // Then: すべてのタスクがキャンセルされている
         for (const taskId of taskIds) {
           assert.ok(taskManager.isCancelled(taskId), `タスク ${taskId} がキャンセルされている`);
         }
+
+        // Then: キャンセル後はすべてのタスクが削除されている
+        const runningIdsAfter = taskManager.getRunningTaskIds();
+        for (const taskId of taskIds) {
+          assert.ok(!runningIdsAfter.includes(taskId), `タスク ${taskId} がキャンセル後に削除されている`);
+        }
       } finally {
-        // クリーンアップ
+        // クリーンアップ（cancel() で既に削除されているが、念のため）
         for (const taskId of taskIds) {
           taskManager.unregister(taskId);
         }

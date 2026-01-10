@@ -54,6 +54,8 @@ suite('integration/commandToProvider', () => {
         assert.ok(capturedOptions !== undefined, 'Options が渡される');
         assert.strictEqual(capturedOptions.runLocation, 'local', 'runLocation が正しく渡される');
         assert.strictEqual(capturedOptions.runMode, 'full', 'runMode が正しく渡される');
+        // Then: extensionContext が渡されている（worktree 実行の成立要件）
+        assert.ok(capturedOptions.extensionContext !== undefined, 'extensionContext が渡される');
       } finally {
         (
           generateFromCommitModule as unknown as {
@@ -86,6 +88,8 @@ suite('integration/commandToProvider', () => {
         // Then: runMode が perspectiveOnly として渡される
         assert.ok(capturedOptions !== undefined, 'Options が渡される');
         assert.strictEqual(capturedOptions.runMode, 'perspectiveOnly', 'runMode が perspectiveOnly');
+        // Then: extensionContext が渡されている
+        assert.ok(capturedOptions.extensionContext !== undefined, 'extensionContext が渡される');
       } finally {
         (
           generateFromCommitModule as unknown as {
@@ -125,6 +129,8 @@ suite('integration/commandToProvider', () => {
         assert.ok(capturedOptions !== undefined, 'Options が渡される');
         assert.strictEqual(capturedOptions.runLocation, 'worktree', 'runLocation が worktree');
         assert.strictEqual(capturedOptions.runMode, 'full', 'runMode が full');
+        // Then: extensionContext が渡されている（worktree 実行の成立要件）
+        assert.ok(capturedOptions.extensionContext !== undefined, 'extensionContext が渡される');
       } finally {
         (
           generateFromCommitRangeModule as unknown as {
@@ -162,6 +168,8 @@ suite('integration/commandToProvider', () => {
         assert.ok(capturedProvider !== undefined, 'Provider が渡される');
         assert.ok(capturedOptions !== undefined, 'Options が渡される');
         assert.strictEqual(capturedOptions.runMode, 'perspectiveOnly', 'runMode が perspectiveOnly');
+        // Then: workingTree コマンドは extensionContext を受け取らない設計
+        assert.strictEqual('extensionContext' in capturedOptions, false, 'extensionContext プロパティは存在しない');
       } finally {
         (
           generateFromWorkingTreeModule as unknown as {
@@ -196,6 +204,8 @@ suite('integration/commandToProvider', () => {
         assert.ok(capturedOptions !== undefined, 'Options が渡される');
         // GenerateFromWorkingTreeOptions には runLocation プロパティが存在しないことを確認
         assert.strictEqual('runLocation' in capturedOptions, false, 'runLocation プロパティは存在しない');
+        // Then: workingTree コマンドは extensionContext を受け取らない設計
+        assert.strictEqual('extensionContext' in capturedOptions, false, 'extensionContext プロパティは存在しない');
       } finally {
         (
           generateFromWorkingTreeModule as unknown as {
@@ -230,6 +240,8 @@ suite('integration/commandToProvider', () => {
         // Then: runLocation が 'local' に正規化される
         assert.ok(capturedOptions !== undefined, 'Options が渡される');
         assert.strictEqual(capturedOptions.runLocation, 'local', 'runLocation が local に正規化される');
+        // Then: extensionContext が渡されている
+        assert.ok(capturedOptions.extensionContext !== undefined, 'extensionContext が渡される');
       } finally {
         (
           generateFromCommitModule as unknown as {
@@ -262,6 +274,8 @@ suite('integration/commandToProvider', () => {
         // Then: runMode が 'full' に正規化される
         assert.ok(capturedOptions !== undefined, 'Options が渡される');
         assert.strictEqual(capturedOptions.runMode, 'full', 'runMode が full に正規化される');
+        // Then: extensionContext が渡されている
+        assert.ok(capturedOptions.extensionContext !== undefined, 'extensionContext が渡される');
       } finally {
         (
           generateFromCommitModule as unknown as {
@@ -296,6 +310,8 @@ suite('integration/commandToProvider', () => {
         assert.strictEqual(capturedOptions.runLocation, 'local', 'runLocation がデフォルトで local');
         assert.strictEqual(capturedOptions.runMode, 'full', 'runMode がデフォルトで full');
         assert.strictEqual(capturedModelOverride, undefined, 'modelOverride がデフォルトで undefined');
+        // Then: extensionContext が渡されている
+        assert.ok(capturedOptions.extensionContext !== undefined, 'extensionContext が渡される');
       } finally {
         (
           generateFromCommitModule as unknown as {
