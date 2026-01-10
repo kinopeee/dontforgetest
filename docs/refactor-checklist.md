@@ -52,37 +52,37 @@
 ## 2. 不安定なテストの修正
 
 ### Week 2: Day 1-2 - モックユーティリティの実装
-- [ ] `test/utils/mockAgentProvider.ts` を作成
-  - [ ] 安定したモックProviderを実装
-  - [ ] エラーシナリオを再現できるようにする
-- [ ] `test/utils/testEnvironment.ts` を作成
-  - [ ] テスト環境のセットアップ関数を実装
-  - [ ] クリーンアップ処理を実装
-- [ ] `test/utils/asyncHelpers.ts` を作成
-  - [ ] `createMockStream()` を実装
-  - [ ] `withDelay()` を実装
-  - [ ] `waitForStreamEnd()` を実装
-- [ ] 新しいユーティリティの単体テストを作成
+- [x] `test/utils/mockAgentProvider.ts` を作成
+  - [x] 安定したモックProviderを実装
+  - [x] エラーシナリオを再現できるようにする
+- [x] `test/utils/testEnvironment.ts` を作成
+  - [x] テスト環境のセットアップ関数を実装
+  - [x] クリーンアップ処理を実装
+- [x] `test/utils/asyncHelpers.ts` を作成
+  - [x] `createMockStream()` を実装
+  - [x] `withDelay()` を実装
+  - [x] `waitForStreamEnd()` を実装
+- [x] 新しいユーティリティの単体テストを作成
 
 ### Week 2: Day 3-5 - 各テストの修正と有効化
-- [ ] TC-CMD-05: Provider失敗テストを修正
-  - [ ] モックを使用して失敗シナリオを再現
-  - [ ] test.skip を削除
-- [ ] TC-CMD-09: Unsafeコマンド実行テストを修正
-  - [ ] 設定ベースのテストに変更
-  - [ ] test.skip を削除
-- [ ] TC-N-03: タイムアウト関連テストを修正
-  - [ ] タイマーモックを使用
-  - [ ] test.skip を削除
-- [ ] TC-E-08: 観点表生成失敗テストを修正
-  - [ ] 適切なモックで再現
-  - [ ] test.skip を削除
-- [ ] TC-E-11: マーカー未検出テストを修正
-  - [ ] ローカル環境依存を排除
-  - [ ] test.skip を削除
-- [ ] TC-E-23: JSON/Markdown不在テストを修正
-  - [ ] 安定したモックを実装
-  - [ ] test.skip を削除
+- [x] TC-CMD-05: Provider失敗テストを修正
+  - [x] モックを使用して失敗シナリオを再現
+  - [x] test.skip を削除
+- [x] TC-CMD-09: Unsafeコマンド実行テストを修正
+  - [x] 設定ベースのテストに変更
+  - [x] test.skip を削除
+- [x] TC-N-03: タイムアウト関連テストを修正
+  - [x] タイマーモックを使用
+  - [x] test.skip を削除
+- [x] TC-E-08: 観点表生成失敗テストを修正
+  - [x] 適切なモックで再現
+  - [x] test.skip を削除
+- [x] TC-E-11: マーカー未検出テストを修正
+  - [x] ローカル環境依存を排除
+  - [x] test.skip を削除
+- [x] TC-E-23: JSON/Markdown不在テストを修正
+  - [x] 安定したモックを実装
+  - [x] test.skip を削除
 - [ ] CIで99%以上の成功率を確認
 
 ## 3. ロギングの統一
@@ -141,9 +141,9 @@
 ## 進捗率
 
 - [x] 1. testAnalyzer.ts の分割: 100%
-- [ ] 2. 不安定なテストの修正: 0%
+- [x] 2. 不安定なテストの修正: 90%
 - [ ] 3. ロギングの統一: 0%
-- [ ] **全体進捗: 33%**
+- [ ] **全体進捗: 60%**
 
 ---
 
