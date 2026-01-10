@@ -875,6 +875,77 @@ ${testFn}(\`should work\`, () => {
       // Then: パイプ文字がエスケープされている
       assert.ok(markdown.includes('test \\| with \\| pipes'));
     });
+
+    suite('Header timestamp milliseconds formatting (pad3)', () => {
+      // NOTE:
+      // - buildAnalysisReportMarkdown のヘッダーは formatLocalIso8601WithOffset を通り、
+      //   その内部で pad3(date.getMilliseconds()) が使われる。
+      // - pad3 は未export のため、ここではヘッダー文字列に含まれる ".SSS " を観測して検証する。
+
+      test('TC-TA-B-01: generatedAtMs のミリ秒が 9 のとき ".009" になる', () => {
+        // Given: 最小構成の分析結果
+        const result: AnalysisResult = {
+          analyzedFiles: 1,
+          issues: [],
+          summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 },
+          pattern: 'src/test/**/*.test.ts',
+        };
+
+        // When: ミリ秒=9 のタイムスタンプでレポートを生成する
+        const markdown = buildAnalysisReportMarkdown(result, 1_700_000_000_009);
+
+        // Then: ヘッダーに 3桁ゼロパディングされたミリ秒が含まれる
+        assert.ok(markdown.includes('.009 '));
+      });
+
+      test('TC-TA-B-02: generatedAtMs のミリ秒が 10 のとき ".010" になる', () => {
+        // Given: 最小構成の分析結果
+        const result: AnalysisResult = {
+          analyzedFiles: 1,
+          issues: [],
+          summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 },
+          pattern: 'src/test/**/*.test.ts',
+        };
+
+        // When: ミリ秒=10 のタイムスタンプでレポートを生成する
+        const markdown = buildAnalysisReportMarkdown(result, 1_700_000_000_010);
+
+        // Then: ".010 " が含まれる
+        assert.ok(markdown.includes('.010 '));
+      });
+
+      test('TC-TA-B-03: generatedAtMs のミリ秒が 99 のとき ".099" になる', () => {
+        // Given: 最小構成の分析結果
+        const result: AnalysisResult = {
+          analyzedFiles: 1,
+          issues: [],
+          summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 },
+          pattern: 'src/test/**/*.test.ts',
+        };
+
+        // When: ミリ秒=99 のタイムスタンプでレポートを生成する
+        const markdown = buildAnalysisReportMarkdown(result, 1_700_000_000_099);
+
+        // Then: ".099 " が含まれる
+        assert.ok(markdown.includes('.099 '));
+      });
+
+      test('TC-TA-B-04: generatedAtMs のミリ秒が 100 のとき ".100" になる', () => {
+        // Given: 最小構成の分析結果
+        const result: AnalysisResult = {
+          analyzedFiles: 1,
+          issues: [],
+          summary: { missingGwt: 0, missingBoundary: 0, missingExceptionMessage: 0 },
+          pattern: 'src/test/**/*.test.ts',
+        };
+
+        // When: ミリ秒=100 のタイムスタンプでレポートを生成する
+        const markdown = buildAnalysisReportMarkdown(result, 1_700_000_000_100);
+
+        // Then: ".100 " が含まれる
+        assert.ok(markdown.includes('.100 '));
+      });
+    });
   });
 
   suite('getAnalysisSettings', () => {

@@ -28,6 +28,14 @@ suite('ClaudeCodeProvider', () => {
   // | TC-B-13 | outputFormat='stream-json' | Boundary – verbose required | Emits started event | - |
   // | TC-E-04 | child emits error | Error – spawn/transport error | Emits error log and completed(null) | - |
   // | TC-E-10 | run() while activeChild exists | Error – duplicate run | Kills previous child and emits warn log | - |
+  // | TC-EXAT-01 | message=null | Boundary – non-record message | Returns undefined | extractAssistantText |
+  // | TC-EXAT-02 | message=1 | Boundary – primitive message | Returns undefined | extractAssistantText |
+  // | TC-EXAT-03 | message={} | Boundary – missing content | Returns undefined | extractAssistantText |
+  // | TC-EXAT-04 | message.content not array | Boundary – invalid content | Returns undefined | extractAssistantText |
+  // | TC-EXAT-05 | message.content=[] | Boundary – empty content | Returns undefined | extractAssistantText |
+  // | TC-EXAT-06 | content[0]=null | Boundary – non-record first item | Returns undefined | extractAssistantText |
+  // | TC-EXAT-07 | firstRec.text non-string | Boundary – invalid text | Returns undefined | extractAssistantText |
+  // | TC-EXAT-08 | firstRec.text string | Equivalence – valid assistant text | Returns text | extractAssistantText |
 
   // TC-N-01: id と displayName が正しく設定されている
   test('TC-N-01: id と displayName が正しく設定されている', () => {
@@ -1222,6 +1230,96 @@ suite('ClaudeCodeProvider', () => {
       assert.ok(stdinWriteCalled, 'stdin.write should have been called');
       const startedEvent = events.find((e) => e.type === 'started');
       assert.ok(startedEvent !== undefined, 'started event should be emitted');
+    });
+  });
+
+  suite('extractAssistantText', () => {
+    test('TC-EXAT-01: message=null の場合 undefined を返す', () => {
+      // Given: message=null
+      const message: unknown = null;
+
+      // When: extractAssistantText を呼ぶ
+      const text = claudeCodeProviderTest.extractAssistantText(message);
+
+      // Then: undefined が返る
+      assert.strictEqual(text, undefined);
+    });
+
+    test('TC-EXAT-02: message がプリミティブ（number）の場合 undefined を返す', () => {
+      // Given: message=1
+      const message: unknown = 1;
+
+      // When: extractAssistantText を呼ぶ
+      const text = claudeCodeProviderTest.extractAssistantText(message);
+
+      // Then: undefined が返る
+      assert.strictEqual(text, undefined);
+    });
+
+    test('TC-EXAT-03: message が Record でも content が無い場合 undefined を返す', () => {
+      // Given: message={}
+      const message: unknown = {};
+
+      // When: extractAssistantText を呼ぶ
+      const text = claudeCodeProviderTest.extractAssistantText(message);
+
+      // Then: undefined が返る
+      assert.strictEqual(text, undefined);
+    });
+
+    test('TC-EXAT-04: content が配列でない場合 undefined を返す', () => {
+      // Given: message.content が配列でない
+      const message: unknown = { content: 'not-array' };
+
+      // When: extractAssistantText を呼ぶ
+      const text = claudeCodeProviderTest.extractAssistantText(message);
+
+      // Then: undefined が返る
+      assert.strictEqual(text, undefined);
+    });
+
+    test('TC-EXAT-05: content が空配列の場合 undefined を返す', () => {
+      // Given: message.content=[]
+      const message: unknown = { content: [] };
+
+      // When: extractAssistantText を呼ぶ
+      const text = claudeCodeProviderTest.extractAssistantText(message);
+
+      // Then: undefined が返る
+      assert.strictEqual(text, undefined);
+    });
+
+    test('TC-EXAT-06: content[0] が Record に見えない場合 undefined を返す', () => {
+      // Given: content[0]=null
+      const message: unknown = { content: [null] };
+
+      // When: extractAssistantText を呼ぶ
+      const text = claudeCodeProviderTest.extractAssistantText(message);
+
+      // Then: undefined が返る
+      assert.strictEqual(text, undefined);
+    });
+
+    test('TC-EXAT-07: firstRec.text が string でない場合 undefined を返す', () => {
+      // Given: text が数値
+      const message: unknown = { content: [{ text: 123 }] };
+
+      // When: extractAssistantText を呼ぶ
+      const text = claudeCodeProviderTest.extractAssistantText(message);
+
+      // Then: undefined が返る
+      assert.strictEqual(text, undefined);
+    });
+
+    test('TC-EXAT-08: firstRec.text が string の場合 text を返す', () => {
+      // Given: text が文字列
+      const message: unknown = { content: [{ text: 'hello' }] };
+
+      // When: extractAssistantText を呼ぶ
+      const text = claudeCodeProviderTest.extractAssistantText(message);
+
+      // Then: text が返る
+      assert.strictEqual(text, 'hello');
     });
   });
 });

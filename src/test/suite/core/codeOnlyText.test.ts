@@ -118,6 +118,19 @@ suite('codeOnlyText', () => {
       assert.ok(!result.includes('pattern'));
     });
 
+    test('treats regex literal at beginning of input as regex (isRegexStart: empty lastNonWsChar)', () => {
+      // Given: 入力の先頭から正規表現リテラルが始まる
+      const content = '/test/gi; const y = 1;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 正規表現内容が空白に置き換えられ、後続コードは保持される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(!result.includes('test'));
+      assert.ok(result.includes('const y = 1;'));
+    });
+
     test('handles regex literals with escaped forward slashes', () => {
       // Given: エスケープされたスラッシュ（\/）を含む正規表現リテラル
       const content = 'const x = /test\\/pattern/gi; const y = 1;';
@@ -528,6 +541,28 @@ function test() {
         assert.strictEqual(result, true);
       });
 
+      test('detects empty string after template expression with nested braces (object literal) (regression)', () => {
+        // Given: ${...} 式部分にオブジェクトリテラルがあり、その後に空文字リテラルが続く
+        const content = "const x = `prefix ${({ a: 1 })} suffix`; const y = '';";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: true が返される（テンプレート式のネストがあっても後続を正しく走査する）
+        assert.strictEqual(result, true);
+      });
+
+      test('detects empty string after regex literal with flags (regression)', () => {
+        // Given: フラグ付き正規表現リテラルの後に空文字リテラルがある（/.../gi のフラグ読み飛ばし）
+        const content = "const re = /abc/gi; const x = '';";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: true が返される
+        assert.strictEqual(result, true);
+      });
+
       test('detects empty string even after division following single-quote string literal (regression)', () => {
         // Given: 文字列リテラル直後の除算の後に空文字リテラルがある
         const content = "const x = 'hello' / 2 + '';";
@@ -683,6 +718,17 @@ function test() {
         const result = hasEmptyStringLiteralInCode(content);
 
         // Then: true が返される
+        assert.strictEqual(result, true);
+      });
+
+      test('detects empty string after unterminated regex that ends at newline (abnormal)', () => {
+        // Given: 正規表現リテラルが閉じられずに改行で終わる（lexer は改行で regex を終了扱い）
+        const content = "const re = /unterminated\nconst x = '';";
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: true が返される（改行で復帰して後続を解析できる）
         assert.strictEqual(result, true);
       });
     });
