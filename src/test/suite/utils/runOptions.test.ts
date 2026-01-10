@@ -67,7 +67,7 @@ suite('utils/runOptions.ts', () => {
     });
 
     // TC-RO-E-01: runMode='full', runLocation='worktree', extensionContext なしでエラー
-    test('TC-RO-E-01: runMode="full", runLocation="worktree", extensionContext なしで undefined が返される', () => {
+    test('TC-RO-E-01: runMode="full", runLocation="worktree", extensionContext なしで undefined が返され、エラーメッセージが表示される', () => {
       // Given: runMode='full', runLocation='worktree', extensionContext なしのオプション
       const options: ResolveRunOptionsInput = {
         runMode: 'full',
@@ -75,11 +75,28 @@ suite('utils/runOptions.ts', () => {
         extensionContext: undefined,
       };
 
-      // When: resolveRunOptions を呼び出す
-      const result = resolveRunOptions(options);
+      // Given: showErrorMessage をスタブ化してメッセージをキャプチャ
+      const originalShowError = vscode.window.showErrorMessage;
+      const capturedErrors: string[] = [];
+      (vscode.window as unknown as { showErrorMessage: typeof vscode.window.showErrorMessage }).showErrorMessage = async (message: string) => {
+        capturedErrors.push(message);
+        return undefined;
+      };
 
-      // Then: undefined が返される（エラーメッセージが表示される）
-      assert.strictEqual(result, undefined, 'extensionContext なしで worktree モードは undefined を返す');
+      try {
+        // When: resolveRunOptions を呼び出す
+        const result = resolveRunOptions(options);
+
+        // Then: undefined が返される
+        assert.strictEqual(result, undefined, 'extensionContext なしで worktree モードは undefined を返す');
+
+        // Then: showErrorMessage が呼び出される
+        assert.strictEqual(capturedErrors.length, 1, 'showErrorMessage が1回呼び出される');
+        assert.ok(capturedErrors[0].length > 0, 'エラーメッセージが空でない');
+      } finally {
+        // クリーンアップ: 元の関数を復元
+        (vscode.window as unknown as { showErrorMessage: typeof originalShowError }).showErrorMessage = originalShowError;
+      }
     });
 
     // TC-RO-B-01: runMode が undefined の場合、デフォルトで 'full' になる

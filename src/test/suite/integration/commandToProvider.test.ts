@@ -189,13 +189,13 @@ suite('integration/commandToProvider', () => {
         // When: runLocation を指定してコマンドを実行（無視されるはず）
         await vscode.commands.executeCommand('dontforgetest.generateTestFromWorkingTree', {
           runMode: 'full',
+          runLocation: 'worktree',
         });
 
         // Then: Options が渡されるが runLocation は含まれない
         assert.ok(capturedOptions !== undefined, 'Options が渡される');
-        // GenerateFromWorkingTreeOptions には runLocation プロパティがないため、
-        // 型安全にアクセスするために as unknown as を使用
-        assert.strictEqual((capturedOptions as unknown as { runLocation?: string }).runLocation, undefined, 'runLocation は undefined');
+        // GenerateFromWorkingTreeOptions には runLocation プロパティが存在しないことを確認
+        assert.strictEqual('runLocation' in capturedOptions, false, 'runLocation プロパティは存在しない');
       } finally {
         (
           generateFromWorkingTreeModule as unknown as {
