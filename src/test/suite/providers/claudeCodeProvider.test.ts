@@ -1071,6 +1071,72 @@ suite('ClaudeCodeProvider', () => {
       }
     });
 
+    // TC-HB-01: 出力がない場合、heartbeat 初回ログが出る
+    test('TC-HB-01: 出力がない場合、heartbeat のログが発火する', () => {
+      // Given: A wired child process (no output)
+      const provider = new ClaudeCodeProvider();
+      const wireOutput = (provider as unknown as { wireOutput: WireOutput }).wireOutput.bind(provider);
+      const events: TestGenEvent[] = [];
+
+      const timers = patchTimers();
+      const { child } = createFakeChild();
+
+      try {
+        const options: AgentRunOptions = {
+          taskId: 'wo-heartbeat-1',
+          workspaceRoot: path.resolve('tmp-workspace'),
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (e) => events.push(e),
+        };
+
+        // When: wireOutput して、タイムアウトを進める（setTimeout を強制実行）
+        wireOutput(child, options);
+        timers.fireAllTimeouts();
+
+        // Then: 「まだ出力がありません」系のログが出る
+        const hbLog = events.find((e) => e.type === 'log' && e.level === 'info' && e.message.includes('まだ出力がありません'));
+        assert.ok(hbLog, 'Expected a heartbeat log when no output is received');
+      } finally {
+        timers.restore();
+      }
+    });
+
+    // TC-HB-02: 先に出力が来た場合、heartbeat は発火しない
+    test('TC-HB-02: 先に stdout 出力が来た場合、heartbeat のログは発火しない', () => {
+      // Given: A wired child process
+      const provider = new ClaudeCodeProvider();
+      const wireOutput = (provider as unknown as { wireOutput: WireOutput }).wireOutput.bind(provider);
+      const events: TestGenEvent[] = [];
+
+      const timers = patchTimers();
+      const { child, stdout } = createFakeChild();
+
+      try {
+        const options: AgentRunOptions = {
+          taskId: 'wo-heartbeat-2',
+          workspaceRoot: path.resolve('tmp-workspace'),
+          prompt: 'test prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (e) => events.push(e),
+        };
+
+        wireOutput(child, options);
+
+        // When: heartbeat のタイムアウト前に何か出力が来る（markOutput が動く）
+        stdout.emit('data', Buffer.from('not-json\n'));
+        timers.fireAllTimeouts();
+
+        // Then: heartbeat のログは出ない（clearTimeout されている想定）
+        const hbLog = events.find((e) => e.type === 'log' && e.level === 'info' && e.message.includes('まだ出力がありません'));
+        assert.strictEqual(hbLog, undefined);
+      } finally {
+        timers.restore();
+      }
+    });
+
     // TC-E-09: silence timeout で kill される
     test('TC-E-09: silence timeout (10分) を超えると child.kill() が呼ばれる', () => {
       // Given: A wired child process with controlled clock
