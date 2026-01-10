@@ -143,19 +143,19 @@ export class Logger implements ILogger {
     }
   }
 
-  debug(message: string, context?: string): void {
+  debug(message: string, _context?: string): void {
     this.log(LogLevel.DEBUG, message);
   }
 
-  info(message: string, context?: string): void {
+  info(message: string, _context?: string): void {
     this.log(LogLevel.INFO, message);
   }
 
-  warn(message: string, context?: string): void {
+  warn(message: string, _context?: string): void {
     this.log(LogLevel.WARN, message);
   }
 
-  error(message: string, error?: Error, context?: string): void {
+  error(message: string, error?: Error, _context?: string): void {
     this.log(LogLevel.ERROR, message, error);
   }
 

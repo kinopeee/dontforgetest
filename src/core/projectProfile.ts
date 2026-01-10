@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { ProjectProfile as IProjectProfile } from './types';
+import type { ProjectProfile as IProjectProfile, AnalysisResult } from './types';
 import { testLogger } from './logger';
-import { analyzeFileContent, type AnalysisIssue } from './testAnalyzer';
-import { isTsjsPackageJsonSignal } from './detectSignals';
+import { analyzeFileContent } from './testAnalyzer';
 
 /**
  * vscode.workspace.fs はテスト環境によっては差し替えが困難なため、
@@ -122,9 +121,13 @@ export const tsjsProfile: ProjectProfile = {
     return false;
   },
 
-  analyzeFileContent(relativePath: string, content: string): any {
+  analyzeFileContent(relativePath: string, content: string): AnalysisResult {
     // testAnalyzer の analyzeFileContent を呼び出す
-    return analyzeFileContent(content, relativePath);
+    const issues = analyzeFileContent(content, relativePath);
+    return {
+      issues,
+      metrics: {},
+    };
   },
 };
 

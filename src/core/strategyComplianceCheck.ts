@@ -180,8 +180,8 @@ export async function runComplianceCheck(params: {
   // testAnalyzerによる分析（プロファイル経由）
   const analysisIssues: AnalysisIssue[] = [];
   for (const [relativePath, content] of testFileContents.entries()) {
-    const fileIssues = effectiveProfile.analyzeFileContent(relativePath, content);
-    analysisIssues.push(...fileIssues);
+    const fileResult = effectiveProfile.analyzeFileContent(relativePath, content);
+    analysisIssues.push(...(fileResult.issues as AnalysisIssue[]));
   }
 
   // サマリー計算

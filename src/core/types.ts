@@ -1,6 +1,15 @@
 /**
  * プロジェクトプロファイルの型定義
  */
+
+/**
+ * ファイル解析結果
+ */
+export interface AnalysisResult {
+  issues: unknown[];
+  metrics: unknown;
+}
+
 export interface ProjectProfile {
   /** プロファイルID */
   id: string;
@@ -17,5 +26,5 @@ export interface ProjectProfile {
   /** テストのようなパスかどうかを判定する関数 */
   testLikePathPredicate: (relativePath: string) => boolean;
   /** ファイル内容を解析する関数 */
-  analyzeFileContent: (relativePath: string, content: string) => any;
+  analyzeFileContent: (relativePath: string, content: string) => AnalysisResult;
 }

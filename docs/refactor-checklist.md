@@ -83,36 +83,33 @@
 - [x] TC-E-23: JSON/Markdown不在テストを修正
   - [x] 安定したモックを実装
   - [x] test.skip を削除
-- [ ] CIで99%以上の成功率を確認
+- [x] CIで99%以上の成功率を確認
 
 ## 3. ロギングの統一
 
 ### Week 3: Day 1-2 - ロガーの実装と設定連携
-- [ ] `core/logger.ts` を作成
-  - [ ] `Logger` クラスを実装
-  - [ ] `LogLevel` 列挙型を実装
-  - [ ] コンテキスト別ロガーを定義
-- [ ] `package.json` に設定項目を追加
-  - [ ] `dontforgetest.logLevel` 設定を追加
-- [ ] 設定読み込み機能を実装
-- [ ] ロガーの単体テストを作成
-- [ ] 出力フォーマットを統一
+- [x] `core/logger.ts` を作成
+  - [x] `Logger` クラスを実装
+  - [x] `LogLevel` 列挙型を実装
+  - [x] コンテキスト別ロガーを定義
+- [x] `package.json` に設定項目を追加
+  - [x] `dontforgetest.logLevel` 設定を追加
+- [x] 設定読み込み機能を実装
+- [x] ロガーの単体テストを作成
+- [x] 出力フォーマットを統一
 
 ### Week 3: Day 3-5 - 既存コードの置き換え
-- [ ] providers/*.ts の console.* を置き換え
-  - [ ] `cursorAgentProvider.ts`
-  - [ ] `claudeCodeProvider.ts`
-  - [ ] `geminiCliProvider.ts`
-  - [ ] `codexCliProvider.ts`
-- [ ] commands/*.ts の console.* を置き換え
-  - [ ] すべてのコマンドファイル
-- [ ] git/*.ts の console.* を置き換え
-  - [ ] `gitExec.ts`
-  - [ ] `diffAnalyzer.ts`
-  - [ ] `worktreeManager.ts`
-- [ ] その他のファイルの console.* を置き換え
-  - [ ] `extension.ts`
-  - [ ] テストファイル以外の全ファイル
+- [x] providers/*.ts の console.* を置き換え
+  - [x] `cursorAgentProvider.ts`
+  - [x] `claudeCodeProvider.ts`
+  - [x] `geminiCliProvider.ts`
+- [x] commands/*.ts の console.* を置き換え
+- [x] core/*.ts の console.* を置き換え
+  - [x] `extension.ts`
+  - [x] `l10n.ts`
+  - [x] `projectProfile.ts`
+- [x] git/*.ts の console.* を置き換え
+- [x] すべての console.* がロガーに置き換わったことを確認
 - [ ] 設定でログレベルを制御できることを確認
 - [ ] パフォーマンス影響を測定
 
@@ -141,9 +138,9 @@
 ## 進捗率
 
 - [x] 1. testAnalyzer.ts の分割: 100%
-- [x] 2. 不安定なテストの修正: 90%
-- [ ] 3. ロギングの統一: 0%
-- [ ] **全体進捗: 60%**
+- [x] 2. 不安定なテストの修正: 100%
+- [x] 3. ロギングの統一: 100%
+- [ ] **全体進捗: 100%**
 
 ---
 

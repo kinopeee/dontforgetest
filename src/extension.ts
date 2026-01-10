@@ -1,9 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { getTestGenOutputChannel } from './core/outputChannel';
-import { commands } from './commands/index';
-import { activateStrategyCompliance } from './core/strategyCompliance';
 import { extensionLogger } from './core/logger';
 import { findLatestArtifact, getArtifactSettings } from './core/artifacts';
 import { t } from './core/l10n';

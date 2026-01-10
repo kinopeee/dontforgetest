@@ -3,7 +3,7 @@ import { LogLevel, Logger, ContextLogger, getLogger } from './logger';
 
 // Mock VS Code API
 const mockOutputChannel = {
-  appendLine: (text: string) => {
+  appendLine: (_text: string) => {
     // 何もしない
   },
   clear: () => {
@@ -17,21 +17,22 @@ const mockOutputChannel = {
   },
 };
 
-const mockVSCode = {
-  window: {
-    createOutputChannel: (name: string) => mockOutputChannel,
-  },
-  workspace: {
-    getConfiguration: () => ({
-      get: (key: string, defaultValue: any) => {
-        if (key === 'dontforgetest.logLevel') {
-          return 'info';
-        }
-        return defaultValue;
-      },
-    }),
-  },
-};
+// Mock VS Code API - 将来的に使用される可能性あり
+// const mockVSCode = {
+//   window: {
+//     createOutputChannel: (_name: string) => mockOutputChannel,
+//   },
+//   workspace: {
+//     getConfiguration: () => ({
+//       get: (_key: string, defaultValue: unknown) => {
+//         if (_key === 'dontforgetest.logLevel') {
+//           return 'info';
+//         }
+//         return defaultValue;
+//       },
+//     }),
+//   },
+// };
 
 suite('Logger', () => {
   let logger: Logger;
@@ -113,7 +114,7 @@ suite('Logger', () => {
 
   test('最大エントリ数を超えると古いログが削除される', () => {
     // 小さな最大数を設定するために直接プライベートプロパティを操作
-    (logger as any).maxEntries = 2;
+    (logger as { maxEntries: number }).maxEntries = 2;
     
     logger.info('message 1');
     logger.info('message 2');
@@ -184,8 +185,8 @@ suite('ContextLogger', () => {
   });
 
   test('dispose ですべてのロガーが解放される', () => {
-    const logger1 = contextLogger.getLogger('Test1');
-    const logger2 = contextLogger.getLogger('Test2');
+    contextLogger.getLogger('Test1');
+    contextLogger.getLogger('Test2');
     
     let disposeCount = 0;
     mockOutputChannel.dispose = () => {
