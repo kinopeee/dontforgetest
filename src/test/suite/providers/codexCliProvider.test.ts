@@ -1,4 +1,7 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
 import * as childProcess from 'child_process';
@@ -437,6 +440,175 @@ suite('providers/codexCliProvider.ts', () => {
 
       return { child: child as EventEmitterExt, stdout, stderr, killedRef };
     };
+
+    // TC-CX-N-01: codexPromptCommand が空 → 注入ログなし、prompt はそのまま stdin に流れる
+    test('TC-CX-N-01: codexPromptCommand が空の場合は注入されず、ログも出ない', () => {
+      // Given: codexPromptCommand が空
+      const config = {
+        get: (key: string) => {
+          if (key === 'codexPromptCommand') return '';
+          if (key === 'codexReasoningEffort') return '';
+          return '';
+        },
+      } as unknown as vscode.WorkspaceConfiguration;
+      mutableWorkspace.getConfiguration = (() => config) as unknown as typeof vscode.workspace.getConfiguration;
+
+      const child = createMockChild();
+      let stdinText = '';
+      const originalWrite = child.stdin.write.bind(child.stdin);
+      child.stdin.write = ((chunk: string | Uint8Array) => {
+        stdinText += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+        return originalWrite(chunk);
+      }) as typeof child.stdin.write;
+      const mockSpawn = (() => child) as unknown as typeof childProcess.spawn;
+
+      const provider = new CodexCliProvider(mockSpawn);
+      // wireOutput はこのテストでは不要なのでスタブ化
+      (provider as unknown as { wireOutput: WireOutput }).wireOutput = () => {};
+
+      const events: { type: string; level?: string; message?: string }[] = [];
+      const options: CodexCliProviderRunOptions = {
+        taskId: 'inject-none',
+        workspaceRoot: '/tmp',
+        prompt: 'base prompt',
+        outputFormat: 'stream-json',
+        allowWrite: false,
+        onEvent: (event) => events.push(event),
+      };
+
+      // When
+      const task = provider.run(options);
+      task.dispose();
+
+      // Then: stdin は prompt のみ
+      assert.strictEqual(stdinText, 'base prompt\n');
+      // 注入ログ（info/warn）は出ない
+      const injectionLogs = events.filter(
+        (e) =>
+          e.type === 'log' &&
+          (e.level === 'info' || e.level === 'warn') &&
+          (e.message?.includes('codex コマンドプロンプト') ?? false),
+      );
+      assert.strictEqual(injectionLogs.length, 0);
+    });
+
+    // TC-CX-N-02: codexPromptCommand が有効でファイルが見つかる → 注入ログ(info) + prompt 先頭に差し込み
+    test('TC-CX-N-02: codexPromptCommand が有効で .md が見つかる場合、prompt が注入され info ログが出る', () => {
+      // Given: codexPromptCommand が有効
+      const config = {
+        get: (key: string) => {
+          if (key === 'codexPromptCommand') return 'testcmd';
+          if (key === 'codexReasoningEffort') return '';
+          return '';
+        },
+      } as unknown as vscode.WorkspaceConfiguration;
+      mutableWorkspace.getConfiguration = (() => config) as unknown as typeof vscode.workspace.getConfiguration;
+
+      // ~/.codex/prompts/testcmd.md をテスト用 HOME 配下へ作成
+      const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-codex-home-'));
+      const promptDir = path.join(tempHome, '.codex', 'prompts');
+      const promptFilePath = path.join(promptDir, 'testcmd.md');
+      fs.mkdirSync(path.dirname(promptFilePath), { recursive: true });
+      fs.writeFileSync(promptFilePath, '  COMMAND\nLINE2  \n', 'utf8');
+
+      const child = createMockChild();
+      let stdinText = '';
+      const originalWrite = child.stdin.write.bind(child.stdin);
+      child.stdin.write = ((chunk: string | Uint8Array) => {
+        stdinText += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+        return originalWrite(chunk);
+      }) as typeof child.stdin.write;
+      const mockSpawn = (() => child) as unknown as typeof childProcess.spawn;
+
+      try {
+        const provider = new CodexCliProvider(mockSpawn, () => promptDir);
+        (provider as unknown as { wireOutput: WireOutput }).wireOutput = () => {};
+
+        const events: { type: string; level?: string; message?: string }[] = [];
+        const options: CodexCliProviderRunOptions = {
+          taskId: 'inject-found',
+          workspaceRoot: '/tmp',
+          prompt: 'base prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (event) => events.push(event),
+        };
+
+        // When
+        const task = provider.run(options);
+        task.dispose();
+
+        // Then: 注入された prompt が stdin に流れる
+        assert.strictEqual(stdinText, 'COMMAND\nLINE2\n\nbase prompt\n');
+        const infoLogs = events.filter((e) => e.type === 'log' && e.level === 'info');
+        assert.ok(
+          infoLogs.some((e) => (e.message ?? '').includes(promptFilePath)),
+          'info ログに注入ファイルのパスが含まれる',
+        );
+      } finally {
+        // 後始末
+        try {
+          fs.rmSync(tempHome, { recursive: true, force: true });
+        } catch {
+          // ignore
+        }
+      }
+    });
+
+    // TC-CX-E-01: codexPromptCommand が有効だがファイルが存在しない → warn ログ + prompt はそのまま
+    test('TC-CX-E-01: codexPromptCommand が有効だがファイルが存在しない場合、warn ログが出て注入されない', () => {
+      // Given: codexPromptCommand が有効
+      const config = {
+        get: (key: string) => {
+          if (key === 'codexPromptCommand') return 'missing-cmd';
+          if (key === 'codexReasoningEffort') return '';
+          return '';
+        },
+      } as unknown as vscode.WorkspaceConfiguration;
+      mutableWorkspace.getConfiguration = (() => config) as unknown as typeof vscode.workspace.getConfiguration;
+
+      const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'dontforgetest-codex-home-'));
+      const promptDir = path.join(tempHome, '.codex', 'prompts');
+
+      const child = createMockChild();
+      let stdinText = '';
+      const originalWrite = child.stdin.write.bind(child.stdin);
+      child.stdin.write = ((chunk: string | Uint8Array) => {
+        stdinText += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+        return originalWrite(chunk);
+      }) as typeof child.stdin.write;
+      const mockSpawn = (() => child) as unknown as typeof childProcess.spawn;
+
+      try {
+        const provider = new CodexCliProvider(mockSpawn, () => promptDir);
+        (provider as unknown as { wireOutput: WireOutput }).wireOutput = () => {};
+
+        const events: { type: string; level?: string; message?: string }[] = [];
+        const options: CodexCliProviderRunOptions = {
+          taskId: 'inject-missing',
+          workspaceRoot: '/tmp',
+          prompt: 'base prompt',
+          outputFormat: 'stream-json',
+          allowWrite: false,
+          onEvent: (event) => events.push(event),
+        };
+
+        // When
+        const task = provider.run(options);
+        task.dispose();
+
+        // Then: 注入されず、stdin は元の prompt
+        assert.strictEqual(stdinText, 'base prompt\n');
+        const warnLogs = events.filter((e) => e.type === 'log' && e.level === 'warn');
+        assert.ok(warnLogs.some((e) => (e.message ?? '').includes('missing-cmd')), 'warn ログにコマンド名が含まれる');
+      } finally {
+        try {
+          fs.rmSync(tempHome, { recursive: true, force: true });
+        } catch {
+          // ignore
+        }
+      }
+    });
 
     // TC-CX-E-02: activeChild 存在時に run() → 旧 child.kill() が呼ばれ、warn ログが発火
     test('TC-CX-E-02: activeChild 存在時に run() すると旧 child.kill() が呼ばれ warn ログが発火する', () => {
