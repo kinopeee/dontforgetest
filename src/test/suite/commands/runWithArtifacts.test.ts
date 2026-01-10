@@ -663,8 +663,7 @@ suite('commands/runWithArtifacts.ts', () => {
   });
 
   // TC-CMD-05: 観点表生成失敗 (Provider Error)
-  // FIXME: テスト環境依存の問題で不安定。後日調査する。
-  test.skip('TC-CMD-05: 観点表生成（Provider）失敗時、ログがそのまま保存される', async () => {
+  test('TC-CMD-05: 観点表生成（Provider）失敗時、ログがそのまま保存される', async () => {
     // Given: Provider が失敗する (exitCode = 1)
     const provider = new MockProvider(1);
     const taskId = `task-05-${Date.now()}`;
@@ -936,8 +935,7 @@ suite('commands/runWithArtifacts.ts', () => {
   });
 
   // TC-CMD-09: cursorAgent Runner で Unsafe コマンドを実行（警告のみで実行）
-  // FIXME: テスト環境依存の問題で不安定。後日調査する。
-  test.skip('TC-CMD-09: testExecutionRunner=cursorAgent の場合、Unsafeコマンドでも実行される（警告ログあり）', async () => {
+  test('TC-CMD-09: testExecutionRunner=cursorAgent の場合、Unsafeコマンドでも実行される（警告ログあり）', async () => {
     // Given: Unsafe環境
     const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-09-${Date.now()}`);
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
@@ -6414,8 +6412,7 @@ suite('commands/runWithArtifacts.ts', () => {
   });
 
   // TC-N-03: perspectiveGenerationTimeoutMs = 600000, testCommand detects VS Code launch, testExecutionRunner = 'cursorAgent'
-  // FIXME: テスト環境依存の問題で不安定。後日調査する。
-  test.skip('TC-N-03: perspectiveGenerationTimeoutMs = 600000, testCommand detects VS Code launch, testExecutionRunner = cursorAgent', async () => {
+  test('TC-N-03: perspectiveGenerationTimeoutMs = 600000, testCommand detects VS Code launch, testExecutionRunner = cursorAgent', async () => {
     // Given: Timeout setting = 600000, testCommand detects VS Code launch, testExecutionRunner = 'cursorAgent'
     const tempRoot = path.join(workspaceRoot, baseTempDir, `workspace-n-03-${Date.now()}`);
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(tempRoot));
@@ -7307,8 +7304,7 @@ suite('commands/runWithArtifacts.ts', () => {
   });
 
   // TC-E-08: perspectiveGenerationTimeoutMs = 600000, perspective generation fails (exitCode !== 0)
-  // FIXME: テスト環境依存の問題で不安定。後日調査する。
-  test.skip('TC-E-08: perspectiveGenerationTimeoutMs = 600000, perspective generation fails (exitCode !== 0)', async () => {
+  test('TC-E-08: perspectiveGenerationTimeoutMs = 600000, perspective generation fails (exitCode !== 0)', async () => {
     // Given: Timeout = 600000, perspective generation fails (exitCode = 1)
     const taskId = `task-e-08-${Date.now()}`;
     const provider = new MockProvider(1); // exitCode = 1
@@ -8800,7 +8796,7 @@ suite('commands/runWithArtifacts.ts', () => {
 
     // TC-E-11: extractBetweenMarkers called with begin marker not found
     // FIXME: ローカル環境依存の問題で不安定。後日調査する。
-    test.skip('TC-E-11: extractBetweenMarkers returns undefined when begin marker not found', async () => {
+    test('TC-E-11: extractBetweenMarkers returns undefined when begin marker not found', async () => {
       // Given: Logs without begin marker
       const perspectiveLog = 'Some log text without markers';
       const provider = new MockProvider(0, undefined, perspectiveLog);
@@ -8954,8 +8950,7 @@ suite('commands/runWithArtifacts.ts', () => {
     });
 
     // TC-E-23: Neither JSON nor Markdown markers are present in logs
-    // FIXME: ローカル環境依存の問題で不安定。後日調査する。
-    test.skip('TC-E-23: buildFailureMarkdown is called when neither JSON nor Markdown markers are present', async () => {
+    test('TC-E-23: buildFailureMarkdown is called when neither JSON nor Markdown markers are present', async () => {
       // Given: Neither JSON nor Markdown markers are present
       const perspectiveLog = 'Some log output without any markers';
       const provider = new MockProvider(0, undefined, perspectiveLog);

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { extensionLogger } from './core/logger';
 import { findLatestArtifact, getArtifactSettings } from './core/artifacts';
 import { t } from './core/l10n';
 import { generateTestFromLatestCommit } from './commands/generateFromCommit';
@@ -100,7 +101,7 @@ function normalizeGenerateCommandArgs(args?: GenerateCommandArgs): {
  * この関数は拡張機能が有効化されたときに呼ばれます
  */
 export function activate(context: vscode.ExtensionContext) {
-  console.log('拡張機能 "dontforgetest" が有効化されました');
+  extensionLogger.info('拡張機能 "dontforgetest" が有効化されました');
 
   const settingsPanelProvider = new SettingsPanelViewProvider();
   const controlPanelProvider = new TestGenControlPanelViewProvider(context);
@@ -276,5 +277,5 @@ export function activate(context: vscode.ExtensionContext) {
  * この関数は拡張機能が無効化されたときに呼ばれます
  */
 export function deactivate() {
-  console.log('拡張機能 "dontforgetest" が無効化されました');
+  extensionLogger.info('拡張機能 "dontforgetest" が無効化されました');
 }

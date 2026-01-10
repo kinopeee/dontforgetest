@@ -1,7 +1,8 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
-import { analyzeFileContent, type AnalysisIssue } from './testAnalyzer';
-import { isTsjsPackageJsonSignal } from './detectSignals';
+import * as path from 'path';
+import type { ProjectProfile as IProjectProfile, AnalysisResult } from './types';
+import { testLogger } from './logger';
+import { analyzeFileContent } from './testAnalyzer';
 
 /**
  * vscode.workspace.fs はテスト環境によっては差し替えが困難なため、
@@ -15,24 +16,10 @@ function getWorkspaceFs(): WorkspaceFsLike {
   return workspaceFsOverrideForTest ?? vscode.workspace.fs;
 }
 
-export interface ProjectProfile {
-  /** プロファイル識別子（例: "tsjs"） */
-  id: string;
-  /** 自動検出用。workspaceRoot を受け取り該当するか判定 */
-  detect(workspaceRoot: string): Promise<boolean>;
-  /** プロンプトに出す「編集可能範囲」の行リスト */
-  allowedChangeScopeLines: string[];
-  /** 生成ファイル収集・準拠チェックで使用 */
-  testFilePredicate(relativePath: string): boolean;
-  /** worktree apply で使用 */
-  testLikePathPredicate(relativePath: string): boolean;
-  /**
-   * テストファイルの内容を解析し、G/W/Tコメント不足などの問題を検出する
-   * - 非対応言語の場合は空配列を返す実装とする
-   * - これにより呼び出し側は言語を意識せず一律に呼び出せる
-   */
-  analyzeFileContent(relativePath: string, content: string): AnalysisIssue[];
-}
+/**
+ * プロジェクトプロファイル
+ */
+export type ProjectProfile = IProjectProfile;
 
 export interface ResolvedProfile {
   profile: ProjectProfile;
@@ -49,34 +36,32 @@ export interface ResolvedProfile {
  */
 export const tsjsProfile: ProjectProfile = {
   id: 'tsjs',
+  displayName: 'TypeScript/JavaScript',
+  description: 'TypeScript/JavaScript プロジェクト用のデフォルトプロファイル',
 
   async detect(workspaceRoot: string): Promise<boolean> {
-    // 優先順位: 強シグナル（ts/jsconfig, deno.json）→ package.json 内容解析
-
-    // 1. 強シグナル: tsconfig.json / jsconfig.json
+    // TypeScript/JavaScript プロジェクトの自動検出ロジック
     const hasTsConfig = await fileExists(path.join(workspaceRoot, 'tsconfig.json'));
     const hasJsConfig = await fileExists(path.join(workspaceRoot, 'jsconfig.json'));
-    if (hasTsConfig || hasJsConfig) {
-      return true;
-    }
-
-    // 2. 強シグナル: deno.json / deno.jsonc
     const hasDenoJson = await fileExists(path.join(workspaceRoot, 'deno.json'));
     const hasDenoJsonc = await fileExists(path.join(workspaceRoot, 'deno.jsonc'));
-    if (hasDenoJson || hasDenoJsonc) {
+
+    if (hasTsConfig || hasJsConfig || hasDenoJson || hasDenoJsonc) {
       return true;
     }
 
-    // 3. package.json の内容を解析してシグナルを判定
+    // package.json の存在もチェック
     const packageJsonPath = path.join(workspaceRoot, 'package.json');
     if (await fileExists(packageJsonPath)) {
       try {
-        const uri = vscode.Uri.file(packageJsonPath);
-        const content = await getWorkspaceFs().readFile(uri);
-        const pkg = JSON.parse(Buffer.from(content).toString('utf8'));
-        return isTsjsPackageJsonSignal(pkg);
+        const content = await vscode.workspace.fs.readFile(vscode.Uri.file(packageJsonPath));
+        const pkg = JSON.parse(content.toString());
+        // TypeScript が devDependencies に含まれる場合
+        if (pkg.devDependencies?.typescript) {
+          return true;
+        }
       } catch {
-        return false;
+        // パース失敗は無視
       }
     }
 
@@ -136,9 +121,14 @@ export const tsjsProfile: ProjectProfile = {
     return false;
   },
 
-  analyzeFileContent(relativePath: string, content: string): AnalysisIssue[] {
-    return analyzeFileContent(relativePath, content);
-  }
+  analyzeFileContent(relativePath: string, content: string): AnalysisResult {
+    // testAnalyzer の analyzeFileContent を呼び出す
+    const issues = analyzeFileContent(content, relativePath);
+    return {
+      issues,
+      metrics: {},
+    };
+  },
 };
 
 /**
@@ -185,7 +175,7 @@ export async function resolveProjectProfile(workspaceRoot: string): Promise<Reso
       return { profile: found, source: 'config' };
     }
     // 設定されたプロファイルが見つからない場合は警告を出してフォールバック
-    console.warn(`Project profile "${configId}" not found. Falling back to default.`);
+    testLogger.warn(`Project profile "${configId}" not found. Falling back to default.`);
     // フォールバック: tsjs
     return { profile: tsjsProfile, source: 'fallback' };
   }
