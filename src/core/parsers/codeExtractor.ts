@@ -61,6 +61,8 @@ function replaceStringLiterals(text: string, literals: { start: number; end: num
 /**
  * コメントを削除する
  *
+ * 行番号を保持するため、ブロックコメント内の改行は維持する。
+ *
  * @param text 元のテキスト
  * @returns コメントが削除されたテキスト
  */
@@ -68,8 +70,11 @@ function removeComments(text: string): string {
   // 行コメントを削除
   let result = text.replace(/\/\/.*$/gm, '');
   
-  // ブロックコメントを削除
-  result = result.replace(/\/\*[\s\S]*?\*\//g, '');
+  // ブロックコメントを削除（改行は維持して行番号を保持）
+  result = result.replace(/\/\*[\s\S]*?\*\//g, (match) => {
+    const newlineCount = (match.match(/\n/g) || []).length;
+    return '\n'.repeat(newlineCount);
+  });
   
   return result;
 }
@@ -113,14 +118,4 @@ export function hasEmptyStringLiteralInCode(content: string): boolean {
   }
 
   return false;
-}
-
-/**
- * 文字列が正規表現の開始パターンかチェックする
- *
- * @param text チェック対象のテキスト
- * @returns 正規表現の開始パターンの場合 true
- */
-export function isRegexStart(text: string): boolean {
-  return text === '/' || text.startsWith('/[') || text.startsWith('/\\');
 }

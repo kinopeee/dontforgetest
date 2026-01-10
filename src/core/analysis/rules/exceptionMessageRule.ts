@@ -47,12 +47,17 @@ function checkExceptionMessage(content: string, testFn: { name: string; original
   });
 
   // 例外メッセージが検証されているかチェック
+  // 文字列リテラル、正規表現、オブジェクトパターンをサポート
   const messagePatterns = [
     /toThrowError\(/g,
     /toThrow\(['"`][^'"`]+['"`]\)/g,
+    /toThrow\(\/[^/]+\/\)/g,                    // 正規表現パターン: toThrow(/pattern/)
+    /toThrow\(\{[^}]+\}\)/g,                    // オブジェクトパターン: toThrow({ message: ... })
     /throws?\(['"`][^'"`]+['"`]\)/g,
     /\.message\s*===\s*['"`][^'"`]+['"`]/g,
     /error\.message\s*===\s*['"`][^'"`]+['"`]/g,
+    /\.message\.match\(/g,                      // message.match(/pattern/)
+    /expect\([^)]+\.message\)/g,                // expect(error.message)
   ];
 
   const hasMessageCheck = messagePatterns.some(pattern => {

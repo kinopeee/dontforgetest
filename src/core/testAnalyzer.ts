@@ -122,10 +122,15 @@ export async function saveAnalysisReport(
 
 /**
  * 指定パターンに一致するテストファイルを検索する
+ *
+ * NOTE: path.join() は Windows でバックスラッシュを生成するが、
+ * glob パターンではバックスラッシュがエスケープ文字として解釈されるため、
+ * vscode.RelativePattern を使用してクロスプラットフォーム対応する。
  */
 async function findTestFiles(workspaceRoot: string, pattern: string): Promise<string[]> {
-  const absolutePattern = path.isAbsolute(pattern) ? pattern : path.join(workspaceRoot, pattern);
-  const uris = await vscode.workspace.findFiles(absolutePattern, '**/node_modules/**');
+  // RelativePattern を使用して Windows でも正しく動作させる
+  const relativePattern = new vscode.RelativePattern(workspaceRoot, pattern);
+  const uris = await vscode.workspace.findFiles(relativePattern, '**/node_modules/**');
   return uris.map(uri => uri.fsPath);
 }
 

@@ -4,9 +4,12 @@ import { TestGenEvent } from '../../core/event';
 
 /**
  * モック用のタスクイベント
+ *
+ * TestGenEvent と互換性を持たせるため、'done' の代わりに 'completed' を使用し、
+ * exitCode を含める。
  */
 export interface MockTaskEvent {
-  type: 'started' | 'log' | 'error' | 'done';
+  type: 'started' | 'log' | 'error' | 'completed';
   taskId: string;
   timestampMs: number;
   label?: string;
@@ -14,6 +17,7 @@ export interface MockTaskEvent {
   level?: 'info' | 'warn' | 'error';
   message?: string;
   error?: Error;
+  exitCode?: number | null;
 }
 
 /**
@@ -113,11 +117,12 @@ export class MockAgentProvider implements AgentProvider {
       this.events.push(logEvent);
       options.onEvent(logEvent as TestGenEvent);
 
-      // 終了イベント
+      // 終了イベント（TestGenEvent の 'completed' 型と互換）
       const endEvent: MockTaskEvent = {
-        type: 'done',
+        type: 'completed',
         taskId,
         timestampMs: Date.now(),
+        exitCode: 0,
       };
       this.events.push(endEvent);
       options.onEvent(endEvent as TestGenEvent);

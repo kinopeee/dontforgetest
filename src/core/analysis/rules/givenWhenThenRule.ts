@@ -56,7 +56,7 @@ export class GivenWhenThenAnalysisRule extends BaseAnalysisRule {
           type: 'missing-gwt',
           file: context.relativePath,
           line: testFn.startLine,
-          detail: t('analysis.issue.missingGwt', result.missing.join(', ')),
+          detail: `${testFn.name} (${result.missing.join(', ')} ${t('analysis.detail.missing')})`,
         });
       }
     }

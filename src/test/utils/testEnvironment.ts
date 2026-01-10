@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { randomUUID } from 'crypto';
 
 /**
  * テスト環境のセットアップ情報
@@ -14,9 +15,12 @@ export interface TestEnvironment {
 
 /**
  * テスト環境をセットアップする
+ *
+ * 並列テスト実行時の競合を避けるため、randomUUID を使用してユニークなディレクトリ名を生成する。
  */
 export async function setupTestEnvironment(): Promise<TestEnvironment> {
-  const workspaceRoot = path.join(process.cwd(), 'tmp', 'test-env-' + Date.now());
+  // Date.now() のみでは並列実行時に衝突する可能性があるため randomUUID を追加
+  const workspaceRoot = path.join(process.cwd(), 'tmp', `test-env-${Date.now()}-${randomUUID()}`);
   const tempDirs: string[] = [];
   const tempFiles: string[] = [];
   
@@ -126,9 +130,10 @@ export async function cleanupTestEnvironment(env: TestEnvironment): Promise<void
   }
 
   // 一時ディレクトリを削除（逆順で）
+  // fs.rmdir は非推奨のため fs.rm を使用
   for (const dirPath of env.tempDirs.reverse()) {
     try {
-      await fs.rmdir(dirPath, { recursive: true });
+      await fs.rm(dirPath, { recursive: true, force: true });
     } catch {
       // 削除に失敗しても無視
     }

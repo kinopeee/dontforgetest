@@ -62,27 +62,27 @@ function buildReportContent(result: AnalysisResult): string {
 
   // ヘッダー
   lines.push('# テスト分析レポート');
-  lines.push();
+  lines.push('');
   lines.push(`**生成日時**: ${formatTimestamp(new Date())}`);
   lines.push(`**分析対象**: ${result.pattern}`);
   lines.push(`**対象ファイル数**: ${result.analyzedFiles}`);
   lines.push(`**検出された問題数**: ${result.issues.length}`);
-  lines.push();
+  lines.push('');
 
   // サマリー
   lines.push('## サマリー');
-  lines.push();
+  lines.push('');
   lines.push('| カテゴリ | 件数 |');
   lines.push('|---------|------|');
   lines.push(`| Given/When/Then 未実装 | ${result.summary.missingGwt} |`);
   lines.push(`| 境界値テスト未実装 | ${result.summary.missingBoundary} |`);
   lines.push(`| 例外メッセージ未検証 | ${result.summary.missingExceptionMessage} |`);
-  lines.push();
+  lines.push('');
 
   // 問題詳細
   if (result.issues.length > 0) {
     lines.push('## 検出された問題');
-    lines.push();
+    lines.push('');
 
     // ファイルごとにグループ化
     const issuesByFile = new Map<string, typeof result.issues>();
@@ -94,17 +94,17 @@ function buildReportContent(result: AnalysisResult): string {
 
     for (const [file, fileIssues] of issuesByFile) {
       lines.push(`### ${file}`);
-      lines.push();
+      lines.push('');
 
       for (const issue of fileIssues) {
         const lineInfo = issue.line ? ` (行 ${issue.line})` : '';
         lines.push(`- ${issue.type}${lineInfo}: ${issue.detail}`);
       }
-      lines.push();
+      lines.push('');
     }
   } else {
     lines.push('## ✅ 問題は検出されませんでした');
-    lines.push();
+    lines.push('');
   }
 
   return lines.join('\n');

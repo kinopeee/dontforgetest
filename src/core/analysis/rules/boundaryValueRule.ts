@@ -51,9 +51,11 @@ function checkBoundaryValue(
     /\[\]/g,
   ];
 
+  // テスト関数のコードのみを対象にチェック（ファイル全体ではなく個別テスト）
+  const testCodeOnly = testFn.originalContent.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
   const hasBoundaryInCode = boundaryPatterns.some(pattern => {
     pattern.lastIndex = 0; // グローバルパターンのリセット
-    return pattern.test(codeOnlyContent);
+    return pattern.test(testCodeOnly);
   });
 
   // 空文字列のみ別途チェック

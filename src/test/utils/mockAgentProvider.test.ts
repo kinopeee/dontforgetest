@@ -26,11 +26,11 @@ suite('MockAgentProvider', () => {
     // イベントが送信されるのを待つ
     await new Promise(resolve => setTimeout(resolve, 100));
 
-    assert.strictEqual(events.length, 4);
+    // MockAgentProvider は 3 つのイベントを送信: started, log, completed
+    assert.strictEqual(events.length, 3);
     assert.strictEqual(events[0].type, 'started');
     assert.strictEqual(events[1].type, 'log');
-    assert.strictEqual(events[2].type, 'done');
-    assert.strictEqual(events[3].type, undefined); // endイベントの後に追加されることはない
+    assert.strictEqual(events[2].type, 'completed');
 
     task.dispose();
   });
@@ -102,11 +102,12 @@ suite('MockAgentProvider', () => {
     // イベントが送信されるのを待つ
     await new Promise(resolve => setTimeout(resolve, 100));
 
+    // MockAgentProvider は 3 つのイベントを記録: started, log, completed
     const recordedEvents = provider.getEvents();
-    assert.strictEqual(recordedEvents.length, 4);
+    assert.strictEqual(recordedEvents.length, 3);
     assert.strictEqual(recordedEvents[0].type, 'started');
     assert.strictEqual(recordedEvents[1].type, 'log');
-    assert.strictEqual(recordedEvents[2].type, 'done');
+    assert.strictEqual(recordedEvents[2].type, 'completed');
 
     provider.clearEvents();
     assert.strictEqual(provider.getEvents().length, 0);
