@@ -567,6 +567,8 @@ export class ClaudeCodeProvider implements AgentProvider {
  */
 export const __test__ = {
   CLAUDE_CODE_MONITORING,
+  extractAssistantText,
+  toWorkspaceRelative,
 };
 
 /**

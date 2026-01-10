@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { buildCodeOnlyContent, hasEmptyStringLiteralInCode } from '../../../core/codeOnlyText';
+import { buildCodeOnlyContent, hasEmptyStringLiteralInCode, isRegexStart } from '../../../core/codeOnlyText';
 
 suite('codeOnlyText', () => {
   suite('buildCodeOnlyContent', () => {
@@ -685,6 +685,132 @@ function test() {
         // Then: true が返される
         assert.strictEqual(result, true);
       });
+    });
+
+    // === 未カバー行テスト観点表 ===
+    // | Case ID         | Input / Precondition                        | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+    // |-----------------|---------------------------------------------|--------------------------------------|-----------------|-------|
+    // | TC-COT-B-01     | テンプレート内でネストした } (braceDepth>0) | Boundary – braceDepth > 0            | false           | 行538 |
+    // | TC-COT-B-02     | 正規表現内で改行がある                      | Boundary – regex状態で改行           | false           | 行549 |
+    // | TC-COT-B-03     | 正規表現にフラグがある                      | Boundary – フラグスキップ            | false           | 行558-559 |
+
+    suite('Template nested braces (line 538)', () => {
+      test('TC-COT-B-01: handles nested braces in template expression without empty string', () => {
+        // Given: テンプレートリテラル内にネストした {} がある（空文字なし）
+        const content = 'const x = `${(() => { return { a: 1 }; })()}`;';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される（空文字リテラルがないため）
+        assert.strictEqual(result, false);
+      });
+
+      test('TC-COT-B-02: handles deeply nested braces in template expression', () => {
+        // Given: テンプレートリテラル内に深くネストした {} がある
+        const content = 'const x = `${(() => { if (true) { return { a: { b: 1 } }; } })()}`;';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+    });
+
+    suite('Regex with newline (line 549)', () => {
+      test('TC-COT-B-03: handles regex-like pattern followed by newline in template', () => {
+        // Given: テンプレート内で / の後に改行がある（正規表現として開始されるが改行で終了）
+        // NOTE: 実際の正規表現リテラルは改行を含めないが、パーサーは改行で状態をリセットする
+        const content = 'const x = `${/\ntest}`;';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+    });
+
+    suite('Regex with flags (line 558-559)', () => {
+      test('TC-COT-B-04: handles regex with flags in template expression', () => {
+        // Given: テンプレート内に正規表現リテラル（フラグ付き）がある
+        const content = 'const x = `${/pattern/gi.test(s)}`;';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+
+      test('TC-COT-B-05: handles regex with multiple flags in template', () => {
+        // Given: テンプレート内に複数フラグの正規表現がある
+        const content = 'const x = `${/test/gimsuy.test(s)}`;';
+
+        // When: 空文字リテラルをチェックする
+        const result = hasEmptyStringLiteralInCode(content);
+
+        // Then: false が返される
+        assert.strictEqual(result, false);
+      });
+    });
+  });
+
+  // === isRegexStart テスト観点表 ===
+  // | Case ID         | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |-----------------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-IRS-B-01     | lastNonWsChar=''     | Boundary – 空文字列（行頭）          | true            | 行606-607 |
+  // | TC-IRS-N-01     | lastNonWsChar='('    | Normal – 演算子                      | true            | -     |
+  // | TC-IRS-N-02     | lastNonWsChar='x'    | Normal – 識別子                      | false           | -     |
+
+  suite('isRegexStart', () => {
+    test('TC-IRS-B-01: returns true for empty string (line start)', () => {
+      // Given: 空文字列（行頭や開始時）
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart('');
+      // Then: true が返る
+      assert.strictEqual(result, true);
+    });
+
+    test('TC-IRS-N-01: returns true for preceding operator "("', () => {
+      // Given: 演算子 '('
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart('(');
+      // Then: true が返る
+      assert.strictEqual(result, true);
+    });
+
+    test('TC-IRS-N-02: returns false for preceding identifier character', () => {
+      // Given: 識別子文字 'x'
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart('x');
+      // Then: false が返る
+      assert.strictEqual(result, false);
+    });
+
+    test('TC-IRS-N-03: returns true for preceding "="', () => {
+      // Given: 代入演算子 '='
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart('=');
+      // Then: true が返る
+      assert.strictEqual(result, true);
+    });
+
+    test('TC-IRS-N-04: returns true for preceding ";"', () => {
+      // Given: セミコロン ';'
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart(';');
+      // Then: true が返る
+      assert.strictEqual(result, true);
+    });
+
+    test('TC-IRS-N-05: returns false for preceding ")"', () => {
+      // Given: 閉じ括弧 ')'（除算の可能性が高い）
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart(')');
+      // Then: false が返る
+      assert.strictEqual(result, false);
     });
   });
 });
