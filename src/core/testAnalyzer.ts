@@ -230,7 +230,7 @@ export class GlobalStateLeakAnalysisRule implements AnalysisRule {
   analyze(context: AnalysisContext): AnalysisIssue[] {
     return checkGlobalStateLeaks(
       context.relativePath,
-      context.content,
+      context.codeOnlyContent,
       context.testFunctions,
     );
   }
@@ -1289,10 +1289,13 @@ function checkUnverifiedMocks(
  * - process.env の変更があるが、復元がない
  * - global / window オブジェクトの変更があるが、復元がない
  * - Object.defineProperty の使用があるが、復元がない
+ *
+ * 注意: afterEach はテスト関数の外側（suiteレベル）で定義されるため、
+ * ファイル全体で afterEach の存在をチェックする。
  */
 function checkGlobalStateLeaks(
   relativePath: string,
-  content: string,
+  codeOnlyContent: string,
   testFunctions: TestFunctionInfo[],
 ): AnalysisIssue[] {
   const issues: AnalysisIssue[] = [];
@@ -1306,18 +1309,20 @@ function checkGlobalStateLeaks(
     /window\.\w+\s*=/,
   ];
 
-  // 復元パターン（finally, afterEach, restore などのキーワード）
-  const restorePatterns = [
+  // テスト関数内で使用される復元パターン
+  const inTestRestorePatterns = [
     /finally\s*\{/,
-    /afterEach\s*\(/,
     /\.restore\s*\(/,
     /delete\s+process\.env/,
     /delete\s+global\./,
     /delete\s+window\./,
   ];
 
+  // ファイル全体で afterEach が定義されているかチェック（suiteレベルのクリーンアップ）
+  const hasAfterEachInFile = /afterEach\s*\(/.test(codeOnlyContent);
+
   for (const testFn of testFunctions) {
-    const testContent = content.split('\n').slice(testFn.startLine - 1, testFn.endLine).join('\n');
+    const testContent = codeOnlyContent.split('\n').slice(testFn.startLine - 1, testFn.endLine).join('\n');
 
     // グローバル状態の変更があるかチェック
     const hasGlobalStateChange = globalStatePatterns.some((p) => p.test(testContent));
@@ -1325,9 +1330,9 @@ function checkGlobalStateLeaks(
       continue;
     }
 
-    // 復元処理があるかチェック
-    const hasRestore = restorePatterns.some((p) => p.test(testContent));
-    if (!hasRestore) {
+    // テスト関数内に復元処理があるか、またはファイルに afterEach があるかチェック
+    const hasRestoreInTest = inTestRestorePatterns.some((p) => p.test(testContent));
+    if (!hasRestoreInTest && !hasAfterEachInFile) {
       issues.push({
         type: 'global-state-leak',
         file: relativePath,
