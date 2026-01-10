@@ -141,7 +141,7 @@ suite('integration/commandToProvider', () => {
       // Given: generateTestFromWorkingTree をスタブ化
       const original = generateFromWorkingTreeModule.generateTestFromWorkingTree;
       let capturedProvider: unknown;
-      let capturedOptions: generateFromWorkingTreeModule.GenerateTestCommandOptions | undefined;
+      let capturedOptions: generateFromWorkingTreeModule.GenerateFromWorkingTreeOptions | undefined;
 
       (
         generateFromWorkingTreeModule as unknown as {
@@ -175,7 +175,7 @@ suite('integration/commandToProvider', () => {
     test('TC-INT-CMD-05: generateTestFromWorkingTree は runLocation を無視する', async () => {
       // Given: generateTestFromWorkingTree をスタブ化
       const original = generateFromWorkingTreeModule.generateTestFromWorkingTree;
-      let capturedOptions: generateFromWorkingTreeModule.GenerateTestCommandOptions | undefined;
+      let capturedOptions: generateFromWorkingTreeModule.GenerateFromWorkingTreeOptions | undefined;
 
       (
         generateFromWorkingTreeModule as unknown as {
@@ -193,7 +193,9 @@ suite('integration/commandToProvider', () => {
 
         // Then: Options が渡されるが runLocation は含まれない
         assert.ok(capturedOptions !== undefined, 'Options が渡される');
-        assert.strictEqual(capturedOptions.runLocation, undefined, 'runLocation は undefined');
+        // GenerateFromWorkingTreeOptions には runLocation プロパティがないため、
+        // 型安全にアクセスするために as unknown as を使用
+        assert.strictEqual((capturedOptions as unknown as { runLocation?: string }).runLocation, undefined, 'runLocation は undefined');
       } finally {
         (
           generateFromWorkingTreeModule as unknown as {
