@@ -1,12 +1,21 @@
 import * as assert from 'assert';
+import * as path from 'path';
+import * as vscode from 'vscode';
 import {
+  analyzeFile,
   analyzeFileContent,
+  analyzeTestFiles,
   buildAnalysisReportMarkdown,
+  ExceptionIssueFormatter,
   getAnalysisSettings,
+  GwtIssueFormatter,
+  MarkdownTableBuilder,
+  saveAnalysisReport,
   type AnalysisIssue,
   type AnalysisResult,
   __test__ as testAnalyzerTest,
 } from '../../../core/testAnalyzer';
+import { stubConfiguration, stubFileSystem } from '../testUtils/stubHelpers';
 
 suite('testAnalyzer', () => {
   // NOTE: testAnalyzer の簡易パーサーは、文字列リテラル内の `test(` / `it(` を区別できない。
@@ -17,6 +26,10 @@ suite('testAnalyzer', () => {
   const itFn = 'i' + 't';
 
   suite('analyzeFileContent', () => {
+    // テスト観点表（追加分）: Given/When/Then 検出
+    // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+    // |---------|----------------------|--------------------------------------|-----------------|-------|
+    // | TC-B-08 | test() without name | Boundary – empty name | detail に <unknown> が含まれる | empty name |
     suite('Given/When/Then detection', () => {
       test('detects missing Given/When/Then comment in test function', () => {
         // Given: テストコードに Given/When/Then コメントがない
@@ -38,6 +51,23 @@ ${testFn}('should return true', () => {
         assert.ok(gwtIssues[0].detail.includes('Given'));
         assert.ok(gwtIssues[0].detail.includes('When'));
         assert.ok(gwtIssues[0].detail.includes('Then'));
+      });
+
+      test('TC-B-08: テスト名が無い場合は <unknown> が使われる', () => {
+        // Given: test() に名前がないコード
+        const content = `
+${testFn}(() => {
+  const value = 1;
+  assert.strictEqual(value, 1);
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-gwt に <unknown> が含まれる
+        const gwtIssue = issues.find((i) => i.type === 'missing-gwt');
+        assert.ok(gwtIssue?.detail.includes('<unknown>'));
       });
 
       test('does not report issue when Given/When/Then all exist', () => {
@@ -414,6 +444,142 @@ ${testFn}('throws error', () => {
         // Then: missing-exception-message の問題が検出される
         const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
         assert.strictEqual(exceptionIssues.length, 1);
+      });
+
+      // テスト観点表（追加分）: 例外メッセージ検証の追加分岐
+      // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+      // |---------|----------------------|--------------------------------------|-----------------|-------|
+      // | TC-E-02 | toThrow( の閉じ括弧が無い | Error – incomplete call | missing-exception-message が検出される | close paren 不在 |
+      // | TC-E-03 | assert.throws(…, Error) | Error – type only | missing-exception-message が検出される | Error のみ |
+      // | TC-B-03 | assert.throws の参照のみ | Boundary – no call | missing-exception-message が検出されない | "(" なし |
+      // | TC-B-04 | assert.throws + 変数マッチャ | Boundary – unknown matcher | missing-exception-message が検出されない | 変数参照 |
+      // | TC-N-03 | 複雑な assert.throws 引数 | Equivalence – complex args | missing-exception-message が検出されない | コメント/テンプレート含む |
+      // | TC-N-04 | テンプレート式/正規表現 | Equivalence – template expr | missing-exception-message が検出されない | escape/comment/regex |
+      test('TC-E-02: toThrow の閉じ括弧が無い場合でも解析が継続される', () => {
+        // Given: toThrow( の閉じ括弧が無いコード
+        const toThrowOpen = '.to' + 'Throw(';
+        const content = `
+${testFn}('throws error', () => {
+  // Given: setup
+  // When: execute
+  // Then: expect error
+  expect(() => badFunction())${toThrowOpen}
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-exception-message の問題が検出される
+        const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
+        assert.strictEqual(exceptionIssues.length, 1);
+      });
+
+      test('TC-N-03: 複雑な assert.throws 引数でも解析できる', () => {
+        // Given: コメント/テンプレート/正規表現を含む assert.throws
+        const assertThrows = 'assert.' + 'throws';
+        const nestedTemplate = '`a${`' + 'b${c}' + '`}`';
+        const content = `
+${testFn}('complex throws', () => {
+  ${assertThrows}(
+    () => {
+      // line comment
+      const tmpl = ${nestedTemplate};
+      const ok = /err/.test(tmpl);
+      const data = { key: ['x', 'y'] };
+      /* block comment */
+      return ok ? data['key'][0] : null;
+    },
+    { message: 'expected' },
+  );
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-exception-message の問題は検出されない
+        const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
+        assert.strictEqual(exceptionIssues.length, 0);
+      });
+
+      test('TC-B-03: assert.throws の参照だけでは検出しない', () => {
+        // Given: assert.throws を呼び出さないコード
+        const assertThrows = 'assert.' + 'throws';
+        const content = `
+${testFn}('no call', () => {
+  const ref = ${assertThrows};
+  assert.strictEqual(typeof ref, 'function');
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-exception-message の問題は検出されない
+        const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
+        assert.strictEqual(exceptionIssues.length, 0);
+      });
+
+      test('TC-E-03: assert.throws が Error のみを指定すると検出される', () => {
+        // Given: assert.throws の第2引数が Error のみ
+        const assertThrows = 'assert.' + 'throws';
+        const content = `
+${testFn}('type only', () => {
+  ${assertThrows}(() => badFunction(), Error);
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-exception-message の問題が検出される
+        const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
+        assert.strictEqual(exceptionIssues.length, 1);
+      });
+
+      test('TC-B-04: assert.throws の第2引数が変数でも許可される', () => {
+        // Given: 変数参照の matcher を指定した assert.throws
+        const assertThrows = 'assert.' + 'throws';
+        const content = `
+${testFn}('variable matcher', () => {
+  const matcher = (err) => err instanceof Error;
+  ${assertThrows}(() => badFunction(), matcher);
+});
+`;
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-exception-message の問題は検出されない
+        const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
+        assert.strictEqual(exceptionIssues.length, 0);
+      });
+
+      test('TC-N-04: テンプレート式と正規表現を含む assert.throws を解析できる', () => {
+        // Given: テンプレート式内にコメント/正規表現/括弧を含む assert.throws
+        const assertThrows = 'assert.' + 'throws';
+        const content = [
+          `${testFn}('template args', () => {`,
+          `  ${assertThrows}(`,
+          '    () => {',
+          "      const escaped = 'a\\\\n';",
+          '      const quoted = "c\\\\n";',
+          '      const value = 1;',
+          '      const message = `prefix \\\\${(value ? { a: [1, 2] } : [\'x\']) /* block */ // line comment',
+          '      } ${/err/.test(\'err\') ? \'ok\' : "ng"}`;',
+          '      return message;',
+          '    },',
+          '    new RegExp("expected"),',
+          '  );',
+          '});',
+        ].join('\n');
+
+        // When: ファイル内容を分析する
+        const issues = analyzeFileContent('test.test.ts', content);
+
+        // Then: missing-exception-message の問題は検出されない
+        const exceptionIssues = issues.filter((i) => i.type === 'missing-exception-message');
+        assert.strictEqual(exceptionIssues.length, 0);
       });
 
       test('does not report issue when assert.throws has message parameter', () => {
@@ -878,6 +1044,179 @@ ${testFn}(\`should work\`, () => {
     });
   });
 
+  // テスト観点表（追加分）: ファイルI/Oとテーブル生成
+  // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |---------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-N-01 | saveAnalysisReport with valid paths | Equivalence – normal | レポートが保存され absolute/relative パスが返る | 0/min/max/±1 は対象外 |
+  // | TC-N-02 | analyzeTestFiles with two empty files | Equivalence – normal | analyzedFiles=2 で issues が空 | findFiles/readFile の成功経路 |
+  // | TC-N-03 | analyzeFile with readable file | Equivalence – normal | analyzedFiles=1 で issues が空 | 0 は content 内で使用 |
+  // | TC-N-04 | analyzeTestFiles with missing GWT | Equivalence – normal | missing-gwt が検出される | null/undefined/empty は対象外 |
+  // | TC-E-01 | analyzeFile with unreadable file | Error – read failure | analyzedFiles=0 で issues が空 | readFile 例外を捕捉 |
+  // | TC-B-01 | MarkdownTableBuilder without headers | Boundary – empty | build() が空文字を返す | empty header |
+
+  suite('saveAnalysisReport / MarkdownTableBuilder / analyzeFile', () => {
+    test('TC-N-01: saveAnalysisReport がレポートを保存しパスを返す', async () => {
+      // Given: 保存先を含む分析結果
+      const workspaceRoot = path.join(process.cwd(), 'tmp', 'test-analysis-report');
+      const reportDir = 'docs/test-analysis-reports';
+      const result: AnalysisResult = {
+        analyzedFiles: 1,
+        issues: [],
+        summary: {
+          missingGwt: 0,
+          missingBoundary: 0,
+          missingExceptionMessage: 0,
+        },
+        pattern: 'src/test/example.test.ts',
+      };
+
+      // When: saveAnalysisReport を呼び出す
+      const saved = await saveAnalysisReport(workspaceRoot, result, reportDir);
+
+      try {
+        // Then: パスが整合し、ファイルが保存される
+        const expectedRelative = path.relative(workspaceRoot, saved.absolutePath);
+        assert.strictEqual(saved.relativePath, expectedRelative);
+
+        const stat = await vscode.workspace.fs.stat(vscode.Uri.file(saved.absolutePath));
+        assert.ok(stat.size >= 0, 'レポートファイルが存在する');
+
+        const content = (await vscode.workspace.fs.readFile(vscode.Uri.file(saved.absolutePath))).toString();
+        assert.ok(content.includes(result.pattern), 'レポートに対象パターンが含まれる');
+      } finally {
+        // テスト後の後始末
+        await vscode.workspace.fs.delete(vscode.Uri.file(path.join(workspaceRoot, reportDir)), { recursive: true, useTrash: false });
+      }
+    });
+
+    test('TC-N-02: analyzeTestFiles は複数ファイルを解析する', async () => {
+      // Given: findFiles で2件の空ファイルが返る
+      const workspaceRoot = path.join(process.cwd(), 'tmp', 'test-analysis-findfiles');
+      const files = [
+        path.join(workspaceRoot, 'a.test.ts'),
+        path.join(workspaceRoot, 'b.test.ts'),
+      ];
+      const originalFindFiles = vscode.workspace.findFiles;
+      const restoreFs = stubFileSystem(
+        (fsPath) => files.includes(fsPath),
+        () => Buffer.from('', 'utf8'),
+      );
+      (vscode.workspace as unknown as { findFiles?: typeof vscode.workspace.findFiles }).findFiles = async () =>
+        files.map((filePath) => vscode.Uri.file(filePath));
+
+      try {
+        // When: analyzeTestFiles を呼び出す
+        const result = await analyzeTestFiles(workspaceRoot, 'src/test/**/*.test.ts');
+
+        // Then: analyzedFiles が一致し、issues は空
+        assert.strictEqual(result.analyzedFiles, 2);
+        assert.strictEqual(result.issues.length, 0);
+        assert.strictEqual(result.pattern, 'src/test/**/*.test.ts');
+      } finally {
+        restoreFs();
+        (vscode.workspace as unknown as { findFiles?: typeof vscode.workspace.findFiles }).findFiles = originalFindFiles;
+      }
+    });
+
+    test('TC-N-03: analyzeFile は読み取り成功時に analyzedFiles=1 を返す', async () => {
+      // Given: 読み取れるファイル
+      const workspaceRoot = process.cwd();
+      const dirPath = path.join(workspaceRoot, 'tmp', 'test-analysis-readable');
+      const filePath = path.join(dirPath, 'readable.test.ts');
+      const content = `
+${testFn}('has gwt and boundary', () => {
+  // Given: setup
+  // When: execute
+  // Then: verify
+  const value = 0;
+  assert.ok(value === 0);
+  assert.strictEqual(value, 0);
+});
+`;
+
+      try {
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath));
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(filePath), Buffer.from(content, 'utf8'));
+
+        // When: analyzeFile を呼び出す
+        const result = await analyzeFile(filePath, workspaceRoot);
+
+        // Then: analyzedFiles=1 で issues が空
+        assert.strictEqual(result.analyzedFiles, 1);
+        assert.strictEqual(result.issues.length, 0);
+        assert.strictEqual(result.pattern, path.relative(workspaceRoot, filePath));
+      } finally {
+        await vscode.workspace.fs.delete(vscode.Uri.file(dirPath), { recursive: true, useTrash: false });
+      }
+    });
+
+    test('TC-N-04: analyzeTestFiles は missing-gwt を検出する', async () => {
+      // Given: Given/When/Then がないテストファイル
+      const workspaceRoot = path.join(process.cwd(), 'tmp', 'test-analysis-gwt');
+      const filePath = path.join(workspaceRoot, 'gwt-missing.test.ts');
+      const content = `
+${testFn}('missing gwt', () => {
+  const value = null;
+  assert.strictEqual(value, null);
+});
+`;
+      const originalFindFiles = vscode.workspace.findFiles;
+      (vscode.workspace as unknown as { findFiles?: typeof vscode.workspace.findFiles }).findFiles = async () => [
+        vscode.Uri.file(filePath),
+      ];
+
+      try {
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(workspaceRoot));
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(filePath), Buffer.from(content, 'utf8'));
+
+        // When: analyzeTestFiles を呼び出す
+        const result = await analyzeTestFiles(workspaceRoot, 'src/test/**/*.test.ts');
+
+        // Then: missing-gwt が検出される
+        const gwtIssues = result.issues.filter((issue) => issue.type === 'missing-gwt');
+        assert.strictEqual(result.analyzedFiles, 1);
+        assert.strictEqual(gwtIssues.length, 1);
+      } finally {
+        await vscode.workspace.fs.delete(vscode.Uri.file(workspaceRoot), { recursive: true, useTrash: false });
+        (vscode.workspace as unknown as { findFiles?: typeof vscode.workspace.findFiles }).findFiles = originalFindFiles;
+      }
+    });
+
+    test('TC-E-01: 読み取り失敗時は analyzedFiles=0 になる', async () => {
+      // Given: 読み取りに失敗するファイル
+      const restoreFs = stubFileSystem(() => false, () => new Uint8Array());
+      const filePath = path.join(process.cwd(), 'tmp', 'missing.test.ts');
+      const workspaceRoot = process.cwd();
+
+      try {
+        // When: analyzeFile を呼び出す
+        const result = await analyzeFile(filePath, workspaceRoot);
+
+        // Then: analyzedFiles=0 で issues が空
+        assert.strictEqual(result.analyzedFiles, 0);
+        assert.strictEqual(result.issues.length, 0);
+      } finally {
+        restoreFs();
+      }
+    });
+
+    test('TC-B-01: MarkdownTableBuilder はヘッダー未設定で空文字を返す', () => {
+      // Given: ヘッダー未設定の MarkdownTableBuilder
+      const builder = new MarkdownTableBuilder();
+
+      // When: build を呼び出す
+      const result = builder.build();
+
+      // Then: 空文字が返る
+      assert.strictEqual(result, '');
+    });
+  });
+
+  // テスト観点表（追加分）: getAnalysisSettings
+  // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |---------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-N-05 | config has trimmed values | Equivalence – normal | trim 済みの値が返る | empty/null/undefined は対象外 |
+  // | TC-B-02 | config values undefined/null | Boundary – null/undefined | デフォルト値が返る | null/undefined を確認 |
   suite('getAnalysisSettings', () => {
     test('TC-TA-N-01: returns default settings when no configuration is set', () => {
       // Given: デフォルト設定（特別な設定なし）
@@ -889,6 +1228,127 @@ ${testFn}(\`should work\`, () => {
       assert.ok(typeof settings.testFilePattern === 'string');
       assert.ok(settings.reportDir.length > 0);
       assert.ok(settings.testFilePattern.length > 0);
+    });
+
+    test('TC-N-05: 設定値が trim されて返る', () => {
+      // Given: trim が必要な設定値
+      const restoreConfig = stubConfiguration({
+        'dontforgetest.analysisReportDir': '  docs/custom-reports  ',
+        'dontforgetest.analysisTestFilePattern': '  src/test/**/*.spec.ts  ',
+      });
+
+      try {
+        // When: getAnalysisSettings を呼び出す
+        const settings = getAnalysisSettings();
+
+        // Then: trim 済みの値が返る
+        assert.strictEqual(settings.reportDir, 'docs/custom-reports');
+        assert.strictEqual(settings.testFilePattern, 'src/test/**/*.spec.ts');
+      } finally {
+        restoreConfig();
+      }
+    });
+
+    test('TC-B-02: undefined/null 設定はデフォルトへフォールバックする', () => {
+      // Given: undefined/null の設定値
+      const restoreConfig = stubConfiguration({
+        'dontforgetest.analysisReportDir': undefined,
+        'dontforgetest.analysisTestFilePattern': null,
+      });
+
+      try {
+        // When: getAnalysisSettings を呼び出す
+        const settings = getAnalysisSettings();
+
+        // Then: デフォルト値が返る
+        assert.strictEqual(settings.reportDir, 'docs/test-analysis-reports');
+        assert.strictEqual(settings.testFilePattern, 'src/test/**/*.test.ts');
+      } finally {
+        restoreConfig();
+      }
+    });
+  });
+
+  // テスト観点表（追加分）: indexToLineNumber
+  // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |---------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-B-03 | index=0 | Boundary – zero | 行番号=1 を返す | 0 を確認 |
+  // | TC-B-04 | index=-1 | Boundary – min-1 | 行番号=1 を返す | min-1 を確認 |
+  // | TC-B-05 | index=last | Boundary – max | 最終行番号を返す | max を確認 |
+  suite('indexToLineNumber (internal)', () => {
+    test('TC-B-03: index=0 で行番号 1 を返す', () => {
+      // Given: 2行の入力
+      const content = 'line1\nline2';
+      const indices = testAnalyzerTest.buildLineStartIndices(content);
+
+      // When: index=0 を渡す
+      const line = testAnalyzerTest.indexToLineNumber(indices, 0);
+
+      // Then: 行番号 1 が返る
+      assert.strictEqual(line, 1);
+    });
+
+    test('TC-B-04: index=-1 でも行番号 1 を返す', () => {
+      // Given: 2行の入力
+      const content = 'line1\nline2';
+      const indices = testAnalyzerTest.buildLineStartIndices(content);
+
+      // When: index=-1 を渡す
+      const line = testAnalyzerTest.indexToLineNumber(indices, -1);
+
+      // Then: 行番号 1 が返る（fallback）
+      assert.strictEqual(line, 1);
+    });
+
+    test('TC-B-05: index=last で最終行番号を返す', () => {
+      // Given: 2行の入力
+      const content = 'line1\nline2';
+      const indices = testAnalyzerTest.buildLineStartIndices(content);
+
+      // When: 最終文字の index を渡す
+      const line = testAnalyzerTest.indexToLineNumber(indices, content.length - 1);
+
+      // Then: 行番号 2 が返る
+      assert.strictEqual(line, 2);
+    });
+  });
+
+  // テスト観点表（追加分）: Issue formatter line
+  // | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |---------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-B-06 | GwtIssueFormatter issue.line=undefined | Boundary – undefined | line が '-' になる | undefined |
+  // | TC-B-07 | ExceptionIssueFormatter issue.line=undefined | Boundary – undefined | line が '-' になる | undefined |
+  suite('Issue formatter (internal)', () => {
+    test('TC-B-06: GwtIssueFormatter は line 未設定を "-" で出力する', () => {
+      // Given: line が undefined の issue
+      const formatter = new GwtIssueFormatter();
+      const issue: AnalysisIssue = {
+        type: 'missing-gwt',
+        file: 'sample.test.ts',
+        detail: 'missing',
+      };
+
+      // When: formatIssueRow を呼び出す
+      const row = formatter.formatIssueRow(issue);
+
+      // Then: line が '-' になる
+      assert.strictEqual(row[1], '-');
+    });
+
+    test('TC-B-07: ExceptionIssueFormatter は line 未設定を "-" で出力する', () => {
+      // Given: line が undefined の issue
+      const formatter = new ExceptionIssueFormatter();
+      const issue: AnalysisIssue = {
+        type: 'missing-exception-message',
+        file: 'sample.test.ts',
+        detail: 'missing',
+      };
+
+      // When: formatIssueRow を呼び出す
+      const row = formatter.formatIssueRow(issue);
+
+      // Then: line が '-' になる
+      assert.strictEqual(row[1], '-');
     });
   });
 
@@ -990,6 +1450,13 @@ ${testFn}(\`should work\`, () => {
     });
   });
 
+  // === formatLocalIso8601WithOffset テスト観点表 ===
+  // | Case ID       | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+  // |---------------|----------------------|--------------------------------------|-----------------|-------|
+  // | TC-FMT-N-01   | milliseconds=5       | Equivalence – normal                 | .005 になる     | -     |
+  // | TC-FMT-N-02   | milliseconds=50      | Equivalence – normal                 | .050 になる     | -     |
+  // | TC-FMT-N-03   | milliseconds=500     | Equivalence – normal                 | .500 になる     | -     |
+  // | TC-FMT-B-01   | timezone offset=+90  | Boundary – positive offset           | 時差が '-' 表記 | null/undefined は対象外 |
   suite('formatLocalIso8601WithOffset (internal)', () => {
     test('TC-FMT-N-01: formats date with milliseconds < 10', () => {
       // Given: ミリ秒が 5 の Date オブジェクト
@@ -1016,6 +1483,21 @@ ${testFn}(\`should work\`, () => {
       const result = testAnalyzerTest.formatLocalIso8601WithOffset(date);
       // Then: ミリ秒部分が '500' でそのまま出力される
       assert.ok(result.includes('.500'), `Expected .500 in result: ${result}`);
+    });
+
+    test('TC-FMT-B-01: timezone offset が正のとき負の符号が付く', () => {
+      // Given: timezone offset を +90 分にした Date
+      const date = new Date(2024, 0, 15, 10, 30, 45, 500);
+      Object.defineProperty(date, 'getTimezoneOffset', {
+        value: () => 90,
+        configurable: true,
+      });
+
+      // When: formatLocalIso8601WithOffset を呼び出す
+      const result = testAnalyzerTest.formatLocalIso8601WithOffset(date);
+
+      // Then: オフセットが "-01:30" になる
+      assert.ok(result.endsWith('-01:30'), `Expected -01:30 in result: ${result}`);
     });
   });
 });

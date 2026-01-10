@@ -323,6 +323,19 @@ export class GeminiCliProvider implements AgentProvider {
   }
 }
 
+/**
+ * テスト専用の内部エクスポート。
+ * 本番利用は禁止。
+ */
+export const __test__ = {
+  tryParseJson,
+  asRecord,
+  extractMessageText,
+  extractToolResultOutput,
+  normalizeGeminiMessage,
+  toWorkspaceRelative,
+};
+
 function tryParseJson(line: string): Record<string, unknown> | undefined {
   try {
     const parsed: unknown = JSON.parse(line);

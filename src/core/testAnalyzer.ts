@@ -1477,4 +1477,6 @@ export const __test__ = {
   pad2,
   pad3,
   formatLocalIso8601WithOffset,
+  buildLineStartIndices,
+  indexToLineNumber,
 };
