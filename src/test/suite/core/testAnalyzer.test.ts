@@ -3,6 +3,7 @@ import {
   analyzeFileContent,
   buildAnalysisReportMarkdown,
   getAnalysisSettings,
+  __test__ as testAnalyzerTest,
   type AnalysisIssue,
   type AnalysisResult,
 } from '../../../core/testAnalyzer';
@@ -888,6 +889,88 @@ ${testFn}(\`should work\`, () => {
       assert.ok(typeof settings.testFilePattern === 'string');
       assert.ok(settings.reportDir.length > 0);
       assert.ok(settings.testFilePattern.length > 0);
+    });
+  });
+
+  // ============================================
+  // テスト観点表: pad3 (ミリ秒ゼロ埋め)
+  // ============================================
+  // | Case ID       | Input / Precondition | Perspective (Boundary)     | Expected Result | Notes            |
+  // |---------------|----------------------|----------------------------|-----------------|------------------|
+  // | TC-PAD3-B-01  | n = 0                | Boundary – n < 10          | '000'           | 最小値           |
+  // | TC-PAD3-B-02  | n = 9                | Boundary – n < 10          | '009'           | n < 10 の上限    |
+  // | TC-PAD3-B-03  | n = 10               | Boundary – 10 <= n < 100   | '010'           | n >= 10 の下限   |
+  // | TC-PAD3-B-04  | n = 99               | Boundary – 10 <= n < 100   | '099'           | n < 100 の上限   |
+  // | TC-PAD3-B-05  | n = 100              | Boundary – n >= 100        | '100'           | n >= 100 の下限  |
+  // | TC-PAD3-B-06  | n = 999              | Boundary – n >= 100        | '999'           | ミリ秒最大値     |
+
+  suite('__test__.pad3', () => {
+    const { pad3 } = testAnalyzerTest;
+
+    test('TC-PAD3-B-01: n = 0 の場合 "000" を返す', () => {
+      // Given: n = 0 (最小値)
+      const n = 0;
+
+      // When: pad3 を呼び出す
+      const result = pad3(n);
+
+      // Then: '000' が返される
+      assert.strictEqual(result, '000');
+    });
+
+    test('TC-PAD3-B-02: n = 9 の場合 "009" を返す', () => {
+      // Given: n = 9 (n < 10 の上限)
+      const n = 9;
+
+      // When: pad3 を呼び出す
+      const result = pad3(n);
+
+      // Then: '009' が返される
+      assert.strictEqual(result, '009');
+    });
+
+    test('TC-PAD3-B-03: n = 10 の場合 "010" を返す', () => {
+      // Given: n = 10 (n >= 10 の下限)
+      const n = 10;
+
+      // When: pad3 を呼び出す
+      const result = pad3(n);
+
+      // Then: '010' が返される
+      assert.strictEqual(result, '010');
+    });
+
+    test('TC-PAD3-B-04: n = 99 の場合 "099" を返す', () => {
+      // Given: n = 99 (n < 100 の上限)
+      const n = 99;
+
+      // When: pad3 を呼び出す
+      const result = pad3(n);
+
+      // Then: '099' が返される
+      assert.strictEqual(result, '099');
+    });
+
+    test('TC-PAD3-B-05: n = 100 の場合 "100" を返す', () => {
+      // Given: n = 100 (n >= 100 の下限)
+      const n = 100;
+
+      // When: pad3 を呼び出す
+      const result = pad3(n);
+
+      // Then: '100' が返される
+      assert.strictEqual(result, '100');
+    });
+
+    test('TC-PAD3-B-06: n = 999 の場合 "999" を返す', () => {
+      // Given: n = 999 (ミリ秒最大値)
+      const n = 999;
+
+      // When: pad3 を呼び出す
+      const result = pad3(n);
+
+      // Then: '999' が返される
+      assert.strictEqual(result, '999');
     });
   });
 });

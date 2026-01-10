@@ -1224,4 +1224,169 @@ suite('ClaudeCodeProvider', () => {
       assert.ok(startedEvent !== undefined, 'started event should be emitted');
     });
   });
+
+  // ============================================
+  // テスト観点表: extractAssistantText (メッセージからテキスト抽出)
+  // ============================================
+  // | Case ID         | Input / Precondition            | Perspective (Equivalence / Boundary) | Expected Result | Notes              |
+  // |-----------------|---------------------------------|--------------------------------------|-----------------|-------------------|
+  // | TC-EAT-E-01     | message = null                  | Error – null 入力                   | undefined       | asRecord が falsy |
+  // | TC-EAT-E-02     | message = undefined             | Error – undefined 入力              | undefined       | asRecord が falsy |
+  // | TC-EAT-E-03     | message = "string"              | Error – プリミティブ入力            | undefined       | asRecord が falsy |
+  // | TC-EAT-E-04     | message = 123                   | Error – 数値入力                    | undefined       | asRecord が falsy |
+  // | TC-EAT-E-05     | message.content = undefined     | Error – content なし                | undefined       | 配列でない        |
+  // | TC-EAT-E-06     | message.content = []            | Error – 空配列                      | undefined       | length === 0      |
+  // | TC-EAT-E-07     | message.content = ["string"]    | Error – first が Record でない      | undefined       | asRecord が falsy |
+  // | TC-EAT-E-08     | message.content[0].text = 123   | Error – text が string でない       | undefined       | typeof !== string |
+  // | TC-EAT-N-01     | 正常なメッセージ                | Equivalence – 正常系                | テキスト        | -                 |
+
+  suite('__test__.extractAssistantText', () => {
+    const { extractAssistantText } = claudeCodeProviderTest;
+
+    test('TC-EAT-E-01: message = null の場合 undefined を返す', () => {
+      // Given: message が null
+      const message = null;
+
+      // When: extractAssistantText を呼び出す
+      const result = extractAssistantText(message);
+
+      // Then: undefined が返される
+      assert.strictEqual(result, undefined);
+    });
+
+    test('TC-EAT-E-02: message = undefined の場合 undefined を返す', () => {
+      // Given: message が undefined
+      const message = undefined;
+
+      // When: extractAssistantText を呼び出す
+      const result = extractAssistantText(message);
+
+      // Then: undefined が返される
+      assert.strictEqual(result, undefined);
+    });
+
+    test('TC-EAT-E-03: message が文字列の場合 undefined を返す', () => {
+      // Given: message がプリミティブ (string)
+      const message = 'string value';
+
+      // When: extractAssistantText を呼び出す
+      const result = extractAssistantText(message);
+
+      // Then: undefined が返される
+      assert.strictEqual(result, undefined);
+    });
+
+    test('TC-EAT-E-04: message が数値の場合 undefined を返す', () => {
+      // Given: message がプリミティブ (number)
+      const message = 123;
+
+      // When: extractAssistantText を呼び出す
+      const result = extractAssistantText(message);
+
+      // Then: undefined が返される
+      assert.strictEqual(result, undefined);
+    });
+
+    test('TC-EAT-E-05: message.content が undefined の場合 undefined を返す', () => {
+      // Given: content プロパティがないオブジェクト
+      const message = { role: 'assistant' };
+
+      // When: extractAssistantText を呼び出す
+      const result = extractAssistantText(message);
+
+      // Then: undefined が返される
+      assert.strictEqual(result, undefined);
+    });
+
+    test('TC-EAT-E-06: message.content が空配列の場合 undefined を返す', () => {
+      // Given: content が空配列
+      const message = { content: [] };
+
+      // When: extractAssistantText を呼び出す
+      const result = extractAssistantText(message);
+
+      // Then: undefined が返される
+      assert.strictEqual(result, undefined);
+    });
+
+    test('TC-EAT-E-07: message.content[0] が Record でない場合 undefined を返す', () => {
+      // Given: content[0] がプリミティブ
+      const message = { content: ['string element'] };
+
+      // When: extractAssistantText を呼び出す
+      const result = extractAssistantText(message);
+
+      // Then: undefined が返される
+      assert.strictEqual(result, undefined);
+    });
+
+    test('TC-EAT-E-08: message.content[0].text が string でない場合 undefined を返す', () => {
+      // Given: text が数値
+      const message = { content: [{ text: 123 }] };
+
+      // When: extractAssistantText を呼び出す
+      const result = extractAssistantText(message);
+
+      // Then: undefined が返される
+      assert.strictEqual(result, undefined);
+    });
+
+    test('TC-EAT-N-01: 正常なメッセージからテキストを抽出する', () => {
+      // Given: 正常な構造のメッセージ
+      const message = { content: [{ text: 'Hello, world!' }] };
+
+      // When: extractAssistantText を呼び出す
+      const result = extractAssistantText(message);
+
+      // Then: テキストが返される
+      assert.strictEqual(result, 'Hello, world!');
+    });
+  });
+
+  // ============================================
+  // テスト観点表: toWorkspaceRelative (パスの相対化)
+  // ============================================
+  // | Case ID         | Input / Precondition                | Perspective (Equivalence / Boundary) | Expected Result      | Notes              |
+  // |-----------------|-------------------------------------|--------------------------------------|----------------------|-------------------|
+  // | TC-TWR-B-01     | 相対パス入力                        | Boundary – 非絶対パス                | そのまま返す         | isAbsolute = false |
+  // | TC-TWR-N-01     | workspace 内の絶対パス              | Equivalence – 正常系                 | 相対パス             | -                 |
+  // | TC-TWR-E-01     | workspace 外の絶対パス              | Error – 外部パス                     | undefined            | '..' で始まる      |
+
+  suite('__test__.toWorkspaceRelative', () => {
+    const { toWorkspaceRelative } = claudeCodeProviderTest;
+    const workspaceRoot = path.resolve('/workspace/project');
+
+    test('TC-TWR-B-01: 相対パス入力の場合そのまま返す', () => {
+      // Given: 相対パス
+      const filePath = 'src/file.ts';
+
+      // When: toWorkspaceRelative を呼び出す
+      const result = toWorkspaceRelative(filePath, workspaceRoot);
+
+      // Then: そのまま返される
+      assert.strictEqual(result, 'src/file.ts');
+    });
+
+    test('TC-TWR-N-01: workspace 内の絶対パスから相対パスを返す', () => {
+      // Given: workspace 内の絶対パス
+      const filePath = path.join(workspaceRoot, 'src', 'file.ts');
+
+      // When: toWorkspaceRelative を呼び出す
+      const result = toWorkspaceRelative(filePath, workspaceRoot);
+
+      // Then: 相対パスが返される
+      assert.strictEqual(result, path.join('src', 'file.ts'));
+    });
+
+    test('TC-TWR-E-01: workspace 外の絶対パスの場合 undefined を返す', () => {
+      // Given: workspace 外の絶対パス
+      const filePath = path.resolve(workspaceRoot, '..', 'outside', 'file.ts');
+
+      // When: toWorkspaceRelative を呼び出す
+      const result = toWorkspaceRelative(filePath, workspaceRoot);
+
+      // Then: undefined が返される
+      assert.strictEqual(result, undefined);
+    });
+  });
 });

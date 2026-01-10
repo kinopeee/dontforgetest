@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { buildCodeOnlyContent, hasEmptyStringLiteralInCode } from '../../../core/codeOnlyText';
+import { buildCodeOnlyContent, hasEmptyStringLiteralInCode, isRegexStart } from '../../../core/codeOnlyText';
 
 suite('codeOnlyText', () => {
   suite('buildCodeOnlyContent', () => {
@@ -685,6 +685,154 @@ function test() {
         // Then: true が返される
         assert.strictEqual(result, true);
       });
+    });
+  });
+
+  // ============================================
+  // テスト観点表: isRegexStart (正規表現開始判定)
+  // ============================================
+  // | Case ID         | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes                     |
+  // |-----------------|----------------------|--------------------------------------|-----------------|--------------------------|
+  // | TC-IRS-B-01     | lastNonWsChar = ''   | Boundary – 空文字（行頭/開始）       | true            | 正規表現の可能性あり     |
+  // | TC-IRS-N-01     | lastNonWsChar = '('  | Equivalence – 演算子/区切り記号      | true            | REGEX_PRECEDING_CHARS    |
+  // | TC-IRS-N-02     | lastNonWsChar = '='  | Equivalence – 代入演算子             | true            | REGEX_PRECEDING_CHARS    |
+  // | TC-IRS-E-01     | lastNonWsChar = ')'  | Error – 識別子/リテラル終端          | false           | 除算として解釈           |
+  // | TC-IRS-E-02     | lastNonWsChar = 'x'  | Error – 識別子文字                   | false           | 除算として解釈           |
+
+  suite('isRegexStart', () => {
+    test('TC-IRS-B-01: 空文字（行頭/開始時）は正規表現の開始と判定する', () => {
+      // Given: 空文字（行頭または開始時点）
+      const lastNonWsChar = '';
+
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart(lastNonWsChar);
+
+      // Then: true が返される
+      assert.strictEqual(result, true);
+    });
+
+    test('TC-IRS-N-01: "(" の後は正規表現の開始と判定する', () => {
+      // Given: 開き括弧の後
+      const lastNonWsChar = '(';
+
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart(lastNonWsChar);
+
+      // Then: true が返される
+      assert.strictEqual(result, true);
+    });
+
+    test('TC-IRS-N-02: "=" の後は正規表現の開始と判定する', () => {
+      // Given: 代入演算子の後
+      const lastNonWsChar = '=';
+
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart(lastNonWsChar);
+
+      // Then: true が返される
+      assert.strictEqual(result, true);
+    });
+
+    test('TC-IRS-E-01: ")" の後は正規表現の開始と判定しない', () => {
+      // Given: 閉じ括弧の後（除算の可能性が高い）
+      const lastNonWsChar = ')';
+
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart(lastNonWsChar);
+
+      // Then: false が返される
+      assert.strictEqual(result, false);
+    });
+
+    test('TC-IRS-E-02: 識別子文字の後は正規表現の開始と判定しない', () => {
+      // Given: 識別子文字の後
+      const lastNonWsChar = 'x';
+
+      // When: isRegexStart を呼び出す
+      const result = isRegexStart(lastNonWsChar);
+
+      // Then: false が返される
+      assert.strictEqual(result, false);
+    });
+  });
+
+  // ============================================
+  // テスト観点表: buildCodeOnlyContent (追加の分岐カバレッジ)
+  // ============================================
+  // | Case ID         | Input / Precondition                    | Perspective (Boundary)                | Expected Result         | Notes                          |
+  // |-----------------|-----------------------------------------|---------------------------------------|-------------------------|-------------------------------|
+  // | TC-COC-B-01     | 正規表現リテラル内で改行                | Boundary – 正規表現の異常終了         | 改行後はコードに復帰    | 549行のカバー                 |
+  // | TC-COC-B-02     | 複数文字の正規表現フラグ                | Boundary – フラグ部分スキップ         | フラグ全体を処理        | 558-559行のカバー             |
+  // | TC-COC-B-03     | テンプレート式内のネストした `{}`       | Boundary – braceDepth > 0 で `}`      | 式内のコードを維持      | 538行のカバー                 |
+  // | TC-COC-N-01     | 行頭から始まる正規表現                  | Equivalence – 行頭で /                | 正規表現として認識      | isRegexStart('')のカバー      |
+
+  suite('buildCodeOnlyContent (additional branch coverage)', () => {
+    test('TC-COC-B-01: 正規表現リテラル内で改行がある場合、改行後はコードに復帰する', () => {
+      // Given: 正規表現リテラル内に改行がある（構文的には不正だが、lexer の挙動を確認）
+      const content = 'const x = /regex\nconst y = 1;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 改行後のコードが保持される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(result.includes('const y = 1;'));
+    });
+
+    test('TC-COC-B-02: 複数文字の正規表現フラグ全体が処理される', () => {
+      // Given: 複数フラグを持つ正規表現
+      const content = 'const x = /pattern/gimsuy; const y = 1;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 正規表現パターンとフラグが空白化され、後続コードは保持される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(!result.includes('pattern'));
+      assert.ok(!result.includes('gimsuy'));
+      assert.ok(result.includes('const y = 1;'));
+    });
+
+    test('TC-COC-B-03: テンプレート式内でネストした波括弧があっても正しく処理する', () => {
+      // Given: テンプレート式内にオブジェクトリテラルがある（braceDepth が 1 より大きくなる）
+      const content = 'const x = `result: ${JSON.stringify({ a: 1, b: 2 })}`; const y = 1;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 式内のコードは保持され、テンプレート文字列部分は空白化される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(result.includes('JSON.stringify({ a: 1, b: 2 })'));
+      assert.ok(result.includes('const y = 1;'));
+      assert.ok(!result.includes('result:'));
+    });
+
+    test('TC-COC-N-01: 行頭から始まる正規表現が正しく認識される', () => {
+      // Given: 行頭から正規表現が始まるコード
+      const content = '/pattern/.test(str);';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 正規表現パターンが空白化され、メソッド呼び出しは保持される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(!result.includes('pattern'));
+      assert.ok(result.includes('.test(str);'));
+    });
+
+    test('TC-COC-B-04: 複数回のテンプレート式でネストした波括弧を処理する', () => {
+      // Given: 複数の式と深いネストを持つテンプレートリテラル
+      const content = 'const x = `${(() => { return { x: 1 }; })()} and ${fn({ y: 2 })}`; const z = 1;';
+
+      // When: codeOnlyContent を生成する
+      const result = buildCodeOnlyContent(content);
+
+      // Then: 式内のコードは保持され、文字列部分は空白化される
+      assert.strictEqual(result.length, content.length);
+      assert.ok(result.includes('return { x: 1 };'));
+      assert.ok(result.includes('fn({ y: 2 })'));
+      assert.ok(result.includes('const z = 1;'));
+      assert.ok(!result.includes(' and '));
     });
   });
 });
