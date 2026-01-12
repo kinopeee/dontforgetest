@@ -330,7 +330,7 @@ suite('core/modelSettings.ts', () => {
     test('MS-N-15: copilotCli の場合は Copilot 用候補を返す', () => {
       // Given: provider is 'copilotCli'
       const settings: ModelSettings = {
-        defaultModel: 'gpt-4o',
+        defaultModel: 'gpt-5',
         customModels: ['custom-copilot'],
       };
 
@@ -338,7 +338,7 @@ suite('core/modelSettings.ts', () => {
       const result = getModelCandidatesForProvider('copilotCli', settings);
 
       // Then: Returns models suitable for Copilot CLI
-      assert.ok(result.includes('gpt-4o'), 'Should include gpt-4o');
+      assert.ok(result.includes('gpt-5'), 'Should include gpt-5');
       assert.ok(result.includes('custom-copilot'), 'Should include custom-copilot');
     });
 
@@ -499,17 +499,17 @@ suite('core/modelSettings.ts', () => {
     });
 
     test('TC-N-17: copilotCli with defaultModel in candidates returns that model', () => {
-      // Given: defaultModel is 'gpt-4o' which is a Copilot candidate
+      // Given: defaultModel is 'gpt-5' which is a Copilot candidate
       const settings: ModelSettings = {
-        defaultModel: 'gpt-4o',
+        defaultModel: 'gpt-5',
         customModels: [],
       };
 
       // When: getEffectiveDefaultModel is called
       const result = getEffectiveDefaultModel('copilotCli', settings);
 
-      // Then: Returns 'gpt-4o'
-      assert.strictEqual(result, 'gpt-4o');
+      // Then: Returns 'gpt-5'
+      assert.strictEqual(result, 'gpt-5');
     });
   });
 
@@ -582,10 +582,10 @@ suite('core/modelSettings.ts', () => {
       // When: getModelCandidatesForProvider('copilotCli', settings) is called
       const result = getModelCandidatesForProvider('copilotCli', settings);
       // Then: Includes Copilot builtin models
-      assert.ok(result.includes('gpt-4o'), 'Should include gpt-4o');
-      assert.ok(result.includes('claude-3.5-sonnet'), 'Should include claude-3.5-sonnet');
-      assert.ok(result.includes('o3-mini'), 'Should include o3-mini');
-      assert.ok(result.includes('gemini-2.0-flash'), 'Should include gemini-2.0-flash');
+      assert.ok(result.includes('gpt-5'), 'Should include gpt-5');
+      assert.ok(result.includes('claude-sonnet-4'), 'Should include claude-sonnet-4');
+      assert.ok(result.includes('gpt-4.1'), 'Should include gpt-4.1');
+      assert.ok(result.includes('gemini-3-pro-preview'), 'Should include gemini-3-pro-preview');
     });
 
     test('MS-N-17: defaultModel がビルトインに無い場合は追加される', () => {

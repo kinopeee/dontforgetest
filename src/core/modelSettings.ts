@@ -276,13 +276,16 @@ export function getCodexCliModelCandidates(settings: ModelSettings = getModelSet
  *
  * NOTE:
  * - `copilot --help` の `--model` オプションから確認
- * - CLI 側のモデル一覧は変動し得るため、ここは最小限に留める
+ * - CLI 側のモデル一覧は変動し得るため、主要なものに留める
  */
 const COPILOT_CLI_BUILTIN_MODELS = [
-  'gpt-4o',
-  'claude-3.5-sonnet',
-  'o3-mini',
-  'gemini-2.0-flash',
+  'gpt-5',
+  'gpt-5.1',
+  'gpt-5.1-codex',
+  'gpt-4.1',
+  'claude-sonnet-4',
+  'claude-sonnet-4.5',
+  'gemini-3-pro-preview',
 ] as const;
 
 /**
