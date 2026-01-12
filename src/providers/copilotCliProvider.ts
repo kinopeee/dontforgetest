@@ -85,7 +85,8 @@ export class CopilotCliProvider implements AgentProvider {
 
     // 出力をスクリプト向けに寄せる
     args.push('--silent');
-    args.push('--stream', 'off');
+    // NOTE: Copilot CLI のドキュメントに合わせて `--stream=off` を 1 引数で渡す
+    args.push('--stream=off');
     args.push('--no-color');
     args.push('--no-auto-update');
     args.push('--no-custom-instructions');
@@ -99,7 +100,8 @@ export class CopilotCliProvider implements AgentProvider {
 
     // shell 実行を許可（testExecutionRunner で Bash が必要 - Claude Code と同じ方針）
     // preTestCheck や testExecutionRunner=cursorAgent でシェルコマンド実行が必要なため
-    args.push('--allow-tool', 'shell(command:*)');
+    // NOTE: `shell(command:*)` のようなパターンは非公式なため、ドキュメントにある `shell` を使用する
+    args.push('--allow-tool', 'shell');
 
     // allowWrite に応じてファイル書き込みを許可/拒否する
     if (options.allowWrite) {

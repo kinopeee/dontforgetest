@@ -275,8 +275,8 @@ export function getCodexCliModelCandidates(settings: ModelSettings = getModelSet
  * Copilot CLI 用のビルトインモデル候補リスト（UI 用のヒント）。
  *
  * NOTE:
- * - `copilot --help` の `--model` オプションから確認
- * - CLI 側のモデル一覧は変動し得るため、主要なものに留める
+ * - Copilot CLI / Copilot の公開情報や help 出力を参考にした「候補例」
+ * - CLI 側の仕様（利用可能モデルや切り替え可否）は変動し得るため、主要なものに留める
  * - ヘッドレスモード（-p）で有効化なしに使えるモデルを先頭に配置
  * - claude-haiku-4.5 等は対話モードでの有効化が必要なため除外
  */
