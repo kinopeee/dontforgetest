@@ -581,11 +581,12 @@ suite('core/modelSettings.ts', () => {
 
       // When: getModelCandidatesForProvider('copilotCli', settings) is called
       const result = getModelCandidatesForProvider('copilotCli', settings);
-      // Then: Includes Copilot builtin models
-      assert.ok(result.includes('gpt-5'), 'Should include gpt-5');
-      assert.ok(result.includes('claude-sonnet-4'), 'Should include claude-sonnet-4');
-      assert.ok(result.includes('gpt-4.1'), 'Should include gpt-4.1');
-      assert.ok(result.includes('gemini-3-pro-preview'), 'Should include gemini-3-pro-preview');
+      // Then: Includes Copilot builtin models (free tier first, then paid)
+      assert.ok(result.includes('gpt-5-mini'), 'Should include gpt-5-mini (free tier)');
+      assert.ok(result.includes('gpt-4.1'), 'Should include gpt-4.1 (free tier)');
+      assert.ok(result.includes('claude-haiku-4.5'), 'Should include claude-haiku-4.5 (free tier)');
+      assert.ok(result.includes('gpt-5'), 'Should include gpt-5 (paid tier)');
+      assert.ok(result.includes('claude-sonnet-4'), 'Should include claude-sonnet-4 (paid tier)');
     });
 
     test('MS-N-17: defaultModel がビルトインに無い場合は追加される', () => {
