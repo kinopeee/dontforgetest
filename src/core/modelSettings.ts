@@ -277,13 +277,13 @@ export function getCodexCliModelCandidates(settings: ModelSettings = getModelSet
  * NOTE:
  * - `copilot --help` の `--model` オプションから確認
  * - CLI 側のモデル一覧は変動し得るため、主要なものに留める
- * - 無料版で利用可能なモデルを先頭に配置
+ * - ヘッドレスモード（-p）で有効化なしに使えるモデルを先頭に配置
+ * - claude-haiku-4.5 等は対話モードでの有効化が必要なため除外
  */
 const COPILOT_CLI_BUILTIN_MODELS = [
-  // 無料版で利用可能
+  // 無料版で利用可能（有効化不要）
   'gpt-5-mini',
   'gpt-4.1',
-  'claude-haiku-4.5',
   // 有償版で追加
   'gpt-5',
   'gpt-5.1',

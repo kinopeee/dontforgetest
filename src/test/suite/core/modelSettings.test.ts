@@ -581,10 +581,10 @@ suite('core/modelSettings.ts', () => {
 
       // When: getModelCandidatesForProvider('copilotCli', settings) is called
       const result = getModelCandidatesForProvider('copilotCli', settings);
-      // Then: Includes Copilot builtin models (free tier first, then paid)
-      assert.ok(result.includes('gpt-5-mini'), 'Should include gpt-5-mini (free tier)');
-      assert.ok(result.includes('gpt-4.1'), 'Should include gpt-4.1 (free tier)');
-      assert.ok(result.includes('claude-haiku-4.5'), 'Should include claude-haiku-4.5 (free tier)');
+      // Then: Includes Copilot builtin models (headless-compatible first, then paid)
+      // NOTE: claude-haiku-4.5 は対話モードでの有効化が必要なため除外
+      assert.ok(result.includes('gpt-5-mini'), 'Should include gpt-5-mini (free tier, no activation)');
+      assert.ok(result.includes('gpt-4.1'), 'Should include gpt-4.1 (free tier, no activation)');
       assert.ok(result.includes('gpt-5'), 'Should include gpt-5 (paid tier)');
       assert.ok(result.includes('claude-sonnet-4'), 'Should include claude-sonnet-4 (paid tier)');
     });
