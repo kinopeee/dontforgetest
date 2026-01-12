@@ -4,11 +4,12 @@ import { CursorAgentProvider } from './cursorAgentProvider';
 import { ClaudeCodeProvider } from './claudeCodeProvider';
 import { GeminiCliProvider } from './geminiCliProvider';
 import { CodexCliProvider } from './codexCliProvider';
+import { CopilotCliProvider } from './copilotCliProvider';
 
 /**
  * エージェントプロバイダーの識別子。
  */
-export type AgentProviderId = 'cursorAgent' | 'claudeCode' | 'geminiCli' | 'codexCli';
+export type AgentProviderId = 'cursorAgent' | 'claudeCode' | 'geminiCli' | 'codexCli' | 'copilotCli';
 
 /**
  * 設定からエージェントプロバイダーIDを取得する。
@@ -23,6 +24,7 @@ export function getAgentProviderId(): AgentProviderId {
   if (trimmed === 'claudeCode') return 'claudeCode';
   if (trimmed === 'geminiCli') return 'geminiCli';
   if (trimmed === 'codexCli') return 'codexCli';
+  if (trimmed === 'copilotCli') return 'copilotCli';
   return 'cursorAgent';
 }
 
@@ -41,5 +43,6 @@ export function createAgentProviderById(id: AgentProviderId): AgentProvider {
   if (id === 'claudeCode') return new ClaudeCodeProvider();
   if (id === 'geminiCli') return new GeminiCliProvider();
   if (id === 'codexCli') return new CodexCliProvider();
+  if (id === 'copilotCli') return new CopilotCliProvider();
   return new CursorAgentProvider();
 }

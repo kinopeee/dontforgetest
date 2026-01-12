@@ -19,7 +19,7 @@
   "command.openLatestExecutionReport.title": "Dontforgetest: 最新のテストレポートを開く",
   "command.openLatestMergeInstruction.title": "Dontforgetest: 手動マージ支援を開く（最新）",
   "configuration.title": "Dontforgetest",
-  "configuration.agentProvider.description": "テスト生成に使用するエージェント（cursorAgent=Cursor Agent CLI（cursor-agent）, claudeCode=Claude Code CLI（claude）, geminiCli=Gemini CLI（gemini）, codexCli=Codex CLI（codex））",
+  "configuration.agentProvider.description": "テスト生成に使用するエージェント（cursorAgent=Cursor Agent CLI（cursor-agent）, claudeCode=Claude Code CLI（claude）, geminiCli=Gemini CLI（gemini）, codexCli=Codex CLI（codex）, copilotCli=Copilot CLI（copilot））",
   "configuration.agentPath.description": "エージェント実行コマンドのパス（推奨）。空なら旧設定または PATH から解決",
   "configuration.cursorAgentPath.description": "（非推奨）cursor-agent コマンドのパス（未指定の場合は PATH から解決）",
   "configuration.claudePath.description": "（非推奨）Claude Code CLI（claude コマンド）のパス（未指定の場合は PATH から解決）",

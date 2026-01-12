@@ -127,7 +127,8 @@
             "cursorAgent",
             "claudeCode",
             "geminiCli",
-            "codexCli"
+            "codexCli",
+            "copilotCli"
           ],
           "default": "cursorAgent",
           "description": "%configuration.agentProvider.description%"
@@ -319,6 +320,8 @@
     "ai",
     "claude",
     "claude-code",
+    "copilot",
+    "copilot-cli",
     "cursor",
     "cursor-agent",
     "test",

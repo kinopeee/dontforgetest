@@ -188,6 +188,7 @@ export function getModelCandidatesForProvider(
   if (providerId === 'claudeCode') return getClaudeCodeModelCandidates();
   if (providerId === 'geminiCli') return getGeminiCliModelCandidates(settings);
   if (providerId === 'codexCli') return getCodexCliModelCandidates(settings);
+  if (providerId === 'copilotCli') return getCopilotCliModelCandidates(settings);
   return getCursorAgentModelCandidates(settings);
 }
 
@@ -258,6 +259,41 @@ export function getCodexCliModelCandidates(settings: ModelSettings = getModelSet
   const seen = new Set<string>();
 
   for (const m of CODEX_CLI_BUILTIN_MODELS) {
+    pushUniqueModel(out, seen, m);
+  }
+  if (settings.defaultModel) {
+    pushUniqueModel(out, seen, settings.defaultModel);
+  }
+  for (const m of settings.customModels) {
+    pushUniqueModel(out, seen, m);
+  }
+
+  return out;
+}
+
+/**
+ * Copilot CLI 用のビルトインモデル候補リスト（UI 用のヒント）。
+ *
+ * NOTE:
+ * - `copilot --help` の `--model` オプションから確認
+ * - CLI 側のモデル一覧は変動し得るため、ここは最小限に留める
+ */
+const COPILOT_CLI_BUILTIN_MODELS = [
+  'gpt-4o',
+  'claude-3.5-sonnet',
+  'o3-mini',
+  'gemini-2.0-flash',
+] as const;
+
+/**
+ * Copilot CLI 用のモデル候補を返す。
+ * ビルトインリストに customModels と defaultModel をマージして返す。
+ */
+export function getCopilotCliModelCandidates(settings: ModelSettings = getModelSettings()): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  for (const m of COPILOT_CLI_BUILTIN_MODELS) {
     pushUniqueModel(out, seen, m);
   }
   if (settings.defaultModel) {

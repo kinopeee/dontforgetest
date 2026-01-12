@@ -92,6 +92,7 @@ suite('src/ui/settingsPanel.ts', () => {
     assert.ok(html.includes('value="claudeCode"'), 'Contains claudeCode');
     assert.ok(html.includes('value="geminiCli"'), 'Contains geminiCli');
     assert.ok(html.includes('value="codexCli"'), 'Contains codexCli');
+    assert.ok(html.includes('value="copilotCli"'), 'Contains copilotCli');
   });
 
   test('TC-SP-N-01: cursorAgent uses auto when defaultModel is undefined', async () => {
@@ -317,6 +318,21 @@ suite('src/ui/settingsPanel.ts', () => {
     assert.ok(postedMessages.length >= 1);
     const lastMsg = postedMessages[postedMessages.length - 1] as { type: string; agentProvider: string };
     assert.strictEqual(lastMsg.agentProvider, 'codexCli');
+  });
+
+  // SP-N-05: handle setAgentProvider message with copilotCli
+  test('SP-N-05: handles setAgentProvider message with copilotCli', async () => {
+    // Given: Provider is resolved and view is ready
+    resolveView();
+    postedMessages = [];
+
+    // When: "setAgentProvider" message is received with 'copilotCli'
+    await webviewView.webview._onMessage?.({ type: 'setAgentProvider', agentProvider: 'copilotCli' });
+
+    // Then: "configUpdate" message is posted back with the updated provider
+    assert.ok(postedMessages.length >= 1);
+    const lastMsg = postedMessages[postedMessages.length - 1] as { type: string; agentProvider: string };
+    assert.strictEqual(lastMsg.agentProvider, 'copilotCli');
   });
 
   // TC-SP-E-01: handle invalid setAgentProvider message

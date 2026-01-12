@@ -19,7 +19,7 @@
   "command.openLatestExecutionReport.title": "Dontforgetest: Open Latest Test Report",
   "command.openLatestMergeInstruction.title": "Dontforgetest: Open Manual Merge Assistance (Latest)",
   "configuration.title": "Dontforgetest",
-  "configuration.agentProvider.description": "Agent provider to use for test generation (cursorAgent=Cursor Agent CLI (cursor-agent), claudeCode=Claude Code CLI (claude), geminiCli=Gemini CLI (gemini), codexCli=Codex CLI (codex))",
+  "configuration.agentProvider.description": "Agent provider to use for test generation (cursorAgent=Cursor Agent CLI (cursor-agent), claudeCode=Claude Code CLI (claude), geminiCli=Gemini CLI (gemini), codexCli=Codex CLI (codex), copilotCli=Copilot CLI (copilot))",
   "configuration.agentPath.description": "Path to agent command (preferred). If empty, falls back to legacy provider-specific settings or PATH",
   "configuration.cursorAgentPath.description": "(Deprecated) Path to cursor-agent command (resolved from PATH if not specified)",
   "configuration.claudePath.description": "(Deprecated) Path to claude command for Claude Code CLI (resolved from PATH if not specified)",

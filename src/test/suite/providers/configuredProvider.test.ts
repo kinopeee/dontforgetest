@@ -9,6 +9,7 @@ import { CursorAgentProvider } from '../../../providers/cursorAgentProvider';
 import { ClaudeCodeProvider } from '../../../providers/claudeCodeProvider';
 import { GeminiCliProvider } from '../../../providers/geminiCliProvider';
 import { CodexCliProvider } from '../../../providers/codexCliProvider';
+import { CopilotCliProvider } from '../../../providers/copilotCliProvider';
 
 suite('configuredProvider', () => {
   // === Test perspective table ===
@@ -18,6 +19,12 @@ suite('configuredProvider', () => {
   // | TC-N-02 | agentProvider='geminiCli' | Equivalence – valid value | Returns 'geminiCli' | Gemini CLI agent selected |
   // | TC-N-03 | agentProvider='cursor' (or 'cursorAgent') | Equivalence – valid value | Returns 'cursorAgent' | Cursor agent selected |
   // | TC-N-04 | agentProvider='codexCli' | Equivalence – valid value | Returns 'codexCli' | Codex CLI agent selected |
+  // | TC-N-05 | agentProvider='copilotCli' | Equivalence – valid value | Returns 'copilotCli' | Copilot CLI agent selected |
+  // | TC-N-06 | createAgentProviderById('cursorAgent') | Equivalence – factory | Returns CursorAgentProvider instance | id='cursor-agent' |
+  // | TC-N-07 | createAgentProviderById('claudeCode') | Equivalence – factory | Returns ClaudeCodeProvider instance | id='claude-code' |
+  // | TC-N-08 | createAgentProviderById('geminiCli') | Equivalence – factory | Returns GeminiCliProvider instance | id='gemini-cli' |
+  // | TC-N-09 | createAgentProviderById('codexCli') | Equivalence – factory | Returns CodexCliProvider instance | id='codex-cli' |
+  // | TC-N-10 | createAgentProviderById('copilotCli') | Equivalence – factory | Returns CopilotCliProvider instance | id='copilot-cli' |
   // | TC-E-01 | agentProvider undefined | Boundary – undefined | Returns default ('cursorAgent') | Fallback on undefined |
   // | TC-E-02 | agentProvider='' | Boundary – empty string | Returns default ('cursorAgent') | Fallback on empty |
   // | TC-E-03 | agentProvider=null | Boundary – null | Returns default ('cursorAgent') | Fallback on null |
@@ -162,6 +169,30 @@ suite('configuredProvider', () => {
     // Then: It returns an instance of CodexCliProvider
     assert.ok(provider instanceof CodexCliProvider);
     assert.strictEqual(provider.id, 'codex-cli');
+  });
+
+  // TC-N-10: createAgentProviderById('copilotCli') は CopilotCliProvider を返す
+  test('TC-N-10: createAgentProviderById copilotCli は CopilotCliProvider を返す', () => {
+    // Given: providerId is 'copilotCli'
+    // When: createAgentProviderById is called
+    const provider = createAgentProviderById('copilotCli');
+
+    // Then: It returns an instance of CopilotCliProvider
+    assert.ok(provider instanceof CopilotCliProvider);
+    assert.strictEqual(provider.id, 'copilot-cli');
+  });
+
+  // TC-N-05-ID: agentProvider='copilotCli' の場合、Copilot CLI エージェントが選択される
+  test('TC-N-05-ID: agentProvider=copilotCli の場合、copilotCli を返す', async () => {
+    // Given: agentProvider is set to 'copilotCli'
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('agentProvider', 'copilotCli', vscode.ConfigurationTarget.Workspace);
+
+    // When: getAgentProviderId is called
+    const id = getAgentProviderId();
+
+    // Then: It returns 'copilotCli'
+    assert.strictEqual(id, 'copilotCli');
   });
 
   // TC-E-01: agentProvider 未設定（undefined）の場合、デフォルトを返す
