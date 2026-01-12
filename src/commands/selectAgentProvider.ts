@@ -31,6 +31,11 @@ export async function selectAgentProvider(): Promise<void> {
       description: currentId === 'codexCli' ? t('selectAgentProvider.current') : undefined,
       providerId: 'codexCli',
     },
+    {
+      label: t('selectAgentProvider.copilotCli'),
+      description: currentId === 'copilotCli' ? t('selectAgentProvider.current') : undefined,
+      providerId: 'copilotCli',
+    },
   ];
 
   const currentLabel =
@@ -40,7 +45,9 @@ export async function selectAgentProvider(): Promise<void> {
         ? t('selectAgentProvider.geminiCli')
         : currentId === 'codexCli'
           ? t('selectAgentProvider.codexCli')
-          : t('selectAgentProvider.cursorAgent');
+          : currentId === 'copilotCli'
+            ? t('selectAgentProvider.copilotCli')
+            : t('selectAgentProvider.cursorAgent');
 
   const picked = await vscode.window.showQuickPick<AgentPickItem>(items, {
     title: t('selectAgentProvider.title'),

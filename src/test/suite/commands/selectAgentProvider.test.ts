@@ -12,7 +12,11 @@ suite('selectAgentProvider', () => {
   // | TC-N-08b | QuickPick selects 'cursorAgent' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'cursorAgent' | - |
   // | TC-N-08c | QuickPick selects 'geminiCli' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'geminiCli' | - |
   // | TC-N-08d | QuickPick selects 'codexCli' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'codexCli' | - |
+  // | TC-N-08e | QuickPick selects 'copilotCli' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'copilotCli' | - |
   // | TC-N-09 | QuickPick canceled (undefined) | Equivalence – cancel | Settings are not changed | Same as TC-N-01 |
+  // | SAP-N-01 | currentId='geminiCli' | Equivalence – label display | PlaceHolder includes 'Gemini CLI' | - |
+  // | SAP-N-02 | currentId='codexCli' | Equivalence – label display | PlaceHolder includes 'Codex CLI' | - |
+  // | SAP-N-03 | currentId='copilotCli' | Equivalence – label display | PlaceHolder includes 'Copilot CLI' | - |
 
   let originalShowQuickPick: typeof vscode.window.showQuickPick;
   let originalShowInformationMessage: typeof vscode.window.showInformationMessage;
@@ -209,6 +213,70 @@ suite('selectAgentProvider', () => {
 
     // Then: PlaceHolder includes 'Codex CLI'
     assert.ok(capturedOptions?.placeHolder?.includes('Codex CLI'));
+  });
+
+  // SAP-N-03: currentId が copilotCli の場合、適切なラベルが表示される
+  test('SAP-N-03: currentId が copilotCli の場合、適切なラベルが表示される', async () => {
+    // Given: agentProvider is set to 'copilotCli'
+    const configStub = {
+      get: (section: string) => (section === 'agentProvider' ? 'copilotCli' : undefined),
+      update: async () => {},
+    } as unknown as vscode.WorkspaceConfiguration;
+    (vscode.workspace as unknown as { getConfiguration: typeof vscode.workspace.getConfiguration }).getConfiguration = () => configStub;
+
+    let capturedOptions: vscode.QuickPickOptions | undefined;
+    (vscode.window as unknown as { showQuickPick: (items: unknown, options: vscode.QuickPickOptions) => Promise<unknown> }).showQuickPick = async (_items, options) => {
+      capturedOptions = options;
+      return undefined;
+    };
+
+    // When: selectAgentProvider is called
+    await selectAgentProvider();
+
+    // Then: PlaceHolder includes 'Copilot CLI'
+    assert.ok(capturedOptions?.placeHolder?.includes('Copilot CLI'));
+  });
+
+  // TC-N-08e: QuickPick で 'copilotCli' を選択した場合、設定が更新される
+  test('TC-N-08e: QuickPick で copilotCli を選択した場合、agentProvider が copilotCli に更新される', async () => {
+    // Given: configuration is stubbed and QuickPick is mocked to select 'copilotCli'
+    let currentAgentProvider: string = 'cursorAgent';
+    const updateCalls: Array<{ section: string; value: unknown; target: unknown }> = [];
+    const configStub = {
+      get: (section: string, defaultValue?: unknown) => {
+        if (section === 'agentProvider') {
+          return currentAgentProvider;
+        }
+        return defaultValue;
+      },
+      update: async (section: string, value: unknown, target: unknown) => {
+        updateCalls.push({ section, value, target });
+        if (section === 'agentProvider' && typeof value === 'string') {
+          currentAgentProvider = value;
+        }
+      },
+    } as unknown as vscode.WorkspaceConfiguration;
+
+    (vscode.workspace as unknown as { getConfiguration: typeof vscode.workspace.getConfiguration }).getConfiguration = () => configStub;
+
+    (vscode.window as unknown as { showQuickPick: (items: unknown) => Promise<unknown> }).showQuickPick = async (items: unknown) => {
+      const itemsArray = items as Array<{ providerId?: string }>;
+      const copilotItem = itemsArray.find((item) => item.providerId === 'copilotCli');
+      return copilotItem;
+    };
+
+    (vscode.window as unknown as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = async () => {
+      return undefined;
+    };
+
+    // When: selectAgentProvider is called
+    await selectAgentProvider();
+
+    // Then: agentProvider is updated to 'copilotCli'
+    assert.strictEqual(currentAgentProvider, 'copilotCli');
+    assert.ok(updateCalls.length >= 1, 'Expected config.update to be called');
+    assert.strictEqual(updateCalls[0]?.section, 'agentProvider');
+    assert.strictEqual(updateCalls[0]?.value, 'copilotCli');
   });
 
   // TC-N-05

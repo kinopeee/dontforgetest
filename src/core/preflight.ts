@@ -168,6 +168,43 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
     };
   }
 
+  if (agentProviderId === 'copilotCli') {
+    // Copilot CLI の確認
+    const copilotCommand = resolveAgentCommand(agentPath, '', 'copilot');
+
+    const agentAvailable = await canSpawnCommand(copilotCommand, ['--version'], workspaceRoot);
+    if (!agentAvailable) {
+      if (process.env.VSCODE_TEST_RUNNER === '1') {
+        void vscode.window.showErrorMessage(t('copilotCli.notFound', copilotCommand));
+        return undefined;
+      }
+
+      const openSettingsLabel = t('copilotCli.openSettings');
+      const openDocsLabel = t('copilotCli.openDocs');
+      const picked = await vscode.window.showErrorMessage(
+        t('copilotCli.notFound', copilotCommand),
+        openSettingsLabel,
+        openDocsLabel,
+      );
+      if (picked === openSettingsLabel) {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.agentPath');
+      }
+      if (picked === openDocsLabel) {
+        await vscode.env.openExternal(vscode.Uri.parse('https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-in-the-command-line'));
+      }
+      return undefined;
+    }
+
+    return {
+      workspaceRoot,
+      defaultModel: getEffectiveDefaultModel(agentProviderId, getModelSettings()),
+      testStrategyPath: effectiveTestStrategyPath,
+      agentProviderId,
+      agentCommand: copilotCommand,
+      cursorAgentCommand: copilotCommand, // 後方互換
+    };
+  }
+
   // Cursor Agent CLI の確認（デフォルト）
   const cursorAgentPath = (config.get<string>('cursorAgentPath') ?? '').trim();
   const cursorAgentCommand = resolveAgentCommand(agentPath, cursorAgentPath, 'cursor-agent');

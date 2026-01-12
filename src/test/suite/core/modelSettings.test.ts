@@ -327,6 +327,21 @@ suite('core/modelSettings.ts', () => {
       assert.ok(result.includes('custom-gemini'), 'Should include custom-gemini');
     });
 
+    test('MS-N-15: copilotCli の場合は Copilot 用候補を返す', () => {
+      // Given: provider is 'copilotCli'
+      const settings: ModelSettings = {
+        defaultModel: 'gpt-5',
+        customModels: ['custom-copilot'],
+      };
+
+      // When: getModelCandidatesForProvider is called
+      const result = getModelCandidatesForProvider('copilotCli', settings);
+
+      // Then: Returns models suitable for Copilot CLI
+      assert.ok(result.includes('gpt-5'), 'Should include gpt-5');
+      assert.ok(result.includes('custom-copilot'), 'Should include custom-copilot');
+    });
+
     test('TC-N-10: getModelCandidatesForProvider(claudeCode) returns Claude model candidates', () => {
       // Given: provider is 'claudeCode' with empty settings
       const settings: ModelSettings = {
@@ -482,6 +497,20 @@ suite('core/modelSettings.ts', () => {
       // Then: Returns 'gemini-3-flash-preview'
       assert.strictEqual(result, 'gemini-3-flash-preview');
     });
+
+    test('TC-N-17: copilotCli with defaultModel in candidates returns that model', () => {
+      // Given: defaultModel is 'gpt-5' which is a Copilot candidate
+      const settings: ModelSettings = {
+        defaultModel: 'gpt-5',
+        customModels: [],
+      };
+
+      // When: getEffectiveDefaultModel is called
+      const result = getEffectiveDefaultModel('copilotCli', settings);
+
+      // Then: Returns 'gpt-5'
+      assert.strictEqual(result, 'gpt-5');
+    });
   });
 
   suite('getGeminiCliModelCandidates', () => {
@@ -539,6 +568,38 @@ suite('core/modelSettings.ts', () => {
       const result = getModelCandidatesForProvider('codexCli', settings);
       // Then: Includes the custom defaultModel
       assert.ok(result.includes('custom-codex-x'), 'Should include custom-codex-x');
+    });
+  });
+
+  suite('getCopilotCliModelCandidates', () => {
+    test('MS-N-16: Copilot CLI 用のビルトインモデルが含まれる', () => {
+      // Given: customModels is empty
+      const settings: ModelSettings = {
+        defaultModel: undefined,
+        customModels: [],
+      };
+
+      // When: getModelCandidatesForProvider('copilotCli', settings) is called
+      const result = getModelCandidatesForProvider('copilotCli', settings);
+      // Then: Includes Copilot builtin models (headless-compatible first, then paid)
+      // NOTE: claude-haiku-4.5 は対話モードでの有効化が必要なため除外
+      assert.ok(result.includes('gpt-5-mini'), 'Should include gpt-5-mini (free tier, no activation)');
+      assert.ok(result.includes('gpt-4.1'), 'Should include gpt-4.1 (free tier, no activation)');
+      assert.ok(result.includes('gpt-5'), 'Should include gpt-5 (paid tier)');
+      assert.ok(result.includes('claude-sonnet-4'), 'Should include claude-sonnet-4 (paid tier)');
+    });
+
+    test('MS-N-17: defaultModel がビルトインに無い場合は追加される', () => {
+      // Given: defaultModel is not a Copilot builtin
+      const settings: ModelSettings = {
+        defaultModel: 'custom-copilot-x',
+        customModels: [],
+      };
+
+      // When: getModelCandidatesForProvider('copilotCli', settings) is called
+      const result = getModelCandidatesForProvider('copilotCli', settings);
+      // Then: Includes the custom defaultModel
+      assert.ok(result.includes('custom-copilot-x'), 'Should include custom-copilot-x');
     });
   });
 });

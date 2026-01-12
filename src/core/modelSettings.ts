@@ -188,6 +188,7 @@ export function getModelCandidatesForProvider(
   if (providerId === 'claudeCode') return getClaudeCodeModelCandidates();
   if (providerId === 'geminiCli') return getGeminiCliModelCandidates(settings);
   if (providerId === 'codexCli') return getCodexCliModelCandidates(settings);
+  if (providerId === 'copilotCli') return getCopilotCliModelCandidates(settings);
   return getCursorAgentModelCandidates(settings);
 }
 
@@ -258,6 +259,48 @@ export function getCodexCliModelCandidates(settings: ModelSettings = getModelSet
   const seen = new Set<string>();
 
   for (const m of CODEX_CLI_BUILTIN_MODELS) {
+    pushUniqueModel(out, seen, m);
+  }
+  if (settings.defaultModel) {
+    pushUniqueModel(out, seen, settings.defaultModel);
+  }
+  for (const m of settings.customModels) {
+    pushUniqueModel(out, seen, m);
+  }
+
+  return out;
+}
+
+/**
+ * Copilot CLI 用のビルトインモデル候補リスト（UI 用のヒント）。
+ *
+ * NOTE:
+ * - Copilot CLI / Copilot の公開情報や help 出力を参考にした「候補例」
+ * - CLI 側の仕様（利用可能モデルや切り替え可否）は変動し得るため、主要なものに留める
+ * - ヘッドレスモード（-p）で有効化なしに使えるモデルを先頭に配置
+ * - claude-haiku-4.5 等は対話モードでの有効化が必要なため除外
+ */
+const COPILOT_CLI_BUILTIN_MODELS = [
+  // 無料版で利用可能（有効化不要）
+  'gpt-5-mini',
+  'gpt-4.1',
+  // 有償版で追加
+  'gpt-5',
+  'gpt-5.1',
+  'claude-sonnet-4',
+  'claude-sonnet-4.5',
+  'gemini-3-pro-preview',
+] as const;
+
+/**
+ * Copilot CLI 用のモデル候補を返す。
+ * ビルトインリストに customModels と defaultModel をマージして返す。
+ */
+export function getCopilotCliModelCandidates(settings: ModelSettings = getModelSettings()): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  for (const m of COPILOT_CLI_BUILTIN_MODELS) {
     pushUniqueModel(out, seen, m);
   }
   if (settings.defaultModel) {

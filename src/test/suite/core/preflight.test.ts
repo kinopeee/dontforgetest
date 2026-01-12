@@ -665,6 +665,104 @@ suite('core/preflight.ts', () => {
         }
       });
 
+      test('TC-PF-DET-CP-01: missing copilot command opens settings when first action is chosen', async () => {
+        // Given: agentProvider=copilotCli and command is missing; user selects the first action
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const originalPathEnv = process.env.PATH;
+        const missingCommand = `missing-copilot-${Date.now()}`;
+
+        try {
+          delete process.env.VSCODE_TEST_RUNNER;
+          process.env.PATH = '';
+          selectErrorAction = (items) => items[0];
+
+          await config.update('agentProvider', 'copilotCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When
+          const result = await ensurePreflight();
+
+          // Then
+          assert.strictEqual(result, undefined);
+          assert.strictEqual(errorCalls.length, 1, 'Expected one error message');
+          assert.strictEqual(executeCommands.length, 1, 'Expected one command execution');
+          assert.strictEqual(executeCommands[0]?.command, 'workbench.action.openSettings');
+          assert.strictEqual(executeCommands[0]?.args[0], 'dontforgetest.agentPath');
+          assert.strictEqual(openExternalUris.length, 0, 'Docs should not be opened');
+        } finally {
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
+          if (originalPathEnv === undefined) {
+            delete process.env.PATH;
+          } else {
+            process.env.PATH = originalPathEnv;
+          }
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      test('TC-PF-DET-CP-02: missing copilot command opens docs when second action is chosen', async () => {
+        // Given: agentProvider=copilotCli and command is missing; user selects the second action
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const originalPathEnv = process.env.PATH;
+        const missingCommand = `missing-copilot-${Date.now()}`;
+
+        try {
+          delete process.env.VSCODE_TEST_RUNNER;
+          process.env.PATH = '';
+          selectErrorAction = (items) => items[1];
+
+          await config.update('agentProvider', 'copilotCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When
+          const result = await ensurePreflight();
+
+          // Then
+          assert.strictEqual(result, undefined);
+          assert.strictEqual(errorCalls.length, 1, 'Expected one error message');
+          assert.strictEqual(openExternalUris.length, 1, 'Expected one openExternal call');
+          assert.ok(
+            openExternalUris[0]?.toString().includes('docs.github.com/en/copilot'),
+            'Docs URL should be opened',
+          );
+          assert.strictEqual(executeCommands.length, 0, 'Settings should not be opened');
+        } finally {
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
+          if (originalPathEnv === undefined) {
+            delete process.env.PATH;
+          } else {
+            process.env.PATH = originalPathEnv;
+          }
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
       test('TC-PF-ADD-N-01: absolute testStrategyPath is preserved and returns PreflightOk', async () => {
         // Given: Existing test strategy file with an absolute path and a runnable cursorAgentPath
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -1060,6 +1158,57 @@ suite('core/preflight.ts', () => {
 
           // Then: returns undefined
           assert.strictEqual(result, undefined);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      test('PF-E-12: copilotCli command not found returns undefined in test runner', async () => {
+        // Given: agentProvider is 'copilotCli' and command is missing
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const missingCommand = `missing-copilot-${Date.now()}`;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'copilotCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: returns undefined
+          assert.strictEqual(result, undefined);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      // TC-N-19
+      test('TC-N-19: copilotCli uses agentPath if provided', async () => {
+        // Given: agentProvider is 'copilotCli' and a custom agentPath is set
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'copilotCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: it should return the custom agent path
+          assert.ok(result);
+          assert.strictEqual(result?.agentCommand, process.execPath);
         } finally {
           process.env.VSCODE_TEST_RUNNER = originalTestRunner;
           await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
