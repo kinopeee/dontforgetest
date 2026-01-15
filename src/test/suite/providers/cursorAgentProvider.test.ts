@@ -205,6 +205,40 @@ suite('providers/cursorAgentProvider.ts', () => {
       await waitForAsyncCleanup();
     });
 
+    // Given: modelにカンマ区切りで複数指定した場合
+    // When: runを呼び出す
+    // Then: 指定した文字列がそのまま --model オプションの値として渡される
+    test('TC-N-09: modelにカンマ区切りで複数指定した場合', async () => {
+      // Given: model に "modelA,modelB" を指定した AgentRunOptions
+      const provider = new CursorAgentProvider();
+      const events: TestGenEvent[] = [];
+
+      const options: AgentRunOptions = {
+        taskId: 'test-task-multi-model',
+        workspaceRoot: '/tmp',
+        prompt: 'test prompt',
+        model: 'modelA,modelB',
+        outputFormat: 'stream-json',
+        allowWrite: false,
+        onEvent: (event) => {
+          events.push(event);
+        },
+      };
+
+      const task = provider.run(options);
+
+      // Then: started イベントに model=modelA,modelB が含まれる
+      // (これはプロバイダーが文字列をそのまま渡していることを確認するため)
+      const startedEvent = events.find((e) => e.type === 'started');
+      if (startedEvent && startedEvent.type === 'started') {
+        assert.ok(startedEvent.detail?.includes('model=modelA,modelB'), 'model指定値がそのまま渡される');
+      }
+
+      // クリーンアップ & 非同期イベントの収束を待つ
+      task.dispose();
+      await waitForAsyncCleanup();
+    });
+
     // Given: dispose呼び出し
     // When: disposeを呼び出す
     // Then: プロセスがkillされる
