@@ -18,6 +18,12 @@
 
 ## インストール
 
+### Open VSX からインストール
+
+1. [Open VSX - kinopeee/dontforgetest](https://open-vsx.org/extension/kinopeee/dontforgetest) を開く
+2. エディタの拡張機能ビューからインストール（または `.vsix` をダウンロード）
+3. 必要に応じてエディタを再読み込み
+
 ### VSIX からインストール（配布/手動）
 
 1. エディタ（Cursor / VS Code / Windsurf / Antigravity）を開く
@@ -232,12 +238,13 @@
 
 ## トラブルシュート
 
-### `cursor-agent が見つかりません` / `claude コマンドが見つかりません` / `cline コマンドが見つかりません`
+### `cursor-agent が見つかりません` / `claude コマンドが見つかりません` / `gemini コマンドが見つかりません` / `codex コマンドが見つかりません` / `cline コマンドが見つかりません`
 
 - 対応する CLI ツールをインストール/セットアップする
 - Cursor Agent（`cursor-agent`）の場合: `dontforgetest.agentPath`（推奨）または `dontforgetest.cursorAgentPath`（旧設定）にフルパスを設定
 - Claude Code の場合: `dontforgetest.agentPath`（推奨）または `dontforgetest.claudePath`（旧設定）にフルパスを設定
 - Gemini CLI の場合: `dontforgetest.agentPath`（推奨）にフルパスを設定
+- Codex CLI の場合: `dontforgetest.agentPath`（推奨）にフルパスを設定
 - Cline CLI の場合: `dontforgetest.agentPath`（推奨）にフルパスを設定
 
 ### テスト戦略ファイルが読み込めない

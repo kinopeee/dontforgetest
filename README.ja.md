@@ -9,6 +9,11 @@ CLI エージェント（対応: Cursor CLI / Claude Code / Gemini CLI / Codex C
 
 - English docs: [README.md](https://github.com/kinopeee/dontforgetest/blob/main/README.md), [docs/usage.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.md)
 
+## インストール
+
+- Open VSX: [kinopeee/dontforgetest](https://open-vsx.org/extension/kinopeee/dontforgetest)
+- `.vsix` から手動インストール: [docs/usage.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.ja.md#インストール)
+
 ## Requirements
 
 - **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf / Antigravity）
@@ -61,6 +66,7 @@ CLI エージェント（対応: Cursor CLI / Claude Code / Gemini CLI / Codex C
 - **DeepWiki**: [deepwiki.com/kinopeee/dontforgetest](https://deepwiki.com/kinopeee/dontforgetest) — AI 生成のドキュメント（概要・アーキテクチャ・コンポーネント詳細）
 - 目次: [docs/README.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/README.ja.md)
 - 操作手順: [docs/usage.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.ja.md)
+- 更新履歴: [CHANGELOG.md](https://github.com/kinopeee/dontforgetest/blob/main/CHANGELOG.md)
 - 内蔵デフォルト戦略: [src/core/defaultTestStrategy.ts](https://github.com/kinopeee/dontforgetest/blob/main/src/core/defaultTestStrategy.ts)（設定が空の場合に使用）
 
 ## 開発（このリポジトリを開発する場合）

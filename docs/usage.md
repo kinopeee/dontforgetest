@@ -18,6 +18,12 @@ This document explains how to use the **Test Generation Agent** extension in VS 
 
 ## Installation
 
+### Install from Open VSX
+
+1. Open [Open VSX - kinopeee/dontforgetest](https://open-vsx.org/extension/kinopeee/dontforgetest)
+2. Install from your editor's Extensions view (or download the `.vsix`)
+3. Reload the editor if needed
+
 ### Install from VSIX (manual / distribution)
 
 1. Open your editor (Cursor / VS Code / Windsurf / Antigravity)
@@ -226,12 +232,13 @@ You can analyze existing test files from the **Analyze** tab in the Control Pane
 
 ## Troubleshooting
 
-### `cursor-agent not found` / `claude command not found` / `cline command not found`
+### `cursor-agent not found` / `claude command not found` / `gemini command not found` / `codex command not found` / `cline command not found`
 
 - Install / set up the corresponding CLI tool
 - For Cursor Agent (`cursor-agent`): Set `dontforgetest.agentPath` (preferred) or `dontforgetest.cursorAgentPath` (legacy)
 - For Claude Code: Set `dontforgetest.agentPath` (preferred) or `dontforgetest.claudePath` (legacy)
 - For Gemini CLI: Set `dontforgetest.agentPath` (preferred)
+- For Codex CLI: Set `dontforgetest.agentPath` (preferred)
 - For Cline CLI: Set `dontforgetest.agentPath` (preferred)
 
 ### Test strategy file cannot be loaded
