@@ -9,6 +9,7 @@ import { CursorAgentProvider } from '../../../providers/cursorAgentProvider';
 import { ClaudeCodeProvider } from '../../../providers/claudeCodeProvider';
 import { GeminiCliProvider } from '../../../providers/geminiCliProvider';
 import { CodexCliProvider } from '../../../providers/codexCliProvider';
+import { ClineCliProvider } from '../../../providers/clineCliProvider';
 
 suite('configuredProvider', () => {
   // === Test perspective table ===
@@ -18,6 +19,7 @@ suite('configuredProvider', () => {
   // | TC-N-02 | agentProvider='geminiCli' | Equivalence – valid value | Returns 'geminiCli' | Gemini CLI agent selected |
   // | TC-N-03 | agentProvider='cursor' (or 'cursorAgent') | Equivalence – valid value | Returns 'cursorAgent' | Cursor agent selected |
   // | TC-N-04 | agentProvider='codexCli' | Equivalence – valid value | Returns 'codexCli' | Codex CLI agent selected |
+  // | TC-N-05 | agentProvider='clineCli' | Equivalence – valid value | Returns 'clineCli' | Cline CLI agent selected |
   // | TC-E-01 | agentProvider undefined | Boundary – undefined | Returns default ('cursorAgent') | Fallback on undefined |
   // | TC-E-02 | agentProvider='' | Boundary – empty string | Returns default ('cursorAgent') | Fallback on empty |
   // | TC-E-03 | agentProvider=null | Boundary – null | Returns default ('cursorAgent') | Fallback on null |
@@ -106,6 +108,19 @@ suite('configuredProvider', () => {
     assert.strictEqual(id, 'codexCli');
   });
 
+  // TC-N-05-ID: agentProvider='clineCli' の場合、Cline CLI エージェントが選択される
+  test('TC-N-05-ID: agentProvider=clineCli の場合、clineCli を返す', async () => {
+    // Given: agentProvider is set to 'clineCli'
+    const config = vscode.workspace.getConfiguration('dontforgetest');
+    await config.update('agentProvider', 'clineCli', vscode.ConfigurationTarget.Workspace);
+
+    // When: getAgentProviderId is called
+    const id = getAgentProviderId();
+
+    // Then: It returns 'clineCli'
+    assert.strictEqual(id, 'clineCli');
+  });
+
   // TC-N-05: createAgentProvider() はデフォルトで CursorAgentProvider を返す
   test('TC-N-05: createAgentProvider はデフォルトで CursorAgentProvider を返す', async () => {
     // Given: agentProvider is unset
@@ -162,6 +177,17 @@ suite('configuredProvider', () => {
     // Then: It returns an instance of CodexCliProvider
     assert.ok(provider instanceof CodexCliProvider);
     assert.strictEqual(provider.id, 'codex-cli');
+  });
+
+  // TC-N-10: createAgentProviderById('clineCli') は ClineCliProvider を返す
+  test('TC-N-10: createAgentProviderById clineCli は ClineCliProvider を返す', () => {
+    // Given: providerId is 'clineCli'
+    // When: createAgentProviderById is called
+    const provider = createAgentProviderById('clineCli');
+
+    // Then: It returns an instance of ClineCliProvider
+    assert.ok(provider instanceof ClineCliProvider);
+    assert.strictEqual(provider.id, 'cline-cli');
   });
 
   // TC-E-01: agentProvider 未設定（undefined）の場合、デフォルトを返す

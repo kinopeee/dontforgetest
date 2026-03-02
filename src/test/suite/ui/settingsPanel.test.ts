@@ -16,6 +16,11 @@ interface MockWebviewView {
   };
 }
 
+// === Test perspective table (Cline CLI 追加分) ===
+// | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+// |---------|----------------------|--------------------------------------|-----------------|-------|
+// | SP-N-05 | setAgentProvider with 'clineCli' | Equivalence – provider message | configUpdate posted with agentProvider='clineCli' | - |
+
 suite('src/ui/settingsPanel.ts', () => {
   let provider: SettingsPanelViewProvider;
   let webviewView: MockWebviewView;
@@ -92,6 +97,7 @@ suite('src/ui/settingsPanel.ts', () => {
     assert.ok(html.includes('value="claudeCode"'), 'Contains claudeCode');
     assert.ok(html.includes('value="geminiCli"'), 'Contains geminiCli');
     assert.ok(html.includes('value="codexCli"'), 'Contains codexCli');
+    assert.ok(html.includes('value="clineCli"'), 'Contains clineCli');
   });
 
   test('TC-SP-N-01: cursorAgent uses auto when defaultModel is undefined', async () => {
@@ -317,6 +323,21 @@ suite('src/ui/settingsPanel.ts', () => {
     assert.ok(postedMessages.length >= 1);
     const lastMsg = postedMessages[postedMessages.length - 1] as { type: string; agentProvider: string };
     assert.strictEqual(lastMsg.agentProvider, 'codexCli');
+  });
+
+  // SP-N-05: handle setAgentProvider message with clineCli
+  test('SP-N-05: handles setAgentProvider message with clineCli', async () => {
+    // Given: Provider is resolved and view is ready
+    resolveView();
+    postedMessages = [];
+
+    // When: "setAgentProvider" message is received with 'clineCli'
+    await webviewView.webview._onMessage?.({ type: 'setAgentProvider', agentProvider: 'clineCli' });
+
+    // Then: "configUpdate" message is posted back with the updated provider
+    assert.ok(postedMessages.length >= 1);
+    const lastMsg = postedMessages[postedMessages.length - 1] as { type: string; agentProvider: string };
+    assert.strictEqual(lastMsg.agentProvider, 'clineCli');
   });
 
   // TC-SP-E-01: handle invalid setAgentProvider message

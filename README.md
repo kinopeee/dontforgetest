@@ -5,9 +5,14 @@
 [![Open VSX Version](https://img.shields.io/open-vsx/v/kinopeee/dontforgetest?label=Open%20VSX)](https://open-vsx.org/extension/kinopeee/dontforgetest)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/kinopeee/dontforgetest?label=Open%20VSX%20downloads)](https://open-vsx.org/extension/kinopeee/dontforgetest)
 
-Powered by CLI agents (Cursor CLI / Claude Code / Gemini CLI / Codex CLI), this extension automatically generates test code from commit diffs and selections.
+Powered by CLI agents (Cursor CLI, Claude Code, Gemini CLI, Codex CLI, and Cline CLI), this extension automatically generates test code from commit diffs and selections.
 
 - Japanese docs: [README.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/README.ja.md), [docs/usage.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.ja.md)
+
+## Install
+
+- Open VSX: [kinopeee/dontforgetest](https://open-vsx.org/extension/kinopeee/dontforgetest)
+- Manual install from `.vsix`: see [docs/usage.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.md#installation)
 
 ## Key features
 
@@ -59,12 +64,13 @@ Powered by CLI agents (Cursor CLI / Claude Code / Gemini CLI / Codex CLI), this 
 - **DeepWiki**: [deepwiki.com/kinopeee/dontforgetest](https://deepwiki.com/kinopeee/dontforgetest) — AI-generated documentation with overview, architecture, and component details
 - Docs index: [docs/README.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/README.md)
 - Usage: [docs/usage.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.md)
+- Changelog: [CHANGELOG.md](https://github.com/kinopeee/dontforgetest/blob/main/CHANGELOG.md)
 - Built-in default strategy: [src/core/defaultTestStrategy.ts](https://github.com/kinopeee/dontforgetest/blob/main/src/core/defaultTestStrategy.ts) (used when the setting is empty)
 
 ## Requirements
 
 - **VS Code 1.105+** compatible (Cursor / VS Code / Windsurf / Antigravity)
-- CLI agent executable (e.g., `cursor-agent`, `claude`, `gemini`, or `codex`)
+- CLI agent executable (e.g., `cursor-agent`, `claude`, `gemini`, `codex`, or `cline`)
 
 ## Development (for contributors)
 

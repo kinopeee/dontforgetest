@@ -188,6 +188,7 @@ export function getModelCandidatesForProvider(
   if (providerId === 'claudeCode') return getClaudeCodeModelCandidates();
   if (providerId === 'geminiCli') return getGeminiCliModelCandidates(settings);
   if (providerId === 'codexCli') return getCodexCliModelCandidates(settings);
+  if (providerId === 'clineCli') return getModelCandidates(settings);
   return getCursorAgentModelCandidates(settings);
 }
 
@@ -269,3 +270,4 @@ export function getCodexCliModelCandidates(settings: ModelSettings = getModelSet
 
   return out;
 }
+

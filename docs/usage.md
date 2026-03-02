@@ -8,7 +8,7 @@ This document explains how to use the **Test Generation Agent** extension in VS 
 
 - You opened a workspace as a **folder** (single-file window is not supported)
 - **VS Code 1.105+** compatible (Cursor / VS Code / Windsurf / Antigravity)
-- CLI agent executable (e.g., `cursor-agent`, `claude`, or `gemini`; available in PATH, or configured via settings)
+- CLI agent executable (e.g., `cursor-agent`, `claude`, `gemini`, `codex`, or `cline`; available in PATH, or configured via settings)
 - For diff-based sources, your workspace must be a **Git repository**
 - **Currently verified only on macOS** (Windows/Linux are not verified yet)
 
@@ -17,6 +17,12 @@ This document explains how to use the **Test Generation Agent** extension in VS 
 > For diff-based sources, you can choose **Worktree (isolated)** which generates in a temporary worktree and applies only test diffs back to local when safe.
 
 ## Installation
+
+### Install from Open VSX
+
+1. Open [Open VSX - kinopeee/dontforgetest](https://open-vsx.org/extension/kinopeee/dontforgetest)
+2. Install from your editor's Extensions view (or download the `.vsix`)
+3. Reload the editor if needed
 
 ### Install from VSIX (manual / distribution)
 
@@ -51,6 +57,7 @@ Search `dontforgetest.*` in your editor Settings (Cursor / VS Code / Windsurf / 
   - `claudeCode`: Use Claude Code CLI (`claude`)
   - `geminiCli`: Use Gemini CLI (`gemini`)
   - `codexCli`: Use Codex CLI (`codex`)
+  - `clineCli`: Use Cline CLI (`cline`)
 - **`dontforgetest.agentPath`**: Path to agent command (preferred). If empty, falls back to legacy provider-specific settings or PATH
 - **`dontforgetest.cursorAgentPath`**: (Deprecated) Path to `cursor-agent` (if empty, resolves from PATH)
 - **`dontforgetest.claudePath`**: (Deprecated) Path to `claude` command for Claude Code CLI (if empty, resolves from PATH)
@@ -225,12 +232,14 @@ You can analyze existing test files from the **Analyze** tab in the Control Pane
 
 ## Troubleshooting
 
-### `cursor-agent not found` / `claude command not found`
+### `cursor-agent not found` / `claude command not found` / `gemini command not found` / `codex command not found` / `cline command not found`
 
 - Install / set up the corresponding CLI tool
 - For Cursor Agent (`cursor-agent`): Set `dontforgetest.agentPath` (preferred) or `dontforgetest.cursorAgentPath` (legacy)
 - For Claude Code: Set `dontforgetest.agentPath` (preferred) or `dontforgetest.claudePath` (legacy)
 - For Gemini CLI: Set `dontforgetest.agentPath` (preferred)
+- For Codex CLI: Set `dontforgetest.agentPath` (preferred)
+- For Cline CLI: Set `dontforgetest.agentPath` (preferred)
 
 ### Test strategy file cannot be loaded
 

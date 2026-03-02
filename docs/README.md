@@ -1,5 +1,7 @@
 # Documentation
 
+- Open VSX: https://open-vsx.org/extension/kinopeee/dontforgetest
+- Changelog: `../CHANGELOG.md`
 - Usage: `usage.md`
 - 日本語: `README.ja.md`, `usage.ja.md`
 

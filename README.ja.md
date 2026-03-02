@@ -5,14 +5,19 @@
 [Open VSX Version](https://open-vsx.org/extension/kinopeee/dontforgetest)
 [Open VSX Downloads](https://open-vsx.org/extension/kinopeee/dontforgetest)
 
-CLI エージェント（対応: Cursor CLI / Claude Code / Gemini CLI / Codex CLI）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する VS Code 互換拡張機能です。
+CLI エージェント（対応: Cursor CLI / Claude Code / Gemini CLI / Codex CLI / Cline CLI）をヘッドレスで呼び出し、コミット差分や選択範囲からテストコードを自動生成する VS Code 互換拡張機能です。
 
 - English docs: [README.md](https://github.com/kinopeee/dontforgetest/blob/main/README.md), [docs/usage.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.md)
+
+## インストール
+
+- Open VSX: [kinopeee/dontforgetest](https://open-vsx.org/extension/kinopeee/dontforgetest)
+- `.vsix` から手動インストール: [docs/usage.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.ja.md#インストール)
 
 ## Requirements
 
 - **VS Code 1.105+** 互換（Cursor / VS Code / Windsurf / Antigravity）
-- CLI エージェント（例: `cursor-agent`、`claude`、`gemini`、`codex`）が実行可能であること
+- CLI エージェント（例: `cursor-agent`、`claude`、`gemini`、`codex`、`cline`）が実行可能であること
 
 ## 主な機能
 
@@ -51,7 +56,7 @@ CLI エージェント（対応: Cursor CLI / Claude Code / Gemini CLI / Codex C
 
 テスト観点表
 
-> **注意（重要）**: CLI エージェント（例: `cursor-agent` / `claude` / `gemini` / `codex`）は **`--force` で実行**される場合があります。  
+> **注意（重要）**: CLI エージェント（例: `cursor-agent` / `claude` / `gemini` / `codex` / `cline`）は **`--force` で実行**される場合があります。  
 > **Local** は実ファイル（現在のワークスペース）へ書き込みます。  
 > **Worktree** は一時 worktree へ書き込み、`git apply --check` が通る場合のみ **テスト差分だけ** をローカルへ適用します（失敗時はパッチ/スナップショット/AI 向け指示を保存）。  
 > 必要に応じてブランチを切る／コミットする等の退避手段を用意してから実行してください。
@@ -61,6 +66,7 @@ CLI エージェント（対応: Cursor CLI / Claude Code / Gemini CLI / Codex C
 - **DeepWiki**: [deepwiki.com/kinopeee/dontforgetest](https://deepwiki.com/kinopeee/dontforgetest) — AI 生成のドキュメント（概要・アーキテクチャ・コンポーネント詳細）
 - 目次: [docs/README.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/README.ja.md)
 - 操作手順: [docs/usage.ja.md](https://github.com/kinopeee/dontforgetest/blob/main/docs/usage.ja.md)
+- 更新履歴: [CHANGELOG.md](https://github.com/kinopeee/dontforgetest/blob/main/CHANGELOG.md)
 - 内蔵デフォルト戦略: [src/core/defaultTestStrategy.ts](https://github.com/kinopeee/dontforgetest/blob/main/src/core/defaultTestStrategy.ts)（設定が空の場合に使用）
 
 ## 開発（このリポジトリを開発する場合）

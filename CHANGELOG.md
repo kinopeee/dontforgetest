@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Agent provider**: Added Cline CLI support (`cline`) as `dontforgetest.agentProvider=clineCli`, including provider selection, preflight checks, and model-candidate handling
+
+### Changed
+
+- **Documentation**: Updated README/usage/docs index and related localization references for Open VSX publication and Cline CLI support
+
+---
+
+## Unreleased（日本語）
+
+### 追加
+
+- **エージェントプロバイダ**: `dontforgetest.agentProvider=clineCli` として Cline CLI（`cline`）対応を追加（プロバイダ選択、事前チェック、モデル候補解決を含む）
+
+### 変更
+
+- **ドキュメント**: Open VSX 公開と Cline CLI 対応に合わせて、README / usage / docs 目次と関連ローカライズ参照を更新
+
+---
+
 ## 0.0.128
 
 ### Changed

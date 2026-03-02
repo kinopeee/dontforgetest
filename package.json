@@ -127,7 +127,8 @@
             "cursorAgent",
             "claudeCode",
             "geminiCli",
-            "codexCli"
+            "codexCli",
+            "clineCli"
           ],
           "default": "cursorAgent",
           "description": "%configuration.agentProvider.description%"
