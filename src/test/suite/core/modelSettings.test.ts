@@ -12,6 +12,12 @@ import {
   type ModelSettings,
 } from '../../../core/modelSettings';
 
+// === Test perspective table (Cline CLI 追加分) ===
+// | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+// |---------|----------------------|--------------------------------------|-----------------|-------|
+// | TC-PROVIDER-N-04 | provider='clineCli', defaultModel+customModels | Equivalence – clineCli candidates | Returns deduplicated defaultModel+customModels | - |
+// | TC-N-17 | provider='clineCli', defaultModel in candidates | Equivalence – effective model | Returns defaultModel | - |
+
 suite('core/modelSettings.ts', () => {
   suite('normalizeModelList', () => {
     test('TC-A-01: undefinedは空配列に正規化される', () => {

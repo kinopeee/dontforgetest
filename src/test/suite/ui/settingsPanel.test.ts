@@ -16,6 +16,11 @@ interface MockWebviewView {
   };
 }
 
+// === Test perspective table (Cline CLI 追加分) ===
+// | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+// |---------|----------------------|--------------------------------------|-----------------|-------|
+// | SP-N-05 | setAgentProvider with 'clineCli' | Equivalence – provider message | configUpdate posted with agentProvider='clineCli' | - |
+
 suite('src/ui/settingsPanel.ts', () => {
   let provider: SettingsPanelViewProvider;
   let webviewView: MockWebviewView;

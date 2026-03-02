@@ -13,6 +13,7 @@ suite('selectAgentProvider', () => {
   // | TC-N-08c | QuickPick selects 'geminiCli' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'geminiCli' | - |
   // | TC-N-08d | QuickPick selects 'codexCli' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'codexCli' | - |
   // | TC-N-08e | QuickPick selects 'clineCli' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'clineCli' | - |
+  // | SAP-N-03 | currentId が clineCli | Equivalence – label display | PlaceHolder includes 'Cline CLI' | - |
   // | TC-N-09 | QuickPick canceled (undefined) | Equivalence – cancel | Settings are not changed | Same as TC-N-01 |
 
   let originalShowQuickPick: typeof vscode.window.showQuickPick;

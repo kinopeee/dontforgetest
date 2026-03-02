@@ -38,6 +38,25 @@ function createBaseOptions(events: TestGenEvent[]): AgentRunOptions {
   };
 }
 
+// === Test perspective table ===
+// | Case ID | Input / Precondition | Perspective (Equivalence / Boundary) | Expected Result | Notes |
+// |---------|----------------------|--------------------------------------|-----------------|-------|
+// | TC-CLINE-N-01 | ClineCliProvider instance | Equivalence – identity | id='cline-cli', displayName='Cline CLI' | - |
+// | TC-CLINE-N-02 | run() with agentCommand/model/allowWrite | Equivalence – spawn args | spawn includes --json, --model, -y, prompt; stdin closed | - |
+// | TC-CLINE-N-03 | JSONL with text/files | Equivalence – event mapping | text→log, files→fileWrite (workspace-relative) | - |
+// | TC-CLINE-N-04 | close event emitted twice | Equivalence – idempotent completion | completed emitted exactly once | - |
+// | TC-CLINE-N-05 | run() called twice without close | Equivalence – previous kill | first child killed, warn log emitted | - |
+// | TC-CLINE-N-06 | absolute path outside workspace | Equivalence – path rejection | toWorkspaceRelative returns undefined | - |
+// | TC-CLINE-N-07 | type=ask, ask=followup | Equivalence – non-error ask | logged as info, not error | - |
+// | TC-CLINE-N-08 | type=ask, ask=error | Equivalence – error ask | logged as error | - |
+// | TC-CLINE-B-01 | partial=true text | Boundary – partial flag | partial text not logged, final text logged | - |
+// | TC-CLINE-E-01 | invalid JSON line | Error – malformed input | warn log emitted | - |
+// | TC-CLINE-E-02 | stderr output | Error – stderr | error log emitted | - |
+// | TC-CLINE-E-03 | child 'error' event | Error – spawn failure | error log + completed(null) emitted | - |
+// | TC-CLINE-B-02 | JSONL with empty files array | Boundary – empty array | no fileWrite events emitted | - |
+// | TC-CLINE-B-03 | JSONL with empty string text | Boundary – empty string | log event with empty message | - |
+// | TC-CLINE-B-04 | stdout with empty lines only | Boundary – blank input | no log/fileWrite events emitted | - |
+
 suite('providers/clineCliProvider.ts', () => {
   test('TC-CLINE-N-01: id/displayName が期待値である', () => {
     // Given: ClineCliProvider instance
@@ -279,5 +298,60 @@ suite('providers/clineCliProvider.ts', () => {
 
     // Then: returns undefined
     assert.strictEqual(result, undefined);
+  });
+
+  test('TC-CLINE-B-02: JSONL の files が空配列の場合 fileWrite は発火しない', () => {
+    // Given: provider with mocked child process
+    const child = new MockChildProcess();
+    const provider = new ClineCliProvider((() => {
+      return child as unknown as ReturnType<typeof import('child_process').spawn>;
+    }) as typeof import('child_process').spawn);
+    const events: TestGenEvent[] = [];
+    provider.run(createBaseOptions(events));
+
+    const line = JSON.stringify({ type: 'say', files: [] });
+
+    // When: stdout emits JSONL with empty files array
+    child.stdout.emit('data', Buffer.from(`${line}\n`, 'utf8'));
+
+    // Then: no fileWrite events are emitted
+    const writes = events.filter((e) => e.type === 'fileWrite');
+    assert.strictEqual(writes.length, 0);
+  });
+
+  test('TC-CLINE-B-03: JSONL の text が空文字の場合も log イベントが発火する', () => {
+    // Given: provider with mocked child process
+    const child = new MockChildProcess();
+    const provider = new ClineCliProvider((() => {
+      return child as unknown as ReturnType<typeof import('child_process').spawn>;
+    }) as typeof import('child_process').spawn);
+    const events: TestGenEvent[] = [];
+    provider.run(createBaseOptions(events));
+
+    const line = JSON.stringify({ type: 'say', text: '' });
+
+    // When: stdout emits JSONL with empty string text
+    child.stdout.emit('data', Buffer.from(`${line}\n`, 'utf8'));
+
+    // Then: log event is emitted with empty message
+    const logs = events.filter((e) => e.type === 'log');
+    assert.ok(logs.some((e) => e.type === 'log' && e.message === ''));
+  });
+
+  test('TC-CLINE-B-04: 空行のみの stdout は無視される', () => {
+    // Given: provider with mocked child process
+    const child = new MockChildProcess();
+    const provider = new ClineCliProvider((() => {
+      return child as unknown as ReturnType<typeof import('child_process').spawn>;
+    }) as typeof import('child_process').spawn);
+    const events: TestGenEvent[] = [];
+    provider.run(createBaseOptions(events));
+
+    // When: stdout emits empty lines only
+    child.stdout.emit('data', Buffer.from('\n\n\n', 'utf8'));
+
+    // Then: no log or fileWrite events are emitted
+    const meaningful = events.filter((e) => e.type === 'log' || e.type === 'fileWrite');
+    assert.strictEqual(meaningful.length, 0);
   });
 });

@@ -308,7 +308,8 @@ function toWorkspaceRelative(filePath: string, workspaceRoot: string): string | 
   }
   const relative = path.relative(workspaceRoot, filePath);
   // ルート外の場合は返さない
-  if (relative.startsWith('..')) {
+  // Windows で異なるドライブ間の場合、path.relative() は絶対パスを返すためそのチェックも必要
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
     return undefined;
   }
   return relative;

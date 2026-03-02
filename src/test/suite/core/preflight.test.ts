@@ -1135,7 +1135,11 @@ suite('core/preflight.ts', () => {
           assert.ok(result);
           assert.strictEqual(result?.agentCommand, process.execPath);
         } finally {
-          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
           await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
           await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
         }
@@ -1210,7 +1214,11 @@ suite('core/preflight.ts', () => {
           // Then: returns undefined
           assert.strictEqual(result, undefined);
         } finally {
-          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
           await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
           await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
         }
