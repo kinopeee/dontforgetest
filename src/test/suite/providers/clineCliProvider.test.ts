@@ -114,6 +114,67 @@ suite('providers/clineCliProvider.ts', () => {
     }
   });
 
+  test('TC-CLINE-B-01: partial=true の text は log に出力しない', () => {
+    // Given: provider with mocked child process
+    const child = new MockChildProcess();
+    const provider = new ClineCliProvider((() => {
+      return child as unknown as ReturnType<typeof import('child_process').spawn>;
+    }) as typeof import('child_process').spawn);
+    const events: TestGenEvent[] = [];
+    provider.run(createBaseOptions(events));
+
+    const partialLine = JSON.stringify({ type: 'say', text: '<!-- BEGIN TEST', partial: true });
+    const finalLine = JSON.stringify({ type: 'say', text: '<!-- BEGIN TEST EXECUTION JSON -->', partial: false });
+
+    // When: stdout emits partial and final lines
+    child.stdout.emit('data', Buffer.from(`${partialLine}\n${finalLine}\n`, 'utf8'));
+
+    // Then: partial text is ignored, final text is logged
+    const logs = events.filter((e) => e.type === 'log');
+    assert.ok(!logs.some((e) => e.type === 'log' && e.message === '<!-- BEGIN TEST'));
+    assert.ok(logs.some((e) => e.type === 'log' && e.message === '<!-- BEGIN TEST EXECUTION JSON -->'));
+  });
+
+  test('TC-CLINE-N-07: type=ask は ask=error でない限り error 扱いしない', () => {
+    // Given: provider with mocked child process
+    const child = new MockChildProcess();
+    const provider = new ClineCliProvider((() => {
+      return child as unknown as ReturnType<typeof import('child_process').spawn>;
+    }) as typeof import('child_process').spawn);
+    const events: TestGenEvent[] = [];
+    provider.run(createBaseOptions(events));
+
+    const line = JSON.stringify({ type: 'ask', ask: 'followup', text: 'Need user input?' });
+
+    // When: stdout emits ask/followup
+    child.stdout.emit('data', Buffer.from(`${line}\n`, 'utf8'));
+
+    // Then: logged as info, not error
+    const infoLog = events.find((e) => e.type === 'log' && e.level === 'info' && e.message === 'Need user input?');
+    const errorLog = events.find((e) => e.type === 'log' && e.level === 'error' && e.message === 'Need user input?');
+    assert.ok(infoLog);
+    assert.strictEqual(errorLog, undefined);
+  });
+
+  test('TC-CLINE-N-08: ask=error は error ログとして扱う', () => {
+    // Given: provider with mocked child process
+    const child = new MockChildProcess();
+    const provider = new ClineCliProvider((() => {
+      return child as unknown as ReturnType<typeof import('child_process').spawn>;
+    }) as typeof import('child_process').spawn);
+    const events: TestGenEvent[] = [];
+    provider.run(createBaseOptions(events));
+
+    const line = JSON.stringify({ type: 'ask', ask: 'error', text: 'Permission denied' });
+
+    // When: stdout emits ask/error
+    child.stdout.emit('data', Buffer.from(`${line}\n`, 'utf8'));
+
+    // Then: logged as error
+    const errorLog = events.find((e) => e.type === 'log' && e.level === 'error' && e.message === 'Permission denied');
+    assert.ok(errorLog);
+  });
+
   test('TC-CLINE-E-01: 不正JSON行を warn ログとして扱う', () => {
     // Given: provider with mocked child process
     const child = new MockChildProcess();

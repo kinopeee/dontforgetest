@@ -212,13 +212,20 @@ export class ClineCliProvider implements AgentProvider {
     options: AgentRunOptions,
     emitEvent: (event: TestGenEvent) => void,
   ): void {
+    const type = getString(obj, 'type');
+    const say = getString(obj, 'say');
+    const ask = getString(obj, 'ask');
+    const isPartial = getBoolean(obj, 'partial') === true;
+    const isErrorLike = say === 'error' || ask === 'error';
+
     // text は基本ログに正規化する。
     const text = getString(obj, 'text');
-    if (text && text.trim().length > 0) {
+    // partial=true は断片が分割されるため、後段のマーカー抽出を壊さないようログ出力しない。
+    if (!isPartial && text && text.trim().length > 0) {
       emitEvent({
         type: 'log',
         taskId: options.taskId,
-        level: 'info',
+        level: isErrorLike ? 'error' : 'info',
         message: text.trim(),
         timestampMs: nowMs(),
       });
@@ -236,25 +243,12 @@ export class ClineCliProvider implements AgentProvider {
       });
     }
 
-    // エラー系メッセージを type/say/ask から拾う。
-    const type = getString(obj, 'type');
-    const say = getString(obj, 'say');
-    const ask = getString(obj, 'ask');
-    if (type === 'ask' || say === 'error' || ask === 'error') {
-      const errorText = text ?? `event:${type ?? 'unknown'}`;
-      emitEvent({
-        type: 'log',
-        taskId: options.taskId,
-        level: 'error',
-        message: errorText,
-        timestampMs: nowMs(),
-      });
-    } else if (!text && type) {
+    if (!text && type) {
       // text が無いイベントはタイプだけ記録しておく。
       emitEvent({
         type: 'log',
         taskId: options.taskId,
-        level: 'info',
+        level: isErrorLike ? 'error' : 'info',
         message: `event:${type}`,
         timestampMs: nowMs(),
       });
@@ -300,6 +294,11 @@ function getStringArray(obj: Record<string, unknown>, key: string): string[] {
     return [];
   }
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+function getBoolean(obj: Record<string, unknown>, key: string): boolean | undefined {
+  const value = obj[key];
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 function toWorkspaceRelative(filePath: string, workspaceRoot: string): string | undefined {
