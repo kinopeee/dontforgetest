@@ -12,6 +12,7 @@ suite('selectAgentProvider', () => {
   // | TC-N-08b | QuickPick selects 'cursorAgent' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'cursorAgent' | - |
   // | TC-N-08c | QuickPick selects 'geminiCli' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'geminiCli' | - |
   // | TC-N-08d | QuickPick selects 'codexCli' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'codexCli' | - |
+  // | TC-N-08e | QuickPick selects 'clineCli' | Equivalence – provider selection | dontforgetest.agentProvider is updated to 'clineCli' | - |
   // | TC-N-09 | QuickPick canceled (undefined) | Equivalence – cancel | Settings are not changed | Same as TC-N-01 |
 
   let originalShowQuickPick: typeof vscode.window.showQuickPick;
@@ -211,6 +212,28 @@ suite('selectAgentProvider', () => {
     assert.ok(capturedOptions?.placeHolder?.includes('Codex CLI'));
   });
 
+  // SAP-N-03: currentId が clineCli の場合、適切なラベルが表示される
+  test('SAP-N-03: currentId が clineCli の場合、適切なラベルが表示される', async () => {
+    // Given: agentProvider is set to 'clineCli'
+    const configStub = {
+      get: (section: string) => (section === 'agentProvider' ? 'clineCli' : undefined),
+      update: async () => {},
+    } as unknown as vscode.WorkspaceConfiguration;
+    (vscode.workspace as unknown as { getConfiguration: typeof vscode.workspace.getConfiguration }).getConfiguration = () => configStub;
+
+    let capturedOptions: vscode.QuickPickOptions | undefined;
+    (vscode.window as unknown as { showQuickPick: (items: unknown, options: vscode.QuickPickOptions) => Promise<unknown> }).showQuickPick = async (_items, options) => {
+      capturedOptions = options;
+      return undefined;
+    };
+
+    // When: selectAgentProvider is called
+    await selectAgentProvider();
+
+    // Then: PlaceHolder includes 'Cline CLI'
+    assert.ok(capturedOptions?.placeHolder?.includes('Cline CLI'));
+  });
+
   // TC-N-05
   test('TC-N-05: QuickPick で Gemini CLI を選択した場合、agentProvider が geminiCli に更新される', async () => {
     // Given: configuration is stubbed and QuickPick is mocked to select 'geminiCli'
@@ -293,5 +316,47 @@ suite('selectAgentProvider', () => {
     assert.ok(updateCalls.length >= 1, 'Expected config.update to be called');
     assert.strictEqual(updateCalls[0]?.section, 'agentProvider');
     assert.strictEqual(updateCalls[0]?.value, 'codexCli');
+  });
+
+  // TC-N-08e: QuickPick で 'clineCli' を選択した場合、設定が更新される
+  test('TC-N-08e: QuickPick で clineCli を選択した場合、agentProvider が clineCli に更新される', async () => {
+    // Given: configuration is stubbed and QuickPick is mocked to select 'clineCli'
+    let currentAgentProvider: string = 'cursorAgent';
+    const updateCalls: Array<{ section: string; value: unknown; target: unknown }> = [];
+    const configStub = {
+      get: (section: string, defaultValue?: unknown) => {
+        if (section === 'agentProvider') {
+          return currentAgentProvider;
+        }
+        return defaultValue;
+      },
+      update: async (section: string, value: unknown, target: unknown) => {
+        updateCalls.push({ section, value, target });
+        if (section === 'agentProvider' && typeof value === 'string') {
+          currentAgentProvider = value;
+        }
+      },
+    } as unknown as vscode.WorkspaceConfiguration;
+
+    (vscode.workspace as unknown as { getConfiguration: typeof vscode.workspace.getConfiguration }).getConfiguration = () => configStub;
+
+    (vscode.window as unknown as { showQuickPick: (items: unknown) => Promise<unknown> }).showQuickPick = async (items: unknown) => {
+      const itemsArray = items as Array<{ providerId?: string }>;
+      const clineItem = itemsArray.find((item) => item.providerId === 'clineCli');
+      return clineItem;
+    };
+
+    (vscode.window as unknown as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = async () => {
+      return undefined;
+    };
+
+    // When: selectAgentProvider is called
+    await selectAgentProvider();
+
+    // Then: agentProvider is updated to 'clineCli'
+    assert.strictEqual(currentAgentProvider, 'clineCli');
+    assert.ok(updateCalls.length >= 1, 'Expected config.update to be called');
+    assert.strictEqual(updateCalls[0]?.section, 'agentProvider');
+    assert.strictEqual(updateCalls[0]?.value, 'clineCli');
   });
 });

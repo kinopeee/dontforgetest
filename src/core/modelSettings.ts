@@ -188,6 +188,7 @@ export function getModelCandidatesForProvider(
   if (providerId === 'claudeCode') return getClaudeCodeModelCandidates();
   if (providerId === 'geminiCli') return getGeminiCliModelCandidates(settings);
   if (providerId === 'codexCli') return getCodexCliModelCandidates(settings);
+  if (providerId === 'clineCli') return getClineCliModelCandidates(settings);
   return getCursorAgentModelCandidates(settings);
 }
 
@@ -260,6 +261,24 @@ export function getCodexCliModelCandidates(settings: ModelSettings = getModelSet
   for (const m of CODEX_CLI_BUILTIN_MODELS) {
     pushUniqueModel(out, seen, m);
   }
+  if (settings.defaultModel) {
+    pushUniqueModel(out, seen, settings.defaultModel);
+  }
+  for (const m of settings.customModels) {
+    pushUniqueModel(out, seen, m);
+  }
+
+  return out;
+}
+
+/**
+ * Cline CLI 用のモデル候補を返す。
+ * Cline 固有の固定ビルトインは持たず、設定値（defaultModel/customModels）のみを候補にする。
+ */
+export function getClineCliModelCandidates(settings: ModelSettings = getModelSettings()): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
   if (settings.defaultModel) {
     pushUniqueModel(out, seen, settings.defaultModel);
   }

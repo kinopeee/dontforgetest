@@ -665,6 +665,104 @@ suite('core/preflight.ts', () => {
         }
       });
 
+      test('TC-PF-DET-CL-01: missing cline command opens settings when first action is chosen', async () => {
+        // Given: agentProvider=clineCli and command is missing; user selects the first action
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const originalPathEnv = process.env.PATH;
+        const missingCommand = `missing-cline-${Date.now()}`;
+
+        try {
+          delete process.env.VSCODE_TEST_RUNNER;
+          process.env.PATH = '';
+          selectErrorAction = (items) => items[0];
+
+          await config.update('agentProvider', 'clineCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When
+          const result = await ensurePreflight();
+
+          // Then
+          assert.strictEqual(result, undefined);
+          assert.strictEqual(errorCalls.length, 1, 'Expected one error message');
+          assert.strictEqual(executeCommands.length, 1, 'Expected one command execution');
+          assert.strictEqual(executeCommands[0]?.command, 'workbench.action.openSettings');
+          assert.strictEqual(executeCommands[0]?.args[0], 'dontforgetest.agentPath');
+          assert.strictEqual(openExternalUris.length, 0, 'Docs should not be opened');
+        } finally {
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
+          if (originalPathEnv === undefined) {
+            delete process.env.PATH;
+          } else {
+            process.env.PATH = originalPathEnv;
+          }
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      test('TC-PF-DET-CL-02: missing cline command opens docs when second action is chosen', async () => {
+        // Given: agentProvider=clineCli and command is missing; user selects the second action
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+          return;
+        }
+
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const originalPathEnv = process.env.PATH;
+        const missingCommand = `missing-cline-${Date.now()}`;
+
+        try {
+          delete process.env.VSCODE_TEST_RUNNER;
+          process.env.PATH = '';
+          selectErrorAction = (items) => items[1];
+
+          await config.update('agentProvider', 'clineCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When
+          const result = await ensurePreflight();
+
+          // Then
+          assert.strictEqual(result, undefined);
+          assert.strictEqual(errorCalls.length, 1, 'Expected one error message');
+          assert.strictEqual(openExternalUris.length, 1, 'Expected one openExternal call');
+          assert.ok(
+            openExternalUris[0]?.toString().includes('docs.cline.bot/getting-started/what-is-cline'),
+            'Docs URL should be opened',
+          );
+          assert.strictEqual(executeCommands.length, 0, 'Settings should not be opened');
+        } finally {
+          if (originalTestRunner === undefined) {
+            delete process.env.VSCODE_TEST_RUNNER;
+          } else {
+            process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          }
+          if (originalPathEnv === undefined) {
+            delete process.env.PATH;
+          } else {
+            process.env.PATH = originalPathEnv;
+          }
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
       test('TC-PF-ADD-N-01: absolute testStrategyPath is preserved and returns PreflightOk', async () => {
         // Given: Existing test strategy file with an absolute path and a runnable cursorAgentPath
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -1017,6 +1115,32 @@ suite('core/preflight.ts', () => {
         }
       });
 
+      // TC-N-19
+      test('TC-N-19: clineCli uses agentPath if provided', async () => {
+        // Given: agentProvider is 'clineCli' and a custom agentPath is set
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'clineCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', process.execPath, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: it should return the custom agent path
+          assert.ok(result);
+          assert.strictEqual(result?.agentCommand, process.execPath);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
       test('PF-E-10: geminiCli command not found returns undefined in test runner', async () => {
         // Given: agentProvider is 'geminiCli' and command is missing
         const config = vscode.workspace.getConfiguration('dontforgetest');
@@ -1053,6 +1177,31 @@ suite('core/preflight.ts', () => {
         try {
           process.env.VSCODE_TEST_RUNNER = '1';
           await config.update('agentProvider', 'codexCli', vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
+
+          // When: ensurePreflight is called
+          const result = await ensurePreflight();
+
+          // Then: returns undefined
+          assert.strictEqual(result, undefined);
+        } finally {
+          process.env.VSCODE_TEST_RUNNER = originalTestRunner;
+          await config.update('agentProvider', originalProvider, vscode.ConfigurationTarget.Workspace);
+          await config.update('agentPath', originalAgentPath, vscode.ConfigurationTarget.Workspace);
+        }
+      });
+
+      test('PF-E-12: clineCli command not found returns undefined in test runner', async () => {
+        // Given: agentProvider is 'clineCli' and command is missing
+        const config = vscode.workspace.getConfiguration('dontforgetest');
+        const originalProvider = config.get('agentProvider');
+        const originalAgentPath = config.get('agentPath');
+        const originalTestRunner = process.env.VSCODE_TEST_RUNNER;
+        const missingCommand = `missing-cline-${Date.now()}`;
+
+        try {
+          process.env.VSCODE_TEST_RUNNER = '1';
+          await config.update('agentProvider', 'clineCli', vscode.ConfigurationTarget.Workspace);
           await config.update('agentPath', missingCommand, vscode.ConfigurationTarget.Workspace);
 
           // When: ensurePreflight is called

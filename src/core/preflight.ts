@@ -12,7 +12,7 @@ export interface PreflightOk {
   testStrategyPath: string;
   /** 現在選択されている Provider の ID */
   agentProviderId: AgentProviderId;
-  /** 実行するエージェントコマンド（cursor-agent / claude / gemini） */
+  /** 実行するエージェントコマンド（cursor-agent / claude / gemini / codex / cline） */
   agentCommand: string;
   /**
    * @deprecated Use `agentCommand` instead. Kept for backward compatibility.
@@ -165,6 +165,43 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
       agentProviderId,
       agentCommand: codexCommand,
       cursorAgentCommand: codexCommand, // 後方互換
+    };
+  }
+
+  if (agentProviderId === 'clineCli') {
+    // Cline CLI の確認
+    const clineCommand = resolveAgentCommand(agentPath, '', 'cline');
+
+    const agentAvailable = await canSpawnCommand(clineCommand, ['version'], workspaceRoot);
+    if (!agentAvailable) {
+      if (process.env.VSCODE_TEST_RUNNER === '1') {
+        void vscode.window.showErrorMessage(t('clineCli.notFound', clineCommand));
+        return undefined;
+      }
+
+      const openSettingsLabel = t('clineCli.openSettings');
+      const openDocsLabel = t('clineCli.openDocs');
+      const picked = await vscode.window.showErrorMessage(
+        t('clineCli.notFound', clineCommand),
+        openSettingsLabel,
+        openDocsLabel,
+      );
+      if (picked === openSettingsLabel) {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'dontforgetest.agentPath');
+      }
+      if (picked === openDocsLabel) {
+        await vscode.env.openExternal(vscode.Uri.parse('https://docs.cline.bot/getting-started/what-is-cline'));
+      }
+      return undefined;
+    }
+
+    return {
+      workspaceRoot,
+      defaultModel: getEffectiveDefaultModel(agentProviderId, getModelSettings()),
+      testStrategyPath: effectiveTestStrategyPath,
+      agentProviderId,
+      agentCommand: clineCommand,
+      cursorAgentCommand: clineCommand, // 後方互換
     };
   }
 

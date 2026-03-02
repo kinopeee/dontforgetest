@@ -327,6 +327,20 @@ suite('core/modelSettings.ts', () => {
       assert.ok(result.includes('custom-gemini'), 'Should include custom-gemini');
     });
 
+    test('TC-PROVIDER-N-04: clineCli の場合は defaultModel/customModels 由来の候補を返す', () => {
+      // Given: provider is 'clineCli'
+      const settings: ModelSettings = {
+        defaultModel: 'cline-model-default',
+        customModels: ['cline-model-custom', 'cline-model-default'],
+      };
+
+      // When: getModelCandidatesForProvider is called
+      const result = getModelCandidatesForProvider('clineCli', settings);
+
+      // Then: Returns only configured models (deduplicated)
+      assert.deepStrictEqual(result, ['cline-model-default', 'cline-model-custom']);
+    });
+
     test('TC-N-10: getModelCandidatesForProvider(claudeCode) returns Claude model candidates', () => {
       // Given: provider is 'claudeCode' with empty settings
       const settings: ModelSettings = {
@@ -481,6 +495,20 @@ suite('core/modelSettings.ts', () => {
 
       // Then: Returns 'gemini-3-flash-preview'
       assert.strictEqual(result, 'gemini-3-flash-preview');
+    });
+
+    test('TC-N-17: clineCli with defaultModel in candidates returns that model', () => {
+      // Given: defaultModel is included in Cline candidates
+      const settings: ModelSettings = {
+        defaultModel: 'cline-model-default',
+        customModels: ['cline-model-custom'],
+      };
+
+      // When: getEffectiveDefaultModel is called
+      const result = getEffectiveDefaultModel('clineCli', settings);
+
+      // Then: Returns defaultModel
+      assert.strictEqual(result, 'cline-model-default');
     });
   });
 
