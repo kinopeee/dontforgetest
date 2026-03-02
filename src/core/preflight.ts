@@ -172,7 +172,7 @@ export async function ensurePreflight(): Promise<PreflightOk | undefined> {
     // Cline CLI の確認
     const clineCommand = resolveAgentCommand(agentPath, '', 'cline');
 
-    const agentAvailable = await canSpawnCommand(clineCommand, ['version'], workspaceRoot);
+    const agentAvailable = await canSpawnCommand(clineCommand, ['--version'], workspaceRoot);
     if (!agentAvailable) {
       if (process.env.VSCODE_TEST_RUNNER === '1') {
         void vscode.window.showErrorMessage(t('clineCli.notFound', clineCommand));
