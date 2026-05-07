@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.129
 
 ### Added
 
@@ -9,10 +9,11 @@
 ### Changed
 
 - **Documentation**: Updated README/usage/docs index and related localization references for Open VSX publication and Cline CLI support
+- **Dependencies**: Upgraded `mocha` to `^11.7.5` and added `overrides` for `diff` (`^9.0.0`) and `serialize-javascript` (`^7.0.5`)
 
 ---
 
-## Unreleased（日本語）
+## 0.0.129（日本語）
 
 ### 追加
 
@@ -21,6 +22,7 @@
 ### 変更
 
 - **ドキュメント**: Open VSX 公開と Cline CLI 対応に合わせて、README / usage / docs 目次と関連ローカライズ参照を更新
+- **依存関係**: `mocha` を `^11.7.5` に更新し、`diff`（`^9.0.0`）と `serialize-javascript`（`^7.0.5`）の `overrides` を追加
 
 ---
 

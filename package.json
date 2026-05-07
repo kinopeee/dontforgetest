@@ -299,6 +299,10 @@
     "vsix:build:bump": "npm version patch --no-git-tag-version && npm run vsix:build",
     "publish:openvsx": "node ./scripts/publishOpenVsx.cjs"
   },
+  "overrides": {
+    "diff": "^9.0.0",
+    "serialize-javascript": "^7.0.5"
+  },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@stylistic/eslint-plugin": "^5.6.1",
@@ -312,7 +316,7 @@
     "esbuild": "^0.27.2",
     "eslint": "^9.17.0",
     "glob": "^10.3.10",
-    "mocha": "^10.2.0",
+    "mocha": "^11.7.5",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.19.1"
   },
