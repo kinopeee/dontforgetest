@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.130
+
+### Changed
+
+- **Release**: Re-published to Open VSX (no functional changes from 0.0.129)
+
+---
+
+## 0.0.130（日本語）
+
+### 変更
+
+- **リリース**: Open VSX 再公開のためのバージョン更新（0.0.129 から機能変更なし）
+
+---
+
 ## 0.0.129
 
 ### Added
