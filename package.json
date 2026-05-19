@@ -272,6 +272,18 @@
           ],
           "default": "auto",
           "description": "%configuration.projectProfile.description%"
+        },
+        "dontforgetest.logLevel": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error",
+            "none"
+          ],
+          "default": "info",
+          "description": "%configuration.logLevel.description%"
         }
       }
     }

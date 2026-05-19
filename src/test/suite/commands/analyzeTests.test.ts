@@ -33,10 +33,7 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
     const originalWithProgress = vscode.window.withProgress;
 
     (testAnalyzerModule as unknown as { saveAnalysisReport: typeof testAnalyzerModule.saveAnalysisReport }).saveAnalysisReport =
-      async () => ({
-        absolutePath: path.join(workspaceRoot, 'docs/test-analysis-reports/test-analysis_mock.md'),
-        relativePath: 'docs/test-analysis-reports/test-analysis_mock.md',
-      });
+      async () => path.join(workspaceRoot, 'docs/test-analysis-reports/test-analysis_mock.md');
 
     (outputChannelModule as unknown as { getTestGenOutputChannel: typeof outputChannelModule.getTestGenOutputChannel }).getTestGenOutputChannel =
       () => ({
@@ -365,7 +362,7 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
     (testAnalyzerModule as unknown as { saveAnalysisReport: typeof testAnalyzerModule.saveAnalysisReport }).saveAnalysisReport =
       async () => {
         saveReportCalled = true;
-        return { absolutePath: mockAbsolutePath, relativePath: mockRelativePath };
+        return mockAbsolutePath;
       };
 
     // outputChannel をスタブ
@@ -503,7 +500,7 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
     const mockAbsolutePath = path.join(workspaceRoot, mockRelativePath);
     (testAnalyzerModule as unknown as { saveAnalysisReport: typeof testAnalyzerModule.saveAnalysisReport }).saveAnalysisReport =
       async () => {
-        return { absolutePath: mockAbsolutePath, relativePath: mockRelativePath };
+        return mockAbsolutePath;
       };
 
     // outputChannel をスタブ
@@ -613,7 +610,7 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
     (testAnalyzerModule as unknown as { saveAnalysisReport: typeof testAnalyzerModule.saveAnalysisReport }).saveAnalysisReport =
       async () => {
         saveReportCalled = true;
-        return { absolutePath: '', relativePath: '' };
+        return '';
       };
 
     // withProgress をスタブ（コールバックを即実行）
@@ -683,7 +680,7 @@ suite('src/commands/analyzeTests.ts analyzeTestsCommand (real scenario tests)', 
     const mockAbsolutePath = path.join(workspaceRoot, mockRelativePath);
     (testAnalyzerModule as unknown as { saveAnalysisReport: typeof testAnalyzerModule.saveAnalysisReport }).saveAnalysisReport =
       async () => {
-        return { absolutePath: mockAbsolutePath, relativePath: mockRelativePath };
+        return mockAbsolutePath;
       };
 
     // outputChannel をスタブ

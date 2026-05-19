@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import * as path from 'path';
+import * as fs from 'fs';
+import { extensionLogger } from './logger';
 
 /**
  * UI文言の翻訳（vscode.l10n.t のラッパー）
@@ -57,7 +58,7 @@ function loadEnglishFallbackBundle(): Record<string, string> {
     // NOTE:
     // - 英語フォールバックの読み込みに失敗しても、拡張機能の主要な機能は継続できる。
     // - ただし原因特定が難しくなるため、ログだけは残す。
-    console.warn('[dontforgetest] 英語フォールバックバンドルの読み込みに失敗しました', error);
+    extensionLogger.error('[dontforgetest] 英語フォールバックバンドルの読み込みに失敗しました', error as Error);
     enFallbackBundle = {};
     return enFallbackBundle;
   }
